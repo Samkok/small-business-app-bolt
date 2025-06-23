@@ -13,7 +13,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
-import { X, Upload, FileText, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { X, Upload, FileText, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { processBulkInventoryImportFromFile } from '@/src/utils/bulkImportProcessor';
 import { processBulkInventoryImport } from '@/src/utils/bulkImportProcessor';
 
