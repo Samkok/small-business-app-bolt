@@ -158,7 +158,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     marginTop: 2,
   },
-,
   timeText: {
     fontSize: 12,
     marginLeft: 4,
