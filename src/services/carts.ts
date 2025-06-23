@@ -80,6 +80,25 @@ export const cartService = {
     return data;
   },
 
+  async deleteCart(cartId: string) {
+    // First delete all cart items
+    const { error: itemsError } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('cart_id', cartId);
+
+    if (itemsError) throw itemsError;
+
+    // Then delete the cart
+    const { error } = await supabase
+      .from('carts')
+      .delete()
+      .eq('id', cartId);
+
+    if (error) throw error;
+    return true;
+  },
+
   async addItemToCart(cartItem: CartItemInsert & {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;

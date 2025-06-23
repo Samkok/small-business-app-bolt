@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { ShoppingCart, User, Clock, DollarSign } from 'lucide-react-native';
+import { ShoppingCart, User, Clock, DollarSign, Trash2 } from 'lucide-react-native';
 
 interface ActiveCartCardProps {
   cart: {
@@ -21,9 +21,10 @@ interface ActiveCartCardProps {
     total_amount: number;
   };
   onPress: () => void;
+  onDelete: (cartId: string) => void;
 }
 
-export function ActiveCartCard({ cart, onPress }: ActiveCartCardProps) {
+export function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps) {
   const { isDark } = useTheme();
 
   const getTotalItems = () => {
@@ -39,6 +40,11 @@ export function ActiveCartCard({ cart, onPress }: ActiveCartCardProps) {
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const handleDelete = (e: any) => {
+    e.stopPropagation();
+    onDelete(cart.id);
   };
 
   return (
@@ -68,6 +74,12 @@ export function ActiveCartCard({ cart, onPress }: ActiveCartCardProps) {
               {getTimeAgo(cart.created_at)}
             </Text>
           </View>
+          <TouchableOpacity 
+            style={[styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+            onPress={handleDelete}
+          >
+            <Trash2 size={16} color="#dc2626" />
+          </TouchableOpacity>
         </View>
         
         <View style={styles.itemsSection}>
@@ -161,6 +173,13 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     marginLeft: 4,
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemsSection: {
     marginBottom: 12,

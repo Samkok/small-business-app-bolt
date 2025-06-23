@@ -145,6 +145,30 @@ export default function SalesScreen() {
     );
   };
 
+  const handleDeleteCart = async (cartId: string) => {
+    Alert.alert(
+      'Delete Cart',
+      'Are you sure you want to delete this cart? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cartService.deleteCart(cartId);
+              Alert.alert('Success', 'Cart deleted successfully');
+              loadData();
+            } catch (error) {
+              console.error('Error deleting cart:', error);
+              Alert.alert('Error', 'Failed to delete cart');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   const handleNewSale = () => {
     router.push('/sales/customer-selection');
   };
@@ -306,6 +330,7 @@ export default function SalesScreen() {
                   key={cart.id}
                   cart={cart}
                   onPress={() => handleCartPress(cart.id)}
+                  onDelete={handleDeleteCart}
                 />
               ))}
             </View>
