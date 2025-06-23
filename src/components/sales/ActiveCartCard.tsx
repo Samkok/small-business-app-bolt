@@ -68,18 +68,20 @@ export function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps)
               )}
             </View>
           </View>
-          <View style={styles.timeInfo}>
-            <Clock size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-            <Text style={[styles.timeText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              {getTimeAgo(cart.created_at)}
-            </Text>
+          <View style={styles.headerActions}>
+            <View style={styles.timeInfo}>
+              <Clock size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.timeText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {getTimeAgo(cart.created_at)}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={handleDelete}
+            >
+              <Trash2 size={16} color="#dc2626" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity 
-            style={[styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-            onPress={handleDelete}
-          >
-            <Trash2 size={16} color="#dc2626" />
-          </TouchableOpacity>
         </View>
         
         <View style={styles.itemsSection}>
@@ -133,11 +135,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
-    gap: 8,
   },
   customerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatar: {
     width: 40,
@@ -163,12 +165,13 @@ const styles = StyleSheet.create({
   customerPhone: {
     fontSize: 12,
   },
+  headerActions: {
+    alignItems: 'flex-end',
+  },
   timeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 60,
-    justifyContent: 'flex-end',
-    marginTop: 2,
+    marginBottom: 8,
   },
   timeText: {
     fontSize: 12,

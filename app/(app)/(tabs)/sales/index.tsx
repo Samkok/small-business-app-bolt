@@ -33,6 +33,7 @@ export default function SalesScreen() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
+  const [deletingCart, setDeletingCart] = useState<string | null>(null);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -156,12 +157,15 @@ export default function SalesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              setDeletingCart(cartId);
               await cartService.deleteCart(cartId);
+              setActiveCarts(activeCarts.filter(cart => cart.id !== cartId));
               Alert.alert('Success', 'Cart deleted successfully');
-              loadData();
             } catch (error) {
               console.error('Error deleting cart:', error);
               Alert.alert('Error', 'Failed to delete cart');
+            } finally {
+              setDeletingCart(null);
             }
           }
         },
@@ -539,6 +543,13 @@ export default function SalesScreen() {
           </ScrollView>
         </View>
       )}
+
+      {/* Loading overlay for cart deletion */}
+      {deletingCart && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Deleting cart..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -697,5 +708,16 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     marginTop: 16,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
 });
