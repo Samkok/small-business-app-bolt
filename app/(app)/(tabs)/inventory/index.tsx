@@ -29,7 +29,7 @@ import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import ImportCSVModal from '@/src/components/inventory/ImportCSVModal';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, CheckSquare, Square } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, SquareCheck as CheckSquare, Square } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
