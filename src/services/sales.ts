@@ -9,14 +9,22 @@ type SaleAction = Database['public']['Tables']['sale_actions']['Row'];
 type SaleActionInsert = Database['public']['Tables']['sale_actions']['Insert'];
 
 export const salesService = {
-  async completeSale(saleData: Omit<SaleInsert, 'total_amount'>) {
-    // Calculate total amount from cart
-    const totalAmount = await cartService.calculateCartTotal(saleData.cart_id);
+  async completeSale(saleData: Omit<SaleInsert, 'total_amount' | 'subtotal_before_discount' | 'sale_discount_amount'>) {
+    // Get cart summary with discount details
+    const cartSummary = await cartService.getCartSummary(saleData.cart_id);
+    const cart = await cartService.getCart(saleData.cart_id);
 
-    // Create sale record
+    // Create sale record with discount information
     const { data: sale, error: saleError } = await supabase
       .from('sales')
-      .insert({ ...saleData, total_amount: totalAmount })
+      .insert({
+        ...saleData,
+        total_amount: cartSummary.finalTotal,
+        subtotal_before_discount: cartSummary.itemsOriginalTotal,
+        sale_discount_type: cart.discount_type,
+        sale_discount_value: cart.discount_value,
+        sale_discount_amount: cartSummary.cartDiscountAmount
+      })
       .select()
       .single();
 
@@ -26,7 +34,6 @@ export const salesService = {
     await cartService.updateCart(saleData.cart_id, { status: 'completed' });
 
     // Update product stock levels
-    const cart = await cartService.getCart(saleData.cart_id);
     for (const item of cart.cart_items) {
       const product = await productService.getProduct(item.product_id);
       const newStock = Math.max(0, product.current_stock - item.quantity);
@@ -44,14 +51,37 @@ export const salesService = {
         customers(name, phone),
         carts(
           total_amount,
+          discount_type,
+          discount_value,
+          delivery_cost,
           cart_items(
             quantity,
             unit_price,
             subtotal,
+            original_subtotal,
+            item_discount_type,
+            item_discount_value,
+            item_discount_amount,
             products(name)
           )
         )
       `)
+      .eq('business_id', businessId)
+      .order('sale_date', { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getSalesWithDiscountDetails(businessId: string, limit?: number) {
+    let query = supabase
+      .from('sales_with_discount_details')
+      .select('*')
       .eq('business_id', businessId)
       .order('sale_date', { ascending: false });
 
@@ -82,6 +112,17 @@ export const salesService = {
           profiles!sale_actions_performed_by_fkey(full_name)
         )
       `)
+      .eq('id', saleId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getSaleWithDiscountBreakdown(saleId: string) {
+    const { data, error } = await supabase
+      .from('sales_with_discount_details')
+      .select('*')
       .eq('id', saleId)
       .single();
 
@@ -161,19 +202,8 @@ export const salesService = {
 
   async getSalesReport(businessId: string, startDate: string, endDate: string) {
     const { data, error } = await supabase
-      .from('sales')
-      .select(`
-        *,
-        customers(name),
-        carts(
-          cart_items(
-            quantity,
-            unit_price,
-            subtotal,
-            products(name, price)
-          )
-        )
-      `)
+      .from('sales_with_discount_details')
+      .select('*')
       .eq('business_id', businessId)
       .gte('sale_date', startDate)
       .lte('sale_date', endDate)
@@ -182,5 +212,44 @@ export const salesService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {
+    const { data, error } = await supabase
+      .from('sales_with_discount_details')
+      .select(`
+        items_original_total,
+        items_total_discount,
+        cart_discount_amount,
+        total_amount,
+        sale_date
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate);
+
+    if (error) throw error;
+
+    const analytics = data.reduce((acc, sale) => {
+      acc.totalOriginalAmount += sale.items_original_total || 0;
+      acc.totalItemDiscounts += sale.items_total_discount || 0;
+      acc.totalCartDiscounts += sale.cart_discount_amount || 0;
+      acc.totalFinalAmount += sale.total_amount || 0;
+      acc.salesCount += 1;
+      return acc;
+    }, {
+      totalOriginalAmount: 0,
+      totalItemDiscounts: 0,
+      totalCartDiscounts: 0,
+      totalFinalAmount: 0,
+      salesCount: 0
+    });
+
+    analytics.totalDiscounts = analytics.totalItemDiscounts + analytics.totalCartDiscounts;
+    analytics.averageDiscountPerSale = analytics.salesCount > 0 ? analytics.totalDiscounts / analytics.salesCount : 0;
+    analytics.discountPercentage = analytics.totalOriginalAmount > 0 ? (analytics.totalDiscounts / analytics.totalOriginalAmount) * 100 : 0;
+
+    return analytics;
   }
 };

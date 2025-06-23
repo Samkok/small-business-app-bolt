@@ -233,6 +233,10 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           subtotal: number;
+          item_discount_type?: 'percentage' | 'fixed';
+          item_discount_value?: number;
+          item_discount_amount?: number;
+          original_subtotal?: number;
           created_at: string;
           updated_at: string;
         };
@@ -245,6 +249,10 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           subtotal: number;
+          item_discount_type?: 'percentage' | 'fixed';
+          item_discount_value?: number;
+          item_discount_amount?: number;
+          original_subtotal?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -257,6 +265,10 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           subtotal?: number;
+          item_discount_type?: 'percentage' | 'fixed';
+          item_discount_value?: number;
+          item_discount_amount?: number;
+          original_subtotal?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -274,6 +286,10 @@ export interface Database {
           business_id: string;
           created_by: string;
           created_at: string;
+          sale_discount_type?: 'percentage' | 'fixed';
+          sale_discount_value?: number;
+          sale_discount_amount?: number;
+          subtotal_before_discount?: number;
         };
         Insert: {
           id?: string;
@@ -287,6 +303,10 @@ export interface Database {
           business_id: string;
           created_by: string;
           created_at?: string;
+          sale_discount_type?: 'percentage' | 'fixed';
+          sale_discount_value?: number;
+          sale_discount_amount?: number;
+          subtotal_before_discount?: number;
         };
         Update: {
           id?: string;
@@ -300,6 +320,10 @@ export interface Database {
           business_id?: string;
           created_by?: string;
           created_at?: string;
+          sale_discount_type?: 'percentage' | 'fixed';
+          sale_discount_value?: number;
+          sale_discount_amount?: number;
+          subtotal_before_discount?: number;
         };
       };
       sale_actions: {

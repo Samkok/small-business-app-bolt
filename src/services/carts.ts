@@ -57,6 +57,17 @@ export const cartService = {
     return data;
   },
 
+  async getCartWithDiscountDetails(cartId: string) {
+    const { data, error } = await supabase
+      .from('cart_details_with_discounts')
+      .select('*')
+      .eq('cart_id', cartId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async updateCart(cartId: string, updates: CartUpdate) {
     const { data, error } = await supabase
       .from('carts')
@@ -69,7 +80,10 @@ export const cartService = {
     return data;
   },
 
-  async addItemToCart(cartItem: CartItemInsert) {
+  async addItemToCart(cartItem: CartItemInsert & {
+    item_discount_type?: 'percentage' | 'fixed';
+    item_discount_value?: number;
+  }) {
     // Check if item already exists in cart
     const { data: existingItem } = await supabase
       .from('cart_items')
@@ -79,20 +93,15 @@ export const cartService = {
       .single();
 
     if (existingItem) {
-      // Update quantity and subtotal
+      // Update quantity and recalculate totals
       const newQuantity = existingItem.quantity + cartItem.quantity;
-      const newSubtotal = this.calculateItemSubtotal(
-        newQuantity,
-        cartItem.unit_price,
-        cartItem.discount_type,
-        cartItem.discount_value
-      );
-
+      
       const { data, error } = await supabase
         .from('cart_items')
         .update({
           quantity: newQuantity,
-          subtotal: newSubtotal,
+          item_discount_type: cartItem.item_discount_type || existingItem.item_discount_type,
+          item_discount_value: cartItem.item_discount_value ?? existingItem.item_discount_value,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingItem.id)
@@ -103,16 +112,9 @@ export const cartService = {
       return data;
     } else {
       // Add new item
-      const subtotal = this.calculateItemSubtotal(
-        cartItem.quantity,
-        cartItem.unit_price,
-        cartItem.discount_type,
-        cartItem.discount_value
-      );
-
       const { data, error } = await supabase
         .from('cart_items')
-        .insert({ ...cartItem, subtotal })
+        .insert(cartItem)
         .select()
         .single();
 
@@ -121,26 +123,10 @@ export const cartService = {
     }
   },
 
-  async updateCartItem(itemId: string, updates: CartItemUpdate) {
-    if (updates.quantity !== undefined || updates.unit_price !== undefined || 
-        updates.discount_type !== undefined || updates.discount_value !== undefined) {
-      // Recalculate subtotal
-      const { data: currentItem } = await supabase
-        .from('cart_items')
-        .select('*')
-        .eq('id', itemId)
-        .single();
-
-      if (currentItem) {
-        const quantity = updates.quantity ?? currentItem.quantity;
-        const unitPrice = updates.unit_price ?? currentItem.unit_price;
-        const discountType = updates.discount_type ?? currentItem.discount_type;
-        const discountValue = updates.discount_value ?? currentItem.discount_value;
-
-        updates.subtotal = this.calculateItemSubtotal(quantity, unitPrice, discountType, discountValue);
-      }
-    }
-
+  async updateCartItem(itemId: string, updates: CartItemUpdate & {
+    item_discount_type?: 'percentage' | 'fixed';
+    item_discount_value?: number;
+  }) {
     const { data, error } = await supabase
       .from('cart_items')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -161,54 +147,71 @@ export const cartService = {
     if (error) throw error;
   },
 
-  async calculateCartTotal(cartId: string) {
-    const { data: items, error } = await supabase
+  async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
+    const { data, error } = await supabase
       .from('cart_items')
-      .select('subtotal')
-      .eq('cart_id', cartId);
-
-    if (error) throw error;
-
-    const itemsTotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-
-    const { data: cart } = await supabase
-      .from('carts')
-      .select('discount_type, discount_value, delivery_cost')
-      .eq('id', cartId)
+      .update({
+        item_discount_type: discountType,
+        item_discount_value: discountValue,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', itemId)
+      .select()
       .single();
 
-    if (!cart) return itemsTotal;
-
-    let total = itemsTotal;
-
-    // Apply cart-level discount
-    if (cart.discount_type && cart.discount_value) {
-      if (cart.discount_type === 'percentage') {
-        total = total * (1 - cart.discount_value / 100);
-      } else {
-        total = total - cart.discount_value;
-      }
-    }
-
-    // Add delivery cost
-    if (cart.delivery_cost) {
-      total -= cart.delivery_cost;
-    }
-
-    return Math.max(0, total);
+    if (error) throw error;
+    return data;
   },
 
-  calculateItemSubtotal(quantity: number, unitPrice: number, discountType?: string, discountValue?: number) {
-    let subtotal = quantity * unitPrice;
+  async removeItemDiscount(itemId: string) {
+    const { data, error } = await supabase
+      .from('cart_items')
+      .update({
+        item_discount_type: null,
+        item_discount_value: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', itemId)
+      .select()
+      .single();
 
-    if (discountType && discountValue) {
-      if (discountType === 'percentage') {
-        subtotal = subtotal * (1 - discountValue / 100);
-      } else {
-        subtotal = subtotal - discountValue;
-      }
+    if (error) throw error;
+    return data;
+  },
+
+  async calculateCartTotal(cartId: string) {
+    const cartDetails = await this.getCartWithDiscountDetails(cartId);
+    return cartDetails.final_total;
+  },
+
+  async getCartSummary(cartId: string) {
+    const cartDetails = await this.getCartWithDiscountDetails(cartId);
+    
+    return {
+      itemsOriginalTotal: cartDetails.items_original_total,
+      itemsTotalDiscount: cartDetails.items_total_discount,
+      itemsSubtotalAfterDiscount: cartDetails.items_subtotal_after_discount,
+      cartDiscountAmount: cartDetails.cart_discount_amount,
+      deliveryCost: cartDetails.delivery_cost || 0,
+      finalTotal: cartDetails.final_total
+    };
+  },
+
+  // Legacy method for backward compatibility
+  calculateItemSubtotal(quantity: number, unitPrice: number, discountType?: string, discountValue?: number) {
+    const originalSubtotal = quantity * unitPrice;
+    
+    if (!discountType || !discountValue) {
+      return originalSubtotal;
     }
 
-    return Math.max(0, subtotal);
+    let discount = 0;
+    if (discountType === 'percentage') {
+      discount = originalSubtotal * (discountValue / 100);
+    } else if (discountType === 'fixed') {
+      discount = Math.min(discountValue, originalSubtotal);
+    }
+
+    return Math.max(0, originalSubtotal - discount);
   }
 };
