@@ -36,7 +36,43 @@ export const cartService = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    
+    // For each cart, calculate the correct total from cart_details_with_discounts
+    const cartsWithCorrectTotals = await Promise.all(
+      data.map(async (cart) => {
+        try {
+          const summary = await this.getCartSummary(cart.id);
+          return {
+            ...cart,
+            total_amount: summary.finalTotal
+          };
+        } catch (error) {
+          console.error(`Error getting cart summary for cart ${cart.id}:`, error);
+          return cart;
+        }
+      })
+    );
+    
+    return cartsWithCorrectTotals;
+  },
+
+  async deleteCart(cartId: string) {
+    // First delete all cart items
+    const { error: itemsError } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('cart_id', cartId);
+
+    if (itemsError) throw itemsError;
+
+    // Then delete the cart
+    const { error } = await supabase
+      .from('carts')
+      .delete()
+      .eq('id', cartId);
+
+    if (error) throw error;
+    return true;
   },
 
   async getCart(cartId: string) {
@@ -54,7 +90,18 @@ export const cartService = {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Get the correct total from cart_details_with_discounts
+    try {
+      const summary = await this.getCartSummary(cartId);
+      return {
+        ...data,
+        total_amount: summary.finalTotal
+      };
+    } catch (summaryError) {
+      console.error(`Error getting cart summary for cart ${cartId}:`, summaryError);
+      return data;
+    }
   },
 
   async getCartWithDiscountDetails(cartId: string) {
@@ -77,26 +124,24 @@ export const cartService = {
       .single();
 
     if (error) throw error;
+    
+    // If we're updating the cart, also update the total_amount based on the cart summary
+    if (!updates.total_amount) {
+      try {
+        const summary = await this.getCartSummary(cartId);
+        await supabase
+          .from('carts')
+          .update({ 
+            total_amount: summary.finalTotal,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', cartId);
+      } catch (summaryError) {
+        console.error(`Error updating cart total for cart ${cartId}:`, summaryError);
+      }
+    }
+    
     return data;
-  },
-
-  async deleteCart(cartId: string) {
-    // First delete all cart items
-    const { error: itemsError } = await supabase
-      .from('cart_items')
-      .delete()
-      .eq('cart_id', cartId);
-
-    if (itemsError) throw itemsError;
-
-    // Then delete the cart
-    const { error } = await supabase
-      .from('carts')
-      .delete()
-      .eq('id', cartId);
-
-    if (error) throw error;
-    return true;
   },
 
   async addItemToCart(cartItem: CartItemInsert & {
@@ -128,6 +173,10 @@ export const cartService = {
         .single();
 
       if (error) throw error;
+      
+      // Update cart total
+      await this.updateCartTotal(cartItem.cart_id);
+      
       return data;
     } else {
       // Add new item
@@ -138,6 +187,10 @@ export const cartService = {
         .single();
 
       if (error) throw error;
+      
+      // Update cart total
+      await this.updateCartTotal(cartItem.cart_id);
+      
       return data;
     }
   },
@@ -146,6 +199,15 @@ export const cartService = {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;
   }) {
+    // Get the cart_id first
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('cart_id')
+      .eq('id', itemId)
+      .single();
+      
+    if (!item) throw new Error('Cart item not found');
+    
     const { data, error } = await supabase
       .from('cart_items')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -154,19 +216,44 @@ export const cartService = {
       .single();
 
     if (error) throw error;
+    
+    // Update cart total
+    await this.updateCartTotal(item.cart_id);
+    
     return data;
   },
 
   async removeCartItem(itemId: string) {
+    // Get the cart_id first
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('cart_id')
+      .eq('id', itemId)
+      .single();
+      
+    if (!item) throw new Error('Cart item not found');
+    
     const { error } = await supabase
       .from('cart_items')
       .delete()
       .eq('id', itemId);
 
     if (error) throw error;
+    
+    // Update cart total
+    await this.updateCartTotal(item.cart_id);
   },
 
   async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
+    // Get the cart_id first
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('cart_id')
+      .eq('id', itemId)
+      .single();
+      
+    if (!item) throw new Error('Cart item not found');
+    
     const { data, error } = await supabase
       .from('cart_items')
       .update({
@@ -179,10 +266,23 @@ export const cartService = {
       .single();
 
     if (error) throw error;
+    
+    // Update cart total
+    await this.updateCartTotal(item.cart_id);
+    
     return data;
   },
 
   async removeItemDiscount(itemId: string) {
+    // Get the cart_id first
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('cart_id')
+      .eq('id', itemId)
+      .single();
+      
+    if (!item) throw new Error('Cart item not found');
+    
     const { data, error } = await supabase
       .from('cart_items')
       .update({
@@ -195,7 +295,27 @@ export const cartService = {
       .single();
 
     if (error) throw error;
+    
+    // Update cart total
+    await this.updateCartTotal(item.cart_id);
+    
     return data;
+  },
+
+  async updateCartTotal(cartId: string) {
+    try {
+      const summary = await this.getCartSummary(cartId);
+      await supabase
+        .from('carts')
+        .update({ 
+          total_amount: summary.finalTotal,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', cartId);
+    } catch (error) {
+      console.error(`Error updating cart total for cart ${cartId}:`, error);
+      throw error;
+    }
   },
 
   async calculateCartTotal(cartId: string) {
