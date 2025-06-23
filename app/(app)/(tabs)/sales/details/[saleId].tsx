@@ -12,7 +12,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 
