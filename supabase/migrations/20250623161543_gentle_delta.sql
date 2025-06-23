@@ -15,4 +15,4 @@
 ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_platform_check;
 
 ALTER TABLE customers ADD CONSTRAINT customers_platform_check 
-CHECK (platform IN ('facebook', 'instagram', 'telegram', 'walk_in', 'other', 'tiktok', 'wechat', 'line'));
+CHECK (platform IN ('facebook', 'instagram', 'telegram', 'walk_in', 'other', 'tiktok', 'wechat', 'line', 'nham24', 'grab'));
