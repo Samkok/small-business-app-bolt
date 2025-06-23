@@ -116,11 +116,12 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  header: {
+    header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 8,
   },
   customerInfo: {
     flexDirection: 'row',
