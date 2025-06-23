@@ -28,6 +28,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [notes, setNotes] = useState('');
   const [additionalCosts, setAdditionalCosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [productName, setProductName] = useState('Unknown Product');
+  const [productBarcode, setProductBarcode] = useState('');
   
   const { isDark } = useTheme();
 
@@ -37,6 +39,12 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
       setBaseUnitCost(importRecord.base_unit_cost?.toString() || '');
       setNotes(importRecord.notes || '');
       setAdditionalCosts(importRecord.import_costs || []);
+      
+      // Safely access product information
+      if (importRecord.products) {
+        setProductName(importRecord.products.name || 'Unknown Product');
+        setProductBarcode(importRecord.products.barcode || '');
+      }
     }
   }, [importRecord]);
 
@@ -73,7 +81,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
       }
     });
 
-    const finalUnitCost = baseCost + (totalAdditionalCost / qty);
+    const finalUnitCost = baseCost + (qty > 0 ? (totalAdditionalCost / qty) : 0);
     const totalCost = finalUnitCost * qty;
 
     return { finalUnitCost: isNaN(finalUnitCost) ? 0 : finalUnitCost, totalCost: isNaN(totalCost) ? 0 : totalCost };
@@ -127,7 +135,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
         cost_type: cost.cost_type.trim(),
         amount: parseFloat(cost.amount),
         calculation_type: cost.calculation_type,
-        description: cost.description.trim() || null,
+        description: cost.description?.trim() || null,
       }));
 
       await inventoryService.updateImport(importRecord.id, importData, costs);
@@ -168,11 +176,11 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
             </View>
             
             <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#374151' }]}>
-              {importRecord.products?.name || 'Unknown Product'}
+              {productName}
             </Text>
-            {importRecord.products?.barcode && (
+            {productBarcode && (
               <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                Barcode: {importRecord.products.barcode}
+                Barcode: {productBarcode}
               </Text>
             )}
           </View>
