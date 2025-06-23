@@ -37,13 +37,13 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     
     // Extract the main fields
     const product_id = values[0];
-    const quantity = parseInt(values[1], 10);
+    const quantity = parseInt(values[1], 10) || 0;
     
     // Handle the three cost entries
     const costs: ImportCost[] = [];
     
     // First cost: Shipping in China
-    if (values[2] && values[2] === 'Shipping in China') {
+    if (values[2] && values[2].trim() === 'Shipping in China') {
       const amount = parseFloat(values[3]) || 0;
       const calculation_type = values[4] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
@@ -56,7 +56,7 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     }
     
     // Second cost: Card Transaction Fee
-    if (values[5] && values[5] === 'Card Transaction Fee') {
+    if (values[5] && values[5].trim() === 'Card Transaction Fee') {
       const amount = parseFloat(values[6]) || 0;
       const calculation_type = values[7] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
@@ -69,7 +69,7 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     }
     
     // Third cost: Shipping to Cambodia
-    if (values[8] && values[8] === 'Shipping to Cambodia') {
+    if (values[8] && values[8].trim() === 'Shipping to Cambodia') {
       const amount = parseFloat(values[9]) || 0;
       const calculation_type = values[10] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
@@ -81,7 +81,7 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
       }
     }
     
-    // Extract remaining fields
+    // Extract base unit cost
     const base_unit_cost = parseFloat(values[11]) || 0;
     
     // Calculate final_unit_cost and total_cost
