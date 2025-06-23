@@ -15,7 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, User, Phone, MapPin, MessageCircle, FileText, Plus, Edit, Trash2 } from 'lucide-react-native';
+import { X, User, Phone, MapPin, MessageCircle, FileText, Plus, CreditCard as Edit, Trash2 } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 
 interface CustomerFormProps {
