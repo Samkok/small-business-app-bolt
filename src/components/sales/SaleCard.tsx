@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { MoveVertical as MoreVertical, User, Calendar, CreditCard, DollarSign } from 'lucide-react-native';
+import { MoveVertical as MoreVertical, User, Calendar, CreditCard, DollarSign, ChevronRight } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 
 interface SaleCardProps {
   sale: {
@@ -30,6 +31,7 @@ interface SaleCardProps {
 
 export function SaleCard({ sale, onVoid }: SaleCardProps) {
   const { isDark } = useTheme();
+  const router = useRouter();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -72,82 +74,93 @@ export function SaleCard({ sale, onVoid }: SaleCardProps) {
     return sale.carts.cart_items.reduce((total, item) => total + item.quantity, 0);
   };
 
+  const handleViewDetails = () => {
+    router.push(`/sales/details/${sale.id}`);
+  };
+
   return (
-    <Card style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.saleInfo}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Sale #{sale.id.slice(-8)}
-            </Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
-                {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
+    <TouchableOpacity onPress={handleViewDetails} activeOpacity={0.7}>
+      <Card style={styles.card}>
+        <View style={styles.header}>
+          <View style={styles.saleInfo}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Sale #{sale.id.slice(-8)}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
+                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.amountRow}>
+              <DollarSign size={18} color="#059669" />
+              <Text style={[styles.amount, { color: '#059669' }]}>
+                {formatCurrency(sale.total_amount)}
               </Text>
             </View>
           </View>
           
-          <View style={styles.amountRow}>
-            <DollarSign size={18} color="#059669" />
-            <Text style={[styles.amount, { color: '#059669' }]}>
-              {formatCurrency(sale.total_amount)}
+          {sale.status === 'completed' && (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={(e) => {
+                e.stopPropagation();
+                onVoid(sale);
+              }}
+            >
+              <MoreVertical size={16} color={isDark ? '#f9fafb' : '#374151'} />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <View style={styles.details}>
+          <View style={styles.detailRow}>
+            <User size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {sale.customers?.name || 'Unknown Customer'}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {formatDate(sale.sale_date)}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <CreditCard size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {getPaymentMethodIcon(sale.payment_method)} {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
             </Text>
           </View>
         </View>
         
-        {sale.status === 'completed' && (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-            onPress={() => onVoid(sale)}
-          >
-            <MoreVertical size={16} color={isDark ? '#f9fafb' : '#374151'} />
-          </TouchableOpacity>
+        <View style={styles.footer}>
+          <Text style={[styles.itemCount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+            {getTotalItems()} item{getTotalItems() !== 1 ? 's' : ''}
+          </Text>
+          
+          {sale.customers?.phone && (
+            <Text style={[styles.phone, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+              {sale.customers.phone}
+            </Text>
+          )}
+          
+          <ChevronRight size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+        </View>
+        
+        {sale.notes && (
+          <View style={styles.notesSection}>
+            <Text style={[styles.notesText, { color: isDark ? '#d1d5db' : '#374151' }]} numberOfLines={2}>
+              {sale.notes}
+            </Text>
+          </View>
         )}
-      </View>
-      
-      <View style={styles.details}>
-        <View style={styles.detailRow}>
-          <User size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {sale.customers?.name || 'Unknown Customer'}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {formatDate(sale.sale_date)}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <CreditCard size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {getPaymentMethodIcon(sale.payment_method)} {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.footer}>
-        <Text style={[styles.itemCount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-          {getTotalItems()} item{getTotalItems() !== 1 ? 's' : ''}
-        </Text>
-        
-        {sale.customers?.phone && (
-          <Text style={[styles.phone, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-            {sale.customers.phone}
-          </Text>
-        )}
-      </View>
-      
-      {sale.notes && (
-        <View style={styles.notesSection}>
-          <Text style={[styles.notesText, { color: isDark ? '#d1d5db' : '#374151' }]} numberOfLines={2}>
-            {sale.notes}
-          </Text>
-        </View>
-      )}
-    </Card>
+      </Card>
+    </TouchableOpacity>
   );
 }
 
