@@ -87,5 +87,65 @@ export const customerService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async getPlatformUsage(businessId: string) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('platform, count')
+      .eq('business_id', businessId)
+      .not('platform', 'is', null)
+      .group('platform');
+
+    if (error) throw error;
+
+    // Convert the result to a map of platform -> count
+    const platformUsage: Record<string, number> = {};
+    data.forEach((item: any) => {
+      platformUsage[item.platform] = parseInt(item.count);
+    });
+
+    return platformUsage;
+  },
+
+  async getCustomersByPlatform(businessId: string, platform: string) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('platform', platform)
+      .order('name');
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updateCustomerPlatform(customerId: string, platform: string | null) {
+    const { data, error } = await supabase
+      .from('customers')
+      .update({ 
+        platform, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', customerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async bulkUpdateCustomerPlatform(customerIds: string[], platform: string | null) {
+    const { data, error } = await supabase
+      .from('customers')
+      .update({ 
+        platform, 
+        updated_at: new Date().toISOString() 
+      })
+      .in('id', customerIds)
+      .select();
+
+    if (error) throw error;
+    return data;
   }
 };

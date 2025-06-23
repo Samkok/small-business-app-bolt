@@ -19,7 +19,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCustomerCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { CustomerCard } from '@/src/components/customers/CustomerCard';
 import CustomerForm from '@/src/components/customers/CustomerForm';
-import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin } from 'lucide-react-native';
+import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 
 export default function CustomersScreen() {
@@ -31,18 +31,13 @@ export default function CustomersScreen() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
+  const [availablePlatforms, setAvailablePlatforms] = useState<Array<{value: string, label: string, count: number}>>([
+    { value: 'all', label: 'All Platforms', count: 0 },
+  ]);
+  
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
-
-  const platforms = [
-    { value: 'all', label: 'All Platforms' },
-    { value: 'facebook', label: 'Facebook' },
-    { value: 'instagram', label: 'Instagram' },
-    { value: 'telegram', label: 'Telegram' },
-    { value: 'walk_in', label: 'Walk-in' },
-    { value: 'other', label: 'Other' },
-  ];
 
   useEffect(() => {
     loadCustomers();
@@ -62,6 +57,38 @@ export default function CustomersScreen() {
     try {
       const data = await customerService.getCustomers(profile.id);
       setCustomers(data);
+      
+      // Get platform usage and update available platforms
+      const platformUsage = await customerService.getPlatformUsage(profile.id);
+      
+      // Create a set of all platforms used by customers
+      const platformSet = new Set(['all']);
+      data.forEach(customer => {
+        if (customer.platform) {
+          platformSet.add(customer.platform);
+        }
+      });
+      
+      // Convert to array of platform objects with counts
+      const platforms = Array.from(platformSet).map(platform => {
+        if (platform === 'all') {
+          return { value: 'all', label: 'All Platforms', count: data.length };
+        }
+        
+        // Format platform name (convert snake_case to Title Case)
+        const formattedName = platform
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        
+        return {
+          value: platform,
+          label: formattedName,
+          count: platformUsage[platform] || 0
+        };
+      });
+      
+      setAvailablePlatforms(platforms);
     } catch (error) {
       console.error('Error loading customers:', error);
       Alert.alert(t('common.error'), 'Failed to load customers');
@@ -136,10 +163,12 @@ export default function CustomersScreen() {
 
   const getCustomerStats = () => {
     const totalCustomers = customers.length;
-    const platformCounts = platforms.slice(1).map(platform => ({
-      ...platform,
-      count: customers.filter(c => c.platform === platform.value).length
-    }));
+    const platformCounts = availablePlatforms
+      .filter(platform => platform.value !== 'all')
+      .map(platform => ({
+        ...platform,
+        count: customers.filter(c => c.platform === platform.value).length
+      }));
     
     return { totalCustomers, platformCounts };
   };
@@ -200,9 +229,9 @@ export default function CustomersScreen() {
         <View style={styles.searchSection}>
           <SkeletonLoader height={48} borderRadius={8} style={{ marginBottom: 12 }} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-            {platforms.map((platform) => (
+            {[1, 2, 3, 4, 5].map((index) => (
               <SkeletonLoader 
-                key={platform.value}
+                key={index}
                 height={36} 
                 width={80} 
                 borderRadius={20} 
@@ -249,7 +278,7 @@ export default function CustomersScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {platforms.map((platform) => (
+          {availablePlatforms.map((platform) => (
             <TouchableOpacity
               key={platform.value}
               style={[
@@ -273,7 +302,7 @@ export default function CustomersScreen() {
                     : (isDark ? '#f9fafb' : '#374151') 
                 }
               ]}>
-                {platform.label}
+                {platform.label} ({platform.count})
               </Text>
             </TouchableOpacity>
           ))}
@@ -298,13 +327,13 @@ export default function CustomersScreen() {
 
         <Card style={styles.statsCard}>
           <View style={styles.statsContent}>
-            <UserPlus size={24} color="#059669" />
+            <MessageCircle size={24} color="#059669" />
             <View style={styles.statsText}>
               <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {filteredCustomers.length}
+                {availablePlatforms.length - 1}
               </Text>
               <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Filtered Results
+                Active Platforms
               </Text>
             </View>
           </View>
@@ -313,9 +342,18 @@ export default function CustomersScreen() {
 
       {/* Platform Breakdown */}
       <Card style={styles.platformCard}>
-        <Text style={[styles.platformTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Customers by Platform
-        </Text>
+        <View style={styles.platformHeader}>
+          <Text style={[styles.platformTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Customers by Platform
+          </Text>
+          <TouchableOpacity
+            style={styles.managePlatformsButton}
+            onPress={() => setShowCustomerForm(true)}
+          >
+            <Tag size={14} color="#2563eb" />
+            <Text style={styles.managePlatformsText}>Manage</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.platformGrid}>
           {platformCounts.map((platform) => (
             <View key={platform.value} style={styles.platformItem}>
@@ -481,10 +519,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
   },
+  platformHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   platformTitle: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 12,
+  },
+  managePlatformsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  managePlatformsText: {
+    fontSize: 12,
+    color: '#2563eb',
+    marginLeft: 4,
   },
   platformGrid: {
     flexDirection: 'row',

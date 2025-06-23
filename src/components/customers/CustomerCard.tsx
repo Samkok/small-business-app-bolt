@@ -31,6 +31,12 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
         return '✈️';
       case 'walk_in':
         return '🚶';
+      case 'tiktok':
+        return '🎵';
+      case 'wechat':
+        return '💬';
+      case 'line':
+        return '📱';
       default:
         return '👤';
     }
@@ -38,6 +44,16 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatPlatformName = (platform?: string) => {
+    if (!platform) return '';
+    
+    // Convert snake_case to Title Case
+    return platform
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   };
 
   return (
@@ -77,7 +93,7 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
             <View style={styles.contactRow}>
               <MessageCircle size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.contactText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {customer.platform.charAt(0).toUpperCase() + customer.platform.slice(1).replace('_', ' ')}
+                {formatPlatformName(customer.platform)}
               </Text>
             </View>
           )}

@@ -7,14 +7,15 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, User, Phone, MapPin, MessageCircle, FileText } from 'lucide-react-native';
+import { X, User, Phone, MapPin, MessageCircle, FileText, Plus, Edit, Trash2 } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 
 interface CustomerFormProps {
@@ -30,18 +31,19 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   const [platform, setPlatform] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPlatformModal, setShowPlatformModal] = useState(false);
+  const [newPlatformName, setNewPlatformName] = useState('');
+  const [editingPlatform, setEditingPlatform] = useState<string | null>(null);
+  const [availablePlatforms, setAvailablePlatforms] = useState<Array<{value: string, label: string, canDelete: boolean}>>([
+    { value: 'facebook', label: 'Facebook', canDelete: true },
+    { value: 'instagram', label: 'Instagram', canDelete: true },
+    { value: 'telegram', label: 'Telegram', canDelete: true },
+    { value: 'walk_in', label: 'Walk-in', canDelete: true },
+    { value: 'other', label: 'Other', canDelete: true },
+  ]);
   
   const { isDark } = useTheme();
   const { profile } = useAuth();
-
-  const platforms = [
-    { value: '', label: 'Select Platform' },
-    { value: 'facebook', label: 'Facebook' },
-    { value: 'instagram', label: 'Instagram' },
-    { value: 'telegram', label: 'Telegram' },
-    { value: 'walk_in', label: 'Walk-in' },
-    { value: 'other', label: 'Other' },
-  ];
 
   useEffect(() => {
     if (customer) {
@@ -51,7 +53,27 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
       setPlatform(customer.platform || '');
       setNotes(customer.notes || '');
     }
+    
+    loadPlatformUsage();
   }, [customer]);
+
+  const loadPlatformUsage = async () => {
+    if (!profile?.id) return;
+    
+    try {
+      const platformUsage = await customerService.getPlatformUsage(profile.id);
+      
+      // Update available platforms with usage information
+      const updatedPlatforms = availablePlatforms.map(platform => ({
+        ...platform,
+        canDelete: !platformUsage[platform.value] || platformUsage[platform.value] === 0
+      }));
+      
+      setAvailablePlatforms(updatedPlatforms);
+    } catch (error) {
+      console.error('Error loading platform usage:', error);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -89,6 +111,87 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddPlatform = () => {
+    setNewPlatformName('');
+    setEditingPlatform(null);
+    setShowPlatformModal(true);
+  };
+
+  const handleEditPlatform = (platformValue: string) => {
+    const platform = availablePlatforms.find(p => p.value === platformValue);
+    if (platform) {
+      setNewPlatformName(platform.label);
+      setEditingPlatform(platformValue);
+      setShowPlatformModal(true);
+    }
+  };
+
+  const handleDeletePlatform = (platformValue: string) => {
+    const platform = availablePlatforms.find(p => p.value === platformValue);
+    if (!platform) return;
+    
+    if (!platform.canDelete) {
+      Alert.alert(
+        'Cannot Delete Platform',
+        'This platform has customers associated with it. Please reassign those customers to another platform first.'
+      );
+      return;
+    }
+    
+    Alert.alert(
+      'Delete Platform',
+      `Are you sure you want to delete the "${platform.label}" platform?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => {
+            // Remove from available platforms
+            const updatedPlatforms = availablePlatforms.filter(p => p.value !== platformValue);
+            setAvailablePlatforms(updatedPlatforms);
+            
+            // If the current customer has this platform, reset it
+            if (platform === platformValue) {
+              setPlatform('');
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleSavePlatform = () => {
+    if (!newPlatformName.trim()) {
+      Alert.alert('Error', 'Platform name is required');
+      return;
+    }
+    
+    // Convert to snake_case for value
+    const platformValue = editingPlatform || newPlatformName.toLowerCase().replace(/\s+/g, '_');
+    
+    if (!editingPlatform && availablePlatforms.some(p => p.value === platformValue)) {
+      Alert.alert('Error', 'A platform with this name already exists');
+      return;
+    }
+    
+    if (editingPlatform) {
+      // Update existing platform
+      const updatedPlatforms = availablePlatforms.map(p => 
+        p.value === editingPlatform ? { ...p, label: newPlatformName } : p
+      );
+      setAvailablePlatforms(updatedPlatforms);
+    } else {
+      // Add new platform
+      setAvailablePlatforms([
+        ...availablePlatforms,
+        { value: platformValue, label: newPlatformName, canDelete: true }
+      ]);
+    }
+    
+    setShowPlatformModal(false);
   };
 
   return (
@@ -156,39 +259,66 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Platform
               </Text>
+              <TouchableOpacity
+                style={[styles.addPlatformButton, { backgroundColor: '#8b5cf6' }]}
+                onPress={handleAddPlatform}
+              >
+                <Plus size={16} color="#ffffff" />
+              </TouchableOpacity>
             </View>
             
             <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
               How did they find you?
             </Text>
             <View style={styles.platformGrid}>
-              {platforms.slice(1).map((platformOption) => (
-                <TouchableOpacity
-                  key={platformOption.value}
-                  style={[
-                    styles.platformButton,
-                    {
-                      backgroundColor: platform === platformOption.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: platform === platformOption.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => setPlatform(platformOption.value)}
-                >
-                  <Text style={[
-                    styles.platformButtonText,
-                    { 
-                      color: platform === platformOption.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {platformOption.label}
-                  </Text>
-                </TouchableOpacity>
+              {availablePlatforms.map((platformOption) => (
+                <View key={platformOption.value} style={styles.platformButtonContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.platformButton,
+                      {
+                        backgroundColor: platform === platformOption.value 
+                          ? '#2563eb' 
+                          : (isDark ? '#374151' : '#f3f4f6'),
+                        borderColor: platform === platformOption.value 
+                          ? '#2563eb' 
+                          : (isDark ? '#4b5563' : '#d1d5db'),
+                      }
+                    ]}
+                    onPress={() => setPlatform(platformOption.value)}
+                  >
+                    <Text style={[
+                      styles.platformButtonText,
+                      { 
+                        color: platform === platformOption.value 
+                          ? '#ffffff' 
+                          : (isDark ? '#f9fafb' : '#374151') 
+                      }
+                    ]}>
+                      {platformOption.label}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.platformActions}>
+                    <TouchableOpacity
+                      style={styles.platformActionButton}
+                      onPress={() => handleEditPlatform(platformOption.value)}
+                    >
+                      <Edit size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.platformActionButton,
+                        !platformOption.canDelete && { opacity: 0.5 }
+                      ]}
+                      onPress={() => handleDeletePlatform(platformOption.value)}
+                      disabled={!platformOption.canDelete}
+                    >
+                      <Trash2 size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
               ))}
             </View>
           </View>
@@ -227,6 +357,49 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
           style={styles.footerButton}
         />
       </View>
+
+      {/* Platform Modal */}
+      <Modal
+        visible={showPlatformModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPlatformModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {editingPlatform ? 'Edit Platform' : 'Add Platform'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowPlatformModal(false)}>
+                <X size={20} color={isDark ? '#f9fafb' : '#111827'} />
+              </TouchableOpacity>
+            </View>
+            
+            <Input
+              label="Platform Name"
+              value={newPlatformName}
+              onChangeText={setNewPlatformName}
+              placeholder="e.g., TikTok, WeChat, Line"
+              required
+            />
+            
+            <View style={styles.modalActions}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={() => setShowPlatformModal(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                title="Save"
+                onPress={handleSavePlatform}
+                style={styles.modalButton}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -269,6 +442,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+    flex: 1,
+  },
+  addPlatformButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
     fontSize: 14,
@@ -278,19 +459,30 @@ const styles = StyleSheet.create({
   platformGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
+  },
+  platformButtonContainer: {
+    minWidth: 120,
   },
   platformButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 1,
-    minWidth: 80,
     alignItems: 'center',
   },
   platformButtonText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  platformActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  platformActionButton: {
+    padding: 4,
   },
   footer: {
     flexDirection: 'row',
@@ -299,5 +491,36 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+    gap: 12,
+  },
+  modalButton: {
+    minWidth: 100,
   },
 });
