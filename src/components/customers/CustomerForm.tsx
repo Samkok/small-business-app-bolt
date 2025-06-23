@@ -8,7 +8,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Modal
+  Modal,
+  TextInput
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -35,15 +36,21 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   const [newPlatformName, setNewPlatformName] = useState('');
   const [editingPlatform, setEditingPlatform] = useState<string | null>(null);
   const [availablePlatforms, setAvailablePlatforms] = useState<Array<{value: string, label: string, canDelete: boolean}>>([
-    { value: 'facebook', label: 'Facebook', canDelete: true },
-    { value: 'instagram', label: 'Instagram', canDelete: true },
-    { value: 'telegram', label: 'Telegram', canDelete: true },
-    { value: 'walk_in', label: 'Walk-in', canDelete: true },
-    { value: 'other', label: 'Other', canDelete: true },
+    { value: 'facebook', label: 'Facebook', canDelete: false },
+    { value: 'instagram', label: 'Instagram', canDelete: false },
+    { value: 'telegram', label: 'Telegram', canDelete: false },
+    { value: 'walk_in', label: 'Walk-in', canDelete: false },
+    { value: 'tiktok', label: 'TikTok', canDelete: true },
+    { value: 'wechat', label: 'WeChat', canDelete: true },
+    { value: 'line', label: 'Line', canDelete: true },
+    { value: 'other', label: 'Other', canDelete: false },
   ]);
   
   const { isDark } = useTheme();
   const { profile } = useAuth();
+
+  // List of built-in platforms that cannot be modified
+  const builtInPlatforms = ['facebook', 'instagram', 'telegram', 'walk_in', 'other'];
 
   useEffect(() => {
     if (customer) {
@@ -66,7 +73,8 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
       // Update available platforms with usage information
       const updatedPlatforms = availablePlatforms.map(platform => ({
         ...platform,
-        canDelete: !platformUsage[platform.value] || platformUsage[platform.value] === 0
+        canDelete: builtInPlatforms.includes(platform.value) ? false : 
+                  !platformUsage[platform.value] || platformUsage[platform.value] === 0
       }));
       
       setAvailablePlatforms(updatedPlatforms);
@@ -107,7 +115,7 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
       onSave();
     } catch (error) {
       console.error('Error saving customer:', error);
-      Alert.alert('Error', `Failed to ${customer ? 'update' : 'create'} customer`);
+      Alert.alert('Error', `Failed to ${customer ? 'update' : 'create'} customer. ${error}`);
     } finally {
       setLoading(false);
     }
@@ -122,6 +130,11 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   const handleEditPlatform = (platformValue: string) => {
     const platform = availablePlatforms.find(p => p.value === platformValue);
     if (platform) {
+      if (builtInPlatforms.includes(platformValue)) {
+        Alert.alert('Cannot Edit', 'This is a built-in platform and cannot be modified.');
+        return;
+      }
+      
       setNewPlatformName(platform.label);
       setEditingPlatform(platformValue);
       setShowPlatformModal(true);
@@ -131,6 +144,11 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   const handleDeletePlatform = (platformValue: string) => {
     const platform = availablePlatforms.find(p => p.value === platformValue);
     if (!platform) return;
+    
+    if (builtInPlatforms.includes(platformValue)) {
+      Alert.alert('Cannot Delete', 'This is a built-in platform and cannot be deleted.');
+      return;
+    }
     
     if (!platform.canDelete) {
       Alert.alert(
@@ -301,8 +319,12 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
                   
                   <View style={styles.platformActions}>
                     <TouchableOpacity
-                      style={styles.platformActionButton}
+                      style={[
+                        styles.platformActionButton,
+                        builtInPlatforms.includes(platformOption.value) && { opacity: 0.5 }
+                      ]}
                       onPress={() => handleEditPlatform(platformOption.value)}
+                      disabled={builtInPlatforms.includes(platformOption.value)}
                     >
                       <Edit size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
                     </TouchableOpacity>
@@ -310,10 +332,10 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
                     <TouchableOpacity
                       style={[
                         styles.platformActionButton,
-                        !platformOption.canDelete && { opacity: 0.5 }
+                        (builtInPlatforms.includes(platformOption.value) || !platformOption.canDelete) && { opacity: 0.5 }
                       ]}
                       onPress={() => handleDeletePlatform(platformOption.value)}
-                      disabled={!platformOption.canDelete}
+                      disabled={builtInPlatforms.includes(platformOption.value) || !platformOption.canDelete}
                     >
                       <Trash2 size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
                     </TouchableOpacity>
