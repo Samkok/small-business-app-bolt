@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Package, Calendar, DollarSign, User } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User } from 'lucide-react-native';
 
 interface ImportHistoryCardProps {
   importRecord: {
@@ -25,9 +25,10 @@ interface ImportHistoryCardProps {
     }>;
   };
   onEdit: (importRecord: any) => void;
+  onDelete: (importRecord: any) => void;
 }
 
-export function ImportHistoryCard({ importRecord, onEdit }: ImportHistoryCardProps) {
+export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHistoryCardProps) {
   const { isDark } = useTheme();
 
   const formatDate = (dateString: string) => {
@@ -69,12 +70,21 @@ export function ImportHistoryCard({ importRecord, onEdit }: ImportHistoryCardPro
           )}
         </View>
         
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-          onPress={() => onEdit(importRecord)}
-        >
-          <Edit size={16} color="#2563eb" />
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+            onPress={() => onEdit(importRecord)}
+          >
+            <Edit size={16} color="#2563eb" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6', marginLeft: 8 }]}
+            onPress={() => onDelete(importRecord)}
+          >
+            <Trash2 size={16} color="#dc2626" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <View style={styles.costBreakdown}>
@@ -173,6 +183,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     marginTop: 4,
+  },
+  actions: {
+    flexDirection: 'row',
   },
   actionButton: {
     width: 32,

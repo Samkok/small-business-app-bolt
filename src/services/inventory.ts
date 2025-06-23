@@ -195,7 +195,7 @@ export const inventoryService = {
       .from('inventory_imports')
       .select(`
         *,
-        products!inner(name, barcode),
+        products(name, barcode),
         import_costs(*)
       `)
       .eq('business_id', businessId)
@@ -232,7 +232,7 @@ export const inventoryService = {
       }
     });
 
-    const finalUnitCost = baseUnitCost + (totalAdditionalCost / quantity);
+    const finalUnitCost = quantity > 0 ? baseUnitCost + (totalAdditionalCost / quantity) : baseUnitCost;
     const totalCost = finalUnitCost * quantity;
 
     return { finalUnitCost, totalCost };

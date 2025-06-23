@@ -53,6 +53,7 @@ export default function InventoryScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [deletingImport, setDeletingImport] = useState<string | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -215,12 +216,15 @@ export default function InventoryScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              setDeletingImport(importRecord.id);
               await inventoryService.deleteImport(importRecord.id);
               Alert.alert('Success', 'Import record deleted successfully');
               loadData();
             } catch (error) {
               console.error('Error deleting import:', error);
               Alert.alert('Error', 'Failed to delete import record');
+            } finally {
+              setDeletingImport(null);
             }
           }
         },
@@ -677,6 +681,7 @@ export default function InventoryScreen() {
                 key={importRecord.id} 
                 importRecord={importRecord}
                 onEdit={handleEditImport}
+                onDelete={handleDeleteImport}
               />
             ))}
           </View>
@@ -814,6 +819,13 @@ export default function InventoryScreen() {
           onClose={() => setShowBarcodeScanner(false)}
         />
       </Modal>
+
+      {/* Loading overlay for deleting import */}
+      {deletingImport && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Deleting import record..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -1091,5 +1103,16 @@ const styles = StyleSheet.create({
   importOptionSubtext: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
 });
