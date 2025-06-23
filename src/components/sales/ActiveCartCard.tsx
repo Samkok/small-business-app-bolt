@@ -154,7 +154,11 @@ const styles = StyleSheet.create({
   timeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 60,
+    justifyContent: 'flex-end',
+    marginTop: 2,
   },
+,
   timeText: {
     fontSize: 12,
     marginLeft: 4,
