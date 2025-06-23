@@ -6,10 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
   RefreshControl,
   TextInput
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -18,23 +18,19 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
-import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users } from 'lucide-react-native';
+import SalesForm from '@/src/components/sales/SalesForm';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { cartService } from '@/src/services/carts';
 
 export default function SalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
-  const [activeCarts, setActiveCarts] = useState<any[]>([]);
   const [filteredSales, setFilteredSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showSalesForm, setShowSalesForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
-  
-  const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
@@ -56,31 +52,27 @@ export default function SalesScreen() {
   ];
 
   useEffect(() => {
-    loadData();
+    loadSales();
   }, []);
 
   useEffect(() => {
     filterSales();
   }, [sales, searchQuery, selectedStatus, selectedPaymentMethod]);
 
-  const loadData = async (isRefresh = false) => {
+  const loadSales = async (isRefresh = false) => {
     if (!profile?.id) return;
     
     if (!isRefresh) {
+      
       setLoading(true);
     }
     
     try {
-      const [salesData, cartsData] = await Promise.all([
-        salesService.getSales(profile.id),
-        cartService.getActiveCarts(profile.id)
-      ]);
-      
-      setSales(salesData);
-      setActiveCarts(cartsData);
+      const data = await salesService.getSales(profile.id);
+      setSales(data);
     } catch (error) {
-      console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), 'Failed to load sales data');
+      console.error('Error loading sales:', error);
+      Alert.alert(t('common.error'), 'Failed to load sales');
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -117,7 +109,12 @@ export default function SalesScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData(true);
+    await loadSales(true);
+  };
+
+  const handleSaleComplete = () => {
+    setShowSalesForm(false);
+    loadSales();
   };
 
   const handleVoidSale = async (sale: any) => {
@@ -134,7 +131,7 @@ export default function SalesScreen() {
               if (!profile?.id) return;
               await salesService.voidSale(sale.id, 'Sale voided by user', profile.id);
               Alert.alert('Success', 'Sale voided successfully');
-              loadData();
+              loadSales();
             } catch (error) {
               console.error('Error voiding sale:', error);
               Alert.alert('Error', 'Failed to void sale');
@@ -143,14 +140,6 @@ export default function SalesScreen() {
         },
       ]
     );
-  };
-
-  const handleNewSale = () => {
-    router.push('/sales/customer-selection');
-  };
-
-  const handleCartPress = (cartId: string) => {
-    router.push(`/sales/cart/${cartId}`);
   };
 
   const getSalesStats = () => {
@@ -169,50 +158,20 @@ export default function SalesScreen() {
     return { totalSales, totalRevenue, averageSale, todayRevenue, todaySales: todaySales.length };
   };
 
-  const TabButton = ({ 
-    title, 
-    icon,
-    isActive, 
-    onPress,
-    count
-  }: { 
-    title: string; 
-    icon: React.ReactNode;
-    isActive: boolean; 
-    onPress: () => void;
-    count?: number;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.tabButton,
-        {
-          backgroundColor: isActive 
-            ? '#2563eb' 
-            : (isDark ? '#374151' : '#f3f4f6'),
-          borderColor: isActive ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-        }
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.tabButtonContent}>
-        <View style={styles.tabIcon}>
-          {icon}
-        </View>
-        <Text style={[
-          styles.tabButtonText,
-          { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-        ]}>
-          {title}
-        </Text>
-        {count !== undefined && count > 0 && (
-          <View style={[styles.countBadge, { backgroundColor: isActive ? '#ffffff' : '#2563eb' }]}>
-            <Text style={[styles.countText, { color: isActive ? '#2563eb' : '#ffffff' }]}>
-              {count}
-            </Text>
+  const SkeletonStatsGrid = () => (
+    <View style={styles.statsGrid}>
+      {[1, 2, 3, 4].map((index) => (
+        <SkeletonCard key={index} style={styles.statsCard}>
+          <View style={styles.statsContent}>
+            <SkeletonLoader height={20} width={20} borderRadius={10} />
+            <View style={styles.statsText}>
+              <SkeletonLoader height={16} width="60%" style={{ marginBottom: 4 }} />
+              <SkeletonLoader height={11} width="80%" />
+            </View>
           </View>
-        )}
-      </View>
-    </TouchableOpacity>
+        </SkeletonCard>
+      ))}
+    </View>
   );
 
   if (loading) {
@@ -224,28 +183,41 @@ export default function SalesScreen() {
           </Text>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={handleNewSale}
+            onPress={() => setShowSalesForm(true)}
           >
             <Plus size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.tabs}>
-          <TabButton
-            title="Active Carts"
-            icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-            isActive={activeTab === 'carts'}
-            onPress={() => setActiveTab('carts')}
-          />
-          <TabButton
-            title="Sales History"
-            icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-            isActive={activeTab === 'sales'}
-            onPress={() => setActiveTab('sales')}
-          />
+        {/* Search and Filter Skeleton */}
+        <View style={styles.searchSection}>
+          <SkeletonLoader height={48} borderRadius={8} style={{ marginBottom: 12 }} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+            {statusFilters.map((filter) => (
+              <SkeletonLoader 
+                key={filter.value}
+                height={36} 
+                width={80} 
+                borderRadius={20} 
+                style={{ marginRight: 8 }} 
+              />
+            ))}
+          </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+            {paymentMethodFilters.map((filter) => (
+              <SkeletonLoader 
+                key={filter.value}
+                height={36} 
+                width={80} 
+                borderRadius={20} 
+                style={{ marginRight: 8 }} 
+              />
+            ))}
+          </ScrollView>
         </View>
 
-        <SkeletonList itemComponent={SkeletonSaleCard} itemCount={5} style={styles.content} />
+        <SkeletonStatsGrid />
+        <SkeletonList itemComponent={SkeletonSaleCard} itemCount={5} style={styles.salesList} />
       </View>
     );
   }
@@ -260,260 +232,206 @@ export default function SalesScreen() {
         </Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={handleNewSale}
+          onPress={() => setShowSalesForm(true)}
         >
           <Plus size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TabButton
-          title="Active Carts"
-          icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-          isActive={activeTab === 'carts'}
-          onPress={() => setActiveTab('carts')}
-          count={activeCarts.length}
-        />
-        <TabButton
-          title="Sales History"
-          icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-          isActive={activeTab === 'sales'}
-          onPress={() => setActiveTab('sales')}
-        />
+      {/* Search and Filter */}
+      <View style={styles.searchSection}>
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+          <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <TextInput
+            style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+            placeholder="Search sales..."
+            placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+          {statusFilters.map((filter) => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[
+                styles.filterButton,
+                {
+                  backgroundColor: selectedStatus === filter.value 
+                    ? '#2563eb' 
+                    : (isDark ? '#374151' : '#f3f4f6'),
+                  borderColor: selectedStatus === filter.value 
+                    ? '#2563eb' 
+                    : (isDark ? '#4b5563' : '#d1d5db'),
+                }
+              ]}
+              onPress={() => setSelectedStatus(filter.value)}
+            >
+              <Text style={[
+                styles.filterButtonText,
+                { 
+                  color: selectedStatus === filter.value 
+                    ? '#ffffff' 
+                    : (isDark ? '#f9fafb' : '#374151') 
+                }
+              ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+          {paymentMethodFilters.map((filter) => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[
+                styles.filterButton,
+                {
+                  backgroundColor: selectedPaymentMethod === filter.value 
+                    ? '#059669' 
+                    : (isDark ? '#374151' : '#f3f4f6'),
+                  borderColor: selectedPaymentMethod === filter.value 
+                    ? '#059669' 
+                    : (isDark ? '#4b5563' : '#d1d5db'),
+                }
+              ]}
+              onPress={() => setSelectedPaymentMethod(filter.value)}
+            >
+              <Text style={[
+                styles.filterButtonText,
+                { 
+                  color: selectedPaymentMethod === filter.value 
+                    ? '#ffffff' 
+                    : (isDark ? '#f9fafb' : '#374151') 
+                }
+              ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {activeTab === 'carts' ? (
-        // Active Carts Tab
-        <ScrollView
-          style={styles.content}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={['#2563eb']}
-              tintColor="#2563eb"
-              title="Pull to refresh"
-              titleColor={isDark ? '#f9fafb' : '#111827'}
-            />
-          }
-        >
-          {activeCarts.length > 0 ? (
-            <View style={styles.cartsGrid}>
-              {activeCarts.map((cart) => (
-                <ActiveCartCard
-                  key={cart.id}
-                  cart={cart}
-                  onPress={() => handleCartPress(cart.id)}
-                />
-              ))}
+      {/* Stats Cards */}
+      <View style={styles.statsGrid}>
+        <Card style={styles.statsCard}>
+          <View style={styles.statsContent}>
+            <DollarSign size={20} color="#2563eb" />
+            <View style={styles.statsText}>
+              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                ${todayRevenue.toFixed(2)}
+              </Text>
+              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Today's Revenue
+              </Text>
             </View>
-          ) : (
-            <Card style={styles.emptyState}>
-              <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-              <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                No Active Carts
+          </View>
+        </Card>
+
+        <Card style={styles.statsCard}>
+          <View style={styles.statsContent}>
+            <TrendingUp size={20} color="#059669" />
+            <View style={styles.statsText}>
+              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                ${totalRevenue.toFixed(2)}
               </Text>
-              <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Start a new sale by selecting a customer and adding products
+              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Total Revenue
               </Text>
+            </View>
+          </View>
+        </Card>
+
+        <Card style={styles.statsCard}>
+          <View style={styles.statsContent}>
+            <Receipt size={20} color="#8b5cf6" />
+            <View style={styles.statsText}>
+              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {todaySales}
+              </Text>
+              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Today's Sales
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        <Card style={styles.statsCard}>
+          <View style={styles.statsContent}>
+            <ShoppingCart size={20} color="#ea580c" />
+            <View style={styles.statsText}>
+              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                ${averageSale.toFixed(2)}
+              </Text>
+              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Average Sale
+              </Text>
+            </View>
+          </View>
+        </Card>
+      </View>
+
+      {/* Sales List */}
+      <ScrollView
+        style={styles.salesList}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#2563eb']}
+            tintColor="#2563eb"
+            title="Pull to refresh"
+            titleColor={isDark ? '#f9fafb' : '#111827'}
+          />
+        }
+      >
+        {filteredSales.length > 0 ? (
+          filteredSales.map((sale) => (
+            <SaleCard
+              key={sale.id}
+              sale={sale}
+              onVoid={handleVoidSale}
+            />
+          ))
+        ) : (
+          <Card style={styles.emptyState}>
+            <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all' 
+                ? 'No sales found' 
+                : 'No sales yet'
+              }
+            </Text>
+            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all'
+                ? 'Try adjusting your search or filter criteria'
+                : 'Create your first sale to get started'
+              }
+            </Text>
+            {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
               <Button
-                title="Start New Sale"
-                onPress={handleNewSale}
+                title="New Sale"
+                onPress={() => setShowSalesForm(true)}
                 style={styles.emptyButton}
               />
-            </Card>
-          )}
-        </ScrollView>
-      ) : (
-        // Sales History Tab
-        <View style={styles.content}>
-          {/* Search and Filter */}
-          <View style={styles.searchSection}>
-            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <TextInput
-                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                placeholder="Search sales..."
-                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {statusFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => setSelectedStatus(filter.value)}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedStatus === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {paymentMethodFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => setSelectedPaymentMethod(filter.value)}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedPaymentMethod === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Stats Cards */}
-          <View style={styles.statsGrid}>
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <DollarSign size={20} color="#2563eb" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${todayRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <TrendingUp size={20} color="#059669" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${totalRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <Receipt size={20} color="#8b5cf6" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {todaySales}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Sales
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <ShoppingCart size={20} color="#ea580c" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${averageSale.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Average Sale
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          </View>
-
-          {/* Sales List */}
-          <ScrollView
-            style={styles.salesList}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={['#2563eb']}
-                tintColor="#2563eb"
-                title="Pull to refresh"
-                titleColor={isDark ? '#f9fafb' : '#111827'}
-              />
-            }
-          >
-            {filteredSales.length > 0 ? (
-              filteredSales.map((sale) => (
-                <SaleCard
-                  key={sale.id}
-                  sale={sale}
-                  onVoid={handleVoidSale}
-                />
-              ))
-            ) : (
-              <Card style={styles.emptyState}>
-                <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-                <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all' 
-                    ? 'No sales found' 
-                    : 'No sales yet'
-                  }
-                </Text>
-                <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all'
-                    ? 'Try adjusting your search or filter criteria'
-                    : 'Create your first sale to get started'
-                  }
-                </Text>
-                {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
-                  <Button
-                    title="Start New Sale"
-                    onPress={handleNewSale}
-                    style={styles.emptyButton}
-                  />
-                )}
-              </Card>
             )}
-          </ScrollView>
-        </View>
-      )}
+          </Card>
+        )}
+      </ScrollView>
+
+      <Modal
+        visible={showSalesForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SalesForm
+          onComplete={handleSaleComplete}
+          onCancel={() => setShowSalesForm(false)}
+        />
+      </Modal>
     </View>
   );
 }
@@ -541,56 +459,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabs: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 8,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  tabButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    minHeight: 48,
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
-  countBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  countText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  cartsGrid: {
-    gap: 12,
-    paddingBottom: 20,
-  },
   searchSection: {
+    paddingHorizontal: 16,
     marginBottom: 16,
   },
   searchContainer: {
@@ -625,6 +495,7 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingHorizontal: 16,
     marginBottom: 16,
     gap: 8,
   },
@@ -652,6 +523,7 @@ const styles = StyleSheet.create({
   },
   salesList: {
     flex: 1,
+    paddingHorizontal: 16,
   },
   emptyState: {
     alignItems: 'center',
