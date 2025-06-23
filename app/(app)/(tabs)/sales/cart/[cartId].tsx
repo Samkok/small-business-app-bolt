@@ -27,6 +27,7 @@ export default function CartScreen() {
   const [showCartDiscountModal, setShowCartDiscountModal] = useState(false);
   const [deliveryCost, setDeliveryCost] = useState('');
   const [notes, setNotes] = useState('');
+  const [updatingDelivery, setUpdatingDelivery] = useState(false);
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -134,22 +135,44 @@ export default function CartScreen() {
     }
   };
 
-  const handleUpdateDelivery = async () => {
+  const handleDeliveryCostChange = async (value: string) => {
+    setDeliveryCost(value);
+    
+    // Debounce the update to avoid too many API calls
+    if (updatingDelivery) return;
+    
+    setUpdatingDelivery(true);
     try {
-      const deliveryAmount = parseFloat(deliveryCost) || 0;
+      const deliveryAmount = parseFloat(value) || 0;
       await cartService.updateCart(cartId as string, {
-        delivery_cost: deliveryAmount,
-        notes: notes.trim() || null
+        delivery_cost: deliveryAmount
       });
       await loadCart();
-      Alert.alert('Success', 'Delivery information updated');
     } catch (error) {
-      console.error('Error updating delivery:', error);
-      Alert.alert('Error', 'Failed to update delivery information');
+      console.error('Error updating delivery cost:', error);
+      // Don't show alert for every keystroke
+    } finally {
+      setUpdatingDelivery(false);
     }
   };
 
-  const handleCheckout = () => {
+  const handleNotesChange = (value: string) => {
+    setNotes(value);
+  };
+
+  const handleCheckout = async () => {
+    // Save notes before checkout if they've changed
+    if (notes !== cart.notes) {
+      try {
+        await cartService.updateCart(cartId as string, {
+          notes: notes.trim() || null
+        });
+      } catch (error) {
+        console.error('Error updating notes:', error);
+        // Continue with checkout even if notes update fails
+      }
+    }
+    
     router.push(`/sales/checkout/${cartId}`);
   };
 
@@ -525,34 +548,56 @@ export default function CartScreen() {
         {/* Delivery Information */}
         <Card style={styles.deliveryCard}>
           <View style={styles.deliveryHeader}>
-            <Text style={[styles.deliveryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Delivery Information
-            </Text>
+            <View style={styles.sectionTitleContainer}>
+              <Truck size={20} color="#ea580c" />
+              <Text style={[styles.deliveryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Delivery Information
+              </Text>
+            </View>
           </View>
 
-          <Input
-            label="Delivery Cost"
-            value={deliveryCost}
-            onChangeText={setDeliveryCost}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-          />
+          <View style={styles.deliveryCostContainer}>
+            <Text style={[styles.deliveryLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              Delivery Cost
+            </Text>
+            <View style={[styles.deliveryCostInput, { 
+              backgroundColor: isDark ? '#374151' : '#f9fafb',
+              borderColor: isDark ? '#4b5563' : '#d1d5db'
+            }]}>
+              <DollarSign size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <TextInput
+                style={[styles.deliveryCostTextInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                value={deliveryCost}
+                onChangeText={handleDeliveryCostChange}
+                placeholder="0.00"
+                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                keyboardType="decimal-pad"
+              />
+              {updatingDelivery && (
+                <View style={styles.updatingIndicator} />
+              )}
+            </View>
+          </View>
 
-          <Input
-            label="Notes"
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Delivery address, special instructions, etc."
-            multiline
-            numberOfLines={3}
-          />
-
-          <Button
-            title="Update Delivery Info"
-            variant="outline"
-            onPress={handleUpdateDelivery}
-            style={styles.updateButton}
-          />
+          <View style={styles.notesContainer}>
+            <Text style={[styles.deliveryLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              Notes
+            </Text>
+            <TextInput
+              style={[styles.notesInput, { 
+                backgroundColor: isDark ? '#374151' : '#f9fafb',
+                borderColor: isDark ? '#4b5563' : '#d1d5db',
+                color: isDark ? '#f9fafb' : '#111827'
+              }]}
+              value={notes}
+              onChangeText={handleNotesChange}
+              placeholder="Delivery address, special instructions, etc."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
         </Card>
 
         {/* Order Summary */}
@@ -607,8 +652,8 @@ export default function CartScreen() {
                 <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   Delivery Cost:
                 </Text>
-                <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  ${cartSummary.deliveryCost.toFixed(2)}
+                <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
+                  -${cartSummary.deliveryCost.toFixed(2)}
                 </Text>
               </View>
             )}
@@ -859,14 +904,57 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   deliveryHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   deliveryTitle: {
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
-  updateButton: {
-    marginTop: 8,
+  deliveryCostContainer: {
+    marginBottom: 16,
+  },
+  deliveryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  deliveryCostInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  deliveryCostTextInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  updatingIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+    position: 'absolute',
+    right: 12,
+  },
+  notesContainer: {
+    marginBottom: 8,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    minHeight: 100,
   },
   summaryCard: {
     padding: 16,
