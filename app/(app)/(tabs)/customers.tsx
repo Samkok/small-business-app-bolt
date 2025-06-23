@@ -33,6 +33,11 @@ export default function CustomersScreen() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<Array<{value: string, label: string, count: number}>>([
     { value: 'all', label: 'All Platforms', count: 0 },
+    { value: 'facebook', label: 'Facebook', count: 0 },
+    { value: 'instagram', label: 'Instagram', count: 0 },
+    { value: 'telegram', label: 'Telegram', count: 0 },
+    { value: 'walk_in', label: 'Walk-in', count: 0 },
+    { value: 'other', label: 'Other', count: 0 },
   ]);
   
   const { t } = useTranslation();
@@ -58,19 +63,24 @@ export default function CustomersScreen() {
       const data = await customerService.getCustomers(profile.id);
       setCustomers(data);
       
-      // Get platform usage and update available platforms
-      const platformUsage = await customerService.getPlatformUsage(profile.id);
-      
-      // Create a set of all platforms used by customers
-      const platformSet = new Set(['all']);
+      // Count platforms manually
+      const platformCounts: Record<string, number> = { all: data.length };
       data.forEach(customer => {
         if (customer.platform) {
-          platformSet.add(customer.platform);
+          platformCounts[customer.platform] = (platformCounts[customer.platform] || 0) + 1;
         }
       });
       
-      // Convert to array of platform objects with counts
-      const platforms = Array.from(platformSet).map(platform => {
+      // Get unique platforms from customers
+      const uniquePlatforms = new Set(['all']);
+      data.forEach(customer => {
+        if (customer.platform) {
+          uniquePlatforms.add(customer.platform);
+        }
+      });
+      
+      // Create platform objects with counts
+      const platforms = Array.from(uniquePlatforms).map(platform => {
         if (platform === 'all') {
           return { value: 'all', label: 'All Platforms', count: data.length };
         }
@@ -84,7 +94,7 @@ export default function CustomersScreen() {
         return {
           value: platform,
           label: formattedName,
-          count: platformUsage[platform] || 0
+          count: platformCounts[platform] || 0
         };
       });
       

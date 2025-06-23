@@ -90,19 +90,21 @@ export const customerService = {
   },
 
   async getPlatformUsage(businessId: string) {
-    const { data, error } = await supabase
+    // First get all customers for this business
+    const { data: customers, error } = await supabase
       .from('customers')
-      .select('platform, count')
+      .select('platform')
       .eq('business_id', businessId)
-      .not('platform', 'is', null)
-      .group('platform');
+      .not('platform', 'is', null);
 
     if (error) throw error;
 
-    // Convert the result to a map of platform -> count
+    // Count occurrences of each platform manually
     const platformUsage: Record<string, number> = {};
-    data.forEach((item: any) => {
-      platformUsage[item.platform] = parseInt(item.count);
+    customers.forEach(customer => {
+      if (customer.platform) {
+        platformUsage[customer.platform] = (platformUsage[customer.platform] || 0) + 1;
+      }
     });
 
     return platformUsage;
