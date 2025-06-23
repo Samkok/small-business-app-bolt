@@ -1,0 +1,406 @@
+export interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          user_id: string;
+          business_name: string;
+          full_name: string;
+          role: 'admin' | 'staff';
+          phone?: string;
+          address?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          business_name: string;
+          full_name: string;
+          role?: 'admin' | 'staff';
+          phone?: string;
+          address?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          business_name?: string;
+          full_name?: string;
+          role?: 'admin' | 'staff';
+          phone?: string;
+          address?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      products: {
+        Row: {
+          id: string;
+          name: string;
+          price: number;
+          description?: string;
+          image_url?: string;
+          barcode?: string;
+          current_stock: number;
+          min_stock_level: number;
+          business_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          price: number;
+          description?: string;
+          image_url?: string;
+          barcode?: string;
+          current_stock?: number;
+          min_stock_level?: number;
+          business_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          price?: number;
+          description?: string;
+          image_url?: string;
+          barcode?: string;
+          current_stock?: number;
+          min_stock_level?: number;
+          business_id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      inventory_imports: {
+        Row: {
+          id: string;
+          product_id: string;
+          quantity: number;
+          base_unit_cost: number;
+          final_unit_cost: number;
+          total_cost: number;
+          notes?: string;
+          business_id: string;
+          imported_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          quantity: number;
+          base_unit_cost: number;
+          final_unit_cost: number;
+          total_cost: number;
+          notes?: string;
+          business_id: string;
+          imported_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          quantity?: number;
+          base_unit_cost?: number;
+          final_unit_cost?: number;
+          total_cost?: number;
+          notes?: string;
+          business_id?: string;
+          imported_by?: string;
+          created_at?: string;
+        };
+      };
+      import_costs: {
+        Row: {
+          id: string;
+          import_id: string;
+          cost_type: string;
+          amount: number;
+          calculation_type: 'per_unit' | 'per_total';
+          description?: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          import_id: string;
+          cost_type: string;
+          amount: number;
+          calculation_type: 'per_unit' | 'per_total';
+          description?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          import_id?: string;
+          cost_type?: string;
+          amount?: number;
+          calculation_type?: 'per_unit' | 'per_total';
+          description?: string;
+          created_at?: string;
+        };
+      };
+      customers: {
+        Row: {
+          id: string;
+          name: string;
+          phone?: string;
+          address?: string;
+          platform?: 'facebook' | 'instagram' | 'telegram' | 'walk_in' | 'other';
+          notes?: string;
+          business_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          phone?: string;
+          address?: string;
+          platform?: 'facebook' | 'instagram' | 'telegram' | 'walk_in' | 'other';
+          notes?: string;
+          business_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          phone?: string;
+          address?: string;
+          platform?: 'facebook' | 'instagram' | 'telegram' | 'walk_in' | 'other';
+          notes?: string;
+          business_id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      carts: {
+        Row: {
+          id: string;
+          customer_id: string;
+          status: 'active' | 'completed' | 'abandoned';
+          total_amount: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          delivery_cost?: number;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id: string;
+          status?: 'active' | 'completed' | 'abandoned';
+          total_amount?: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          delivery_cost?: number;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_id?: string;
+          status?: 'active' | 'completed' | 'abandoned';
+          total_amount?: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          delivery_cost?: number;
+          notes?: string;
+          business_id?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      cart_items: {
+        Row: {
+          id: string;
+          cart_id: string;
+          product_id: string;
+          quantity: number;
+          unit_price: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          subtotal: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cart_id: string;
+          product_id: string;
+          quantity: number;
+          unit_price: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          subtotal: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cart_id?: string;
+          product_id?: string;
+          quantity?: number;
+          unit_price?: number;
+          discount_type?: 'percentage' | 'fixed';
+          discount_value?: number;
+          subtotal?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      sales: {
+        Row: {
+          id: string;
+          cart_id: string;
+          customer_id: string;
+          total_amount: number;
+          payment_method: 'cash' | 'card' | 'transfer' | 'other';
+          status: 'completed' | 'voided' | 'refunded' | 'partially_returned';
+          sale_date: string;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          cart_id: string;
+          customer_id: string;
+          total_amount: number;
+          payment_method: 'cash' | 'card' | 'transfer' | 'other';
+          status?: 'completed' | 'voided' | 'refunded' | 'partially_returned';
+          sale_date?: string;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          cart_id?: string;
+          customer_id?: string;
+          total_amount?: number;
+          payment_method?: 'cash' | 'card' | 'transfer' | 'other';
+          status?: 'completed' | 'voided' | 'refunded' | 'partially_returned';
+          sale_date?: string;
+          notes?: string;
+          business_id?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+      };
+      sale_actions: {
+        Row: {
+          id: string;
+          sale_id: string;
+          action_type: 'void' | 'refund' | 'return';
+          amount?: number;
+          reason: string;
+          notes?: string;
+          performed_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sale_id: string;
+          action_type: 'void' | 'refund' | 'return';
+          amount?: number;
+          reason: string;
+          notes?: string;
+          performed_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sale_id?: string;
+          action_type?: 'void' | 'refund' | 'return';
+          amount?: number;
+          reason?: string;
+          notes?: string;
+          performed_by?: string;
+          created_at?: string;
+        };
+      };
+      expenses: {
+        Row: {
+          id: string;
+          category_id: string;
+          amount: number;
+          description: string;
+          expense_date: string;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          category_id: string;
+          amount: number;
+          description: string;
+          expense_date?: string;
+          notes?: string;
+          business_id: string;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          category_id?: string;
+          amount?: number;
+          description?: string;
+          expense_date?: string;
+          notes?: string;
+          business_id?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+      };
+      expense_categories: {
+        Row: {
+          id: string;
+          name: string;
+          description?: string;
+          business_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string;
+          business_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string;
+          business_id?: string;
+          created_at?: string;
+        };
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+  };
+}

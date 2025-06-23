@@ -1,0 +1,304 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { Card } from '@/src/components/ui/Card';
+import { Input } from '@/src/components/ui/Input';
+import { Button } from '@/src/components/ui/Button';
+import { X, DollarSign, FileText, Calendar, Tag } from 'lucide-react-native';
+import { expenseService } from '@/src/services/expenses';
+
+interface ExpenseFormProps {
+  expense?: any;
+  categories: any[];
+  onSave: () => void;
+  onCancel: () => void;
+}
+
+export default function ExpenseForm({ expense, categories, onSave, onCancel }: ExpenseFormProps) {
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [expenseDate, setExpenseDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  
+  const { isDark } = useTheme();
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    if (expense) {
+      setAmount(expense.amount.toString());
+      setDescription(expense.description || '');
+      setCategoryId(expense.category_id || '');
+      setExpenseDate(expense.expense_date?.split('T')[0] || '');
+      setNotes(expense.notes || '');
+    } else {
+      // Set today's date as default
+      setExpenseDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [expense]);
+
+  const handleSave = async () => {
+    if (!amount.trim() || !description.trim() || !categoryId) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const amountValue = parseFloat(amount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    if (!profile?.id) {
+      Alert.alert('Error', 'No business profile found');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const expenseData = {
+        amount: amountValue,
+        description: description.trim(),
+        category_id: categoryId,
+        expense_date: expenseDate || new Date().toISOString(),
+        notes: notes.trim() || null,
+        business_id: profile.id,
+        created_by: profile.id,
+      };
+
+      if (expense) {
+        await expenseService.updateExpense(expense.id, expenseData);
+      } else {
+        await expenseService.createExpense(expenseData);
+      }
+
+      Alert.alert('Success', `Expense ${expense ? 'updated' : 'created'} successfully`);
+      onSave();
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      Alert.alert('Error', `Failed to ${expense ? 'update' : 'create'} expense`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          {expense ? 'Edit Expense' : 'Add Expense'}
+        </Text>
+        <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
+          <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Card style={styles.form}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <DollarSign size={20} color="#dc2626" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Expense Details
+              </Text>
+            </View>
+            
+            <Input
+              label="Amount"
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              required
+            />
+            
+            <Input
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What was this expense for?"
+              required
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Tag size={20} color="#8b5cf6" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Category
+              </Text>
+            </View>
+            
+            <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              Select Category *
+            </Text>
+            <View style={styles.categoryGrid}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryButton,
+                    {
+                      backgroundColor: categoryId === category.id 
+                        ? '#8b5cf6' 
+                        : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: categoryId === category.id 
+                        ? '#8b5cf6' 
+                        : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => setCategoryId(category.id)}
+                >
+                  <Text style={[
+                    styles.categoryButtonText,
+                    { 
+                      color: categoryId === category.id 
+                        ? '#ffffff' 
+                        : (isDark ? '#f9fafb' : '#374151') 
+                    }
+                  ]}>
+                    {category.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Calendar size={20} color="#059669" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Date
+              </Text>
+            </View>
+            
+            <Input
+              label="Expense Date"
+              value={expenseDate}
+              onChangeText={setExpenseDate}
+              placeholder="YYYY-MM-DD"
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <FileText size={20} color="#ea580c" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Additional Notes
+              </Text>
+            </View>
+            
+            <Input
+              label="Notes"
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Any additional details about this expense"
+              multiline
+              numberOfLines={4}
+            />
+          </View>
+        </Card>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Button
+          title="Cancel"
+          variant="outline"
+          onPress={onCancel}
+          style={styles.footerButton}
+        />
+        <Button
+          title={expense ? 'Update Expense' : 'Add Expense'}
+          onPress={handleSave}
+          loading={loading}
+          style={styles.footerButton}
+        />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  form: {
+    padding: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  footerButton: {
+    flex: 1,
+  },
+});
