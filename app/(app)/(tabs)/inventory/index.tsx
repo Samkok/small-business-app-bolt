@@ -29,7 +29,7 @@ import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import ImportCSVModal from '@/src/components/inventory/ImportCSVModal';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, CheckSquare, Square } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -54,6 +54,9 @@ export default function InventoryScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
+  const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -159,6 +162,8 @@ export default function InventoryScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     setSearchQuery('');
+    setSelectedImports(new Set());
+    setIsMultiSelectMode(false);
     await loadData(true);
   };
 
@@ -205,7 +210,7 @@ export default function InventoryScreen() {
     setShowEditImportForm(true);
   };
 
-  const handleDeleteImport = (importRecord: any) => {
+  const handleDeleteImport = async (importRecord: any) => {
     Alert.alert(
       'Delete Import Record',
       `Are you sure you want to delete this import record? This will also adjust the product stock.`,
@@ -228,6 +233,91 @@ export default function InventoryScreen() {
             }
           }
         },
+      ]
+    );
+  };
+
+  const handleToggleSelectImport = (importId: string) => {
+    const newSelected = new Set(selectedImports);
+    if (newSelected.has(importId)) {
+      newSelected.delete(importId);
+    } else {
+      newSelected.add(importId);
+    }
+    setSelectedImports(newSelected);
+  };
+
+  const handleToggleMultiSelectMode = () => {
+    setIsMultiSelectMode(!isMultiSelectMode);
+    if (!isMultiSelectMode) {
+      setSelectedImports(new Set());
+    }
+  };
+
+  const handleSelectAllImports = () => {
+    if (selectedImports.size === importHistory.length) {
+      // Deselect all
+      setSelectedImports(new Set());
+    } else {
+      // Select all
+      const allImportIds = importHistory.map(item => item.id);
+      setSelectedImports(new Set(allImportIds));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedImports.size === 0) {
+      Alert.alert('No Imports Selected', 'Please select at least one import record to delete.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Selected Imports',
+      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkDeleteLoading(true);
+            try {
+              const importIds = Array.from(selectedImports);
+              let successCount = 0;
+              let errorCount = 0;
+
+              // Process deletions sequentially to avoid race conditions
+              for (const importId of importIds) {
+                try {
+                  await inventoryService.deleteImport(importId);
+                  successCount++;
+                } catch (error) {
+                  console.error(`Error deleting import ${importId}:`, error);
+                  errorCount++;
+                }
+              }
+
+              if (errorCount === 0) {
+                Alert.alert('Success', `Successfully deleted ${successCount} import record(s).`);
+              } else {
+                Alert.alert(
+                  'Partial Success',
+                  `Successfully deleted ${successCount} import record(s), but failed to delete ${errorCount} record(s).`
+                );
+              }
+
+              // Reset selection and refresh data
+              setSelectedImports(new Set());
+              setIsMultiSelectMode(false);
+              loadData();
+            } catch (error) {
+              console.error('Error in bulk delete operation:', error);
+              Alert.alert('Error', 'An error occurred during the bulk delete operation.');
+            } finally {
+              setBulkDeleteLoading(false);
+            }
+          }
+        }
       ]
     );
   };
@@ -676,13 +766,85 @@ export default function InventoryScreen() {
       >
         {importHistory.length > 0 ? (
           <View style={styles.historyList}>
+            <View style={styles.historyActions}>
+              <TouchableOpacity 
+                style={[
+                  styles.multiSelectButton, 
+                  { backgroundColor: isMultiSelectMode ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6') }
+                ]}
+                onPress={handleToggleMultiSelectMode}
+              >
+                <CheckSquare size={16} color={isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+                <Text style={[
+                  styles.multiSelectButtonText, 
+                  { color: isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+                ]}>
+                  {isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple'}
+                </Text>
+              </TouchableOpacity>
+
+              {isMultiSelectMode && (
+                <View style={styles.bulkActionButtons}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.bulkActionButton, 
+                      { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+                    ]}
+                    onPress={handleSelectAllImports}
+                  >
+                    <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
+                      {selectedImports.size === importHistory.length ? 'Deselect All' : 'Select All'}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.bulkActionButton, 
+                      { 
+                        backgroundColor: selectedImports.size > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
+                        opacity: selectedImports.size > 0 ? 1 : 0.5
+                      }
+                    ]}
+                    onPress={handleBulkDelete}
+                    disabled={selectedImports.size === 0 || bulkDeleteLoading}
+                  >
+                    {bulkDeleteLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <>
+                        <Trash2 size={16} color="#ffffff" />
+                        <Text style={{ color: '#ffffff', marginLeft: 4 }}>
+                          Delete ({selectedImports.size})
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
             {importHistory.map((importRecord) => (
-              <ImportHistoryCard 
-                key={importRecord.id} 
-                importRecord={importRecord}
-                onEdit={handleEditImport}
-                onDelete={handleDeleteImport}
-              />
+              <View key={importRecord.id} style={styles.importCardContainer}>
+                {isMultiSelectMode && (
+                  <TouchableOpacity
+                    style={styles.selectCheckbox}
+                    onPress={() => handleToggleSelectImport(importRecord.id)}
+                  >
+                    {selectedImports.has(importRecord.id) ? (
+                      <CheckSquare size={24} color="#2563eb" />
+                    ) : (
+                      <Square size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                <View style={[styles.importCardWrapper, isMultiSelectMode && styles.importCardWithCheckbox]}>
+                  <ImportHistoryCard 
+                    importRecord={importRecord}
+                    onEdit={handleEditImport}
+                    onDelete={handleDeleteImport}
+                  />
+                </View>
+              </View>
             ))}
           </View>
         ) : (
@@ -824,6 +986,13 @@ export default function InventoryScreen() {
       {deletingImport && (
         <View style={styles.loadingOverlay}>
           <LoadingSpinner text="Deleting import record..." />
+        </View>
+      )}
+
+      {/* Loading overlay for bulk delete */}
+      {bulkDeleteLoading && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text={`Deleting ${selectedImports.size} import records...`} />
         </View>
       )}
     </View>
@@ -982,6 +1151,50 @@ const styles = StyleSheet.create({
   },
   historyList: {
     paddingBottom: 80,
+  },
+  historyActions: {
+    marginBottom: 12,
+  },
+  multiSelectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  multiSelectButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  bulkActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  bulkActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  importCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  selectCheckbox: {
+    marginRight: 12,
+  },
+  importCardWrapper: {
+    flex: 1,
+  },
+  importCardWithCheckbox: {
+    flex: 1,
   },
   emptyState: {
     alignItems: 'center',
