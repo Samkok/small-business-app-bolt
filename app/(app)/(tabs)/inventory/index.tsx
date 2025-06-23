@@ -29,7 +29,7 @@ import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import ImportCSVModal from '@/src/components/inventory/ImportCSVModal';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, SquareCheck as CheckSquare, Square } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, SortAsc, SortDesc } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -40,6 +40,7 @@ export default function InventoryScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [importHistory, setImportHistory] = useState<any[]>([]);
+  const [filteredImportHistory, setFilteredImportHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
@@ -50,13 +51,16 @@ export default function InventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedImport, setSelectedImport] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [importSearchQuery, setImportSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isImportSearching, setIsImportSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
   const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -86,6 +90,10 @@ export default function InventoryScreen() {
     }
   }, [searchQuery, products]);
 
+  useEffect(() => {
+    filterImportHistory();
+  }, [importHistory, importSearchQuery, sortOrder]);
+
   const loadData = async (isRefresh = false) => {
     if (!profile?.id) return;
     
@@ -101,6 +109,7 @@ export default function InventoryScreen() {
       ]);
       
       setImportHistory(historyData);
+      setFilteredImportHistory(historyData);
       setTotalProducts(totalCount);
       setLowStockCount(lowStockProducts.length);
       
@@ -162,6 +171,7 @@ export default function InventoryScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     setSearchQuery('');
+    setImportSearchQuery('');
     setSelectedImports(new Set());
     setIsMultiSelectMode(false);
     await loadData(true);
@@ -255,12 +265,12 @@ export default function InventoryScreen() {
   };
 
   const handleSelectAllImports = () => {
-    if (selectedImports.size === importHistory.length) {
+    if (selectedImports.size === filteredImportHistory.length) {
       // Deselect all
       setSelectedImports(new Set());
     } else {
       // Select all
-      const allImportIds = importHistory.map(item => item.id);
+      const allImportIds = filteredImportHistory.map(item => item.id);
       setSelectedImports(new Set(allImportIds));
     }
   };
@@ -345,6 +355,56 @@ export default function InventoryScreen() {
     setIsSearching(false);
     setSearchResults([]);
     setFilteredProducts(products);
+  };
+
+  const handleImportSearch = () => {
+    filterImportHistory();
+  };
+
+  const handleClearImportSearch = () => {
+    setImportSearchQuery('');
+    setIsImportSearching(false);
+    setFilteredImportHistory(importHistory);
+  };
+
+  const filterImportHistory = () => {
+    if (!importHistory.length) return;
+    
+    let filtered = [...importHistory];
+    
+    // Apply search filter if query exists
+    if (importSearchQuery.trim()) {
+      setIsImportSearching(true);
+      filtered = filtered.filter(item => {
+        const productName = item.products?.name?.toLowerCase() || '';
+        const productBarcode = item.products?.barcode?.toLowerCase() || '';
+        const importId = item.id.toLowerCase();
+        const query = importSearchQuery.toLowerCase();
+        
+        return (
+          productName.includes(query) || 
+          productBarcode.includes(query) || 
+          importId.includes(query) ||
+          item.quantity.toString().includes(query) ||
+          item.total_cost.toString().includes(query)
+        );
+      });
+    } else {
+      setIsImportSearching(false);
+    }
+    
+    // Apply sort order
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    setFilteredImportHistory(filtered);
+  };
+
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest');
   };
 
   const handleBarcodeScanned = async (barcode: string) => {
@@ -764,7 +824,52 @@ export default function InventoryScreen() {
           />
         }
       >
-        {importHistory.length > 0 ? (
+        {/* Search and Filter Bar for Import History */}
+        <View style={styles.importSearchContainer}>
+          <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff', flex: 1 }]}>
+            <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <TextInput
+              style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+              placeholder="Search imports..."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              value={importSearchQuery}
+              onChangeText={setImportSearchQuery}
+              returnKeyType="search"
+              onSubmitEditing={handleImportSearch}
+            />
+            {importSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={handleClearImportSearch}>
+                <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.sortButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
+            onPress={toggleSortOrder}
+          >
+            {sortOrder === 'newest' ? (
+              <SortDesc size={20} color="#2563eb" />
+            ) : (
+              <SortAsc size={20} color="#2563eb" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {isImportSearching && (
+          <View style={styles.searchResultsHeader}>
+            <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {filteredImportHistory.length === 0 
+                ? `No imports found for "${importSearchQuery}"` 
+                : `Found ${filteredImportHistory.length} import${filteredImportHistory.length !== 1 ? 's' : ''}`}
+            </Text>
+            <TouchableOpacity onPress={handleClearImportSearch}>
+              <Text style={styles.clearSearchText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {filteredImportHistory.length > 0 ? (
           <View style={styles.historyList}>
             <View style={styles.historyActions}>
               <TouchableOpacity 
@@ -793,7 +898,7 @@ export default function InventoryScreen() {
                     onPress={handleSelectAllImports}
                   >
                     <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
-                      {selectedImports.size === importHistory.length ? 'Deselect All' : 'Select All'}
+                      {selectedImports.size === filteredImportHistory.length ? 'Deselect All' : 'Select All'}
                     </Text>
                   </TouchableOpacity>
                   
@@ -823,7 +928,7 @@ export default function InventoryScreen() {
               )}
             </View>
 
-            {importHistory.map((importRecord) => (
+            {filteredImportHistory.map((importRecord) => (
               <View key={importRecord.id} style={styles.importCardContainer}>
                 {isMultiSelectMode && (
                   <TouchableOpacity
@@ -851,11 +956,21 @@ export default function InventoryScreen() {
           <Card style={styles.emptyState}>
             <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
             <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              No Import History
+              {isImportSearching ? 'No matching imports found' : 'No Import History'}
             </Text>
             <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Import history will appear here once you start importing inventory
+              {isImportSearching 
+                ? `No imports match your search "${importSearchQuery}"`
+                : 'Import history will appear here once you start importing inventory'
+              }
             </Text>
+            {isImportSearching && (
+              <Button
+                title="Clear Search"
+                onPress={handleClearImportSearch}
+                style={styles.emptyButton}
+              />
+            )}
           </Card>
         )}
       </ScrollView>
@@ -1062,6 +1177,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
+  importSearchContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
@@ -1078,6 +1198,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   barcodeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  sortButton: {
     width: 48,
     height: 48,
     borderRadius: 8,
