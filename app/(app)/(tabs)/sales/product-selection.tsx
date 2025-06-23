@@ -47,7 +47,7 @@ export default function ProductSelectionScreen() {
     
     try {
       const [productsData, cartData] = await Promise.all([
-        productService.getProducts(profile.id),
+        productService.getInStockProducts(profile.id),
         cartService.getCart(cartId as string)
       ]);
       
