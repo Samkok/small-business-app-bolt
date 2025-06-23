@@ -628,7 +628,7 @@ export default function CartScreen() {
       {/* Checkout Button */}
       <View style={styles.footer}>
         <Button
-          title={`Checkout - $${cartSummary?.finalTotal.toFixed(2) || '0.00'}`}
+          title={`Checkout $${cartSummary?.finalTotal.toFixed(2) || '0.00'}`}
           onPress={handleCheckout}
           style={styles.checkoutButton}
         />
