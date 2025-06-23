@@ -27,8 +27,9 @@ import { ImportHistoryCard } from '@/src/components/inventory/ImportHistoryCard'
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
+import ImportCSVModal from '@/src/components/inventory/ImportCSVModal';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -45,6 +46,7 @@ export default function InventoryScreen() {
   const [showImportForm, setShowImportForm] = useState(false);
   const [showEditImportForm, setShowEditImportForm] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showImportCSVModal, setShowImportCSVModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedImport, setSelectedImport] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,6 +181,11 @@ export default function InventoryScreen() {
   const handleEditImportComplete = () => {
     setShowEditImportForm(false);
     setSelectedImport(null);
+    loadData();
+  };
+
+  const handleCSVImportComplete = () => {
+    setShowImportCSVModal(false);
     loadData();
   };
 
@@ -557,6 +564,44 @@ export default function InventoryScreen() {
           />
         }
       >
+        <Card style={styles.importOptionsCard}>
+          <Text style={[styles.importOptionsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Import Options
+          </Text>
+          
+          <View style={styles.importOptionsGrid}>
+            <TouchableOpacity
+              style={[styles.importOption, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+              onPress={() => setShowImportForm(true)}
+            >
+              <View style={[styles.importOptionIcon, { backgroundColor: '#2563eb20' }]}>
+                <TrendingUp size={24} color="#2563eb" />
+              </View>
+              <Text style={[styles.importOptionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Manual Import
+              </Text>
+              <Text style={[styles.importOptionSubtext, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Add stock for a single product
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.importOption, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+              onPress={() => setShowImportCSVModal(true)}
+            >
+              <View style={[styles.importOptionIcon, { backgroundColor: '#05966920' }]}>
+                <FileUp size={24} color="#059669" />
+              </View>
+              <Text style={[styles.importOptionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Bulk Import
+              </Text>
+              <Text style={[styles.importOptionSubtext, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Import from CSV file
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+        
         <Card style={styles.emptyState}>
           <TrendingUp size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
           <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -565,11 +610,19 @@ export default function InventoryScreen() {
           <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
             Add stock to your products with detailed cost tracking
           </Text>
-          <Button
-            title="Import Stock"
-            onPress={() => setShowImportForm(true)}
-            style={styles.importButton}
-          />
+          <View style={styles.importButtonsContainer}>
+            <Button
+              title="Manual Import"
+              onPress={() => setShowImportForm(true)}
+              style={styles.importButton}
+            />
+            <Button
+              title="Bulk Import"
+              variant="outline"
+              onPress={() => setShowImportCSVModal(true)}
+              style={styles.importButton}
+            />
+          </View>
         </Card>
       </ScrollView>
     );
@@ -737,6 +790,17 @@ export default function InventoryScreen() {
             setShowEditImportForm(false);
             setSelectedImport(null);
           }}
+        />
+      </Modal>
+
+      <Modal
+        visible={showImportCSVModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ImportCSVModal
+          onComplete={handleCSVImportComplete}
+          onClose={() => setShowImportCSVModal(false)}
         />
       </Modal>
 
@@ -930,6 +994,11 @@ const styles = StyleSheet.create({
   importButton: {
     marginTop: 16,
   },
+  importButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
   loadingMore: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -986,5 +1055,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
+  },
+  importOptionsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  importOptionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  importOptionsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  importOption: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  importOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  importOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  importOptionSubtext: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
