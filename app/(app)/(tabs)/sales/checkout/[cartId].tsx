@@ -1,0 +1,473 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert
+} from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { Card } from '@/src/components/ui/Card';
+import { Button } from '@/src/components/ui/Button';
+import { Input } from '@/src/components/ui/Input';
+import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { ArrowLeft, CreditCard, DollarSign, Check, FileText } from 'lucide-react-native';
+import { cartService } from '@/src/services/carts';
+import { salesService } from '@/src/services/sales';
+
+export default function CheckoutScreen() {
+  const [cart, setCart] = useState<any>(null);
+  const [cartSummary, setCartSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('cash');
+  const [notes, setNotes] = useState('');
+  
+  const router = useRouter();
+  const { cartId } = useLocalSearchParams();
+  const { isDark } = useTheme();
+  const { profile } = useAuth();
+
+  const paymentMethods = [
+    { value: 'cash', label: 'Cash', icon: '💵' },
+    { value: 'card', label: 'Card', icon: '💳' },
+    { value: 'transfer', label: 'Transfer', icon: '🏦' },
+    { value: 'other', label: 'Other', icon: '💰' },
+  ];
+
+  useEffect(() => {
+    loadCart();
+  }, []);
+
+  const loadCart = async () => {
+    if (!cartId) return;
+    
+    try {
+      const [cartData, summaryData] = await Promise.all([
+        cartService.getCart(cartId as string),
+        cartService.getCartSummary(cartId as string)
+      ]);
+      
+      setCart(cartData);
+      setCartSummary(summaryData);
+      setNotes(cartData.notes || '');
+    } catch (error) {
+      console.error('Error loading cart:', error);
+      Alert.alert('Error', 'Failed to load cart');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteSale = async () => {
+    if (!profile?.id || !cartId) {
+      Alert.alert('Error', 'Missing required information');
+      return;
+    }
+
+    if (cart.cart_items?.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      await salesService.completeSale({
+        cart_id: cartId as string,
+        customer_id: cart.customer_id,
+        payment_method: paymentMethod,
+        notes: notes.trim() || null,
+        business_id: profile.id,
+        created_by: profile.id
+      });
+
+      Alert.alert(
+        'Sale Completed',
+        'The sale has been successfully completed!',
+        [
+          { 
+            text: 'OK', 
+            onPress: () => router.replace('/sales')
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error completing sale:', error);
+      Alert.alert('Error', 'Failed to complete sale');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (loading) {
+    return <LoadingSpinner text="Loading checkout..." />;
+  }
+
+  if (!cart) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          Cart not found
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          Checkout
+        </Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Order Summary */}
+        <Card style={styles.summaryCard}>
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Order Summary
+          </Text>
+          
+          <View style={styles.customerRow}>
+            <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Customer:
+            </Text>
+            <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {cart.customers?.name}
+            </Text>
+          </View>
+          
+          <View style={styles.itemsContainer}>
+            {cart.cart_items?.map((item: any) => (
+              <View key={item.id} style={styles.summaryItem}>
+                <View style={styles.itemDetails}>
+                  <Text style={[styles.itemQuantity, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {item.quantity}x
+                  </Text>
+                  <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {item.products?.name}
+                  </Text>
+                </View>
+                <View style={styles.itemPricing}>
+                  {item.original_subtotal > item.subtotal && (
+                    <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                      ${item.original_subtotal.toFixed(2)}
+                    </Text>
+                  )}
+                  <Text style={[styles.itemSubtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    ${item.subtotal.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          
+          <View style={styles.divider} />
+          
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Items Subtotal:
+            </Text>
+            <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              ${cartSummary?.itemsOriginalTotal.toFixed(2)}
+            </Text>
+          </View>
+          
+          {cartSummary?.itemsTotalDiscount > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Item Discounts:
+              </Text>
+              <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
+                -${cartSummary.itemsTotalDiscount.toFixed(2)}
+              </Text>
+            </View>
+          )}
+          
+          {cartSummary?.cartDiscountAmount > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Cart Discount:
+              </Text>
+              <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
+                -${cartSummary.cartDiscountAmount.toFixed(2)}
+              </Text>
+            </View>
+          )}
+          
+          {cartSummary?.deliveryCost > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Delivery Cost:
+              </Text>
+              <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                ${cartSummary.deliveryCost.toFixed(2)}
+              </Text>
+            </View>
+          )}
+          
+          <View style={[styles.summaryRow, styles.totalRow]}>
+            <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Total:
+            </Text>
+            <Text style={[styles.totalValue, { color: '#059669' }]}>
+              ${cartSummary?.finalTotal.toFixed(2)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Payment Method */}
+        <Card style={styles.paymentCard}>
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Payment Method
+          </Text>
+          
+          <View style={styles.paymentMethods}>
+            {paymentMethods.map((method) => (
+              <TouchableOpacity
+                key={method.value}
+                style={[
+                  styles.paymentMethod,
+                  {
+                    backgroundColor: paymentMethod === method.value 
+                      ? '#2563eb' 
+                      : (isDark ? '#374151' : '#f3f4f6'),
+                    borderColor: paymentMethod === method.value 
+                      ? '#2563eb' 
+                      : (isDark ? '#4b5563' : '#d1d5db'),
+                  }
+                ]}
+                onPress={() => setPaymentMethod(method.value as any)}
+              >
+                <Text style={styles.paymentIcon}>{method.icon}</Text>
+                <Text style={[
+                  styles.paymentLabel,
+                  { color: paymentMethod === method.value ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+                ]}>
+                  {method.label}
+                </Text>
+                {paymentMethod === method.value && (
+                  <View style={styles.selectedIndicator}>
+                    <Check size={16} color="#ffffff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Card>
+
+        {/* Additional Notes */}
+        <Card style={styles.notesCard}>
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Additional Notes
+          </Text>
+          
+          <Input
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add any notes about this sale"
+            multiline
+            numberOfLines={3}
+          />
+        </Card>
+      </ScrollView>
+
+      {/* Complete Sale Button */}
+      <View style={styles.footer}>
+        <Button
+          title={`Complete Sale - $${cartSummary?.finalTotal.toFixed(2)}`}
+          onPress={handleCompleteSale}
+          loading={processing}
+          style={styles.completeButton}
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  headerRight: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  summaryCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  customerLabel: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  itemsContainer: {
+    marginBottom: 16,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  itemDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  itemQuantity: {
+    fontSize: 14,
+    marginRight: 8,
+    minWidth: 30,
+  },
+  itemName: {
+    fontSize: 14,
+    flex: 1,
+  },
+  itemPricing: {
+    alignItems: 'flex-end',
+  },
+  originalPrice: {
+    fontSize: 12,
+    textDecorationLine: 'line-through',
+  },
+  itemSubtotal: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  discountAmount: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  totalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  paymentCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  paymentMethods: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  paymentMethod: {
+    width: '48%',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  paymentIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  paymentLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notesCard: {
+    padding: 16,
+    marginBottom: 20,
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  completeButton: {
+    backgroundColor: '#059669',
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 40,
+  },
+});
