@@ -9,6 +9,18 @@ type ImportCostInsert = Database['public']['Tables']['import_costs']['Insert'];
 
 export const inventoryService = {
   async createImport(importData: InventoryImportInsert, costs: Omit<ImportCostInsert, 'import_id'>[]) {
+    // Ensure final_unit_cost and total_cost are calculated correctly
+    if (!importData.final_unit_cost || !importData.total_cost) {
+      const calculatedCosts = this.calculateFinalCost(
+        importData.base_unit_cost,
+        importData.quantity,
+        costs
+      );
+      
+      importData.final_unit_cost = calculatedCosts.finalUnitCost;
+      importData.total_cost = calculatedCosts.totalCost;
+    }
+
     const { data: importRecord, error: importError } = await supabase
       .from('inventory_imports')
       .insert(importData)
@@ -58,6 +70,15 @@ export const inventoryService = {
     importData: Partial<InventoryImportUpdate>, 
     costs: Omit<ImportCostInsert, 'import_id'>[]
   ) {
+    // Get the original import record to calculate stock adjustment
+    const { data: originalImport, error: getError } = await supabase
+      .from('inventory_imports')
+      .select('product_id, quantity')
+      .eq('id', importId)
+      .single();
+
+    if (getError) throw getError;
+
     // Update the import record
     const { data: updatedImport, error: importError } = await supabase
       .from('inventory_imports')
@@ -88,6 +109,32 @@ export const inventoryService = {
         .insert(costsWithImportId);
 
       if (costsError) throw costsError;
+    }
+
+    // Update product stock if quantity changed
+    if (importData.quantity && importData.quantity !== originalImport.quantity) {
+      // Get current product stock
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('current_stock')
+        .eq('id', originalImport.product_id)
+        .single();
+
+      if (productError) throw productError;
+
+      // Calculate the stock adjustment (new quantity - old quantity)
+      const stockAdjustment = importData.quantity - originalImport.quantity;
+      
+      // Update the product stock
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          current_stock: Math.max(0, (product.current_stock || 0) + stockAdjustment),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', originalImport.product_id);
+
+      if (updateError) throw updateError;
     }
 
     return updatedImport;

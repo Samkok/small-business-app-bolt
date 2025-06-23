@@ -43,9 +43,9 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     const costs: ImportCost[] = [];
     
     // First cost: Shipping in China
-    if (values[2] === 'Shipping in China') {
+    if (values[2] && values[2] === 'Shipping in China') {
       const amount = parseFloat(values[3]) || 0;
-      const calculation_type = values[4] || 'per_total';
+      const calculation_type = values[4] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
         costs.push({
           cost_type: 'Shipping in China',
@@ -56,9 +56,9 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     }
     
     // Second cost: Card Transaction Fee
-    if (values[5] === 'Card Transaction Fee') {
+    if (values[5] && values[5] === 'Card Transaction Fee') {
       const amount = parseFloat(values[6]) || 0;
-      const calculation_type = values[7] || 'per_total';
+      const calculation_type = values[7] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
         costs.push({
           cost_type: 'Card Transaction Fee',
@@ -69,9 +69,9 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     }
     
     // Third cost: Shipping to Cambodia
-    if (values[8] === 'Shipping to Cambodia') {
+    if (values[8] && values[8] === 'Shipping to Cambodia') {
       const amount = parseFloat(values[9]) || 0;
-      const calculation_type = values[10] || 'per_total';
+      const calculation_type = values[10] === 'per_unit' ? 'per_unit' : 'per_total';
       if (amount > 0) {
         costs.push({
           cost_type: 'Shipping to Cambodia',
@@ -83,8 +83,20 @@ export function parseInventoryImportCsv(csvData: string): InventoryImportRecord[
     
     // Extract remaining fields
     const base_unit_cost = parseFloat(values[11]) || 0;
-    const final_unit_cost = parseFloat(values[12]) || 0;
-    const total_cost = parseFloat(values[13]) || 0;
+    
+    // Calculate final_unit_cost and total_cost
+    let total_additional_cost = 0;
+    costs.forEach(cost => {
+      if (cost.calculation_type === 'per_unit') {
+        total_additional_cost += cost.amount * quantity;
+      } else {
+        total_additional_cost += cost.amount;
+      }
+    });
+    
+    const final_unit_cost = base_unit_cost + (total_additional_cost / quantity);
+    const total_cost = final_unit_cost * quantity;
+    
     const business_id = values[14];
     const imported_by = values[15];
     const created_at = values[16];

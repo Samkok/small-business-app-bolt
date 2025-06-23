@@ -37,13 +37,26 @@ export async function processBulkInventoryImport(
   // Process each record sequentially
   for (const record of importRecords) {
     try {
+      // Calculate final_unit_cost and total_cost
+      let totalAdditionalCost = 0;
+      record.costs.forEach(cost => {
+        if (cost.calculation_type === 'per_unit') {
+          totalAdditionalCost += cost.amount * record.quantity;
+        } else {
+          totalAdditionalCost += cost.amount;
+        }
+      });
+      
+      const finalUnitCost = record.base_unit_cost + (totalAdditionalCost / record.quantity);
+      const totalCost = finalUnitCost * record.quantity;
+      
       // Ensure business_id and imported_by are set correctly
       const importData = {
         product_id: record.product_id,
         quantity: record.quantity,
         base_unit_cost: record.base_unit_cost,
-        final_unit_cost: 0, // Will be calculated by the service
-        total_cost: 0, // Will be calculated by the service
+        final_unit_cost: finalUnitCost,
+        total_cost: totalCost,
         business_id: profileId,
         imported_by: profileId,
         notes: null
