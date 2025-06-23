@@ -27,6 +27,27 @@ export const productService = {
     return data;
   },
 
+  async getInStockProducts(businessId: string, limit?: number, offset?: number) {
+    let query = supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId)
+      .gt('current_stock', 0)
+      .order('name');
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    if (offset) {
+      query = query.range(offset, offset + (limit || 10) - 1);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
   async getProductsCount(businessId: string) {
     const { count, error } = await supabase
       .from('products')
