@@ -18,12 +18,14 @@ import { SkeletonDashboardStats, SkeletonCard, SkeletonLoader } from '@/src/comp
 import ProductForm from '@/src/components/products/ProductForm';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
-import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus } from 'lucide-react-native';
+import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 
 interface DashboardStats {
   todayRevenue: number;
   monthlyRevenue: number;
+  monthlyCOGS: number;
+  totalProfit: number;
   totalExpenses: number;
   netProfit: number;
   lowStockCount: number;
@@ -271,6 +273,19 @@ export default function DashboardScreen() {
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
               trend={stats!.monthlyRevenue > 0 ? "up" : undefined}
+            />
+            <StatCard
+              title="Monthly COGS"
+              value={`$${stats!.monthlyCOGS.toFixed(2)}`}
+              icon={<Calculator size={20} color="#8b5cf6" />}
+              color="#8b5cf6"
+            />
+            <StatCard
+              title="Total Profit"
+              value={`$${stats!.totalProfit.toFixed(2)}`}
+              icon={<DollarSign size={20} color="#059669" />}
+              color="#059669"
+              trend={stats!.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title="Total Expenses"

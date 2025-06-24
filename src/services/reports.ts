@@ -30,6 +30,19 @@ export const reportsService = {
 
     const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
 
+    // Monthly COGS (Cost of Goods Sold)
+    const { data: monthlyImports } = await supabase
+      .from('inventory_imports')
+      .select('total_cost, quantity')
+      .eq('business_id', businessId)
+      .gte('created_at', startOfMonth)
+      .lte('created_at', endOfMonth);
+
+    const monthlyCOGS = monthlyImports?.reduce((sum, item) => sum + item.total_cost, 0) || 0;
+
+    // Calculate Total Profit (Revenue - COGS)
+    const totalProfit = monthlyRevenue - monthlyCOGS;
+
     // Monthly expenses
     const { data: monthlyExpenses } = await supabase
       .from('expenses')
@@ -39,6 +52,9 @@ export const reportsService = {
       .lte('expense_date', endOfMonth);
 
     const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+
+    // Net Profit = Total Profit - Total Expenses
+    const netProfit = totalProfit - totalExpenses;
 
     // Low stock count
     const { data: lowStockProducts } = await supabase
@@ -64,8 +80,10 @@ export const reportsService = {
     return {
       todayRevenue,
       monthlyRevenue,
+      monthlyCOGS,
+      totalProfit,
       totalExpenses,
-      netProfit: monthlyRevenue - totalExpenses,
+      netProfit,
       lowStockCount,
       totalCustomers: totalCustomers || 0,
       totalProducts: totalProducts || 0
