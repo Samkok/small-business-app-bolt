@@ -11,12 +11,14 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -27,7 +29,6 @@ import ImportSalesModal from '@/src/components/sales/ImportSalesModal';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { cartService } from '@/src/services/carts';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
 
@@ -35,7 +36,6 @@ const SALES_PER_PAGE = 10;
 
 export default function SalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
-  const [activeCarts, setActiveCarts] = useState<any[]>([]);
   const [filteredSales, setFilteredSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +67,7 @@ export default function SalesScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const statusFilters = [
@@ -188,8 +189,8 @@ export default function SalesScreen() {
     }
     
     try {
-      const cartsData = await cartService.getActiveCarts(profile.id);
-      setActiveCarts(cartsData);
+      // Refresh local carts
+      await refreshCarts();
       
       if (activeTab === 'sales') {
         await loadSalesData(isRefresh);
@@ -202,7 +203,7 @@ export default function SalesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [profile?.id, activeTab, t]);
+  }, [profile?.id, activeTab, t, refreshCarts]);
 
   const loadSalesData = useCallback(async (isRefresh = false) => {
     if (!profile?.id) return;
@@ -300,7 +301,7 @@ export default function SalesScreen() {
     );
   }, [profile?.id, loadData]);
 
-  const handleDeleteCart = useCallback(async (cartId: string) => {
+  const handleDeleteCartItem = useCallback(async (cartId: string) => {
     Alert.alert(
       'Delete Cart',
       'Are you sure you want to delete this cart? This action cannot be undone.',
@@ -312,8 +313,7 @@ export default function SalesScreen() {
           onPress: async () => {
             try {
               setDeletingCart(cartId);
-              await cartService.deleteCart(cartId);
-              setActiveCarts(activeCarts.filter(cart => cart.id !== cartId));
+              await deleteCart(cartId);
               Alert.alert('Success', 'Cart deleted successfully');
             } catch (error) {
               console.error('Error deleting cart:', error);
@@ -325,7 +325,7 @@ export default function SalesScreen() {
         },
       ]
     );
-  }, [activeCarts]);
+  }, [deleteCart]);
 
   const handleNewSale = useCallback(() => {
     router.push('/sales/customer-selection');
@@ -699,11 +699,28 @@ export default function SalesScreen() {
       key={item.id}
       cart={item}
       onPress={() => handleCartPress(item.id)}
-      onDelete={handleDeleteCart}
+      onDelete={handleDeleteCartItem}
     />
-  ), [handleCartPress, handleDeleteCart]);
+  ), [handleCartPress, handleDeleteCartItem]);
 
-  if (loading && !loadingMore) {
+  const renderEmptyCartsComponent = useCallback(() => (
+    <Card style={styles.emptyState}>
+      <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+      <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        No Active Carts
+      </Text>
+      <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+        Start a new sale by selecting a customer and adding products
+      </Text>
+      <Button
+        title="Start New Sale"
+        onPress={handleNewSale}
+        style={styles.emptyButton}
+      />
+    </Card>
+  ), [isDark, handleNewSale]);
+
+  if ((loading && !loadingMore) || cartsLoading) {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
@@ -775,7 +792,7 @@ export default function SalesScreen() {
           icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'carts'}
           onPress={() => setActiveTab('carts')}
-          count={activeCarts.length}
+          count={carts.length}
         />
         <TabButton
           title="Sales History"
@@ -788,7 +805,7 @@ export default function SalesScreen() {
       {activeTab === 'carts' ? (
         // Active Carts Tab
         <FlatList
-          data={activeCarts}
+          data={carts}
           renderItem={renderCartItem}
           keyExtractor={(item) => item.id}
           style={styles.content}
@@ -804,22 +821,7 @@ export default function SalesScreen() {
               titleColor={isDark ? '#f9fafb' : '#111827'}
             />
           }
-          ListEmptyComponent={() => (
-            <Card style={styles.emptyState}>
-              <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-              <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                No Active Carts
-              </Text>
-              <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Start a new sale by selecting a customer and adding products
-              </Text>
-              <Button
-                title="Start New Sale"
-                onPress={handleNewSale}
-                style={styles.emptyButton}
-              />
-            </Card>
-          )}
+          ListEmptyComponent={renderEmptyCartsComponent}
         />
       ) : (
         // Sales History Tab

@@ -50,11 +50,13 @@
     "react-native-webview": "13.13.5",
     "zod": "^3.22.4",
     "date-fns": "^3.0.6",
-    "react-hook-form": "^7.48.2"
+    "react-hook-form": "^7.48.2",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "@types/uuid": "^9.0.8",
     "typescript": "~5.8.3"
   }
 }

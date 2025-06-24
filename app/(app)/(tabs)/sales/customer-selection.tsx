@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,20 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  TextInput
+  TextInput,
+  FlatList
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import { ArrowLeft, Users, Plus, Search, User } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
-import { cartService } from '@/src/services/carts';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 export default function CustomerSelectionScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -31,6 +33,8 @@ export default function CustomerSelectionScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const { createCart } = useCart();
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     loadCustomers();
@@ -38,46 +42,45 @@ export default function CustomerSelectionScreen() {
 
   useEffect(() => {
     filterCustomers();
-  }, [customers, searchQuery]);
+  }, [customers, debouncedSearchQuery]);
 
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
     if (!profile?.id) return;
     
     try {
       const data = await customerService.getCustomers(profile.id);
       setCustomers(data);
+      setFilteredCustomers(data);
     } catch (error) {
       console.error('Error loading customers:', error);
       Alert.alert('Error', 'Failed to load customers');
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
-  const filterCustomers = () => {
-    if (searchQuery.trim() === '') {
+  const filterCustomers = useCallback(() => {
+    if (debouncedSearchQuery.trim() === '') {
       setFilteredCustomers(customers);
     } else {
       const filtered = customers.filter(customer =>
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (customer.phone && customer.phone.includes(searchQuery))
+        customer.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(debouncedSearchQuery))
       );
       setFilteredCustomers(filtered);
     }
-  };
+  }, [customers, debouncedSearchQuery]);
 
-  const handleCustomerSelect = async (customer: any) => {
+  const handleCustomerSelect = useCallback(async (customer: any) => {
     if (!profile?.id) return;
     
     setCreatingCart(true);
     try {
-      // Create a new cart for this customer
-      const cart = await cartService.createCart({
-        customer_id: customer.id,
-        business_id: profile.id,
-        created_by: profile.id,
-        status: 'active',
-        total_amount: 0
+      // Create a new cart locally
+      const cart = await createCart({
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone
       });
 
       // Navigate to product selection with the cart ID
@@ -88,37 +91,37 @@ export default function CustomerSelectionScreen() {
     } finally {
       setCreatingCart(false);
     }
-  };
+  }, [profile?.id, createCart, router]);
 
-  const handleCustomerSave = async () => {
+  const handleCustomerSave = useCallback(async () => {
     setShowCustomerForm(false);
     await loadCustomers();
-  };
+  }, [loadCustomers]);
 
-  const CustomerCard = ({ customer }: { customer: any }) => (
+  const renderCustomerItem = useCallback(({ item }) => (
     <TouchableOpacity
       style={[styles.customerCard, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
-      onPress={() => handleCustomerSelect(customer)}
+      onPress={() => handleCustomerSelect(item)}
       disabled={creatingCart}
     >
       <View style={styles.customerInfo}>
         <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
           <Text style={styles.avatarText}>
-            {customer.name.charAt(0).toUpperCase()}
+            {item.name.charAt(0).toUpperCase()}
           </Text>
         </View>
         <View style={styles.customerDetails}>
           <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {customer.name}
+            {item.name}
           </Text>
-          {customer.phone && (
+          {item.phone && (
             <Text style={[styles.customerPhone, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {customer.phone}
+              {item.phone}
             </Text>
           )}
-          {customer.platform && (
+          {item.platform && (
             <Text style={[styles.customerPlatform, { color: '#2563eb' }]}>
-              {customer.platform.charAt(0).toUpperCase() + customer.platform.slice(1).replace('_', ' ')}
+              {item.platform.charAt(0).toUpperCase() + item.platform.slice(1).replace('_', ' ')}
             </Text>
           )}
         </View>
@@ -129,7 +132,29 @@ export default function CustomerSelectionScreen() {
         </Text>
       </View>
     </TouchableOpacity>
-  );
+  ), [isDark, handleCustomerSelect, creatingCart]);
+
+  const renderEmptyComponent = useCallback(() => (
+    <Card style={styles.emptyState}>
+      <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+      <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        {searchQuery ? 'No customers found' : 'No customers yet'}
+      </Text>
+      <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+        {searchQuery 
+          ? `No customers match "${searchQuery}"`
+          : 'Add your first customer to start making sales'
+        }
+      </Text>
+      {!searchQuery && (
+        <Button
+          title="Add Customer"
+          onPress={() => setShowCustomerForm(true)}
+          style={styles.emptyButton}
+        />
+      )}
+    </Card>
+  ), [searchQuery, isDark]);
 
   if (loading) {
     return <LoadingSpinner text="Loading customers..." />;
@@ -170,33 +195,15 @@ export default function CustomerSelectionScreen() {
       </View>
 
       {/* Customer List */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {filteredCustomers.length > 0 ? (
-          filteredCustomers.map((customer) => (
-            <CustomerCard key={customer.id} customer={customer} />
-          ))
-        ) : (
-          <Card style={styles.emptyState}>
-            <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {searchQuery ? 'No customers found' : 'No customers yet'}
-            </Text>
-            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {searchQuery 
-                ? `No customers match "${searchQuery}"`
-                : 'Add your first customer to start making sales'
-              }
-            </Text>
-            {!searchQuery && (
-              <Button
-                title="Add Customer"
-                onPress={() => setShowCustomerForm(true)}
-                style={styles.emptyButton}
-              />
-            )}
-          </Card>
-        )}
-      </ScrollView>
+      <FlatList
+        data={filteredCustomers}
+        renderItem={renderCustomerItem}
+        keyExtractor={(item) => item.id}
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={filteredCustomers.length === 0 ? styles.emptyContainer : undefined}
+      />
 
       {/* Loading Overlay */}
       {creatingCart && (
@@ -272,6 +279,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   customerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -311,8 +322,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   customerPhone: {
-    fontSize: 14,
-    marginBottom: 2,
+    fontSize: 12,
   },
   customerPlatform: {
     fontSize: 12,

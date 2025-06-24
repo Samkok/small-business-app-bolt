@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,56 +11,51 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { Input } from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2 } from 'lucide-react-native';
-import { cartService } from '@/src/services/carts';
 
 export default function CartScreen() {
-  const [cart, setCart] = useState<any>(null);
-  const [cartSummary, setCartSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState<string | null>(null);
   const [showCartDiscountModal, setShowCartDiscountModal] = useState(false);
   const [deliveryCost, setDeliveryCost] = useState('');
   const [notes, setNotes] = useState('');
   const [updatingDelivery, setUpdatingDelivery] = useState(false);
+  const [updatingNotes, setUpdatingNotes] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const { 
+    getCart, 
+    updateCart, 
+    updateCartItem, 
+    removeCartItem, 
+    applyItemDiscount, 
+    removeItemDiscount, 
+    getCartSummary 
+  } = useCart();
+
+  // Get cart and summary
+  const cart = getCart(cartId as string);
+  const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
   useEffect(() => {
-    loadCart();
-  }, []);
-
-  const loadCart = async () => {
-    if (!cartId) return;
-    
-    try {
-      const [cartData, summaryData] = await Promise.all([
-        cartService.getCart(cartId as string),
-        cartService.getCartSummary(cartId as string)
-      ]);
-      
-      setCart(cartData);
-      setCartSummary(summaryData);
-      setDeliveryCost(cartData.delivery_cost?.toString() || '');
-      setNotes(cartData.notes || '');
-    } catch (error) {
-      console.error('Error loading cart:', error);
-      Alert.alert('Error', 'Failed to load cart');
-    } finally {
-      setLoading(false);
+    if (cart) {
+      setDeliveryCost(cart.delivery_cost?.toString() || '');
+      setNotes(cart.notes || '');
     }
-  };
+  }, [cart]);
 
-  const handleQuantityChange = async (itemId: string, change: number) => {
-    const item = cart.cart_items.find((i: any) => i.id === itemId);
+  const handleQuantityChange = useCallback(async (itemId: string, change: number) => {
+    if (!cart) return;
+
+    const item = cart.items.find((i) => i.id === itemId);
     if (!item) return;
 
     const newQuantity = Math.max(0, item.quantity + change);
@@ -68,24 +63,24 @@ export default function CartScreen() {
     setUpdating(itemId);
     try {
       if (newQuantity === 0) {
-        await cartService.removeCartItem(itemId);
+        await removeCartItem(cart.id, itemId);
       } else {
-        await cartService.updateCartItem(itemId, { quantity: newQuantity });
+        await updateCartItem(cart.id, itemId, { quantity: newQuantity });
       }
-      await loadCart();
     } catch (error) {
       console.error('Error updating quantity:', error);
       Alert.alert('Error', 'Failed to update quantity');
     } finally {
       setUpdating(null);
     }
-  };
+  }, [cart, updateCartItem, removeCartItem]);
 
-  const handleItemDiscount = async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => {
+  const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => {
+    if (!cart) return;
+    
     setUpdating(itemId);
     try {
-      await cartService.applyItemDiscount(itemId, discountType, discountValue);
-      await loadCart();
+      await applyItemDiscount(cart.id, itemId, discountType, discountValue);
       setShowDiscountModal(null);
     } catch (error) {
       console.error('Error applying discount:', error);
@@ -93,88 +88,101 @@ export default function CartScreen() {
     } finally {
       setUpdating(null);
     }
-  };
+  }, [cart, applyItemDiscount]);
 
-  const handleRemoveItemDiscount = async (itemId: string) => {
+  const handleRemoveItemDiscount = useCallback(async (itemId: string) => {
+    if (!cart) return;
+    
     setUpdating(itemId);
     try {
-      await cartService.removeItemDiscount(itemId);
-      await loadCart();
+      await removeItemDiscount(cart.id, itemId);
     } catch (error) {
       console.error('Error removing discount:', error);
       Alert.alert('Error', 'Failed to remove discount');
     } finally {
       setUpdating(null);
     }
-  };
+  }, [cart, removeItemDiscount]);
 
-  const handleCartDiscount = async (discountType: 'percentage' | 'fixed', discountValue: number) => {
+  const handleCartDiscount = useCallback(async (discountType: 'percentage' | 'fixed', discountValue: number) => {
+    if (!cart) return;
+    
     try {
-      await cartService.updateCart(cartId as string, {
+      await updateCart(cart.id, {
         discount_type: discountType,
         discount_value: discountValue
       });
-      await loadCart();
       setShowCartDiscountModal(false);
     } catch (error) {
       console.error('Error applying cart discount:', error);
       Alert.alert('Error', 'Failed to apply cart discount');
     }
-  };
+  }, [cart, updateCart]);
 
-  const handleRemoveCartDiscount = async () => {
+  const handleRemoveCartDiscount = useCallback(async () => {
+    if (!cart) return;
+    
     try {
-      await cartService.updateCart(cartId as string, {
-        discount_type: null,
-        discount_value: null
+      await updateCart(cart.id, {
+        discount_type: undefined,
+        discount_value: undefined
       });
-      await loadCart();
     } catch (error) {
       console.error('Error removing cart discount:', error);
       Alert.alert('Error', 'Failed to remove cart discount');
     }
-  };
+  }, [cart, updateCart]);
 
-  const handleDeliveryCostChange = async (value: string) => {
+  const handleDeliveryCostChange = useCallback(async (value: string) => {
     setDeliveryCost(value);
     
-    // Debounce the update to avoid too many API calls
-    if (updatingDelivery) return;
+    // Debounce the update to avoid too many operations
+    if (updatingDelivery || !cart) return;
     
     setUpdatingDelivery(true);
     try {
       const deliveryAmount = parseFloat(value) || 0;
-      await cartService.updateCart(cartId as string, {
+      await updateCart(cart.id, {
         delivery_cost: deliveryAmount
       });
-      await loadCart();
     } catch (error) {
       console.error('Error updating delivery cost:', error);
       // Don't show alert for every keystroke
     } finally {
       setUpdatingDelivery(false);
     }
-  };
+  }, [cart, updatingDelivery, updateCart]);
 
-  const handleNotesChange = (value: string) => {
+  const handleNotesChange = useCallback((value: string) => {
     setNotes(value);
-  };
+  }, []);
 
-  const handleCheckout = async () => {
+  const handleSaveNotes = useCallback(async () => {
+    if (!cart) return;
+    
+    setUpdatingNotes(true);
+    try {
+      await updateCart(cart.id, {
+        notes: notes.trim() || undefined
+      });
+    } catch (error) {
+      console.error('Error updating notes:', error);
+      Alert.alert('Error', 'Failed to update notes');
+    } finally {
+      setUpdatingNotes(false);
+    }
+  }, [cart, notes, updateCart]);
+
+  const handleCheckout = useCallback(() => {
+    if (!cart) return;
+    
     // Save notes before checkout if they've changed
     if (notes !== cart.notes) {
-      try {
-        await cartService.updateCart(cartId as string, {
-          notes: notes.trim() || null
-        });
-      } catch (error) {
-        console.error('Error updating notes:', error);
-        // Continue with checkout even if notes update fails
-      }
+      handleSaveNotes();
     }
     
     router.push(`/sales/checkout/${cartId}`);
-  };
+  }, [cart, notes, cartId, router, handleSaveNotes]);
 
   const DiscountModal = ({ itemId, onApply, onCancel }: {
     itemId: string;
@@ -275,10 +283,10 @@ export default function CartScreen() {
     onCancel: () => void;
   }) => {
     const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
-      cart.discount_type || 'percentage'
+      cart?.discount_type || 'percentage'
     );
     const [discountValue, setDiscountValue] = useState(
-      cart.discount_value ? cart.discount_value.toString() : ''
+      cart?.discount_value ? cart.discount_value.toString() : ''
     );
 
     const handleApply = () => {
@@ -367,16 +375,32 @@ export default function CartScreen() {
     );
   };
 
-  if (loading) {
-    return <LoadingSpinner text="Loading cart..." />;
-  }
-
-  if (!cart) {
+  if (!cart || !cartSummary) {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-        <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Cart not found
-        </Text>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Cart Not Found
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            The cart you're looking for doesn't exist or has been deleted.
+          </Text>
+          <Button
+            title="Go Back"
+            onPress={() => router.back()}
+            style={styles.errorButton}
+          />
+        </View>
       </View>
     );
   }
@@ -402,7 +426,7 @@ export default function CartScreen() {
           Customer:
         </Text>
         <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          {cart.customers?.name}
+          {cart.customer_name}
         </Text>
       </Card>
 
@@ -411,7 +435,7 @@ export default function CartScreen() {
         <Card style={styles.itemsCard}>
           <View style={styles.itemsHeader}>
             <Text style={[styles.itemsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Items ({cart.cart_items?.length || 0})
+              Items ({cart.items?.length || 0})
             </Text>
             <TouchableOpacity
               style={styles.addMoreButton}
@@ -422,11 +446,11 @@ export default function CartScreen() {
             </TouchableOpacity>
           </View>
 
-          {cart.cart_items?.map((item: any) => (
+          {cart.items?.map((item) => (
             <View key={item.id} style={styles.cartItem}>
               <View style={styles.itemInfo}>
                 <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {item.products?.name}
+                  {item.product_name}
                 </Text>
                 <Text style={[styles.itemPrice, { color: '#059669' }]}>
                   ${item.unit_price.toFixed(2)} each
@@ -520,7 +544,7 @@ export default function CartScreen() {
                 <Text style={[styles.discountValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                   {cart.discount_type === 'percentage' 
                     ? `${cart.discount_value}%` 
-                    : `$${cart.discount_value.toFixed(2)}`
+                    : `$${cart.discount_value?.toFixed(2)}`
                   }
                 </Text>
               </View>
@@ -596,7 +620,11 @@ export default function CartScreen() {
               multiline
               numberOfLines={3}
               textAlignVertical="top"
+              onBlur={handleSaveNotes}
             />
+            {updatingNotes && (
+              <View style={styles.updatingNotesIndicator} />
+            )}
           </View>
         </Card>
 
@@ -676,6 +704,7 @@ export default function CartScreen() {
           title={`Checkout $${cartSummary?.finalTotal.toFixed(2) || '0.00'}`}
           onPress={handleCheckout}
           style={styles.checkoutButton}
+          disabled={!cart || cart.items.length === 0}
         />
       </View>
 
@@ -947,6 +976,7 @@ const styles = StyleSheet.create({
   },
   notesContainer: {
     marginBottom: 8,
+    position: 'relative',
   },
   notesInput: {
     borderWidth: 1,
@@ -955,6 +985,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     minHeight: 100,
+  },
+  updatingNotesIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+    position: 'absolute',
+    top: 8,
+    right: 12,
   },
   summaryCard: {
     padding: 16,
@@ -1049,9 +1088,18 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 40,
+    marginBottom: 20,
+  },
+  errorButton: {
+    minWidth: 120,
   },
 });

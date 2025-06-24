@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   TextInput,
@@ -12,18 +11,17 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ProductCard } from '@/src/components/products/ProductCard';
 import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
-import { cartService } from '@/src/services/carts';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
@@ -33,6 +31,8 @@ export default function ProductSelectionScreen() {
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const { getCart, addItemToCart, updateCartItem } = useCart();
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     loadData();
@@ -40,117 +40,127 @@ export default function ProductSelectionScreen() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchQuery]);
+  }, [products, debouncedSearchQuery]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!profile?.id || !cartId) return;
     
     try {
-      const [productsData, cartData] = await Promise.all([
-        productService.getInStockProducts(profile.id),
-        cartService.getCart(cartId as string)
-      ]);
-      
+      // Load products
+      const productsData = await productService.getInStockProducts(profile.id);
       setProducts(productsData);
-      setCart(cartData);
+      setFilteredProducts(productsData);
       
-      // Initialize selected products from existing cart items
-      const selected: Record<string, number> = {};
-      cartData.cart_items?.forEach((item: any) => {
-        selected[item.product_id] = item.quantity;
-      });
-      setSelectedProducts(selected);
+      // Get cart to initialize selected products
+      const cart = getCart(cartId as string);
+      if (cart) {
+        // Initialize selected products from existing cart items
+        const selected: Record<string, number> = {};
+        cart.items.forEach((item) => {
+          selected[item.product_id] = item.quantity;
+        });
+        setSelectedProducts(selected);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id, cartId, getCart]);
 
-  const filterProducts = () => {
-    if (searchQuery.trim() === '') {
+  const filterProducts = useCallback(() => {
+    if (debouncedSearchQuery.trim() === '') {
       setFilteredProducts(products);
     } else {
       const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.barcode && product.barcode.includes(searchQuery)) ||
-        (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()))
+        product.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (product.barcode && product.barcode.includes(debouncedSearchQuery)) ||
+        (product.description && product.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
       );
       setFilteredProducts(filtered);
     }
-  };
+  }, [products, debouncedSearchQuery]);
 
-  const handleQuantityChange = async (productId: string, change: number) => {
+  const handleQuantityChange = useCallback(async (productId: string, change: number) => {
+    if (!cartId) return;
+    
     const currentQuantity = selectedProducts[productId] || 0;
     const newQuantity = Math.max(0, currentQuantity + change);
     
+    // Update local state immediately for better UX
     setSelectedProducts(prev => ({
       ...prev,
       [productId]: newQuantity
     }));
 
     // Update cart in real-time
-    if (newQuantity === 0) {
-      // Remove item from cart
-      const existingItem = cart.cart_items?.find((item: any) => item.product_id === productId);
-      if (existingItem) {
-        try {
-          await cartService.removeCartItem(existingItem.id);
-        } catch (error) {
-          console.error('Error removing item:', error);
-        }
-      }
-    } else {
-      // Add or update item in cart
+    setAddingToCart(productId);
+    try {
+      const cart = getCart(cartId as string);
+      if (!cart) throw new Error('Cart not found');
+      
       const product = products.find(p => p.id === productId);
-      if (product) {
-        setAddingToCart(productId);
-        try {
-          await cartService.addItemToCart({
-            cart_id: cartId as string,
-            product_id: productId,
-            quantity: change > 0 ? 1 : -1, // Add/remove one at a time
-            unit_price: product.price,
-            subtotal: product.price * (change > 0 ? 1 : -1)
-          });
-        } catch (error) {
-          console.error('Error updating cart:', error);
-          // Revert the change
-          setSelectedProducts(prev => ({
-            ...prev,
-            [productId]: currentQuantity
-          }));
-        } finally {
-          setAddingToCart(null);
-        }
+      if (!product) throw new Error('Product not found');
+      
+      // Find if this product is already in the cart
+      const existingItem = cart.items.find(item => item.product_id === productId);
+      
+      if (newQuantity === 0 && existingItem) {
+        // Remove item from cart
+        await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
+      } else if (existingItem) {
+        // Update existing item
+        await updateCartItem(cartId as string, existingItem.id, { quantity: newQuantity });
+      } else if (newQuantity > 0) {
+        // Add new item
+        await addItemToCart(cartId as string, product, newQuantity);
       }
+    } catch (error) {
+      console.error('Error updating cart:', error);
+      // Revert the change in local state
+      setSelectedProducts(prev => ({
+        ...prev,
+        [productId]: currentQuantity
+      }));
+      Alert.alert('Error', 'Failed to update cart');
+    } finally {
+      setAddingToCart(null);
     }
-  };
+  }, [cartId, selectedProducts, products, getCart, updateCartItem, addItemToCart]);
 
-  const getTotalItems = () => {
+  const getTotalItems = useCallback(() => {
     return Object.values(selectedProducts).reduce((sum, quantity) => sum + quantity, 0);
-  };
+  }, [selectedProducts]);
 
-  const handleContinueToCart = () => {
+  const handleContinueToCart = useCallback(() => {
     router.push(`/sales/cart/${cartId}`);
-  };
+  }, [router, cartId]);
 
-  const ProductSelectionCard = ({ product }: { product: any }) => {
-    const quantity = selectedProducts[product.id] || 0;
-    const isUpdating = addingToCart === product.id;
+  const renderProductItem = useCallback(({ item }) => {
+    const quantity = selectedProducts[item.id] || 0;
+    const isUpdating = addingToCart === item.id;
+    const isOutOfStock = item.current_stock <= 0;
+    const isMaxStock = quantity >= item.current_stock;
 
     return (
       <Card style={styles.productCard}>
         <View style={styles.productInfo}>
           <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
-            {product.name}
+            {item.name}
           </Text>
           <Text style={[styles.productPrice, { color: '#059669' }]}>
-            ${product.price.toFixed(2)}
+            ${item.price.toFixed(2)}
           </Text>
-          <Text style={[styles.productStock, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Stock: {product.current_stock}
+          <Text style={[
+            styles.productStock, 
+            { 
+              color: isOutOfStock 
+                ? '#dc2626' 
+                : (item.current_stock <= item.min_stock_level ? '#ea580c' : (isDark ? '#d1d5db' : '#6b7280')) 
+            }
+          ]}>
+            Stock: {item.current_stock}
           </Text>
         </View>
         
@@ -160,10 +170,10 @@ export default function ProductSelectionScreen() {
               styles.quantityButton,
               { 
                 backgroundColor: quantity > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                opacity: isUpdating ? 0.5 : 1
+                opacity: isUpdating || quantity === 0 ? 0.5 : 1
               }
             ]}
-            onPress={() => handleQuantityChange(product.id, -1)}
+            onPress={() => handleQuantityChange(item.id, -1)}
             disabled={quantity === 0 || isUpdating}
           >
             <Minus size={16} color={quantity > 0 ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} />
@@ -178,21 +188,67 @@ export default function ProductSelectionScreen() {
               styles.quantityButton,
               { 
                 backgroundColor: '#2563eb',
-                opacity: isUpdating ? 0.5 : 1
+                opacity: isUpdating || isOutOfStock || isMaxStock ? 0.5 : 1
               }
             ]}
-            onPress={() => handleQuantityChange(product.id, 1)}
-            disabled={product.current_stock <= quantity || isUpdating}
+            onPress={() => handleQuantityChange(item.id, 1)}
+            disabled={isOutOfStock || isMaxStock || isUpdating}
           >
             <Plus size={16} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </Card>
     );
-  };
+  }, [selectedProducts, addingToCart, isDark, handleQuantityChange]);
+
+  const renderEmptyComponent = useCallback(() => (
+    <Card style={styles.emptyState}>
+      <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+      <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        {searchQuery ? 'No products found' : 'No products available'}
+      </Text>
+      <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+        {searchQuery 
+          ? `No products match "${searchQuery}"`
+          : 'Add products to your inventory first'
+        }
+      </Text>
+    </Card>
+  ), [searchQuery, isDark]);
 
   if (loading) {
     return <LoadingSpinner text="Loading products..." />;
+  }
+
+  const cart = getCart(cartId as string);
+  if (!cart) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Cart Not Found
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            The cart you're looking for doesn't exist or has been deleted.
+          </Text>
+          <Button
+            title="Go Back"
+            onPress={() => router.back()}
+            style={styles.errorButton}
+          />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -217,16 +273,14 @@ export default function ProductSelectionScreen() {
       </View>
 
       {/* Customer Info */}
-      {cart && (
-        <Card style={styles.customerInfo}>
-          <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Customer:
-          </Text>
-          <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {cart.customers?.name}
-          </Text>
-        </Card>
-      )}
+      <Card style={styles.customerInfo}>
+        <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+          Customer:
+        </Text>
+        <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          {cart.customer_name}
+        </Text>
+      </Card>
 
       {/* Search */}
       <View style={styles.searchSection}>
@@ -245,26 +299,14 @@ export default function ProductSelectionScreen() {
       {/* Products List */}
       <FlatList
         data={filteredProducts}
-        renderItem={({ item }) => <ProductSelectionCard product={item} />}
+        renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
         style={styles.productsList}
         showsVerticalScrollIndicator={false}
         numColumns={2}
         columnWrapperStyle={styles.productRow}
-        ListEmptyComponent={() => (
-          <Card style={styles.emptyState}>
-            <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {searchQuery ? 'No products found' : 'No products available'}
-            </Text>
-            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {searchQuery 
-                ? `No products match "${searchQuery}"`
-                : 'Add products to your inventory first'
-              }
-            </Text>
-          </Card>
-        )}
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={filteredProducts.length === 0 ? styles.emptyContainer : undefined}
       />
 
       {/* Continue Button */}
@@ -401,6 +443,10 @@ const styles = StyleSheet.create({
     minWidth: 30,
     textAlign: 'center',
   },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   emptyState: {
     alignItems: 'center',
     padding: 40,
@@ -424,5 +470,19 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: '#2563eb',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorButton: {
+    minWidth: 120,
   },
 });
