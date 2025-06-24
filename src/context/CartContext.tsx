@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { cartService } from '@/src/services/carts';
 import { productService } from '@/src/services/products';
+import { salesService } from '@/src/services/sales';
 
 // Types
 export interface CartItem {
@@ -79,6 +80,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     loadCarts();
   }, []);
 
+  // Load carts from AsyncStorage
   const loadCarts = async () => {
     try {
       setLoading(true);
@@ -122,6 +124,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     try {
       setLoading(true);
+      
+      // First, try to sync any unsynced local carts
+      const unsyncedCarts = carts.filter(cart => !cart.synced);
+      for (const cart of unsyncedCarts) {
+        try {
+          await syncCart(cart.id);
+        } catch (error) {
+          console.error(`Error syncing cart ${cart.id}:`, error);
+          // Continue with other carts even if one fails
+        }
+      }
       
       // Get active carts from the server
       const serverCarts = await cartService.getActiveCarts(profile.id);
@@ -176,6 +189,36 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           };
           
           mergedCarts.push(newCart);
+        } else {
+          // If the cart exists locally but is not synced, keep the local version
+          // Otherwise, update with the server version
+          const localCart = localCarts[localCartIndex];
+          if (localCart.synced) {
+            // Update the local cart with server data
+            mergedCarts[localCartIndex] = {
+              ...localCart,
+              status: serverCart.status as 'active' | 'completed' | 'abandoned',
+              total_amount: serverCart.total_amount,
+              discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
+              discount_value: serverCart.discount_value,
+              delivery_cost: serverCart.delivery_cost,
+              notes: serverCart.notes,
+              updated_at: serverCart.updated_at,
+              items: serverCart.cart_items?.map(item => ({
+                id: item.id,
+                product_id: item.product_id,
+                product_name: item.products?.name || 'Unknown Product',
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                original_subtotal: item.original_subtotal || (item.quantity * item.unit_price),
+                item_discount_type: item.item_discount_type as 'percentage' | 'fixed' | undefined,
+                item_discount_value: item.item_discount_value,
+                item_discount_amount: item.item_discount_amount || 0,
+                subtotal: item.subtotal
+              })) || [],
+              synced: true
+            };
+          }
         }
       }
       
@@ -186,7 +229,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, carts, syncCart]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
     if (!profile?.id) {
@@ -591,42 +634,63 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       
       // If the cart is not synced, create it on the server
       if (!cart.synced) {
-        // Create cart on server
-        const serverCart = await cartService.createCart({
-          id: cart.id, // Use the same UUID
-          customer_id: cart.customer_id,
-          business_id: cart.business_id,
-          created_by: cart.created_by,
-          status: cart.status,
-          total_amount: cart.total_amount,
-          discount_type: cart.discount_type,
-          discount_value: cart.discount_value,
-          delivery_cost: cart.delivery_cost,
-          notes: cart.notes,
-          created_at: cart.created_at,
-          updated_at: cart.updated_at
-        });
-        
-        serverCartId = serverCart.id;
+        try {
+          // Create cart on server
+          const serverCart = await cartService.createCart({
+            id: cart.id, // Use the same UUID
+            customer_id: cart.customer_id,
+            business_id: cart.business_id,
+            created_by: cart.created_by,
+            status: cart.status,
+            total_amount: cart.total_amount,
+            discount_type: cart.discount_type,
+            discount_value: cart.discount_value,
+            delivery_cost: cart.delivery_cost,
+            notes: cart.notes,
+            created_at: cart.created_at,
+            updated_at: cart.updated_at
+          });
+          
+          serverCartId = serverCart.id;
+        } catch (error) {
+          console.error('Error creating cart on server:', error);
+          throw error;
+        }
       }
       
       // Sync all cart items
       for (const item of cart.items) {
-        // Check if item exists on server (for synced carts)
-        if (cart.synced) {
-          try {
-            // Try to update the item if it exists
-            await cartService.updateCartItem(item.id, {
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              subtotal: item.subtotal,
-              original_subtotal: item.original_subtotal,
-              item_discount_type: item.item_discount_type,
-              item_discount_value: item.item_discount_value,
-              item_discount_amount: item.item_discount_amount
-            });
-          } catch (error) {
-            // If item doesn't exist, create it
+        try {
+          // Check if item exists on server (for synced carts)
+          if (cart.synced) {
+            try {
+              // Try to update the item if it exists
+              await cartService.updateCartItem(item.id, {
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                subtotal: item.subtotal,
+                original_subtotal: item.original_subtotal,
+                item_discount_type: item.item_discount_type,
+                item_discount_value: item.item_discount_value,
+                item_discount_amount: item.item_discount_amount
+              });
+            } catch (error) {
+              // If item doesn't exist, create it
+              await cartService.addItemToCart({
+                id: item.id, // Use the same UUID
+                cart_id: serverCartId,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                subtotal: item.subtotal,
+                original_subtotal: item.original_subtotal,
+                item_discount_type: item.item_discount_type,
+                item_discount_value: item.item_discount_value,
+                item_discount_amount: item.item_discount_amount
+              });
+            }
+          } else {
+            // For new carts, just add all items
             await cartService.addItemToCart({
               id: item.id, // Use the same UUID
               cart_id: serverCartId,
@@ -640,21 +704,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               item_discount_amount: item.item_discount_amount
             });
           }
-        } else {
-          // For new carts, just add all items
-          await cartService.addItemToCart({
-            id: item.id, // Use the same UUID
-            cart_id: serverCartId,
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            subtotal: item.subtotal,
-            original_subtotal: item.original_subtotal,
-            item_discount_type: item.item_discount_type,
-            item_discount_value: item.item_discount_value,
-            item_discount_amount: item.item_discount_amount
-          });
+        } catch (error) {
+          console.error(`Error syncing cart item ${item.id}:`, error);
+          throw error;
         }
+      }
+      
+      // Update cart on server with latest values
+      try {
+        await cartService.updateCart(serverCartId, {
+          status: cart.status,
+          total_amount: cart.total_amount,
+          discount_type: cart.discount_type,
+          discount_value: cart.discount_value,
+          delivery_cost: cart.delivery_cost,
+          notes: cart.notes
+        });
+      } catch (error) {
+        console.error('Error updating cart on server:', error);
+        throw error;
       }
       
       // Mark cart as synced
