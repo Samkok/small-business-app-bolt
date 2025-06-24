@@ -86,6 +86,44 @@ export default function SalesScreen() {
     { value: 'all', label: 'All Time' },
   ];
 
+  // Helper function to calculate dates without state updates
+  const calculateDatesForFilter = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all', customStart?: Date, customEnd?: Date) => {
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+    let text = '';
+    
+    switch (filter) {
+      case 'this_month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        text = 'This Month';
+        break;
+      case 'three_months':
+        start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        text = 'Last 3 Months';
+        break;
+      case 'six_months':
+        start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        text = 'Last 6 Months';
+        break;
+      case 'custom':
+        start = customStart || new Date();
+        end = customEnd || new Date();
+        text = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+        break;
+      case 'all':
+        start = new Date(2000, 0, 1);
+        end = now;
+        text = 'All Time';
+        break;
+    }
+    
+    return { start, end, text };
+  }, []);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -105,47 +143,6 @@ export default function SalesScreen() {
       setFilteredSales(sales);
     }
   }, [searchQuery, sales]);
-
-  const getDateRange = useCallback(() => {
-    const now = new Date();
-    let start = new Date();
-    let end = new Date();
-    
-    switch (dateFilter) {
-      case 'this_month':
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        setDateRangeText('This Month');
-        break;
-      case 'three_months':
-        start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        setDateRangeText('Last 3 Months');
-        break;
-      case 'six_months':
-        start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        setDateRangeText('Last 6 Months');
-        break;
-      case 'custom':
-        // Use the selected custom range
-        setDateRangeText(`${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`);
-        break;
-      case 'all':
-        // Set a very old start date
-        start = new Date(2000, 0, 1);
-        end = now;
-        setDateRangeText('All Time');
-        break;
-    }
-    
-    if (dateFilter !== 'custom') {
-      setStartDate(start);
-      setEndDate(end);
-    }
-    
-    return { start, end };
-  }, [dateFilter, startDate, endDate]);
 
   const loadData = async (isRefresh = false) => {
     if (!profile?.id) return;
@@ -179,7 +176,9 @@ export default function SalesScreen() {
     }
     
     try {
-      const { start, end } = getDateRange();
+      // Use the current state values directly
+      const start = startDate;
+      const end = endDate;
       
       // First get the total count for pagination
       const count = await salesService.getSalesCount(
@@ -313,11 +312,10 @@ export default function SalesScreen() {
     }
 
     try {
-      const { start, end } = getDateRange();
       const csvData = await importService.exportSalesToCsv(
         profile.id, 
-        start.toISOString(), 
-        end.toISOString()
+        startDate.toISOString(), 
+        endDate.toISOString()
       );
       
       // Create a download link
@@ -325,7 +323,7 @@ export default function SalesScreen() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
+      a.download = `sales_export_${startDate.toISOString().split('T')[0]}_to_${endDate.toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -344,12 +342,19 @@ export default function SalesScreen() {
     
     if (filter === 'custom') {
       setShowDateRangePicker(true);
+    } else {
+      // Calculate and set the dates for non-custom filters
+      const { start, end, text } = calculateDatesForFilter(filter);
+      setStartDate(start);
+      setEndDate(end);
+      setDateRangeText(text);
     }
   };
 
   const handleDateRangeConfirm = (start: Date, end: Date) => {
     setStartDate(start);
     setEndDate(end);
+    setDateRangeText(`${start.toLocaleDateString()} - ${end.toLocaleDateString()}`);
     setShowDateRangePicker(false);
     setCurrentPage(0);
   };
