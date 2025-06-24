@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle } from 'lucide-react-native';
-import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 
 interface ProductCardProps {
   product: {
