@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,14 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { Input } from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText } from 'lucide-react-native';
-import { cartService } from '@/src/services/carts';
-import { salesService } from '@/src/services/sales';
 
 export default function CheckoutScreen() {
-  const [cart, setCart] = useState<any>(null);
-  const [cartSummary, setCartSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('cash');
   const [notes, setNotes] = useState('');
@@ -30,6 +26,11 @@ export default function CheckoutScreen() {
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const { getCart, getCartSummary, completeSale } = useCart();
+
+  // Get cart and summary
+  const cart = getCart(cartId as string);
+  const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
   const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: '💵' },
@@ -38,80 +39,69 @@ export default function CheckoutScreen() {
     { value: 'other', label: 'Other', icon: '💰' },
   ];
 
-  useEffect(() => {
-    loadCart();
-  }, []);
-
-  const loadCart = async () => {
-    if (!cartId) return;
-    
-    try {
-      const [cartData, summaryData] = await Promise.all([
-        cartService.getCart(cartId as string),
-        cartService.getCartSummary(cartId as string)
-      ]);
-      
-      setCart(cartData);
-      setCartSummary(summaryData);
-      setNotes(cartData.notes || '');
-    } catch (error) {
-      console.error('Error loading cart:', error);
-      Alert.alert('Error', 'Failed to load cart');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCompleteSale = async () => {
-    if (!profile?.id || !cartId) {
+  const handleCompleteSale = useCallback(async () => {
+    if (!profile?.id || !cartId || !cart) {
       Alert.alert('Error', 'Missing required information');
       return;
     }
 
-    if (cart.cart_items?.length === 0) {
+    if (cart.items.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
     setProcessing(true);
     try {
-      await salesService.completeSale({
-        cart_id: cartId as string,
-        customer_id: cart.customer_id,
-        payment_method: paymentMethod,
-        notes: notes.trim() || null,
-        business_id: profile.id,
-        created_by: profile.id
-      });
-
-      Alert.alert(
-        'Sale Completed',
-        'The sale has been successfully completed!',
-        [
-          { 
-            text: 'OK', 
-            onPress: () => router.replace('/sales')
-          }
-        ]
-      );
+      const result = await completeSale(cartId as string, paymentMethod);
+      
+      if (result.success) {
+        Alert.alert(
+          'Sale Completed',
+          'The sale has been successfully completed!',
+          [
+            { 
+              text: 'OK', 
+              onPress: () => router.replace('/sales')
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to complete sale');
+      }
     } catch (error) {
       console.error('Error completing sale:', error);
       Alert.alert('Error', 'Failed to complete sale');
     } finally {
       setProcessing(false);
     }
-  };
+  }, [profile?.id, cartId, cart, paymentMethod, completeSale, router]);
 
-  if (loading) {
-    return <LoadingSpinner text="Loading checkout..." />;
-  }
-
-  if (!cart) {
+  if (!cart || !cartSummary) {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-        <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Cart not found
-        </Text>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Cart Not Found
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            The cart you're looking for doesn't exist or has been deleted.
+          </Text>
+          <Button
+            title="Go Back"
+            onPress={() => router.back()}
+            style={styles.errorButton}
+          />
+        </View>
       </View>
     );
   }
@@ -143,19 +133,19 @@ export default function CheckoutScreen() {
               Customer:
             </Text>
             <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {cart.customers?.name}
+              {cart.customer_name}
             </Text>
           </View>
           
           <View style={styles.itemsContainer}>
-            {cart.cart_items?.map((item: any) => (
+            {cart.items?.map((item) => (
               <View key={item.id} style={styles.summaryItem}>
                 <View style={styles.itemDetails}>
                   <Text style={[styles.itemQuantity, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                     {item.quantity}x
                   </Text>
                   <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {item.products?.name}
+                    {item.product_name}
                   </Text>
                 </View>
                 <View style={styles.itemPricing}>
@@ -232,7 +222,7 @@ export default function CheckoutScreen() {
             Payment Method
           </Text>
           
-          <View style={styles.paymentMethods}>
+          <View style={styles.paymentGrid}>
             {paymentMethods.map((method) => (
               <TouchableOpacity
                 key={method.value}
@@ -421,7 +411,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  paymentMethods: {
+  paymentGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
@@ -465,9 +455,18 @@ const styles = StyleSheet.create({
   completeButton: {
     backgroundColor: '#059669',
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 40,
+    marginBottom: 20,
+  },
+  errorButton: {
+    minWidth: 120,
   },
 });
