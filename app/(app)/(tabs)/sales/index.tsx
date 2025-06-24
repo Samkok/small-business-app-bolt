@@ -90,15 +90,19 @@ export default function SalesScreen() {
     loadData();
   }, []);
 
+  // Only load sales data when tab changes or filter parameters change
   useEffect(() => {
     if (activeTab === 'sales') {
       loadSalesData();
     }
-  }, [dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage]);
+  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage]);
 
+  // Filter sales when search query changes
   useEffect(() => {
     if (searchQuery.trim()) {
       filterSales();
+    } else {
+      setFilteredSales(sales);
     }
   }, [searchQuery, sales]);
 
