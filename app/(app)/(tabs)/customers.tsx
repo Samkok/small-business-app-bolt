@@ -8,7 +8,8 @@ import {
   Modal,
   RefreshControl,
   TextInput,
-  FlatList
+  FlatList,
+  ScrollView
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
