@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   Modal,
   RefreshControl,
-  TextInput
+  TextInput,
+  FlatList
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -21,6 +21,7 @@ import { CustomerCard } from '@/src/components/customers/CustomerCard';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -43,6 +44,7 @@ export default function CustomersScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     loadCustomers();
@@ -50,9 +52,9 @@ export default function CustomersScreen() {
 
   useEffect(() => {
     filterCustomers();
-  }, [customers, searchQuery, selectedPlatform]);
+  }, [customers, debouncedSearchQuery, selectedPlatform]);
 
-  const loadCustomers = async (isRefresh = false) => {
+  const loadCustomers = useCallback(async (isRefresh = false) => {
     if (!profile?.id) return;
     
     if (!isRefresh) {
@@ -109,17 +111,17 @@ export default function CustomersScreen() {
         setLoading(false);
       }
     }
-  };
+  }, [profile?.id, t]);
 
-  const filterCustomers = () => {
+  const filterCustomers = useCallback(() => {
     let filtered = customers;
 
     // Filter by search query
-    if (searchQuery.trim()) {
+    if (debouncedSearchQuery.trim()) {
       filtered = filtered.filter(customer =>
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (customer.phone && customer.phone.includes(searchQuery)) ||
-        (customer.address && customer.address.toLowerCase().includes(searchQuery.toLowerCase()))
+        customer.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(debouncedSearchQuery)) ||
+        (customer.address && customer.address.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
       );
     }
 
@@ -129,25 +131,25 @@ export default function CustomersScreen() {
     }
 
     setFilteredCustomers(filtered);
-  };
+  }, [customers, debouncedSearchQuery, selectedPlatform]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadCustomers(true);
-  };
+  }, [loadCustomers]);
 
-  const handleCustomerSave = () => {
+  const handleCustomerSave = useCallback(() => {
     setShowCustomerForm(false);
     setSelectedCustomer(null);
     loadCustomers();
-  };
+  }, [loadCustomers]);
 
-  const handleEditCustomer = (customer: any) => {
+  const handleEditCustomer = useCallback((customer: any) => {
     setSelectedCustomer(customer);
     setShowCustomerForm(true);
-  };
+  }, []);
 
-  const handleDeleteCustomer = (customer: any) => {
+  const handleDeleteCustomer = useCallback((customer: any) => {
     Alert.alert(
       'Delete Customer',
       `Are you sure you want to delete ${customer.name}?`,
@@ -169,9 +171,9 @@ export default function CustomersScreen() {
         },
       ]
     );
-  };
+  }, [loadCustomers]);
 
-  const getCustomerStats = () => {
+  const getCustomerStats = useCallback(() => {
     const totalCustomers = customers.length;
     const platformCounts = availablePlatforms
       .filter(platform => platform.value !== 'all')
@@ -181,7 +183,39 @@ export default function CustomersScreen() {
       }));
     
     return { totalCustomers, platformCounts };
-  };
+  }, [customers, availablePlatforms]);
+
+  const { totalCustomers, platformCounts } = useMemo(() => getCustomerStats(), [getCustomerStats]);
+
+  const renderCustomerItem = useCallback(({ item }) => (
+    <CustomerCard
+      customer={item}
+      onEdit={handleEditCustomer}
+      onDelete={handleDeleteCustomer}
+    />
+  ), [handleEditCustomer, handleDeleteCustomer]);
+
+  const renderEmptyComponent = useCallback(() => (
+    <Card style={styles.emptyState}>
+      <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+      <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        {searchQuery || selectedPlatform !== 'all' ? 'No customers found' : 'No customers yet'}
+      </Text>
+      <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+        {searchQuery || selectedPlatform !== 'all' 
+          ? 'Try adjusting your search or filter criteria'
+          : 'Add your first customer to get started'
+        }
+      </Text>
+      {!searchQuery && selectedPlatform === 'all' && (
+        <Button
+          title="Add Customer"
+          onPress={() => setShowCustomerForm(true)}
+          style={styles.emptyButton}
+        />
+      )}
+    </Card>
+  ), [searchQuery, selectedPlatform, isDark]);
 
   const SkeletonStatsCards = () => (
     <View style={styles.statsContainer}>
@@ -257,8 +291,6 @@ export default function CustomersScreen() {
       </View>
     );
   }
-
-  const { totalCustomers, platformCounts } = getCustomerStats();
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
@@ -379,8 +411,10 @@ export default function CustomersScreen() {
       </Card>
 
       {/* Customer List */}
-      <ScrollView
-        style={styles.customersList}
+      <FlatList
+        data={filteredCustomers}
+        renderItem={renderCustomerItem}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -392,38 +426,9 @@ export default function CustomersScreen() {
             titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
-      >
-        {filteredCustomers.length > 0 ? (
-          filteredCustomers.map((customer) => (
-            <CustomerCard
-              key={customer.id}
-              customer={customer}
-              onEdit={handleEditCustomer}
-              onDelete={handleDeleteCustomer}
-            />
-          ))
-        ) : (
-          <Card style={styles.emptyState}>
-            <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {searchQuery || selectedPlatform !== 'all' ? 'No customers found' : 'No customers yet'}
-            </Text>
-            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {searchQuery || selectedPlatform !== 'all' 
-                ? 'Try adjusting your search or filter criteria'
-                : 'Add your first customer to get started'
-              }
-            </Text>
-            {!searchQuery && selectedPlatform === 'all' && (
-              <Button
-                title="Add Customer"
-                onPress={() => setShowCustomerForm(true)}
-                style={styles.emptyButton}
-              />
-            )}
-          </Card>
-        )}
-      </ScrollView>
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={filteredCustomers.length === 0 ? styles.emptyContainer : styles.customersList}
+      />
 
       <Modal
         visible={showCustomerForm}
@@ -566,8 +571,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   customersList: {
-    flex: 1,
     paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  emptyContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
   },
   emptyState: {
     alignItems: 'center',

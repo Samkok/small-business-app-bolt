@@ -22,7 +22,7 @@ interface ExpenseCardProps {
   onDelete: (expense: any) => void;
 }
 
-export function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardProps) {
+export const ExpenseCard = React.memo(function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardProps) {
   const { isDark } = useTheme();
 
   const formatDate = (dateString: string) => {
@@ -99,7 +99,7 @@ export function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardProps) {
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

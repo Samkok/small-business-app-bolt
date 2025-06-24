@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 
 interface ProductCardProps {
   product: {
@@ -19,7 +20,7 @@ interface ProductCardProps {
   onImportStock: (product: any) => void;
 }
 
-export function ProductCard({ product, onEdit, onImportStock }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onImportStock }: ProductCardProps) {
   const { isDark } = useTheme();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
@@ -36,7 +37,12 @@ export function ProductCard({ product, onEdit, onImportStock }: ProductCardProps
   return (
     <Card style={styles.card}>
       {product.image_url ? (
-        <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
+        <OptimizedImage 
+          source={{ uri: product.image_url }} 
+          style={styles.image} 
+          resizeMode="cover" 
+          alt={product.name}
+        />
       ) : (
         <View style={[styles.imagePlaceholder, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
           <Package size={32} color={isDark ? '#9ca3af' : '#6b7280'} />
@@ -98,7 +104,7 @@ export function ProductCard({ product, onEdit, onImportStock }: ProductCardProps
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

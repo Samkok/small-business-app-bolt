@@ -24,7 +24,7 @@ interface ActiveCartCardProps {
   onDelete: (cartId: string) => void;
 }
 
-export function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps) {
+export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps) {
   const { isDark } = useTheme();
 
   const getTotalItems = () => {
@@ -123,7 +123,7 @@ export function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps)
       </Card>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

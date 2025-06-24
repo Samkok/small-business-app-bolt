@@ -18,7 +18,7 @@ interface CustomerCardProps {
   onDelete: (customer: any) => void;
 }
 
-export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) {
+export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) {
   const { isDark } = useTheme();
 
   const getPlatformIcon = (platform?: string) => {
@@ -134,7 +134,7 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

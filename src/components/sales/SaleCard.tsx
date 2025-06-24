@@ -29,7 +29,7 @@ interface SaleCardProps {
   onVoid: (sale: any) => void;
 }
 
-export function SaleCard({ sale, onVoid }: SaleCardProps) {
+export const SaleCard = React.memo(function SaleCard({ sale, onVoid }: SaleCardProps) {
   const { isDark } = useTheme();
   const router = useRouter();
 
@@ -162,7 +162,7 @@ export function SaleCard({ sale, onVoid }: SaleCardProps) {
       </Card>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

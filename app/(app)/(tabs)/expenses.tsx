@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   Modal,
   RefreshControl,
   TextInput,
-  Animated
+  Animated,
+  FlatList
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -23,6 +24,7 @@ import ExpenseForm from '@/src/components/expenses/ExpenseForm';
 import CategoryForm from '@/src/components/expenses/CategoryForm';
 import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -44,6 +46,7 @@ export default function ExpensesScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
     { value: 'all', label: 'All Time' },
@@ -59,7 +62,7 @@ export default function ExpensesScreen() {
 
   useEffect(() => {
     filterExpenses();
-  }, [expenses, searchQuery, selectedCategory, selectedPeriod]);
+  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod]);
 
   // Animate the collapsible section
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function ExpensesScreen() {
     }).start();
   }, [statsCollapsed, collapseAnim]);
 
-  const loadData = async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false) => {
     if (!profile?.id) return;
     
     if (!isRefresh) {
@@ -95,17 +98,17 @@ export default function ExpensesScreen() {
         setLoading(false);
       }
     }
-  };
+  }, [profile?.id, t]);
 
-  const filterExpenses = () => {
+  const filterExpenses = useCallback(() => {
     let filtered = expenses;
 
     // Filter by search query
-    if (searchQuery.trim()) {
+    if (debouncedSearchQuery.trim()) {
       filtered = filtered.filter(expense =>
-        expense.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.expense_categories?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.amount.toString().includes(searchQuery)
+        expense.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        expense.expense_categories?.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        expense.amount.toString().includes(debouncedSearchQuery)
       );
     }
 
@@ -142,30 +145,30 @@ export default function ExpensesScreen() {
     }
 
     setFilteredExpenses(filtered);
-  };
+  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData(true);
-  };
+  }, [loadData]);
 
-  const handleExpenseSave = () => {
+  const handleExpenseSave = useCallback(() => {
     setShowExpenseForm(false);
     setSelectedExpense(null);
     loadData();
-  };
+  }, [loadData]);
 
-  const handleCategorySave = () => {
+  const handleCategorySave = useCallback(() => {
     setShowCategoryForm(false);
     loadData();
-  };
+  }, [loadData]);
 
-  const handleEditExpense = (expense: any) => {
+  const handleEditExpense = useCallback((expense: any) => {
     setSelectedExpense(expense);
     setShowExpenseForm(true);
-  };
+  }, []);
 
-  const handleDeleteExpense = (expense: any) => {
+  const handleDeleteExpense = useCallback((expense: any) => {
     Alert.alert(
       'Delete Expense',
       `Are you sure you want to delete this expense of $${expense.amount.toFixed(2)}?`,
@@ -187,13 +190,13 @@ export default function ExpensesScreen() {
         },
       ]
     );
-  };
+  }, [loadData]);
 
-  const toggleStatsCollapse = () => {
+  const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
-  };
+  }, [statsCollapsed]);
 
-  const getExpenseStats = () => {
+  const getExpenseStats = useCallback(() => {
     const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const expenseCount = filteredExpenses.length;
     const averageExpense = expenseCount > 0 ? totalExpenses / expenseCount : 0;
@@ -218,7 +221,53 @@ export default function ExpensesScreen() {
       .map(([name, total]) => ({ name, total }));
 
     return { totalExpenses, expenseCount, averageExpense, todayTotal, topCategories };
-  };
+  }, [filteredExpenses]);
+
+  const { totalExpenses, expenseCount, averageExpense, todayTotal, topCategories } = useMemo(
+    () => getExpenseStats(), 
+    [getExpenseStats]
+  );
+
+  const renderExpenseItem = useCallback(({ item }) => (
+    <ExpenseCard
+      expense={item}
+      onEdit={handleEditExpense}
+      onDelete={handleDeleteExpense}
+    />
+  ), [handleEditExpense, handleDeleteExpense]);
+
+  const renderEmptyComponent = useCallback(() => (
+    <Card style={styles.emptyState}>
+      <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+      <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all' 
+          ? 'No expenses found' 
+          : 'No expenses yet'
+        }
+      </Text>
+      <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+        {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all'
+          ? 'Try adjusting your search or filter criteria'
+          : 'Add your first expense to start tracking'
+        }
+      </Text>
+      {!searchQuery && selectedCategory === 'all' && selectedPeriod === 'all' && (
+        <View style={styles.emptyActions}>
+          <Button
+            title="Add Category"
+            variant="outline"
+            onPress={() => setShowCategoryForm(true)}
+            style={styles.emptyButton}
+          />
+          <Button
+            title="Add Expense"
+            onPress={() => setShowExpenseForm(true)}
+            style={styles.emptyButton}
+          />
+        </View>
+      )}
+    </Card>
+  ), [searchQuery, selectedCategory, selectedPeriod, isDark]);
 
   const SkeletonStatsGrid = () => (
     <View style={styles.statsGrid}>
@@ -317,8 +366,6 @@ export default function ExpensesScreen() {
       </View>
     );
   }
-
-  const { totalExpenses, expenseCount, averageExpense, todayTotal, topCategories } = getExpenseStats();
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
@@ -554,7 +601,10 @@ export default function ExpensesScreen() {
       </Animated.View>
 
       {/* Expenses List */}
-      <ScrollView
+      <FlatList
+        data={filteredExpenses}
+        renderItem={renderExpenseItem}
+        keyExtractor={(item) => item.id}
         style={styles.expensesList}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -567,49 +617,9 @@ export default function ExpensesScreen() {
             titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
-      >
-        {filteredExpenses.length > 0 ? (
-          filteredExpenses.map((expense) => (
-            <ExpenseCard
-              key={expense.id}
-              expense={expense}
-              onEdit={handleEditExpense}
-              onDelete={handleDeleteExpense}
-            />
-          ))
-        ) : (
-          <Card style={styles.emptyState}>
-            <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all' 
-                ? 'No expenses found' 
-                : 'No expenses yet'
-              }
-            </Text>
-            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all'
-                ? 'Try adjusting your search or filter criteria'
-                : 'Add your first expense to start tracking'
-              }
-            </Text>
-            {!searchQuery && selectedCategory === 'all' && selectedPeriod === 'all' && (
-              <View style={styles.emptyActions}>
-                <Button
-                  title="Add Category"
-                  variant="outline"
-                  onPress={() => setShowCategoryForm(true)}
-                  style={styles.emptyButton}
-                />
-                <Button
-                  title="Add Expense"
-                  onPress={() => setShowExpenseForm(true)}
-                  style={styles.emptyButton}
-                />
-              </View>
-            )}
-          </Card>
-        )}
-      </ScrollView>
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={filteredExpenses.length === 0 ? styles.emptyContainer : undefined}
+      />
 
       <Modal
         visible={showExpenseForm}
@@ -782,6 +792,10 @@ const styles = StyleSheet.create({
   expensesList: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   emptyState: {
     alignItems: 'center',
