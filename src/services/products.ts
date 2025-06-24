@@ -170,6 +170,21 @@ export const productService = {
     return data;
   },
 
+  async updateCostPerUnit(productId: string, newCostPerUnit: number) {
+    const { data, error } = await supabase
+      .from('products')
+      .update({ 
+        cost_per_unit: newCostPerUnit,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
     let dbQuery = supabase
       .from('products')
@@ -217,5 +232,59 @@ export const productService = {
     );
     
     return Promise.all(promises);
+  },
+
+  async getProductCostHistory(productId: string) {
+    const { data, error } = await supabase
+      .from('inventory_imports')
+      .select(`
+        id,
+        quantity,
+        base_unit_cost,
+        final_unit_cost,
+        total_cost,
+        created_at
+      `)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async recalculateProductCost(productId: string) {
+    // Get all imports for this product
+    const { data: imports, error: importsError } = await supabase
+      .from('inventory_imports')
+      .select('quantity, final_unit_cost')
+      .eq('product_id', productId)
+      .order('created_at');
+
+    if (importsError) throw importsError;
+
+    // Get current stock
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', productId)
+      .single();
+
+    if (productError) throw productError;
+
+    // Calculate weighted average cost
+    let totalQuantity = 0;
+    let totalCost = 0;
+
+    imports.forEach(imp => {
+      totalQuantity += imp.quantity;
+      totalCost += imp.quantity * imp.final_unit_cost;
+    });
+
+    const costPerUnit = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+
+    // Update the product's cost_per_unit
+    await this.updateCostPerUnit(productId, costPerUnit);
+
+    return costPerUnit;
   }
 };

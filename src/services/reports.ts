@@ -30,15 +30,14 @@ export const reportsService = {
 
     const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
 
-    // Monthly COGS (Cost of Goods Sold)
-    const { data: monthlyImports } = await supabase
-      .from('inventory_imports')
-      .select('total_cost, quantity')
-      .eq('business_id', businessId)
-      .gte('created_at', startOfMonth)
-      .lte('created_at', endOfMonth);
-
-    const monthlyCOGS = monthlyImports?.reduce((sum, item) => sum + item.total_cost, 0) || 0;
+    // Monthly COGS (Cost of Goods Sold) - based on actual sold items
+    const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
+      business_id_param: businessId,
+      start_date: startOfMonth,
+      end_date: endOfMonth
+    });
+    
+    const monthlyCOGS = monthlyCOGSData || 0;
 
     // Calculate Total Profit (Revenue - COGS)
     const totalProfit = monthlyRevenue - monthlyCOGS;
@@ -98,7 +97,7 @@ export const reportsService = {
       .from('cart_items')
       .select(`
         quantity,
-        products(name, price),
+        products(name, price, cost_per_unit),
         carts!inner(
           sales!inner(
             business_id,
@@ -115,18 +114,27 @@ export const reportsService = {
     if (error) throw error;
 
     // Group by product and sum quantities
-    const productSales: Record<string, { name: string; quantity: number; revenue: number }> = {};
+    const productSales: Record<string, { name: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
     
     data.forEach(item => {
       const productName = item.products?.name || 'Unknown';
       const productPrice = item.products?.price || 0;
+      const productCost = item.products?.cost_per_unit || 0;
       
       if (!productSales[productName]) {
-        productSales[productName] = { name: productName, quantity: 0, revenue: 0 };
+        productSales[productName] = { 
+          name: productName, 
+          quantity: 0, 
+          revenue: 0,
+          cost: 0,
+          profit: 0
+        };
       }
       
       productSales[productName].quantity += item.quantity;
       productSales[productName].revenue += item.quantity * productPrice;
+      productSales[productName].cost += item.quantity * productCost;
+      productSales[productName].profit += item.quantity * (productPrice - productCost);
     });
 
     return Object.values(productSales)
@@ -211,5 +219,66 @@ export const reportsService = {
     }
 
     return result;
+  },
+
+  async getSalesCOGSReport(businessId: string, startDate: string, endDate: string) {
+    // Get sales data
+    const { data: salesData } = await supabase
+      .from('sales')
+      .select(`
+        id,
+        total_amount,
+        sale_date,
+        cart_id,
+        carts(
+          cart_items(
+            quantity,
+            product_id,
+            products(
+              name,
+              cost_per_unit
+            )
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
+      .order('sale_date');
+
+    if (!salesData) return [];
+
+    // Process sales data to calculate COGS and profit
+    return salesData.map(sale => {
+      let totalCOGS = 0;
+      let itemDetails = [];
+
+      // Calculate COGS for each item in the sale
+      if (sale.carts?.cart_items) {
+        sale.carts.cart_items.forEach(item => {
+          const costPerUnit = item.products?.cost_per_unit || 0;
+          const itemCOGS = item.quantity * costPerUnit;
+          totalCOGS += itemCOGS;
+
+          itemDetails.push({
+            product: item.products?.name || 'Unknown Product',
+            quantity: item.quantity,
+            costPerUnit,
+            totalCost: itemCOGS
+          });
+        });
+      }
+
+      return {
+        id: sale.id,
+        date: sale.sale_date,
+        revenue: sale.total_amount,
+        cogs: totalCOGS,
+        profit: sale.total_amount - totalCOGS,
+        profitMargin: sale.total_amount > 0 ? ((sale.total_amount - totalCOGS) / sale.total_amount) * 100 : 0,
+        items: itemDetails
+      };
+    });
   }
 };

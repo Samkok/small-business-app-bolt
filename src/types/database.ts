@@ -46,6 +46,7 @@ export interface Database {
           barcode?: string;
           current_stock: number;
           min_stock_level: number;
+          cost_per_unit: number;
           business_id: string;
           created_at: string;
           updated_at: string;
@@ -59,6 +60,7 @@ export interface Database {
           barcode?: string;
           current_stock?: number;
           min_stock_level?: number;
+          cost_per_unit?: number;
           business_id: string;
           created_at?: string;
           updated_at?: string;
@@ -72,6 +74,7 @@ export interface Database {
           barcode?: string;
           current_stock?: number;
           min_stock_level?: number;
+          cost_per_unit?: number;
           business_id?: string;
           created_at?: string;
           updated_at?: string;

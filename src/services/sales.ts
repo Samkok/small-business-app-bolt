@@ -214,6 +214,60 @@ export const salesService = {
     return data;
   },
 
+  async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
+    // Get sales with cart items and product costs
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        id,
+        total_amount,
+        sale_date,
+        status,
+        carts(
+          cart_items(
+            quantity,
+            unit_price,
+            subtotal,
+            product_id,
+            products(
+              name,
+              cost_per_unit
+            )
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
+      .order('sale_date');
+
+    if (error) throw error;
+
+    // Calculate COGS and profit for each sale
+    return data.map(sale => {
+      let totalCOGS = 0;
+      let totalRevenue = sale.total_amount;
+
+      // Calculate COGS from cart items
+      if (sale.carts?.cart_items) {
+        sale.carts.cart_items.forEach(item => {
+          const costPerUnit = item.products?.cost_per_unit || 0;
+          totalCOGS += item.quantity * costPerUnit;
+        });
+      }
+
+      return {
+        id: sale.id,
+        date: sale.sale_date,
+        revenue: totalRevenue,
+        cogs: totalCOGS,
+        profit: totalRevenue - totalCOGS,
+        profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0
+      };
+    });
+  },
+
   async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {
     const { data, error } = await supabase
       .from('sales_with_discount_details')

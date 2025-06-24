@@ -37,6 +37,8 @@ interface TopProduct {
   name: string;
   quantity: number;
   revenue: number;
+  cost: number;
+  profit: number;
 }
 
 interface TopCustomer {
@@ -165,9 +167,14 @@ export default function DashboardScreen() {
           {product.quantity} sold
         </Text>
       </View>
-      <Text style={[styles.topItemValue, { color: '#059669' }]}>
-        ${product.revenue.toFixed(2)}
-      </Text>
+      <View style={styles.topItemValues}>
+        <Text style={[styles.topItemValue, { color: '#059669' }]}>
+          ${product.revenue.toFixed(2)}
+        </Text>
+        <Text style={[styles.topItemProfit, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
+          Profit: ${product.profit.toFixed(2)}
+        </Text>
+      </View>
     </View>
   );
 
@@ -555,9 +562,17 @@ const styles = StyleSheet.create({
   topItemSubtext: {
     fontSize: 12,
   },
+  topItemValues: {
+    alignItems: 'flex-end',
+  },
   topItemValue: {
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  topItemProfit: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   quickActions: {
     padding: 16,
