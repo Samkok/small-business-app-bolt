@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   Alert,
   Modal,
   RefreshControl,
-  TextInput
+  TextInput,
+  Animated
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -20,7 +21,7 @@ import { SkeletonExpenseCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ExpenseCard } from '@/src/components/expenses/ExpenseCard';
 import ExpenseForm from '@/src/components/expenses/ExpenseForm';
 import CategoryForm from '@/src/components/expenses/CategoryForm';
-import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3 } from 'lucide-react-native';
+import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
 
 export default function ExpensesScreen() {
@@ -35,6 +36,11 @@ export default function ExpensesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
+  const [statsCollapsed, setStatsCollapsed] = useState(true);
+  
+  // Animation for collapsible section
+  const collapseAnim = useRef(new Animated.Value(0)).current;
+  
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
@@ -54,6 +60,15 @@ export default function ExpensesScreen() {
   useEffect(() => {
     filterExpenses();
   }, [expenses, searchQuery, selectedCategory, selectedPeriod]);
+
+  // Animate the collapsible section
+  useEffect(() => {
+    Animated.timing(collapseAnim, {
+      toValue: statsCollapsed ? 0 : 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [statsCollapsed, collapseAnim]);
 
   const loadData = async (isRefresh = false) => {
     if (!profile?.id) return;
@@ -172,6 +187,10 @@ export default function ExpensesScreen() {
         },
       ]
     );
+  };
+
+  const toggleStatsCollapse = () => {
+    setStatsCollapsed(!statsCollapsed);
   };
 
   const getExpenseStats = () => {
@@ -323,7 +342,7 @@ export default function ExpensesScreen() {
         </View>
       </View>
 
-      {/* Search and Filter */}
+      {/* Search */}
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
           <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
@@ -335,7 +354,36 @@ export default function ExpensesScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
+      </View>
 
+      {/* Collapsible Stats Section */}
+      <View style={styles.collapsibleHeader}>
+        <View style={styles.collapsibleTitle}>
+          <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Expense Statistics
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.collapseButton}
+          onPress={toggleStatsCollapse}
+        >
+          {statsCollapsed ? (
+            <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+          ) : (
+            <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <Animated.View style={{
+        maxHeight: collapseAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 500] // Adjust this value based on your content height
+        }),
+        overflow: 'hidden',
+        opacity: collapseAnim
+      }}>
+        {/* Category Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {categories.map((category) => (
             <TouchableOpacity
@@ -392,6 +440,7 @@ export default function ExpensesScreen() {
           </TouchableOpacity>
         </ScrollView>
 
+        {/* Period Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {periodFilters.map((filter) => (
             <TouchableOpacity
@@ -422,87 +471,87 @@ export default function ExpensesScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
 
-      {/* Stats Cards */}
-      <View style={styles.statsGrid}>
-        <Card style={styles.statsCard}>
-          <View style={styles.statsContent}>
-            <DollarSign size={20} color="#dc2626" />
-            <View style={styles.statsText}>
-              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                ${todayTotal.toFixed(2)}
-              </Text>
-              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Today's Expenses
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        <Card style={styles.statsCard}>
-          <View style={styles.statsContent}>
-            <TrendingDown size={20} color="#ea580c" />
-            <View style={styles.statsText}>
-              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                ${totalExpenses.toFixed(2)}
-              </Text>
-              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Expenses
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        <Card style={styles.statsCard}>
-          <View style={styles.statsContent}>
-            <Receipt size={20} color="#8b5cf6" />
-            <View style={styles.statsText}>
-              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {expenseCount}
-              </Text>
-              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Records
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        <Card style={styles.statsCard}>
-          <View style={styles.statsContent}>
-            <BarChart3 size={20} color="#06b6d4" />
-            <View style={styles.statsText}>
-              <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                ${averageExpense.toFixed(2)}
-              </Text>
-              <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Average Expense
-              </Text>
-            </View>
-          </View>
-        </Card>
-      </View>
-
-      {/* Top Categories */}
-      {topCategories.length > 0 && (
-        <Card style={styles.categoriesCard}>
-          <Text style={[styles.categoriesTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Top Expense Categories
-          </Text>
-          <View style={styles.categoriesGrid}>
-            {topCategories.map((category, index) => (
-              <View key={index} style={styles.categoryItem}>
-                <Text style={[styles.categoryName, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  {category.name}
+        {/* Stats Cards */}
+        <View style={styles.statsGrid}>
+          <Card style={styles.statsCard}>
+            <View style={styles.statsContent}>
+              <DollarSign size={20} color="#dc2626" />
+              <View style={styles.statsText}>
+                <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  ${todayTotal.toFixed(2)}
                 </Text>
-                <Text style={[styles.categoryAmount, { color: '#dc2626' }]}>
-                  ${category.total.toFixed(2)}
+                <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Today's Expenses
                 </Text>
               </View>
-            ))}
-          </View>
-        </Card>
-      )}
+            </View>
+          </Card>
+
+          <Card style={styles.statsCard}>
+            <View style={styles.statsContent}>
+              <TrendingDown size={20} color="#ea580c" />
+              <View style={styles.statsText}>
+                <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  ${totalExpenses.toFixed(2)}
+                </Text>
+                <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Total Expenses
+                </Text>
+              </View>
+            </View>
+          </Card>
+
+          <Card style={styles.statsCard}>
+            <View style={styles.statsContent}>
+              <Receipt size={20} color="#8b5cf6" />
+              <View style={styles.statsText}>
+                <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  {expenseCount}
+                </Text>
+                <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Total Records
+                </Text>
+              </View>
+            </View>
+          </Card>
+
+          <Card style={styles.statsCard}>
+            <View style={styles.statsContent}>
+              <BarChart3 size={20} color="#06b6d4" />
+              <View style={styles.statsText}>
+                <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  ${averageExpense.toFixed(2)}
+                </Text>
+                <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Average Expense
+                </Text>
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* Top Categories */}
+        {topCategories.length > 0 && (
+          <Card style={styles.categoriesCard}>
+            <Text style={[styles.categoriesTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Top Expense Categories
+            </Text>
+            <View style={styles.categoriesGrid}>
+              {topCategories.map((category, index) => (
+                <View key={index} style={styles.categoryItem}>
+                  <Text style={[styles.categoryName, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {category.name}
+                  </Text>
+                  <Text style={[styles.categoryAmount, { color: '#dc2626' }]}>
+                    ${category.total.toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        )}
+      </Animated.View>
 
       {/* Expenses List */}
       <ScrollView
@@ -637,8 +686,30 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
   },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  collapsibleTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  collapsibleTitleText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  collapseButton: {
+    padding: 4,
+  },
   filterContainer: {
     marginBottom: 8,
+    paddingHorizontal: 16,
   },
   filterButton: {
     paddingVertical: 8,
