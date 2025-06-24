@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
-  TextInput
+  TextInput,
+  Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -19,9 +20,11 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users } from 'lucide-react-native';
+import ImportSalesModal from '@/src/components/sales/ImportSalesModal';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { cartService } from '@/src/services/carts';
+import { importService } from '@/src/services/importService';
 
 export default function SalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
@@ -34,6 +37,7 @@ export default function SalesScreen() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -181,6 +185,42 @@ export default function SalesScreen() {
     router.push(`/sales/cart/${cartId}`);
   };
 
+  const handleImportSales = () => {
+    router.push('/sales/import');
+  };
+
+  const handleExportSales = async () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Not Supported', 'Export is only available on web platform');
+      return;
+    }
+
+    if (!profile?.id) {
+      Alert.alert('Error', 'No business profile found');
+      return;
+    }
+
+    try {
+      const csvData = await importService.exportSalesToCsv(profile.id);
+      
+      // Create a download link
+      const blob = new Blob([csvData], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      Alert.alert('Success', 'Sales data exported successfully');
+    } catch (error) {
+      console.error('Error exporting sales:', error);
+      Alert.alert('Error', 'Failed to export sales data');
+    }
+  };
+
   const getSalesStats = () => {
     const totalSales = sales.length;
     const completedSales = sales.filter(s => s.status === 'completed');
@@ -250,12 +290,20 @@ export default function SalesScreen() {
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {t('sales.title')}
           </Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleNewSale}
-          >
-            <Plus size={24} color="#ffffff" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#059669' }]}
+              onPress={handleImportSales}
+            >
+              <FileUp size={20} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
+              onPress={handleNewSale}
+            >
+              <Plus size={24} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.tabs}>
@@ -286,12 +334,20 @@ export default function SalesScreen() {
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {t('sales.title')}
         </Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleNewSale}
-        >
-          <Plus size={24} color="#ffffff" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#059669' }]}
+            onPress={handleImportSales}
+          >
+            <FileUp size={20} color="#ffffff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
+            onPress={handleNewSale}
+          >
+            <Plus size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -369,6 +425,24 @@ export default function SalesScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            </View>
+
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={handleImportSales}
+              >
+                <FileUp size={16} color="#2563eb" />
+                <Text style={styles.actionButtonText}>Import</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={handleExportSales}
+              >
+                <Download size={16} color="#059669" />
+                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
@@ -532,11 +606,19 @@ export default function SalesScreen() {
                   }
                 </Text>
                 {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
-                  <Button
-                    title="Start New Sale"
-                    onPress={handleNewSale}
-                    style={styles.emptyButton}
-                  />
+                  <View style={styles.emptyActions}>
+                    <Button
+                      title="Import Sales"
+                      variant="outline"
+                      onPress={handleImportSales}
+                      style={styles.emptyButton}
+                    />
+                    <Button
+                      title="New Sale"
+                      onPress={handleNewSale}
+                      style={styles.emptyButton}
+                    />
+                  </View>
                 )}
               </Card>
             )}
@@ -550,6 +632,22 @@ export default function SalesScreen() {
           <LoadingSpinner text="Deleting cart..." />
         </View>
       )}
+
+      {/* Import Sales Modal */}
+      <Modal
+        visible={showImportModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowImportModal(false)}
+      >
+        <ImportSalesModal
+          onClose={() => setShowImportModal(false)}
+          onComplete={() => {
+            setShowImportModal(false);
+            loadData();
+          }}
+        />
+      </Modal>
     </View>
   );
 }
@@ -569,8 +667,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  addButton: {
-    backgroundColor: '#2563eb',
+  headerActions: {
+    flexDirection: 'row',
+  },
+  actionButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -644,6 +744,29 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  actionButtonSmall: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
+    color: '#2563eb',
+  },
   filterContainer: {
     marginBottom: 8,
   },
@@ -706,8 +829,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
+  emptyActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   emptyButton: {
     marginTop: 16,
+    minWidth: 120,
   },
   loadingOverlay: {
     position: 'absolute',
