@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   TextInput,
   Modal,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,7 @@ import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import ImportSalesModal from '@/src/components/sales/ImportSalesModal';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { cartService } from '@/src/services/carts';
 import { importService } from '@/src/services/importService';
@@ -44,6 +45,10 @@ export default function SalesScreen() {
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [statsCollapsed, setStatsCollapsed] = useState(true);
+  
+  // Animation for collapsible section
+  const collapseAnim = useRef(new Animated.Value(0)).current;
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -163,6 +168,15 @@ export default function SalesScreen() {
       setFilteredSales(sales);
     }
   }, [searchQuery, sales]);
+
+  // Animate the collapsible section
+  useEffect(() => {
+    Animated.timing(collapseAnim, {
+      toValue: statsCollapsed ? 0 : 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [statsCollapsed, collapseAnim]);
 
   const loadData = async (isRefresh = false) => {
     if (!profile?.id) return;
@@ -424,6 +438,10 @@ export default function SalesScreen() {
     const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
 
     return { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales: todaySales.length };
+  };
+
+  const toggleStatsCollapse = () => {
+    setStatsCollapsed(!statsCollapsed);
   };
 
   const TabButton = ({ 
@@ -763,164 +781,192 @@ export default function SalesScreen() {
           {/* Date Filter */}
           {renderDateFilter()}
           
-          {/* Search and Filter */}
-          <View style={styles.searchSection}>
-            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <TextInput
-                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                placeholder="Search sales..."
-                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
+          {/* Collapsible Section */}
+          <View style={styles.collapsibleHeader}>
+            <View style={styles.collapsibleTitle}>
+              <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Sales Statistics
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.collapseButton}
+              onPress={toggleStatsCollapse}
+            >
+              {statsCollapsed ? (
+                <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              ) : (
+                <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          <Animated.View style={{
+            maxHeight: collapseAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 500] // Adjust this value based on your content height
+            }),
+            overflow: 'hidden',
+            opacity: collapseAnim
+          }}>
+            {/* Search and Filter */}
+            <View style={styles.searchSection}>
+              <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+                <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <TextInput
+                  style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                  placeholder="Search sales..."
+                  placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={handleImportSales}
+                >
+                  <FileUp size={16} color="#2563eb" />
+                  <Text style={styles.actionButtonText}>Import</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={handleExportSales}
+                >
+                  <Download size={16} color="#059669" />
+                  <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+                {statusFilters.map((filter) => (
+                  <TouchableOpacity
+                    key={filter.value}
+                    style={[
+                      styles.filterButton,
+                      {
+                        backgroundColor: selectedStatus === filter.value 
+                          ? '#2563eb' 
+                          : (isDark ? '#374151' : '#f3f4f6'),
+                        borderColor: selectedStatus === filter.value 
+                          ? '#2563eb' 
+                          : (isDark ? '#4b5563' : '#d1d5db'),
+                      }
+                    ]}
+                    onPress={() => {
+                      setSelectedStatus(filter.value);
+                      setCurrentPage(0);
+                    }}
+                  >
+                    <Text style={[
+                      styles.filterButtonText,
+                      { 
+                        color: selectedStatus === filter.value 
+                          ? '#ffffff' 
+                          : (isDark ? '#f9fafb' : '#374151') 
+                      }
+                    ]}>
+                      {filter.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+                {paymentMethodFilters.map((filter) => (
+                  <TouchableOpacity
+                    key={filter.value}
+                    style={[
+                      styles.filterButton,
+                      {
+                        backgroundColor: selectedPaymentMethod === filter.value 
+                          ? '#059669' 
+                          : (isDark ? '#374151' : '#f3f4f6'),
+                        borderColor: selectedPaymentMethod === filter.value 
+                          ? '#059669' 
+                          : (isDark ? '#4b5563' : '#d1d5db'),
+                      }
+                    ]}
+                    onPress={() => {
+                      setSelectedPaymentMethod(filter.value);
+                      setCurrentPage(0);
+                    }}
+                  >
+                    <Text style={[
+                      styles.filterButtonText,
+                      { 
+                        color: selectedPaymentMethod === filter.value 
+                          ? '#ffffff' 
+                          : (isDark ? '#f9fafb' : '#374151') 
+                      }
+                    ]}>
+                      {filter.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={handleImportSales}
-              >
-                <FileUp size={16} color="#2563eb" />
-                <Text style={styles.actionButtonText}>Import</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={handleExportSales}
-              >
-                <Download size={16} color="#059669" />
-                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
-              </TouchableOpacity>
+            {/* Stats Cards */}
+            <View style={styles.statsGrid}>
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <DollarSign size={20} color="#2563eb" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${todayRevenue.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Today's Revenue
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <TrendingUp size={20} color="#059669" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${totalRevenue.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Total Revenue
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <Receipt size={20} color="#8b5cf6" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {todaySales}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Today's Sales
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <ShoppingCart size={20} color="#ea580c" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${averageSale.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Average Sale
+                    </Text>
+                  </View>
+                </View>
+              </Card>
             </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {statusFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => {
-                    setSelectedStatus(filter.value);
-                    setCurrentPage(0);
-                  }}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedStatus === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {paymentMethodFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => {
-                    setSelectedPaymentMethod(filter.value);
-                    setCurrentPage(0);
-                  }}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedPaymentMethod === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Stats Cards */}
-          <View style={styles.statsGrid}>
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <DollarSign size={20} color="#2563eb" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${todayRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <TrendingUp size={20} color="#059669" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${totalRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <Receipt size={20} color="#8b5cf6" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {todaySales}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Sales
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <ShoppingCart size={20} color="#ea580c" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${averageSale.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Average Sale
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          </View>
+          </Animated.View>
 
           {/* Sales List */}
           <View style={styles.salesListContainer}>
@@ -1199,6 +1245,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  collapsibleTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  collapsibleTitleText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  collapseButton: {
+    padding: 4,
   },
   searchSection: {
     marginBottom: 16,
