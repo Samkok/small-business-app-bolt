@@ -14,7 +14,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, FileUp, Download, FileText, Upload, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, FileUp, Download, FileText, Upload, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { importService } from '@/src/services/importService';
 
 export default function ImportSalesScreen() {
