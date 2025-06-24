@@ -43,6 +43,92 @@ export const salesService = {
     return sale;
   },
 
+  async getSalesCount(
+    businessId: string, 
+    startDate?: string, 
+    endDate?: string,
+    status?: string,
+    paymentMethod?: string
+  ) {
+    let query = supabase
+      .from('sales')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId);
+    
+    if (startDate) {
+      query = query.gte('sale_date', startDate);
+    }
+    
+    if (endDate) {
+      query = query.lte('sale_date', endDate);
+    }
+    
+    if (status) {
+      query = query.eq('status', status);
+    }
+    
+    if (paymentMethod) {
+      query = query.eq('payment_method', paymentMethod);
+    }
+    
+    const { count, error } = await query;
+    
+    if (error) throw error;
+    return count || 0;
+  },
+
+  async getSalesPaginated(
+    businessId: string,
+    startDate: string,
+    endDate: string,
+    offset: number = 0,
+    limit: number = 10,
+    status?: string,
+    paymentMethod?: string
+  ) {
+    let query = supabase
+      .from('sales')
+      .select(`
+        *,
+        customers(name, phone),
+        carts(
+          total_amount,
+          discount_type,
+          discount_value,
+          delivery_cost,
+          cart_items(
+            quantity,
+            unit_price,
+            subtotal,
+            original_subtotal,
+            item_discount_type,
+            item_discount_value,
+            item_discount_amount,
+            products(name)
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
+      .order('sale_date', { ascending: false });
+    
+    if (status) {
+      query = query.eq('status', status);
+    }
+    
+    if (paymentMethod) {
+      query = query.eq('payment_method', paymentMethod);
+    }
+    
+    query = query.range(offset, offset + limit - 1);
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data || [];
+  },
+
   async getSales(businessId: string, limit?: number) {
     let query = supabase
       .from('sales')
