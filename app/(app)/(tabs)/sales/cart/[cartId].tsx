@@ -52,6 +52,15 @@ export default function CartScreen() {
     }
   }, [cart]);
 
+  // Update cart total_amount when cartSummary changes
+  useEffect(() => {
+    if (cart && cartSummary && cart.total_amount !== cartSummary.finalTotal) {
+      updateCart(cart.id, { total_amount: cartSummary.finalTotal }).catch(error => {
+        console.error('Error updating cart total amount:', error);
+      });
+    }
+  }, [cart, cartSummary, updateCart]);
+
   const handleQuantityChange = useCallback(async (itemId: string, change: number) => {
     if (!cart) return;
 

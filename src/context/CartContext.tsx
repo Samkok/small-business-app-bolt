@@ -702,13 +702,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const deliveryCost = cart.delivery_cost || 0;
     const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount - deliveryCost);
     
-    // Update cart total_amount if it's different
-    if (cart.total_amount !== finalTotal) {
-      updateCart(cartId, { total_amount: finalTotal }).catch(error => {
-        console.error('Error updating cart total amount:', error);
-      });
-    }
-    
     return {
       itemsOriginalTotal,
       itemsTotalDiscount,
@@ -717,7 +710,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       deliveryCost,
       finalTotal
     };
-  }, [carts, calculateCartDiscount, updateCart]);
+  }, [carts, calculateCartDiscount]);
 
   const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
     if (!profile?.id) {

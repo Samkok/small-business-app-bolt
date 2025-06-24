@@ -7,18 +7,16 @@ import { ShoppingCart, User, Clock, DollarSign, Trash2 } from 'lucide-react-nati
 interface ActiveCartCardProps {
   cart: {
     id: string;
-    customers: {
-      name: string;
-      phone?: string;
-    };
-    cart_items: Array<{
-      quantity: number;
-      products: {
-        name: string;
-      };
-    }>;
-    created_at: string;
+    customer_id: string;
+    customer_name: string;
+    customer_phone?: string;
+    status: 'active' | 'completed' | 'abandoned';
     total_amount: number;
+    created_at: string;
+    items: Array<{
+      quantity: number;
+      product_name: string;
+    }>;
   };
   onPress: () => void;
   onDelete: (cartId: string) => void;
@@ -28,7 +26,7 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
   const { isDark } = useTheme();
 
   const getTotalItems = () => {
-    return cart.cart_items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+    return cart.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   };
 
   const getTimeAgo = (dateString: string) => {
@@ -54,16 +52,16 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
           <View style={styles.customerInfo}>
             <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
               <Text style={styles.avatarText}>
-                {cart.customers?.name?.charAt(0).toUpperCase() || 'U'}
+                {cart.customer_name?.charAt(0).toUpperCase() || 'U'}
               </Text>
             </View>
             <View style={styles.customerDetails}>
               <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {cart.customers?.name || 'Unknown Customer'}
+                {cart.customer_name || 'Unknown Customer'}
               </Text>
-              {cart.customers?.phone && (
+              {cart.customer_phone && (
                 <Text style={[styles.customerPhone, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  {cart.customers.phone}
+                  {cart.customer_phone}
                 </Text>
               )}
             </View>
@@ -89,18 +87,18 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
             Items:
           </Text>
           <View style={styles.itemsList}>
-            {cart.cart_items?.slice(0, 3).map((item, index) => (
+            {cart.items?.slice(0, 3).map((item, index) => (
               <Text 
                 key={index} 
                 style={[styles.itemText, { color: isDark ? '#f9fafb' : '#111827' }]}
                 numberOfLines={1}
               >
-                • {item.quantity}x {item.products?.name}
+                • {item.quantity}x {item.product_name}
               </Text>
             ))}
-            {(cart.cart_items?.length || 0) > 3 && (
+            {(cart.items?.length || 0) > 3 && (
               <Text style={[styles.moreItems, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                +{cart.cart_items.length - 3} more items
+                +{cart.items.length - 3} more items
               </Text>
             )}
           </View>
