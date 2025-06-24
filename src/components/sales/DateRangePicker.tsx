@@ -55,6 +55,8 @@ export default function DateRangePicker({
     // Add days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       const date = new Date(year, month, i);
+      // Set time to beginning of day for consistent comparison
+      date.setHours(0, 0, 0, 0);
       days.push({ day: i, date });
     }
     
@@ -62,16 +64,28 @@ export default function DateRangePicker({
   };
 
   const isDateInRange = (date: Date) => {
-    return date >= startDate && date <= endDate;
+    // Create copies with time set to beginning of day for consistent comparison
+    const compareStart = new Date(startDate);
+    compareStart.setHours(0, 0, 0, 0);
+    
+    const compareEnd = new Date(endDate);
+    compareEnd.setHours(0, 0, 0, 0);
+    
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
+    return compareDate >= compareStart && compareDate <= compareEnd;
   };
 
   const isStartDate = (date: Date) => {
+    // Compare only year, month, and day
     return date.getDate() === startDate.getDate() && 
            date.getMonth() === startDate.getMonth() && 
            date.getFullYear() === startDate.getFullYear();
   };
 
   const isEndDate = (date: Date) => {
+    // Compare only year, month, and day
     return date.getDate() === endDate.getDate() && 
            date.getMonth() === endDate.getMonth() && 
            date.getFullYear() === endDate.getFullYear();
@@ -80,17 +94,31 @@ export default function DateRangePicker({
   const handleDatePress = (date: Date) => {
     if (selectingStart) {
       // If selecting start date, set it and prepare to select end date
-      setStartDate(date);
-      setEndDate(date); // Initially set end date same as start date
+      // Create a new date object with time set to beginning of day
+      const newStartDate = new Date(date);
+      newStartDate.setHours(0, 0, 0, 0);
+      
+      setStartDate(newStartDate);
+      setEndDate(newStartDate); // Initially set end date same as start date
       setSelectingStart(false);
     } else {
       // If selecting end date
       if (date < startDate) {
         // If selected date is before start date, swap them
-        setEndDate(startDate);
-        setStartDate(date);
+        const newEndDate = new Date(startDate);
+        newEndDate.setHours(0, 0, 0, 0);
+        
+        const newStartDate = new Date(date);
+        newStartDate.setHours(0, 0, 0, 0);
+        
+        setEndDate(newEndDate);
+        setStartDate(newStartDate);
       } else {
-        setEndDate(date);
+        // Create a new date object with time set to beginning of day
+        const newEndDate = new Date(date);
+        newEndDate.setHours(0, 0, 0, 0);
+        
+        setEndDate(newEndDate);
       }
       setSelectingStart(true); // Reset to selecting start date for next time
     }

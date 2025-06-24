@@ -96,27 +96,47 @@ export default function SalesScreen() {
     switch (filter) {
       case 'this_month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start.setHours(0, 0, 0, 0); // Set to beginning of day
+        
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999); // Set to end of day
+        
         text = 'This Month';
         break;
       case 'three_months':
         start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        start.setHours(0, 0, 0, 0); // Set to beginning of day
+        
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999); // Set to end of day
+        
         text = 'Last 3 Months';
         break;
       case 'six_months':
         start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        start.setHours(0, 0, 0, 0); // Set to beginning of day
+        
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999); // Set to end of day
+        
         text = 'Last 6 Months';
         break;
       case 'custom':
         start = customStart || new Date();
+        start.setHours(0, 0, 0, 0); // Set to beginning of day
+        
         end = customEnd || new Date();
+        end.setHours(23, 59, 59, 999); // Set to end of day
+        
         text = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
         break;
       case 'all':
         start = new Date(2000, 0, 1);
+        start.setHours(0, 0, 0, 0); // Set to beginning of day
+        
         end = now;
+        end.setHours(23, 59, 59, 999); // Set to end of day
+        
         text = 'All Time';
         break;
     }
@@ -177,8 +197,11 @@ export default function SalesScreen() {
     
     try {
       // Use the current state values directly
-      const start = startDate;
-      const end = endDate;
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Set to beginning of day
+      
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Set to end of day
       
       // First get the total count for pagination
       const count = await salesService.getSalesCount(
@@ -312,10 +335,17 @@ export default function SalesScreen() {
     }
 
     try {
+      // Create start and end dates with proper time components
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
       const csvData = await importService.exportSalesToCsv(
         profile.id, 
-        startDate.toISOString(), 
-        endDate.toISOString()
+        start.toISOString(), 
+        end.toISOString()
       );
       
       // Create a download link
@@ -323,7 +353,7 @@ export default function SalesScreen() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `sales_export_${startDate.toISOString().split('T')[0]}_to_${endDate.toISOString().split('T')[0]}.csv`;
+      a.download = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -352,8 +382,16 @@ export default function SalesScreen() {
   };
 
   const handleDateRangeConfirm = (start: Date, end: Date) => {
-    setStartDate(start);
-    setEndDate(end);
+    // Set start date to beginning of day
+    const adjustedStart = new Date(start);
+    adjustedStart.setHours(0, 0, 0, 0);
+    
+    // Set end date to end of day
+    const adjustedEnd = new Date(end);
+    adjustedEnd.setHours(23, 59, 59, 999);
+    
+    setStartDate(adjustedStart);
+    setEndDate(adjustedEnd);
     setDateRangeText(`${start.toLocaleDateString()} - ${end.toLocaleDateString()}`);
     setShowDateRangePicker(false);
     setCurrentPage(0);
