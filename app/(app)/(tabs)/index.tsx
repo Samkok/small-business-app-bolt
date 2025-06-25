@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -402,7 +402,7 @@ export default function DashboardScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => r()}
+            onPress={handleNewSale}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#2563eb20' }]}>
               <ShoppingCart size={24} color="#2563eb" />
