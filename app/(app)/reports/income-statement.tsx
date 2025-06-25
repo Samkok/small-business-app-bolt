@@ -24,7 +24,7 @@ import * as Sharing from 'expo-sharing';
 
 export default function IncomeStatementScreen() {
   const [loading, setLoading] = useState(true);
-  const [expenseCategory, setExpenseCategory] = useState<any>(null)
+  const [expenseCategories, setExpenseCategories] = useState<any>(null)
   const [incomeData, setIncomeData] = useState<any>(null);
   
   const router = useRouter();
@@ -65,7 +65,6 @@ export default function IncomeStatementScreen() {
         startDate as string,
         endDate as string
       );
-      setExpenseCategory(expenseCategory)
       
       // Fix: Use 'amount' property instead of 'total'
       const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.amount, 0);
@@ -92,6 +91,8 @@ export default function IncomeStatementScreen() {
         netIncome,
         netMargin
       });
+      
+      setExpenseCategory(expenseCategories);
       
     } catch (error) {
       console.error('Error loading income statement:', error);
