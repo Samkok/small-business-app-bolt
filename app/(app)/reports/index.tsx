@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dateRangeButton: {
-    paddingVertical: 4,
+    paddingVertical: 2,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
@@ -827,6 +827,7 @@ const styles = StyleSheet.create({
   dateRangeButtonText: {
     fontSize: 14,
     fontWeight: '500',
+    lineHeight: 14,
   },
   content: {
     flex: 1,
