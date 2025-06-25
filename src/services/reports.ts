@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { salesService } from './sales';
 import { expenseService } from './expenses';
+import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 
 export const reportsService = {
   async getDashboardStats(businessId: string) {
@@ -184,41 +185,359 @@ export const reportsService = {
       .slice(0, limit);
   },
 
-  async getRevenueChart(businessId: string, days = 30) {
-    const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-
+  async getRevenueChart(businessId: string, startDate: string, endDate: string) {
     const { data, error } = await supabase
       .from('sales')
       .select('total_amount, sale_date')
       .eq('business_id', businessId)
       .eq('status', 'completed')
-      .gte('sale_date', startDate.toISOString().split('T')[0])
-      .lte('sale_date', endDate.toISOString().split('T')[0])
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
       .order('sale_date');
 
     if (error) throw error;
 
-    // Group by date
-    const dailyRevenue: Record<string, number> = {};
+    // Convert dates to JS Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
     
-    data.forEach(sale => {
-      const date = sale.sale_date.split('T')[0];
-      dailyRevenue[date] = (dailyRevenue[date] || 0) + sale.total_amount;
-    });
-
-    // Fill in missing dates with 0
-    const result = [];
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate.getTime() + (i * 24 * 60 * 60 * 1000));
-      const dateStr = date.toISOString().split('T')[0];
-      result.push({
-        date: dateStr,
-        revenue: dailyRevenue[dateStr] || 0
+    // Determine if we should group by day or month based on date range
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const groupByMonth = dayDiff > 31;
+    
+    let result = [];
+    
+    if (groupByMonth) {
+      // Group by month
+      const months = eachMonthOfInterval({ start, end });
+      
+      result = months.map(month => {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        const monthSales = data.filter(sale => {
+          const saleDate = new Date(sale.sale_date);
+          return isSameMonth(saleDate, month);
+        });
+        
+        const revenue = monthSales.reduce((sum, sale) => sum + sale.total_amount, 0);
+        
+        return {
+          date: format(month, 'yyyy-MM-dd'),
+          label: format(month, 'MMM'),
+          revenue
+        };
+      });
+    } else {
+      // Group by day
+      const days = eachDayOfInterval({ start, end });
+      
+      result = days.map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        const daySales = data.filter(sale => sale.sale_date.split('T')[0] === dayStr);
+        const revenue = daySales.reduce((sum, sale) => sum + sale.total_amount, 0);
+        
+        return {
+          date: dayStr,
+          label: format(day, 'dd/MM'),
+          revenue
+        };
       });
     }
-
+    
     return result;
+  },
+
+  async getExpenseChart(businessId: string, startDate: string, endDate: string) {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('amount, expense_date')
+      .eq('business_id', businessId)
+      .gte('expense_date', startDate)
+      .lte('expense_date', endDate)
+      .order('expense_date');
+
+    if (error) throw error;
+
+    // Convert dates to JS Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Determine if we should group by day or month based on date range
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const groupByMonth = dayDiff > 31;
+    
+    let result = [];
+    
+    if (groupByMonth) {
+      // Group by month
+      const months = eachMonthOfInterval({ start, end });
+      
+      result = months.map(month => {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        const monthExpenses = data.filter(expense => {
+          const expenseDate = new Date(expense.expense_date);
+          return isSameMonth(expenseDate, month);
+        });
+        
+        const amount = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        
+        return {
+          date: format(month, 'yyyy-MM-dd'),
+          label: format(month, 'MMM'),
+          amount
+        };
+      });
+    } else {
+      // Group by day
+      const days = eachDayOfInterval({ start, end });
+      
+      result = days.map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        const dayExpenses = data.filter(expense => expense.expense_date.split('T')[0] === dayStr);
+        const amount = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        
+        return {
+          date: dayStr,
+          label: format(day, 'dd/MM'),
+          amount
+        };
+      });
+    }
+    
+    return result;
+  },
+
+  async getProfitChart(businessId: string, startDate: string, endDate: string) {
+    // Get sales data with COGS
+    const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
+    
+    // Get expense data
+    const { data: expenseData, error: expenseError } = await supabase
+      .from('expenses')
+      .select('amount, expense_date')
+      .eq('business_id', businessId)
+      .gte('expense_date', startDate)
+      .lte('expense_date', endDate)
+      .order('expense_date');
+
+    if (expenseError) throw expenseError;
+
+    // Convert dates to JS Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Determine if we should group by day or month based on date range
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const groupByMonth = dayDiff > 31;
+    
+    let result = [];
+    
+    if (groupByMonth) {
+      // Group by month
+      const months = eachMonthOfInterval({ start, end });
+      
+      result = months.map(month => {
+        const monthStr = format(month, 'yyyy-MM');
+        
+        // Filter sales for this month
+        const monthSales = salesData.filter(sale => {
+          const saleMonth = sale.date.substring(0, 7); // YYYY-MM
+          return saleMonth === monthStr;
+        });
+        
+        // Calculate revenue, COGS, and profit for this month
+        const revenue = monthSales.reduce((sum, sale) => sum + sale.revenue, 0);
+        const cogs = monthSales.reduce((sum, sale) => sum + sale.cogs, 0);
+        const profit = revenue - cogs;
+        
+        // Filter expenses for this month
+        const monthExpenses = expenseData.filter(expense => {
+          const expenseMonth = expense.expense_date.substring(0, 7); // YYYY-MM
+          return expenseMonth === monthStr;
+        });
+        
+        // Calculate total expenses for this month
+        const expenses = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        
+        // Calculate net profit (profit - expenses)
+        const netProfit = profit - expenses;
+        
+        return {
+          date: format(month, 'yyyy-MM-dd'),
+          label: format(month, 'MMM'),
+          revenue,
+          cogs,
+          profit,
+          expenses,
+          netProfit
+        };
+      });
+    } else {
+      // Group by day
+      const days = eachDayOfInterval({ start, end });
+      
+      result = days.map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        
+        // Filter sales for this day
+        const daySales = salesData.filter(sale => {
+          const saleDate = sale.date.split('T')[0];
+          return saleDate === dayStr;
+        });
+        
+        // Calculate revenue, COGS, and profit for this day
+        const revenue = daySales.reduce((sum, sale) => sum + sale.revenue, 0);
+        const cogs = daySales.reduce((sum, sale) => sum + sale.cogs, 0);
+        const profit = revenue - cogs;
+        
+        // Filter expenses for this day
+        const dayExpenses = expenseData.filter(expense => {
+          const expenseDate = expense.expense_date.split('T')[0];
+          return expenseDate === dayStr;
+        });
+        
+        // Calculate total expenses for this day
+        const expenses = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        
+        // Calculate net profit (profit - expenses)
+        const netProfit = profit - expenses;
+        
+        return {
+          date: dayStr,
+          label: format(day, 'dd/MM'),
+          revenue,
+          cogs,
+          profit,
+          expenses,
+          netProfit
+        };
+      });
+    }
+    
+    return result;
+  },
+
+  async getExpensesByCategory(businessId: string, startDate: string, endDate: string) {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select(`
+        amount,
+        expense_categories(name)
+      `)
+      .eq('business_id', businessId)
+      .gte('expense_date', startDate)
+      .lte('expense_date', endDate);
+
+    if (error) throw error;
+
+    // Group by category
+    const categoryTotals: Record<string, number> = {};
+    let totalExpenses = 0;
+    
+    data.forEach(expense => {
+      const categoryName = expense.expense_categories?.name || 'Uncategorized';
+      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + expense.amount;
+      totalExpenses += expense.amount;
+    });
+
+    // Convert to array and calculate percentages
+    const result = Object.entries(categoryTotals).map(([category, amount]) => ({
+      category,
+      amount,
+      percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
+    }));
+
+    // Sort by amount (descending)
+    return result.sort((a, b) => b.amount - a.amount);
+  },
+
+  async getCashFlowStatement(businessId: string, month: number, year: number) {
+    // Calculate date range for the month
+    const startDate = new Date(year, month, 1).toISOString();
+    const endDate = new Date(year, month + 1, 0).toISOString();
+    
+    try {
+      // Get sales data for the month
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('total_amount')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate);
+
+      if (salesError) throw salesError;
+      
+      // Get expenses data for the month
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select('amount, category_id, expense_categories(name)')
+        .eq('business_id', businessId)
+        .gte('expense_date', startDate)
+        .lte('expense_date', endDate);
+
+      if (expensesError) throw expensesError;
+      
+      // Get inventory imports for the month
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory_imports')
+        .select('total_cost')
+        .eq('business_id', businessId)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
+
+      if (inventoryError) throw inventoryError;
+      
+      // Calculate total revenue
+      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
+      
+      // Calculate total expenses
+      const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
+      
+      // Calculate inventory changes (total cost of imports)
+      const inventoryChanges = inventoryData.reduce((sum, item) => sum + item.total_cost, 0);
+      
+      // Identify equipment purchases (expenses in equipment category)
+      const equipmentPurchases = expensesData
+        .filter(expense => {
+          const categoryName = expense.expense_categories?.name?.toLowerCase() || '';
+          return categoryName.includes('equipment') || categoryName.includes('asset') || categoryName.includes('capital');
+        })
+        .reduce((sum, expense) => sum + expense.amount, 0);
+      
+      // For this example, we'll use placeholder values for owner contributions and withdrawals
+      // In a real app, you would have a separate table to track these
+      const ownerContributions = 0; // Placeholder
+      const ownerWithdrawals = 0; // Placeholder
+      
+      // Calculate net income (revenue - expenses)
+      const netIncome = totalRevenue - totalExpenses;
+      
+      // Calculate cash flows
+      const operatingCashFlow = netIncome - inventoryChanges;
+      const investingCashFlow = -equipmentPurchases;
+      const financingCashFlow = ownerContributions - ownerWithdrawals;
+      
+      // Calculate net cash flow
+      const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
+      
+      return {
+        period: `${month + 1}/${year}`,
+        netIncome,
+        inventoryChanges,
+        operatingCashFlow,
+        equipmentPurchases,
+        investingCashFlow,
+        ownerContributions,
+        ownerWithdrawals,
+        financingCashFlow,
+        netCashFlow
+      };
+    } catch (error) {
+      console.error('Error generating cash flow statement:', error);
+      throw error;
+    }
   },
 
   async getSalesCOGSReport(businessId: string, startDate: string, endDate: string) {

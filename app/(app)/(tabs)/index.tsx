@@ -9,6 +9,7 @@ import {
   Modal,
   RefreshControl
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -18,7 +19,7 @@ import { SkeletonDashboardStats, SkeletonCard, SkeletonLoader } from '@/src/comp
 import ProductForm from '@/src/components/products/ProductForm';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
-import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator } from 'lucide-react-native';
+import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, BarChart } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 
 interface DashboardStats {
@@ -60,6 +61,7 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     loadDashboardData();
@@ -112,6 +114,10 @@ export default function DashboardScreen() {
   const handleSaleComplete = () => {
     setShowSalesForm(false);
     loadDashboardData(); // Refresh stats
+  };
+
+  const handleViewReports = () => {
+    router.push('/reports');
   };
 
   const StatCard = ({ 
@@ -324,6 +330,23 @@ export default function DashboardScreen() {
             />
           </View>
 
+          {/* Reports Card */}
+          <TouchableOpacity onPress={handleViewReports}>
+            <Card style={styles.reportsCard}>
+              <View style={styles.reportsContent}>
+                <BarChart size={24} color="#2563eb" />
+                <View style={styles.reportsText}>
+                  <Text style={[styles.reportsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    Business Reports
+                  </Text>
+                  <Text style={[styles.reportsSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    View detailed reports, charts, and financial statements
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </TouchableOpacity>
+
           {stats!.lowStockCount > 0 && (
             <TouchableOpacity>
               <Card style={styles.alertCard}>
@@ -517,6 +540,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     lineHeight: 14,
+  },
+  reportsCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  reportsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reportsText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  reportsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  reportsSubtitle: {
+    fontSize: 14,
   },
   alertCard: {
     marginBottom: 16,

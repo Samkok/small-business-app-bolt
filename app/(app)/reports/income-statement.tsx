@@ -1,0 +1,418 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform
+} from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { Card } from '@/src/components/ui/Card';
+import { Button } from '@/src/components/ui/Button';
+import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { salesService } from '@/src/services/sales';
+import { importService } from '@/src/services/importService';
+
+export default function IncomeStatementScreen() {
+  const [loading, setLoading] = useState(true);
+  const [incomeData, setIncomeData] = useState<any>(null);
+  
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const { startDate, endDate } = params;
+  const { t } = useTranslation();
+  const { isDark } = useTheme();
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    if (profile?.id && startDate && endDate) {
+      loadIncomeStatement();
+    } else {
+      setLoading(false);
+    }
+  }, [profile?.id, startDate, endDate]);
+
+  const loadIncomeStatement = async () => {
+    try {
+      setLoading(true);
+      
+      // Get sales data with COGS
+      const salesData = await salesService.getSalesWithCOGS(
+        profile!.id, 
+        startDate as string, 
+        endDate as string
+      );
+      
+      // Calculate totals
+      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
+      const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
+      const grossProfit = totalRevenue - totalCOGS;
+      const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+      
+      // Get expense data grouped by category
+      const expenseCategories = await salesService.getExpensesByCategory(
+        profile!.id,
+        startDate as string,
+        endDate as string
+      );
+      
+      const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.total, 0);
+      const netIncome = grossProfit - totalExpenses;
+      const netMargin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
+      
+      setIncomeData({
+        period: {
+          start: new Date(startDate as string).toLocaleDateString(),
+          end: new Date(endDate as string).toLocaleDateString()
+        },
+        revenue: {
+          total: totalRevenue
+        },
+        cogs: {
+          total: totalCOGS
+        },
+        grossProfit,
+        grossMargin,
+        expenses: {
+          categories: expenseCategories,
+          total: totalExpenses
+        },
+        netIncome,
+        netMargin
+      });
+      
+    } catch (error) {
+      console.error('Error loading income statement:', error);
+      Alert.alert('Error', 'Failed to load income statement');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Not Supported', 'Export is only available on web platform');
+      return;
+    }
+
+    if (!profile?.id) {
+      Alert.alert('Error', 'No business profile found');
+      return;
+    }
+
+    try {
+      const csvData = await importService.exportIncomeStatementToCsv(
+        profile.id, 
+        startDate as string, 
+        endDate as string
+      );
+      
+      // Create a download link
+      const blob = new Blob([csvData], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `income_statement_${startDate}_to_${endDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      Alert.alert('Success', 'Income statement exported successfully');
+    } catch (error) {
+      console.error('Error exporting income statement:', error);
+      Alert.alert('Error', 'Failed to export income statement');
+    }
+  };
+
+  if (loading) {
+    return <LoadingSpinner text="Loading income statement..." />;
+  }
+
+  if (!incomeData) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Income Statement
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            No data available for the selected period
+          </Text>
+          <Button
+            title="Go Back"
+            onPress={() => router.back()}
+            style={styles.errorButton}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          Income Statement
+        </Text>
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleExport}
+        >
+          <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Card style={styles.periodCard}>
+          <Text style={[styles.periodText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Period: {incomeData.period.start} - {incomeData.period.end}
+          </Text>
+        </Card>
+
+        {/* Revenue Section */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingUp size={20} color="#059669" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Revenue
+            </Text>
+          </View>
+          
+          <View style={[styles.row, styles.totalRow]}>
+            <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Total Revenue
+            </Text>
+            <Text style={[styles.totalValue, { color: '#059669' }]}>
+              ${incomeData.revenue.total.toFixed(2)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* COGS Section */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingDown size={20} color="#dc2626" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Cost of Goods Sold
+            </Text>
+          </View>
+          
+          <View style={[styles.row, styles.totalRow]}>
+            <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Total COGS
+            </Text>
+            <Text style={[styles.totalValue, { color: '#dc2626' }]}>
+              ${incomeData.cogs.total.toFixed(2)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Gross Profit Section */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DollarSign size={20} color="#2563eb" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Gross Profit
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Gross Profit
+            </Text>
+            <Text style={[styles.value, { color: incomeData.grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
+              ${incomeData.grossProfit.toFixed(2)}
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Gross Margin
+            </Text>
+            <Text style={[styles.value, { color: incomeData.grossMargin >= 0 ? '#059669' : '#dc2626' }]}>
+              {incomeData.grossMargin.toFixed(2)}%
+            </Text>
+          </View>
+        </Card>
+
+        {/* Expenses Section */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingDown size={20} color="#ea580c" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Operating Expenses
+            </Text>
+          </View>
+          
+          {incomeData.expenses.categories.map((category: any, index: number) => (
+            <View key={index} style={styles.row}>
+              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                {category.category}
+              </Text>
+              <Text style={[styles.value, { color: '#dc2626' }]}>
+                ${category.total.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+          
+          <View style={[styles.row, styles.totalRow]}>
+            <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Total Expenses
+            </Text>
+            <Text style={[styles.totalValue, { color: '#dc2626' }]}>
+              ${incomeData.expenses.total.toFixed(2)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Net Income Section */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DollarSign size={20} color={incomeData.netIncome >= 0 ? "#059669" : "#dc2626"} />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Net Income
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Net Income
+            </Text>
+            <Text style={[styles.value, { color: incomeData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
+              ${incomeData.netIncome.toFixed(2)}
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Net Margin
+            </Text>
+            <Text style={[styles.value, { color: incomeData.netMargin >= 0 ? '#059669' : '#dc2626' }]}>
+              {incomeData.netMargin.toFixed(2)}%
+            </Text>
+          </View>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  exportButton: {
+    padding: 8,
+  },
+  headerRight: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  periodCard: {
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  periodText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  section: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  totalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorButton: {
+    minWidth: 120,
+  },
+});

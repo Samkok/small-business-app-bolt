@@ -133,5 +133,123 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
     });
     
     return csv;
+  },
+
+  /**
+   * Export income statement to CSV
+   * @param businessId Business ID to export income statement for
+   * @param startDate Start date for export range
+   * @param endDate End date for export range
+   * @returns CSV string
+   */
+  async exportIncomeStatementToCsv(businessId: string, startDate: string, endDate: string) {
+    try {
+      // Get sales data with COGS
+      const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
+      
+      // Get expense data
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select(`
+          amount,
+          description,
+          expense_date,
+          expense_categories(name)
+        `)
+        .eq('business_id', businessId)
+        .gte('expense_date', startDate)
+        .lte('expense_date', endDate)
+        .order('expense_date');
+      
+      if (expensesError) throw expensesError;
+      
+      // Calculate totals
+      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
+      const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
+      const grossProfit = totalRevenue - totalCOGS;
+      
+      // Group expenses by category
+      const expensesByCategory: Record<string, number> = {};
+      expensesData.forEach(expense => {
+        const category = expense.expense_categories?.name || 'Uncategorized';
+        expensesByCategory[category] = (expensesByCategory[category] || 0) + expense.amount;
+      });
+      
+      const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
+      const netIncome = grossProfit - totalExpenses;
+      
+      // Create CSV content
+      let csv = 'INCOME STATEMENT\n';
+      csv += `Period: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}\n\n`;
+      
+      // Revenue section
+      csv += 'REVENUE\n';
+      csv += `Total Revenue,${totalRevenue.toFixed(2)}\n\n`;
+      
+      // COGS section
+      csv += 'COST OF GOODS SOLD\n';
+      csv += `Total COGS,${totalCOGS.toFixed(2)}\n\n`;
+      
+      // Gross Profit
+      csv += `GROSS PROFIT,${grossProfit.toFixed(2)}\n\n`;
+      
+      // Expenses section
+      csv += 'OPERATING EXPENSES\n';
+      Object.entries(expensesByCategory).forEach(([category, amount]) => {
+        csv += `${category},${amount.toFixed(2)}\n`;
+      });
+      csv += `Total Expenses,${totalExpenses.toFixed(2)}\n\n`;
+      
+      // Net Income
+      csv += `NET INCOME,${netIncome.toFixed(2)}\n`;
+      
+      return csv;
+    } catch (error) {
+      console.error('Error generating income statement CSV:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Export cash flow statement to CSV
+   * @param businessId Business ID to export cash flow for
+   * @param month Month (0-11)
+   * @param year Year
+   * @returns CSV string
+   */
+  async exportCashFlowToCsv(businessId: string, month: number, year: number) {
+    try {
+      // Get cash flow data
+      const cashFlowData = await reportsService.getCashFlowStatement(businessId, month, year);
+      
+      // Create CSV content
+      let csv = 'CASH FLOW STATEMENT\n';
+      csv += `Period: ${new Date(year, month, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}\n\n`;
+      
+      // Operating Activities
+      csv += 'OPERATING ACTIVITIES\n';
+      csv += `Net Income,${cashFlowData.netIncome.toFixed(2)}\n`;
+      csv += `Inventory Changes,${cashFlowData.inventoryChanges.toFixed(2)}\n`;
+      csv += `Net Cash from Operations,${cashFlowData.operatingCashFlow.toFixed(2)}\n\n`;
+      
+      // Investing Activities
+      csv += 'INVESTING ACTIVITIES\n';
+      csv += `Equipment Purchases,${cashFlowData.equipmentPurchases.toFixed(2)}\n`;
+      csv += `Net Cash from Investing,${cashFlowData.investingCashFlow.toFixed(2)}\n\n`;
+      
+      // Financing Activities
+      csv += 'FINANCING ACTIVITIES\n';
+      csv += `Owner Contributions,${cashFlowData.ownerContributions.toFixed(2)}\n`;
+      csv += `Owner Withdrawals,${cashFlowData.ownerWithdrawals.toFixed(2)}\n`;
+      csv += `Net Cash from Financing,${cashFlowData.financingCashFlow.toFixed(2)}\n\n`;
+      
+      // Net Cash Flow
+      csv += `NET CHANGE IN CASH,${cashFlowData.netCashFlow.toFixed(2)}\n`;
+      
+      return csv;
+    } catch (error) {
+      console.error('Error generating cash flow CSV:', error);
+      throw error;
+    }
   }
 };
