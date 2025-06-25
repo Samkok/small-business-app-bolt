@@ -67,6 +67,10 @@ export default function DashboardScreen() {
     loadDashboardData();
   }, [profile?.id]);
 
+  const handleNewSale = useCallback(() => {
+    router.push('/sales/customer-selection');
+  }, [router]);
+
   const loadDashboardData = async (isRefresh = false) => {
     if (!profile?.id) return;
     
@@ -398,7 +402,7 @@ export default function DashboardScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => setShowSalesForm(true)}
+            onPress={() => handleNewSale()}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#2563eb20' }]}>
               <ShoppingCart size={24} color="#2563eb" />
