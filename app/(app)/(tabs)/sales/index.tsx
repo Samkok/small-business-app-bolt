@@ -201,7 +201,6 @@ export default function SalesScreen() {
       console.error('Error loading data:', error);
       Alert.alert(t('common.error'), 'Failed to load data');
       setLoading(false);
-      setRefreshing(false);
     }
   }, [profile?.id, activeTab, t, refreshCarts]);
 
@@ -250,7 +249,6 @@ export default function SalesScreen() {
       Alert.alert(t('common.error'), 'Failed to load sales data');
     } finally {
       setLoading(false);
-      setRefreshing(false);
       setLoadingMore(false);
     }
   }, [profile?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
@@ -273,8 +271,16 @@ export default function SalesScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setCurrentPage(0);
-    await loadData(true);
-  }, [loadData]);
+    
+    try {
+      await loadData(true);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      Alert.alert(t('common.error'), 'Failed to refresh data');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData, t]);
 
   const handleVoidSale = useCallback(async (sale: any) => {
     Alert.alert(
