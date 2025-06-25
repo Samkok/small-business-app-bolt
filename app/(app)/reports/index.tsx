@@ -8,7 +8,8 @@ import {
   Alert,
   Dimensions,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText } from 'lucide-react-native';
+import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
 import { format, subDays, subMonths, startOfMonth, endOfMonth } from 'date-fns';
@@ -29,6 +30,7 @@ export default function ReportsScreen() {
   const [chartsLoading, setChartsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'cash-flow'>('overview');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [revenueData, setRevenueData] = useState<any>(null);
   const [expensesData, setExpensesData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
@@ -72,6 +74,21 @@ export default function ReportsScreen() {
       startDate: format(startDate, 'yyyy-MM-dd'),
       endDate: format(endDate, 'yyyy-MM-dd')
     };
+  };
+
+  const getDateRangeText = () => {
+    switch (dateRange) {
+      case 'week':
+        return '7 Days';
+      case 'month':
+        return '30 Days';
+      case 'quarter':
+        return '90 Days';
+      case 'year':
+        return '1 Year';
+      default:
+        return '30 Days';
+    }
   };
 
   const loadReportData = async () => {
@@ -735,30 +752,20 @@ export default function ReportsScreen() {
         />
       </View>
 
-      {/* Date Range Selector (only for Overview and Income tabs) */}
+      {/* Date Range Dropdown (only for Overview and Income tabs) */}
       {activeTab !== 'cash-flow' && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRangeSelector}>
-          <DateRangeButton
-            title="7 Days"
-            isActive={dateRange === 'week'}
-            onPress={() => setDateRange('week')}
-          />
-          <DateRangeButton
-            title="30 Days"
-            isActive={dateRange === 'month'}
-            onPress={() => setDateRange('month')}
-          />
-          <DateRangeButton
-            title="90 Days"
-            isActive={dateRange === 'quarter'}
-            onPress={() => setDateRange('quarter')}
-          />
-          <DateRangeButton
-            title="1 Year"
-            isActive={dateRange === 'year'}
-            onPress={() => setDateRange('year')}
-          />
-        </ScrollView>
+        <View style={styles.dateRangeContainer}>
+          <TouchableOpacity 
+            style={[styles.dateRangeDropdown, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+            onPress={() => setShowDateRangeModal(true)}
+          >
+            <Calendar size={18} color="#059669" />
+            <Text style={[styles.dateRangeText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {getDateRangeText()}
+            </Text>
+            <ChevronDown size={18} color="#059669" />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Tab Content */}
@@ -767,6 +774,105 @@ export default function ReportsScreen() {
         {activeTab === 'income' && renderIncomeTab()}
         {activeTab === 'cash-flow' && renderCashFlowTab()}
       </ScrollView>
+
+      {/* Date Range Modal */}
+      <Modal
+        visible={showDateRangeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDateRangeModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDateRangeModal(false)}
+        >
+          <Card style={styles.modalContent}>
+            <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Date Range
+            </Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                dateRange === 'week' && { backgroundColor: '#059669' }
+              ]}
+              onPress={() => {
+                setDateRange('week');
+                setShowDateRangeModal(false);
+              }}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                { color: dateRange === 'week' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+              ]}>
+                7 Days
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                dateRange === 'month' && { backgroundColor: '#059669' }
+              ]}
+              onPress={() => {
+                setDateRange('month');
+                setShowDateRangeModal(false);
+              }}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                { color: dateRange === 'month' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+              ]}>
+                30 Days
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                dateRange === 'quarter' && { backgroundColor: '#059669' }
+              ]}
+              onPress={() => {
+                setDateRange('quarter');
+                setShowDateRangeModal(false);
+              }}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                { color: dateRange === 'quarter' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+              ]}>
+                90 Days
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                dateRange === 'year' && { backgroundColor: '#059669' }
+              ]}
+              onPress={() => {
+                setDateRange('year');
+                setShowDateRangeModal(false);
+              }}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                { color: dateRange === 'year' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+              ]}>
+                1 Year
+              </Text>
+            </TouchableOpacity>
+            
+            <Button
+              title="Cancel"
+              variant="outline"
+              onPress={() => setShowDateRangeModal(false)}
+              style={styles.modalCancelButton}
+            />
+          </Card>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -813,21 +919,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  dateRangeSelector: {
+  dateRangeContainer: {
     paddingHorizontal: 16,
     marginBottom: 16,
   },
-  dateRangeButton: {
-    paddingVertical: 2,
+  dateRangeDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    marginRight: 8,
+    borderColor: '#059669',
   },
-  dateRangeButtonText: {
+  dateRangeText: {
     fontSize: 14,
     fontWeight: '500',
-    lineHeight: 14,
+    flex: 1,
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  modalCancelButton: {
+    marginTop: 8,
   },
   content: {
     flex: 1,
@@ -973,5 +1115,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 12,
+  },
+  // Keep this for backward compatibility but it's not used anymore
+  dateRangeSelector: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  dateRangeButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  dateRangeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
