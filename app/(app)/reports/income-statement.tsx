@@ -18,6 +18,8 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 export default function IncomeStatementScreen() {
   const [loading, setLoading] = useState(true);
@@ -96,11 +98,6 @@ export default function IncomeStatementScreen() {
   };
 
   const handleExport = async () => {
-    if (Platform.OS !== 'web') {
-      Alert.alert('Not Supported', 'Export is only available on web platform');
-      return;
-    }
-
     if (!profile?.id) {
       Alert.alert('Error', 'No business profile found');
       return;
@@ -113,16 +110,32 @@ export default function IncomeStatementScreen() {
         endDate as string
       );
       
-      // Create a download link
-      const blob = new Blob([csvData], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `income_statement_${startDate}_to_${endDate}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (Platform.OS === 'web') {
+        // Web platform - use browser download
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `income_statement_${startDate}_to_${endDate}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Mobile platform - use expo-file-system and expo-sharing
+        const fileUri = `${FileSystem.documentDirectory}income_statement_${startDate}_to_${endDate}.csv`;
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Export Income Statement',
+            UTI: 'public.comma-separated-values-text'
+          });
+        } else {
+          Alert.alert('Error', 'Sharing is not available on this device');
+        }
+      }
       
       Alert.alert('Success', 'Income statement exported successfully');
     } catch (error) {
