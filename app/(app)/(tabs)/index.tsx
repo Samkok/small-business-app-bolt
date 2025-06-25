@@ -402,7 +402,7 @@ export default function DashboardScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => handleNewSale()}
+            onPress={() => r()}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#2563eb20' }]}>
               <ShoppingCart size={24} color="#2563eb" />
