@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
-  Alert
+  Alert,
+  TouchableOpacity
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -16,14 +17,36 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Square, CheckSquare } from 'lucide-react-native';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
+
+  // Load saved credentials if "Remember Me" was checked
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('savedEmail');
+        const savedRememberMe = await AsyncStorage.getItem('rememberMe');
+        
+        if (savedEmail && savedRememberMe === 'true') {
+          setEmail(savedEmail);
+          setRememberMe(true);
+        }
+      } catch (error) {
+        console.error('Error loading saved credentials:', error);
+      }
+    };
+
+    loadSavedCredentials();
+  }, []);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -32,12 +55,32 @@ export default function SignInScreen() {
     }
 
     setLoading(true);
-    const { error } = await signIn(email, password);
-    setLoading(false);
+    
+    try {
+      // Save or remove credentials based on "Remember Me" checkbox
+      if (rememberMe) {
+        await AsyncStorage.setItem('savedEmail', email);
+        await AsyncStorage.setItem('rememberMe', 'true');
+      } else {
+        await AsyncStorage.removeItem('savedEmail');
+        await AsyncStorage.removeItem('rememberMe');
+      }
 
-    if (error) {
-      Alert.alert(t('common.error'), error.message);
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        Alert.alert(t('common.error'), error.message);
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      Alert.alert(t('common.error'), 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const toggleRememberMe = () => {
+    setRememberMe(!rememberMe);
   };
 
   return (
@@ -75,6 +118,27 @@ export default function SignInScreen() {
               autoComplete="password"
               required
             />
+
+            <View style={styles.rememberForgotRow}>
+              <TouchableOpacity 
+                style={styles.rememberMeContainer} 
+                onPress={toggleRememberMe}
+                activeOpacity={0.7}
+              >
+                {rememberMe ? (
+                  <CheckSquare size={20} color="#2563eb" />
+                ) : (
+                  <Square size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                )}
+                <Text style={[styles.rememberMeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Remember me
+                </Text>
+              </TouchableOpacity>
+
+              <Link href="/(auth)/forgot-password" style={styles.forgotPasswordLink}>
+                {t('auth.forgotPassword')}
+              </Link>
+            </View>
 
             <Button
               title={t('auth.signIn')}
@@ -123,9 +187,30 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     width: '100%',
     alignSelf: 'center',
+    padding: 24,
+  },
+  rememberForgotRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rememberMeText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  forgotPasswordLink: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '500',
   },
   button: {
-    marginTop: 8,
+    marginTop: 16,
   },
   footer: {
     alignItems: 'center',

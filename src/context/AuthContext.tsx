@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -14,6 +15,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
+  updatePassword: (password: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,6 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear any saved credentials
+    try {
+      await AsyncStorage.removeItem('rememberMe');
+      // Don't remove savedEmail here to allow it to persist if user wants to sign in again
+    } catch (error) {
+      console.error('Error clearing saved credentials:', error);
+    }
+    
+    // Sign out from Supabase
     await supabase.auth.signOut();
   };
 
@@ -129,6 +141,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password,
+    });
+    return { error };
+  };
+
   const value = {
     session,
     user,
@@ -138,6 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     updateProfile,
+    resetPassword,
+    updatePassword,
   };
 
   return (
