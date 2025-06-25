@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
+import { expenseService } from '@/src/services/expenses';
 import { importService } from '@/src/services/importService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -58,7 +59,7 @@ export default function IncomeStatementScreen() {
       const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
       
       // Get expense data grouped by category
-      const expenseCategories = await salesService.getExpensesByCategory(
+      const expenseCategories = await expenseService.getExpensesByCategory(
         profile!.id,
         startDate as string,
         endDate as string
@@ -286,7 +287,7 @@ export default function IncomeStatementScreen() {
                 {category.category}
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                ${category.total.toFixed(2)}
+                ${category.amount.toFixed(2)}
               </Text>
             </View>
           ))}

@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,8 @@ import { format, subDays, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 const screenWidth = Dimensions.get('window').width;
 
 export default function ReportsScreen() {
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [chartsLoading, setChartsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'cash-flow'>('overview');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [revenueData, setRevenueData] = useState<any>(null);
@@ -41,7 +43,7 @@ export default function ReportsScreen() {
     if (profile?.id) {
       loadReportData();
     } else {
-      setLoading(false);
+      setInitialLoading(false);
     }
   }, [profile?.id, dateRange]);
 
@@ -75,7 +77,12 @@ export default function ReportsScreen() {
   const loadReportData = async () => {
     if (!profile?.id) return;
     
-    setLoading(true);
+    if (initialLoading) {
+      setInitialLoading(true);
+    } else {
+      setChartsLoading(true);
+    }
+    
     try {
       const { startDate, endDate } = getDateRange();
       
@@ -98,7 +105,8 @@ export default function ReportsScreen() {
       console.error('Error loading report data:', error);
       Alert.alert('Error', 'Failed to load report data');
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setChartsLoading(false);
     }
   };
 
@@ -112,6 +120,14 @@ export default function ReportsScreen() {
     const month = now.getMonth();
     const year = now.getFullYear();
     router.push(`/reports/cash-flow?month=${month}&year=${year}`);
+  };
+
+  // Function to process labels for charts to avoid crowding
+  const getProcessedLabels = (labels: string[], maxVisibleLabels: number) => {
+    if (labels.length <= maxVisibleLabels) return labels;
+    
+    const interval = Math.ceil(labels.length / maxVisibleLabels);
+    return labels.map((label, index) => (index % interval === 0) ? label : '');
   };
 
   const TabButton = ({ 
@@ -175,6 +191,17 @@ export default function ReportsScreen() {
   );
 
   const renderOverviewTab = () => {
+    if (chartsLoading) {
+      return (
+        <View style={styles.loadingChartsContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={[styles.loadingChartsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Loading charts...
+          </Text>
+        </View>
+      );
+    }
+
     if (!revenueData || !expensesData || !profitData || !expenseCategoriesData) {
       return (
         <View style={styles.noDataContainer}>
@@ -185,9 +212,14 @@ export default function ReportsScreen() {
       );
     }
 
+    // Process labels to avoid crowding
+    const processedRevenueLabels = getProcessedLabels(revenueData.map((item: any) => item.label), 7);
+    const processedExpensesLabels = getProcessedLabels(expensesData.map((item: any) => item.label), 7);
+    const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
+
     // Prepare data for revenue chart
     const revenueChartData = {
-      labels: revenueData.map((item: any) => item.label),
+      labels: processedRevenueLabels,
       datasets: [
         {
           data: revenueData.map((item: any) => item.revenue),
@@ -199,7 +231,7 @@ export default function ReportsScreen() {
 
     // Prepare data for expenses chart
     const expensesChartData = {
-      labels: expensesData.map((item: any) => item.label),
+      labels: processedExpensesLabels,
       datasets: [
         {
           data: expensesData.map((item: any) => item.amount),
@@ -211,7 +243,7 @@ export default function ReportsScreen() {
 
     // Prepare data for profit chart
     const profitChartData = {
-      labels: profitData.map((item: any) => item.label),
+      labels: processedProfitLabels,
       datasets: [
         {
           data: profitData.map((item: any) => item.netProfit),
@@ -424,6 +456,17 @@ export default function ReportsScreen() {
   };
 
   const renderIncomeTab = () => {
+    if (chartsLoading) {
+      return (
+        <View style={styles.loadingChartsContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={[styles.loadingChartsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Loading charts...
+          </Text>
+        </View>
+      );
+    }
+
     if (!profitData) {
       return (
         <View style={styles.noDataContainer}>
@@ -433,6 +476,9 @@ export default function ReportsScreen() {
         </View>
       );
     }
+
+    // Process labels to avoid crowding
+    const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
     // Calculate totals
     const totalRevenue = profitData.reduce((sum: number, item: any) => sum + item.revenue, 0);
@@ -516,7 +562,7 @@ export default function ReportsScreen() {
           <View style={styles.chartContainer}>
             <LineChart
               data={{
-                labels: profitData.map((item: any) => item.label),
+                labels: processedProfitLabels,
                 datasets: [
                   {
                     data: profitData.map((item: any) => item.netProfit),
@@ -565,7 +611,7 @@ export default function ReportsScreen() {
           <View style={styles.chartContainer}>
             <LineChart
               data={{
-                labels: profitData.map((item: any) => item.label),
+                labels: processedProfitLabels,
                 datasets: [
                   {
                     data: profitData.map((item: any) => item.revenue),
@@ -651,7 +697,7 @@ export default function ReportsScreen() {
     );
   };
 
-  if (loading) {
+  if (initialLoading) {
     return <LoadingSpinner text="Loading reports..." />;
   }
 
@@ -772,9 +818,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dateRangeButton: {
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     marginRight: 8,
   },
@@ -788,6 +834,15 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     paddingBottom: 20,
+  },
+  loadingChartsContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingChartsText: {
+    fontSize: 16,
+    marginTop: 12,
   },
   noDataContainer: {
     padding: 40,

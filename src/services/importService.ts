@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { processSalesImport, processSalesImportFromFile } from '../utils/salesImportProcessor';
 import { processBulkInventoryImport, processBulkInventoryImportFromFile } from '../utils/bulkImportProcessor';
+import { reportsService } from './reports';
 
 export const importService = {
   /**
@@ -148,34 +149,15 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
       const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
       
       // Get expense data
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select(`
-          amount,
-          description,
-          expense_date,
-          expense_categories(name)
-        `)
-        .eq('business_id', businessId)
-        .gte('expense_date', startDate)
-        .lte('expense_date', endDate)
-        .order('expense_date');
-      
-      if (expensesError) throw expensesError;
+      const expenseCategories = await reportsService.getExpensesByCategory(businessId, startDate, endDate);
       
       // Calculate totals
       const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
       const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
       const grossProfit = totalRevenue - totalCOGS;
       
-      // Group expenses by category
-      const expensesByCategory: Record<string, number> = {};
-      expensesData.forEach(expense => {
-        const category = expense.expense_categories?.name || 'Uncategorized';
-        expensesByCategory[category] = (expensesByCategory[category] || 0) + expense.amount;
-      });
-      
-      const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
+      // Calculate total expenses
+      const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.amount, 0);
       const netIncome = grossProfit - totalExpenses;
       
       // Create CSV content
@@ -195,8 +177,8 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
       
       // Expenses section
       csv += 'OPERATING EXPENSES\n';
-      Object.entries(expensesByCategory).forEach(([category, amount]) => {
-        csv += `${category},${amount.toFixed(2)}\n`;
+      expenseCategories.forEach(category => {
+        csv += `${category.category},${category.amount.toFixed(2)}\n`;
       });
       csv += `Total Expenses,${totalExpenses.toFixed(2)}\n\n`;
       
