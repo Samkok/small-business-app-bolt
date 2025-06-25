@@ -111,7 +111,7 @@ export const expenseService = {
       .from('expenses')
       .select(`
         amount,
-        expense_categories(description)
+        expense_categories(name)
       `)
       .eq('business_id', businessId)
       .gte('expense_date', startDate)
