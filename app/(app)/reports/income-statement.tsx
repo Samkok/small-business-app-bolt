@@ -288,7 +288,7 @@ export default function IncomeStatementScreen() {
                 {category.category}
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                ${Number(category.amount || 0).toFixed(2)}
+                ${Number(category.total || 0).toFixed(2)}
               </Text>
             </View>
           ))}
