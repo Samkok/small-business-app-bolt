@@ -818,9 +818,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dateRangeButton: {
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
     marginRight: 8,
   },
