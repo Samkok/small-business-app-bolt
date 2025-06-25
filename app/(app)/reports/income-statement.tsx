@@ -298,7 +298,7 @@ export default function IncomeStatementScreen() {
               Total Expenses
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              ${Number(totalExpense || 0).toFixed(2)}
+              ${expenseCategories.reduce((sum, category) => sum + category.amount, 0)}
             </Text>
           </View>
         </Card>
