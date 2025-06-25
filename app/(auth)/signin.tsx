@@ -18,7 +18,7 @@ import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Square, CheckSquare } from 'lucide-react-native';
+import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
