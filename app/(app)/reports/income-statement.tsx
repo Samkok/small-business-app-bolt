@@ -65,7 +65,8 @@ export default function IncomeStatementScreen() {
         endDate as string
       );
       
-      const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.total, 0);
+      // Fix: Use 'amount' property instead of 'total'
+      const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.amount, 0);
       const netIncome = grossProfit - totalExpenses;
       const netMargin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
       
