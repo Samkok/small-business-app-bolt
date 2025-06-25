@@ -19,7 +19,7 @@ import { SkeletonDashboardStats, SkeletonCard, SkeletonLoader } from '@/src/comp
 import ProductForm from '@/src/components/products/ProductForm';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
-import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, BarChart } from 'lucide-react-native';
+import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 
 interface DashboardStats {

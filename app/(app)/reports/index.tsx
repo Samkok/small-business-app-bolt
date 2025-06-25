@@ -18,20 +18,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  Download, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  BarChart, 
-  LineChart, 
-  PieChart,
-  ChevronDown,
-  ChevronUp,
-  FileText
-} from 'lucide-react-native';
+import { ArrowLeft, Calendar, Download, TrendingUp, TrendingDown, DollarSign, ChartBar as BarChart, ChartLine as LineChart, ChartPie as PieChart, ChevronDown, ChevronUp, FileText } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { importService } from '@/src/services/importService';
 import { LineChart as RNLineChart, BarChart as RNBarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
