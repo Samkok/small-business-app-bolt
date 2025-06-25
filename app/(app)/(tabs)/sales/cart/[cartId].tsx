@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ export default function CartScreen() {
   const [updatingDelivery, setUpdatingDelivery] = useState(false);
   const [updatingNotes, setUpdatingNotes] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [isDeliveryCostFocused, setIsDeliveryCostFocused] = useState(false);
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -46,11 +47,11 @@ export default function CartScreen() {
   const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
   useEffect(() => {
-    if (cart) {
+    if (cart && !isDeliveryCostFocused) {
       setDeliveryCost(cart.delivery_cost?.toString() || '');
       setNotes(cart.notes || '');
     }
-  }, [cart]);
+  }, [cart, isDeliveryCostFocused]);
 
   // Update cart total_amount when cartSummary changes
   useEffect(() => {
@@ -161,6 +162,25 @@ export default function CartScreen() {
       setUpdatingDelivery(false);
     }
   }, [cart, updatingDelivery, updateCart]);
+
+  const handleDeliveryCostBlur = useCallback(() => {
+    setIsDeliveryCostFocused(false);
+    
+    // Format the delivery cost to show two decimal places
+    if (deliveryCost) {
+      const formattedValue = parseFloat(deliveryCost).toFixed(2);
+      setDeliveryCost(formattedValue);
+      
+      // Update the cart with the formatted value
+      if (cart) {
+        updateCart(cart.id, {
+          delivery_cost: parseFloat(formattedValue)
+        }).catch(error => {
+          console.error('Error updating delivery cost on blur:', error);
+        });
+      }
+    }
+  }, [deliveryCost, cart, updateCart]);
 
   const handleNotesChange = useCallback((value: string) => {
     setNotes(value);
@@ -605,6 +625,8 @@ export default function CartScreen() {
                 placeholder="0.00"
                 placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
                 keyboardType="decimal-pad"
+                onFocus={() => setIsDeliveryCostFocused(true)}
+                onBlur={handleDeliveryCostBlur}
               />
               {updatingDelivery && (
                 <View style={styles.updatingIndicator} />
