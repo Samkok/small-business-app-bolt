@@ -120,6 +120,7 @@ export const cartService = {
   },
 
   async updateCart(cartId: string, updates: CartUpdate) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const { data, error } = await supabase
       .from('carts')
       .update({ ...updates, updated_at: new Date().toISOString() })
