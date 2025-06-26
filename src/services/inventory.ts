@@ -70,6 +70,9 @@ export const inventoryService = {
     importData: Partial<InventoryImportUpdate>, 
     costs: Omit<ImportCostInsert, 'import_id'>[]
   ) {
+
+    if (typeof importId !== 'string' || !importId) return;
+    
     // Get the original import record to calculate stock adjustment
     const { data: originalImport, error: getError } = await supabase
       .from('inventory_imports')
