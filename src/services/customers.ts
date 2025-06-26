@@ -101,6 +101,7 @@ export const customerService = {
 
   async getPlatformUsage(businessId: string) {
     // First get all customers for this business
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data: customers, error } = await supabase
       .from('customers')
       .select('platform')
