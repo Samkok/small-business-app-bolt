@@ -21,6 +21,7 @@ export const cartService = {
   },
 
   async getActiveCarts(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('carts')
       .select(`
