@@ -54,6 +54,7 @@ export const customerService = {
   },
 
   async deleteCustomer(id: string) {
+    if (typeof id !== 'string' || !id) return;
     const { error } = await supabase
       .from('customers')
       .delete()
