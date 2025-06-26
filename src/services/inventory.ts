@@ -144,6 +144,7 @@ export const inventoryService = {
   },
 
   async deleteImport(importId: string) {
+    if (typeof importId !== 'string' || !importId) return;
     // Get import details first
     const { data: importRecord, error: getError } = await supabase
       .from('inventory_imports')
