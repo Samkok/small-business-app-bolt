@@ -197,6 +197,7 @@ export const storageService = {
 
   getImagePath(imageUrl: string): string | null {
     try {
+      if (typeof imageUrl !== 'string' || !imageUrl) return null;
       if (!imageUrl.includes('product-images')) return null;
       
       // Extract path from Supabase storage URL
