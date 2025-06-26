@@ -280,7 +280,7 @@ export const reportsService = {
           return isSameMonth(expenseDate, month);
         });
         
-        const amount = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const amount = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
         
         return {
           date: format(month, 'yyyy-MM-dd'),
@@ -358,7 +358,7 @@ export const reportsService = {
         });
         
         // Calculate total expenses for this month
-        const expenses = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const expenses = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
         
         // Calculate net profit (profit - expenses)
         const netProfit = profit - expenses;
