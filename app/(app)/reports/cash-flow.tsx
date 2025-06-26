@@ -73,6 +73,8 @@ export default function CashFlowScreen() {
         year
       );
 
+      
+      console.log("CSV DATA: ");
       console.log(csvData);
       
       if (Platform.OS === 'web') {
