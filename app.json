@@ -29,13 +29,7 @@
       "expo-font", 
       "expo-web-browser",
       "expo-secure-store",
-      "expo-camera",
-      [
-        "expo-barcode-scanner",
-        {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access camera for barcode scanning."
-        }
-      ]
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true
