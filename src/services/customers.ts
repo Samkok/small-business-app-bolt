@@ -144,6 +144,7 @@ export const customerService = {
   },
 
   async bulkUpdateCustomerPlatform(customerIds: string[], platform: string | null) {
+    if (typeof platform !== 'string' || !platform) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ 
