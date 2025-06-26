@@ -107,6 +107,20 @@ export function ImageUpload({
         const asset = result.assets[0];
         if (!asset.uri && typeof asset.uri !== 'string') return;
         setPreviewUrl(asset.uri);
+
+        
+        if (
+          !asset ||
+          typeof asset.uri !== 'string' ||
+          !asset.uri ||
+          typeof asset.type !== 'string' ||
+          !asset.type ||
+          typeof asset.fileName !== 'string' ||
+          !asset.fileName
+        ) {
+          Alert.alert('Invalid file', 'The selected file is invalid or missing required information.');
+          return;
+        }
         
         // Create file-like object for mobile
         const file = {
