@@ -39,6 +39,10 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromCsv(csvContent: string, profileId: string) {
+    
+    if (typeof csvContent !== 'string' || !csvContent) return;
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processBulkInventoryImport(csvContent, profileId);
   },
 
