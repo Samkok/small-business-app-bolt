@@ -439,7 +439,7 @@ export default function SalesScreen() {
   const getSalesStats = useCallback(() => {
     const totalSalesCount = totalSales;
     const completedSales = sales.filter(s => s.status === 'completed');
-    const totalRevenue = completedSales.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+    const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
     const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
     
     // Today's sales
@@ -447,7 +447,7 @@ export default function SalesScreen() {
     const todaySales = completedSales.filter(sale => 
       sale.sale_date.split('T')[0] === today
     );
-    const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+    const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
 
     return { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales: todaySales.length };
   }, [sales, totalSales]);
