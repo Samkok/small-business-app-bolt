@@ -34,7 +34,7 @@ export default function CashFlowScreen() {
 
   useEffect(() => {
     console.log("Showing month and year");
-    console.log(month);
+    console.log(month+1);
     console.log(year);
     if (profile?.id && month !== undefined && year !== undefined) {
       
