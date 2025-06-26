@@ -239,7 +239,7 @@ export default function ReportsScreen() {
       labels: processedRevenueLabels,
       datasets: [
         {
-          data: revenueData.map((item: any) => parseFloat((item.revenue > 0 ? item.revenue : 0))),
+          data: revenueData.map((item: any) => parseFloat(item.revenue)),
           color: () => '#059669',
           strokeWidth: 2
         }
