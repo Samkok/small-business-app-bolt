@@ -41,6 +41,7 @@ export const customerService = {
   },
 
   async updateCustomer(id: string, updates: CustomerUpdate) {
+    if (typeof id !== 'string' || !id) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })
