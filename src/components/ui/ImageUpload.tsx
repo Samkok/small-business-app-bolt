@@ -105,6 +105,7 @@ export function ImageUpload({
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        if (!asset.uri && typeof asset.uri !== 'string') return;
         setPreviewUrl(asset.uri);
         
         // Create file-like object for mobile
