@@ -33,9 +33,6 @@ export default function CashFlowScreen() {
   const { profile } = useAuth();
 
   useEffect(() => {
-    console.log("Showing month and year");
-    console.log(parseInt(month) + 1);
-    console.log(year);
     if (profile?.id && month !== undefined && year !== undefined) {
       
       loadCashFlowStatement();
@@ -75,6 +72,8 @@ export default function CashFlowScreen() {
         month,
         year
       );
+
+      console.log("Done export");
       
       if (Platform.OS === 'web') {
         // Web platform - use browser download
