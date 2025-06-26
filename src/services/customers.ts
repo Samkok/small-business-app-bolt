@@ -18,6 +18,7 @@ export const customerService = {
   },
 
   async getCustomer(id: string) {
+    if (typeof id !== 'string' || !id) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
