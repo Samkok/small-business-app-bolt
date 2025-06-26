@@ -58,6 +58,7 @@ export const cartService = {
   },
 
   async deleteCart(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     // First delete all cart items
     const { error: itemsError } = await supabase
       .from('cart_items')
