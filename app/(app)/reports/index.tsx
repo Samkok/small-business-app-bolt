@@ -498,7 +498,7 @@ export default function ReportsScreen() {
     const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
     // Calculate totals
-    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + item.revenue, 0);
+    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
     const totalCOGS = profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
     const totalExpenses = profitData.reduce((sum: number, item: any) => sum + item.expenses, 0);
     const grossProfit = totalRevenue - totalCOGS;
