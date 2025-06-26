@@ -325,6 +325,9 @@ export const salesService = {
   },
 
   async getSalesReport(businessId: string, startDate: string, endDate: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select('*')
