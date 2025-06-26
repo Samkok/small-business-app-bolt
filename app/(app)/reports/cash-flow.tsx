@@ -34,6 +34,8 @@ export default function CashFlowScreen() {
 
   useEffect(() => {
     if (profile?.id && month !== undefined && year !== undefined) {
+      console.log(month);
+      console.log(year);
       loadCashFlowStatement();
     } else {
       setLoading(false);
