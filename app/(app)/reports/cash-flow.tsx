@@ -74,7 +74,7 @@ export default function CashFlowScreen() {
       );
 
       
-      console.log("CSV DATA: ")
+      console.log("CSV DATA: ");
       console.log(csvData);
       
       if (Platform.OS === 'web') {
