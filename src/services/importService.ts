@@ -11,6 +11,10 @@ export const importService = {
    * @returns Import results
    */
   async importSalesFromCsv(csvContent: string, profileId: string) {
+    
+    if (typeof csvContent !== 'string' || !csvContent) return;
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processSalesImport(csvContent, profileId);
   },
 
