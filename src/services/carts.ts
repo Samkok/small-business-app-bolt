@@ -78,6 +78,7 @@ export const cartService = {
   },
 
   async getCart(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const { data, error } = await supabase
       .from('carts')
       .select(`
