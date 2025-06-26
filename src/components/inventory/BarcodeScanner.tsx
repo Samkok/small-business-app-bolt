@@ -76,14 +76,16 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         </TouchableOpacity>
       </View>
 
-      <CameraView
+      <View style={styles.cameraWrapper}>
+        <CameraView
         style={styles.camera}
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         barcodeScannerSettings={{
           barcodeTypes: ['qr', 'pdf417', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
         }}
       >
-        <View style={styles.overlay}>
+        <View style={StyleSheet.absoluteFillObject}>
+          <View style={styles.overlay}>
           <View style={styles.scanArea}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
@@ -104,7 +106,9 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
             </TouchableOpacity>
           )}
         </View>
+        </View>
       </CameraView>
+      </View>
     </View>
   );
 }
@@ -217,5 +221,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  cameraWrapper: {
+    flex: 1,
+    position: 'relative',
   },
 });
