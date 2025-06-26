@@ -221,6 +221,10 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportCashFlowToCsv(businessId: string, month: number, year: number) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof month !== 'number' || !month) return;
+    if (typeof year !== 'number' || !year) return;
     try {
       // Get cash flow data
       const cashFlowData = await reportsService.getCashFlowStatement(businessId, month, year);
