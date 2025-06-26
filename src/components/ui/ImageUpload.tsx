@@ -139,6 +139,13 @@ export function ImageUpload({
 
   const handleFileChange = (event: any) => {
     const file = event.target.files?.[0];
+    if (
+      !file ||
+      typeof file.type !== 'string' ||
+      !file.type ||
+      typeof file.name !== 'string' ||
+      !file.name
+    ) return;
     if (!file) return;
 
     // Validate file type
