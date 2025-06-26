@@ -82,6 +82,11 @@ export const customerService = {
     address?: string;
     notes?: string;
   }) {
+    if (typeof customerId !== 'string' || !customerId) return;
+    if (typeof platform !== 'string' || !platform) return;
+    if (typeof phone !== 'string' || !phone) return;
+    if (typeof address !== 'string' || !address) return;
+    if (typeof notes !== 'string' || !notes) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })
