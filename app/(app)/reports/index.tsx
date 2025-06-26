@@ -275,7 +275,7 @@ export default function ReportsScreen() {
       const colors = ['#2563eb', '#059669', '#dc2626', '#8b5cf6', '#ea580c'];
       return {
         name: item.category,
-        amount: item.amount.toFixed(2),
+        amount: item.total.toFixed(2),
         color: colors[index % colors.length],
         legendFontColor: isDark ? '#d1d5db' : '#6b7280',
         legendFontSize: 12
