@@ -251,6 +251,8 @@ export const cartService = {
   },
 
   async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
+    
+    if (typeof itemId !== 'string' || !itemId) return;
     // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
