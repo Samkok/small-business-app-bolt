@@ -127,6 +127,8 @@ export const customerService = {
   },
 
   async updateCustomerPlatform(customerId: string, platform: string | null) {
+    if (typeof customerId !== 'string' || !customerId) return;
+    if (typeof platform !== 'string' || !platform) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ 
