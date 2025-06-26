@@ -94,8 +94,6 @@ export default function CashFlowScreen() {
         const fileUri = `${FileSystem.documentDirectory}cash_flow_${month}_${year}.csv`;
         await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
         
-        console.log("DONE HERE");
-        
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: 'text/csv',
