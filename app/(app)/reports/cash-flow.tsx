@@ -73,10 +73,10 @@ export default function CashFlowScreen() {
         parseInt(year as string)
       );
 
-      
-      console.log("CSV DATA: ");
-      console.log(csvData);
-      
+      if (csvData === undefined) {
+        Alert.alert('Error report undefinded', 'Something is wrong with the report');
+      }
+
       if (Platform.OS === 'web') {
         // Web platform - use browser download
         const blob = new Blob([csvData], { type: 'text/csv' });
