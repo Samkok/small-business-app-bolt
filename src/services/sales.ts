@@ -223,6 +223,7 @@ export const salesService = {
   },
 
   async getSaleWithDiscountBreakdown(saleId: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select('*')
