@@ -680,7 +680,7 @@ export default function ReportsScreen() {
     // Get previous months
     const months = [];
     for (let i = 0; i < 6; i++) {
-      const date = new Date(currentYear, currentMonth - i, 1);
+      const date = new Date(currentYear, currentMonth, 1);
       months.push({
         month: date.getMonth(),
         year: date.getFullYear(),
