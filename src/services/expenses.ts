@@ -123,7 +123,7 @@ export const expenseService = {
     const categoryTotals: Record<string, number> = {};
     data.forEach(expense => {
       const categoryName = expense.expense_categories?.name || 'Uncategorized';
-      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + expense.amount;
+      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + parseFloat(expense.amount);
     });
 
     return Object.entries(categoryTotals).map(([name, total]) => ({
