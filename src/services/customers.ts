@@ -7,6 +7,7 @@ type CustomerUpdate = Database['public']['Tables']['customers']['Update'];
 
 export const customerService = {
   async getCustomers(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
