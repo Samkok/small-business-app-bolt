@@ -458,6 +458,8 @@ export const reportsService = {
     // Calculate date range for the month
     const startDate = new Date(year, month, 1).toISOString();
     const endDate = new Date(year, month + 1, 0).toISOString();
+    console.log(startDate);
+    console.log(endDate);
     
     try {
       // Get sales data for the month
