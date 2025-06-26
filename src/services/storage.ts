@@ -63,6 +63,19 @@ export const storageService = {
     } else {
       // Mobile file upload using direct API call
       const mobileFile = file as { uri: string; type: string; name: string };
+
+      // Before using mobileFile.uri, type, name
+      if (
+        !mobileFile ||
+        typeof mobileFile.uri !== 'string' ||
+        !mobileFile.uri ||
+        typeof mobileFile.type !== 'string' ||
+        !mobileFile.type ||
+        typeof mobileFile.name !== 'string' ||
+        !mobileFile.name
+      ) {
+        throw new Error('Invalid file object: uri, type, or name is missing or not a string.');
+      }
       
       // Extract file extension from type or name
       let fileExtension = 'jpg';
