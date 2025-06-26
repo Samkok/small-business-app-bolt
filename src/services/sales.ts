@@ -94,9 +94,6 @@ export const salesService = {
     if (typeof businessId !== 'string' || !businessId) return;
     if (typeof startDate !== 'string' || !startDate) return;
     if (typeof endDate !== 'string' || !endDate) return;
-    if (typeof offset !== 'number' || !offset) return;
-    if (typeof limit !== 'number' || !limit) return;
-    if (typeof status !== 'string' || !status) return;
     if (typeof paymentMethod !== 'string' || !paymentMethod) return;
     let query = supabase
       .from('sales')
