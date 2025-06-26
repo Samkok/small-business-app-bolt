@@ -153,7 +153,6 @@ export default function InventoryScreen() {
         
         setProducts(uniqueById);
         setFilteredProducts(uniqueById);
-
       }
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
