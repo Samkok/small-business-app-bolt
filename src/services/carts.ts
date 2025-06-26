@@ -282,6 +282,7 @@ export const cartService = {
   },
 
   async removeItemDiscount(itemId: string) {
+    if (typeof itemId !== 'string' || !itemId) return;
     // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
