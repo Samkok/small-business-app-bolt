@@ -235,6 +235,9 @@ export const salesService = {
   },
 
   async voidSale(saleId: string, reason: string, performedBy: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !id) return;
     return this.performSaleAction(saleId, 'void', reason, performedBy);
   },
 
