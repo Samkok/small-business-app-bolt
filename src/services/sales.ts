@@ -51,7 +51,6 @@ export const salesService = {
     paymentMethod?: string
   ) {
     if (typeof businessId !== 'string' || !businessId) return;
-    if (typeof paymentMethod !== 'string' || !paymentMethod) return;
     let query = supabase
       .from('sales')
       .select('id', { count: 'exact', head: true })
