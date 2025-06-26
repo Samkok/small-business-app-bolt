@@ -330,11 +330,13 @@ export const cartService = {
   },
 
   async calculateCartTotal(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const cartDetails = await this.getCartWithDiscountDetails(cartId);
     return cartDetails.final_total;
   },
 
   async getCartSummary(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const cartDetails = await this.getCartWithDiscountDetails(cartId);
     
     return {
