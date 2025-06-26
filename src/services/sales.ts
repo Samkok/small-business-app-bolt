@@ -276,7 +276,6 @@ export const salesService = {
     if (typeof saleId !== 'string' || !saleId) return;
     if (typeof reason !== 'string' || !reason) return;
     if (typeof performedBy !== 'string' || !performedBy) return;
-    if (typeof amount !== 'number' || !amount) return;
     
     // Create sale action record
     const actionData: SaleActionInsert = {
