@@ -66,6 +66,7 @@ export const expenseService = {
   },
 
   async updateExpense(id: string, updates: ExpenseUpdate) {
+    if (typeof id !== 'string' || !id) return;
     const { data, error } = await supabase
       .from('expenses')
       .update(updates)
