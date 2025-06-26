@@ -50,7 +50,7 @@ export default function CashFlowScreen() {
       
       const data = await reportsService.getCashFlowStatement(
         profile!.id, 
-        (parseInt(month) + 1), 
+        (parseInt(month)), 
         parseInt(year as string)
       );
       
