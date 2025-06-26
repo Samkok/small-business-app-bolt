@@ -24,6 +24,7 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
   }, []);
 
   const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (!data || typeof data !== 'string') return;
     if (scanned) return;
     
     setScanned(true);
