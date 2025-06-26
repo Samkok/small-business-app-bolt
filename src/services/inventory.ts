@@ -195,6 +195,7 @@ export const inventoryService = {
   },
 
   async getImportHistory(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('inventory_imports')
       .select(`
