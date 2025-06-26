@@ -250,6 +250,13 @@ export const salesService = {
   },
 
   async returnItems(saleId: string, returnedItems: { productId: string; quantity: number }[], reason: string, performedBy: string) {
+
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof productId !== 'string' || !productId) return;
+    if (typeof quantity !== 'number' || !quantity) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
+    
     const sale = await this.getSale(saleId);
     let returnAmount = 0;
 
