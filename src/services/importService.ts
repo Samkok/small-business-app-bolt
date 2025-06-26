@@ -85,6 +85,10 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportSalesToCsv(businessId: string, startDate?: string, endDate?: string) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     let query = supabase
       .from('sales')
       .select(`
