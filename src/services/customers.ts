@@ -64,6 +64,7 @@ export const customerService = {
   },
 
   async searchCustomers(businessId: string, query: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
