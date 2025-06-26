@@ -72,8 +72,8 @@ export default function CashFlowScreen() {
     try {
       const csvData = await importService.exportCashFlowToCsv(
         profile.id, 
-        parseInt(month as string),
-        parseInt(year as string)
+        month,
+        year
       );
       
       if (Platform.OS === 'web') {
