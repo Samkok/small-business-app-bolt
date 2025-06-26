@@ -617,7 +617,7 @@ export default function InventoryScreen() {
           ref={flatListRef}
           data={filteredProducts}
           renderItem={renderProductItem}
-          keyExtractor={(item, index) => item?.id?.toString() ?? index.toString()}
+          keyExtractor={(item, index) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
