@@ -83,6 +83,7 @@ export const expenseService = {
   },
 
   async deleteExpense(id: string) {
+    if (typeof id !== 'string' || !id) return;
     const { error } = await supabase
       .from('expenses')
       .delete()
