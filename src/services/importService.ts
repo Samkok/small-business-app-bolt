@@ -25,6 +25,10 @@ export const importService = {
    * @returns Import results
    */
   async importSalesFromFile(file: File, profileId: string) {
+    
+    if (typeof file !== 'string' || !file) return;
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processSalesImportFromFile(file, profileId);
   },
 
