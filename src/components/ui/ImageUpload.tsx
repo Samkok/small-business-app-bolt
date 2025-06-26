@@ -68,6 +68,7 @@ export function ImageUpload({
       });
 
       if (!result.canceled && result.assets[0]) {
+        if (!asset.uri && typeof asset.uri !== 'string') return;
         const asset = result.assets[0];
         setPreviewUrl(asset.uri);
         
