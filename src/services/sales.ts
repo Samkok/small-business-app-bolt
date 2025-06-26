@@ -342,6 +342,11 @@ export const salesService = {
   },
 
   async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
+    
     // Get sales with cart items and product costs
     const { data, error } = await supabase
       .from('sales')
