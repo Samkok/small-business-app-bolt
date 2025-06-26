@@ -219,7 +219,7 @@ export const reportsService = {
           return isSameMonth(saleDate, month);
         });
         
-        const revenue = monthSales.reduce((sum, sale) => sum + parseFloat(sale.total_amoun), 0);
+        const revenue = monthSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0);
         if (revenue < 0) revenue = 0;
         
         return {
