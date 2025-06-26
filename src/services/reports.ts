@@ -219,7 +219,7 @@ export const reportsService = {
           return isSameMonth(saleDate, month);
         });
         
-        const revenue = monthSales.reduce((sum, sale) => sum + sale.total_amount, 0);
+        const revenue = monthSales.reduce((sum, sale) => sum + parseFloat(sale.total_amoun), 0);
         
         return {
           date: format(month, 'yyyy-MM-dd'),
