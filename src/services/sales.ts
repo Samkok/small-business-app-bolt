@@ -197,6 +197,7 @@ export const salesService = {
   },
 
   async getSale(saleId: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
     const { data, error } = await supabase
       .from('sales')
       .select(`
