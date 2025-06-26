@@ -52,6 +52,8 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromFile(file: File, profileId: string) {
+    
+    if (typeof profileId !== 'string' || !profileId) return;
     return processBulkInventoryImportFromFile(file, profileId);
   },
 
