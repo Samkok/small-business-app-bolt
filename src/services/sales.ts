@@ -333,12 +333,12 @@ export const salesService = {
     // Calculate COGS and profit for each sale
     return data.map(sale => {
       let totalCOGS = 0;
-      let totalRevenue = sale.total_amount;
+      let totalRevenue = parseFloat(sale.total_amount);
 
       // Calculate COGS from cart items
       if (sale.carts?.cart_items) {
         sale.carts.cart_items.forEach(item => {
-          const costPerUnit = item.products?.cost_per_unit || 0;
+          const costPerUnit = parseFloat(item.products?.cost_per_unit) || 0;
           totalCOGS += item.quantity * costPerUnit;
         });
       }
