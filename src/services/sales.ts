@@ -277,6 +277,12 @@ export const salesService = {
   },
 
   async performSaleAction(saleId: string, actionType: 'void' | 'refund' | 'return', reason: string, performedBy: string, amount?: number) {
+
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
+    if (typeof amount !== 'number' || !amount) return;
+    
     // Create sale action record
     const actionData: SaleActionInsert = {
       sale_id: saleId,
