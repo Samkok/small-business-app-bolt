@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { processSalesImport, processSalesImportFromFile } from '../utils/salesImportProcessor';
 import { processBulkInventoryImport, processBulkInventoryImportFromFile } from '../utils/bulkImportProcessor';
 import { reportsService } from './reports';
+import { salesService } from './sales'
 
 export const importService = {
   /**
