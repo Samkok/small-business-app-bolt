@@ -74,7 +74,7 @@ export default function CashFlowScreen() {
       );
 
       if (csvData === undefined) {
-        Alert.alert('Error report undefinded', 'Something is wrong with the report');
+        Alert.alert('Something is wrong with the report', 'Please contact developer');
         return;
       }
 
