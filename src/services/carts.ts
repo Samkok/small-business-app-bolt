@@ -312,6 +312,8 @@ export const cartService = {
   },
 
   async updateCartTotal(cartId: string) {
+    
+    if (typeof cartId !== 'string' || !cartId) return;
     try {
       const summary = await this.getCartSummary(cartId);
       await supabase
