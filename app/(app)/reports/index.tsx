@@ -682,7 +682,7 @@ export default function ReportsScreen() {
     for (let i = 0; i < 6; i++) {
       const date = new Date(currentYear, currentMonth-i, 1);
       months.push({
-        month: date.getMonth() + 1,
+        month: date.getMonth(),
         year: date.getFullYear(),
         label: format(date, 'MMMM yyyy')
       });
