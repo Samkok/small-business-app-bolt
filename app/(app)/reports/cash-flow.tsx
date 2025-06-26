@@ -72,8 +72,6 @@ export default function CashFlowScreen() {
         month,
         year
       );
-
-      console.log("Done export");
       
       if (Platform.OS === 'web') {
         // Web platform - use browser download
@@ -90,6 +88,8 @@ export default function CashFlowScreen() {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}cash_flow_${month}_${year}.csv`;
         await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+
+        console.log("DONE HERE");
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
