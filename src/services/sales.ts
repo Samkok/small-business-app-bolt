@@ -242,6 +242,10 @@ export const salesService = {
   },
 
   async refundSale(saleId: string, amount: number, reason: string, performedBy: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof amount !== 'number' || !amount) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !id) return;
     return this.performSaleAction(saleId, 'refund', reason, performedBy, amount);
   },
 
