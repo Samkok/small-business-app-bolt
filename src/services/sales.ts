@@ -140,7 +140,6 @@ export const salesService = {
 
   async getSales(businessId: string, limit?: number) {
     if (typeof businessId !== 'string' || !businessId) return;
-    if (typeof limit !== 'number' || !limit) return;
     let query = supabase
       .from('sales')
       .select(`
