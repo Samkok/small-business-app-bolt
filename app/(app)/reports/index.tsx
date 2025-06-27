@@ -239,7 +239,7 @@ export default function ReportsScreen() {
       labels: processedRevenueLabels,
       datasets: [
         {
-          data: revenueData.map((item: any) => item.revenue),
+          data: revenueData.map((item: any) => parseFloat(item.revenue)),
           color: () => '#059669',
           strokeWidth: 2
         }
@@ -498,7 +498,7 @@ export default function ReportsScreen() {
     const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
     // Calculate totals
-    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + item.revenue, 0);
+    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
     const totalCOGS = profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
     const totalExpenses = profitData.reduce((sum: number, item: any) => sum + item.expenses, 0);
     const grossProfit = totalRevenue - totalCOGS;
@@ -680,7 +680,7 @@ export default function ReportsScreen() {
     // Get previous months
     const months = [];
     for (let i = 0; i < 6; i++) {
-      const date = new Date(currentYear, currentMonth - i, 1);
+      const date = new Date(currentYear, currentMonth-i, 1);
       months.push({
         month: date.getMonth(),
         year: date.getFullYear(),

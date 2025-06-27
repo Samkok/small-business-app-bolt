@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { processSalesImport, processSalesImportFromFile } from '../utils/salesImportProcessor';
 import { processBulkInventoryImport, processBulkInventoryImportFromFile } from '../utils/bulkImportProcessor';
 import { reportsService } from './reports';
+import { salesService } from './sales'
 
 export const importService = {
   /**
@@ -11,6 +12,10 @@ export const importService = {
    * @returns Import results
    */
   async importSalesFromCsv(csvContent: string, profileId: string) {
+    
+    if (typeof csvContent !== 'string' || !csvContent) return;
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processSalesImport(csvContent, profileId);
   },
 
@@ -21,6 +26,9 @@ export const importService = {
    * @returns Import results
    */
   async importSalesFromFile(file: File, profileId: string) {
+    
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processSalesImportFromFile(file, profileId);
   },
 
@@ -31,6 +39,10 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromCsv(csvContent: string, profileId: string) {
+    
+    if (typeof csvContent !== 'string' || !csvContent) return;
+    if (typeof profileId !== 'string' || !profileId) return;
+    
     return processBulkInventoryImport(csvContent, profileId);
   },
 
@@ -41,6 +53,8 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromFile(file: File, profileId: string) {
+    
+    if (typeof profileId !== 'string' || !profileId) return;
     return processBulkInventoryImportFromFile(file, profileId);
   },
 
@@ -72,6 +86,10 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportSalesToCsv(businessId: string, startDate?: string, endDate?: string) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     let query = supabase
       .from('sales')
       .select(`
@@ -144,6 +162,10 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportIncomeStatementToCsv(businessId: string, startDate: string, endDate: string) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     try {
       // Get sales data with COGS
       const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
@@ -200,6 +222,11 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportCashFlowToCsv(businessId: string, month: number, year: number) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof month !== 'number' || isNaN(month) || month < 0 || month > 11) return;
+    if (typeof year !== 'number' || isNaN(year)) return;
+
     try {
       // Get cash flow data
       const cashFlowData = await reportsService.getCashFlowStatement(businessId, month, year);

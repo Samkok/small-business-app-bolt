@@ -34,6 +34,7 @@ export default function CashFlowScreen() {
 
   useEffect(() => {
     if (profile?.id && month !== undefined && year !== undefined) {
+      
       loadCashFlowStatement();
     } else {
       setLoading(false);
@@ -46,7 +47,7 @@ export default function CashFlowScreen() {
       
       const data = await reportsService.getCashFlowStatement(
         profile!.id, 
-        parseInt(month as string), 
+        parseInt(month as string),
         parseInt(year as string)
       );
       
@@ -71,7 +72,12 @@ export default function CashFlowScreen() {
         parseInt(month as string),
         parseInt(year as string)
       );
-      
+
+      if (csvData === undefined) {
+        Alert.alert('Something is wrong with the report', 'Please contact developer');
+        return;
+      }
+
       if (Platform.OS === 'web') {
         // Web platform - use browser download
         const blob = new Blob([csvData], { type: 'text/csv' });

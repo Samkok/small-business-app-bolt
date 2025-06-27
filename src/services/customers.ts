@@ -7,6 +7,7 @@ type CustomerUpdate = Database['public']['Tables']['customers']['Update'];
 
 export const customerService = {
   async getCustomers(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -18,6 +19,7 @@ export const customerService = {
   },
 
   async getCustomer(id: string) {
+    if (typeof id !== 'string' || !id) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -40,6 +42,7 @@ export const customerService = {
   },
 
   async updateCustomer(id: string, updates: CustomerUpdate) {
+    if (typeof id !== 'string' || !id) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -52,6 +55,7 @@ export const customerService = {
   },
 
   async deleteCustomer(id: string) {
+    if (typeof id !== 'string' || !id) return;
     const { error } = await supabase
       .from('customers')
       .delete()
@@ -61,6 +65,7 @@ export const customerService = {
   },
 
   async searchCustomers(businessId: string, query: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -78,6 +83,11 @@ export const customerService = {
     address?: string;
     notes?: string;
   }) {
+    if (typeof customerId !== 'string' || !customerId) return;
+    if (typeof platform !== 'string' || !platform) return;
+    if (typeof phone !== 'string' || !phone) return;
+    if (typeof address !== 'string' || !address) return;
+    if (typeof notes !== 'string' || !notes) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -91,6 +101,7 @@ export const customerService = {
 
   async getPlatformUsage(businessId: string) {
     // First get all customers for this business
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data: customers, error } = await supabase
       .from('customers')
       .select('platform')
@@ -123,6 +134,8 @@ export const customerService = {
   },
 
   async updateCustomerPlatform(customerId: string, platform: string | null) {
+    if (typeof customerId !== 'string' || !customerId) return;
+    if (typeof platform !== 'string' || !platform) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ 
@@ -138,6 +151,7 @@ export const customerService = {
   },
 
   async bulkUpdateCustomerPlatform(customerIds: string[], platform: string | null) {
+    if (typeof platform !== 'string' || !platform) return;
     const { data, error } = await supabase
       .from('customers')
       .update({ 

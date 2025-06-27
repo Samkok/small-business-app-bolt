@@ -98,6 +98,19 @@ export const storageService = {
           throw new Error('No authentication session found');
         }
 
+        // Before using mobileFile.uri, type, name
+        if (
+          !mobileFile ||
+          typeof mobileFile.uri !== 'string' ||
+          !mobileFile.uri ||
+          typeof mobileFile.type !== 'string' ||
+          !mobileFile.type ||
+          typeof mobileFile.name !== 'string' ||
+          !mobileFile.name
+        ) {
+          throw new Error('Invalid file object: uri, type, or name is missing or not a string.');
+        }
+        
         // Create FormData for mobile upload
         const formData = new FormData();
         formData.append('file', {
@@ -184,6 +197,7 @@ export const storageService = {
 
   getImagePath(imageUrl: string): string | null {
     try {
+      if (typeof imageUrl !== 'string' || !imageUrl) return null;
       if (!imageUrl.includes('product-images')) return null;
       
       // Extract path from Supabase storage URL

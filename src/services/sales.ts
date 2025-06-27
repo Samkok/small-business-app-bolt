@@ -50,6 +50,7 @@ export const salesService = {
     status?: string,
     paymentMethod?: string
   ) {
+    if (typeof businessId !== 'string' || !businessId) return;
     let query = supabase
       .from('sales')
       .select('id', { count: 'exact', head: true })
@@ -86,6 +87,9 @@ export const salesService = {
     status?: string,
     paymentMethod?: string
   ) {
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     let query = supabase
       .from('sales')
       .select(`
@@ -130,6 +134,7 @@ export const salesService = {
   },
 
   async getSales(businessId: string, limit?: number) {
+    if (typeof businessId !== 'string' || !businessId) return;
     let query = supabase
       .from('sales')
       .select(`
@@ -165,6 +170,7 @@ export const salesService = {
   },
 
   async getSalesWithDiscountDetails(businessId: string, limit?: number) {
+    if (typeof businessId !== 'string' || !businessId) return;
     let query = supabase
       .from('sales_with_discount_details')
       .select('*')
@@ -181,6 +187,7 @@ export const salesService = {
   },
 
   async getSale(saleId: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
     const { data, error } = await supabase
       .from('sales')
       .select(`
@@ -206,6 +213,7 @@ export const salesService = {
   },
 
   async getSaleWithDiscountBreakdown(saleId: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select('*')
@@ -217,14 +225,28 @@ export const salesService = {
   },
 
   async voidSale(saleId: string, reason: string, performedBy: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !id) return;
     return this.performSaleAction(saleId, 'void', reason, performedBy);
   },
 
   async refundSale(saleId: string, amount: number, reason: string, performedBy: string) {
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof amount !== 'number' || !amount) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !id) return;
     return this.performSaleAction(saleId, 'refund', reason, performedBy, amount);
   },
 
   async returnItems(saleId: string, returnedItems: { productId: string; quantity: number }[], reason: string, performedBy: string) {
+
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof productId !== 'string' || !productId) return;
+    if (typeof quantity !== 'number' || !quantity) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
+    
     const sale = await this.getSale(saleId);
     let returnAmount = 0;
 
@@ -245,6 +267,11 @@ export const salesService = {
   },
 
   async performSaleAction(saleId: string, actionType: 'void' | 'refund' | 'return', reason: string, performedBy: string, amount?: number) {
+
+    if (typeof saleId !== 'string' || !saleId) return;
+    if (typeof reason !== 'string' || !reason) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
+    
     // Create sale action record
     const actionData: SaleActionInsert = {
       sale_id: saleId,
@@ -287,6 +314,9 @@ export const salesService = {
   },
 
   async getSalesReport(businessId: string, startDate: string, endDate: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select('*')
@@ -301,6 +331,11 @@ export const salesService = {
   },
 
   async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
+    
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
+    
     // Get sales with cart items and product costs
     const { data, error } = await supabase
       .from('sales')
@@ -355,6 +390,9 @@ export const salesService = {
   },
 
   async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof startDate !== 'string' || !startDate) return;
+    if (typeof endDate !== 'string' || !endDate) return;
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select(`

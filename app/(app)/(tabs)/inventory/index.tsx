@@ -144,9 +144,15 @@ export default function InventoryScreen() {
         setProducts(productsData);
         setFilteredProducts(productsData);
       } else {
-        const newProducts = [...(page === 0 ? [] : products), ...productsData];
-        setProducts(newProducts);
-        setFilteredProducts(newProducts);
+        const combined = [...(page === 0 ? [] : products), ...productsData];
+
+        // Deduplicate by `id`
+        const uniqueById = Array.from(
+          new Map(combined.map(item => [item.id, item])).values()
+        );
+        
+        setProducts(uniqueById);
+        setFilteredProducts(uniqueById);
       }
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
@@ -617,7 +623,7 @@ export default function InventoryScreen() {
           ref={flatListRef}
           data={filteredProducts}
           renderItem={renderProductItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

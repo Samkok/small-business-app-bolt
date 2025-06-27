@@ -21,6 +21,7 @@ export const cartService = {
   },
 
   async getActiveCarts(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('carts')
       .select(`
@@ -57,6 +58,7 @@ export const cartService = {
   },
 
   async deleteCart(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     // First delete all cart items
     const { error: itemsError } = await supabase
       .from('cart_items')
@@ -76,6 +78,7 @@ export const cartService = {
   },
 
   async getCart(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const { data, error } = await supabase
       .from('carts')
       .select(`
@@ -105,6 +108,7 @@ export const cartService = {
   },
 
   async getCartWithDiscountDetails(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const { data, error } = await supabase
       .from('cart_details_with_discounts')
       .select('*')
@@ -116,6 +120,7 @@ export const cartService = {
   },
 
   async updateCart(cartId: string, updates: CartUpdate) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const { data, error } = await supabase
       .from('carts')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -224,6 +229,7 @@ export const cartService = {
   },
 
   async removeCartItem(itemId: string) {
+    if (typeof itemId !== 'string' || !itemId) return;
     // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
@@ -245,6 +251,8 @@ export const cartService = {
   },
 
   async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
+    
+    if (typeof itemId !== 'string' || !itemId) return;
     // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
@@ -274,6 +282,7 @@ export const cartService = {
   },
 
   async removeItemDiscount(itemId: string) {
+    if (typeof itemId !== 'string' || !itemId) return;
     // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
@@ -303,6 +312,8 @@ export const cartService = {
   },
 
   async updateCartTotal(cartId: string) {
+    
+    if (typeof cartId !== 'string' || !cartId) return;
     try {
       const summary = await this.getCartSummary(cartId);
       await supabase
@@ -319,11 +330,13 @@ export const cartService = {
   },
 
   async calculateCartTotal(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const cartDetails = await this.getCartWithDiscountDetails(cartId);
     return cartDetails.final_total;
   },
 
   async getCartSummary(cartId: string) {
+    if (typeof cartId !== 'string' || !cartId) return;
     const cartDetails = await this.getCartWithDiscountDetails(cartId);
     
     return {

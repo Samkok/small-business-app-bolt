@@ -69,6 +69,7 @@ export function ImageUpload({
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        if (!asset.uri && typeof asset.uri !== 'string') return;
         setPreviewUrl(asset.uri);
         
         // Create file-like object for mobile
@@ -104,7 +105,22 @@ export function ImageUpload({
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        if (!asset.uri && typeof asset.uri !== 'string') return;
         setPreviewUrl(asset.uri);
+
+        
+        if (
+          !asset ||
+          typeof asset.uri !== 'string' ||
+          !asset.uri ||
+          typeof asset.type !== 'string' ||
+          !asset.type ||
+          typeof asset.fileName !== 'string' ||
+          !asset.fileName
+        ) {
+          Alert.alert('Invalid file', 'The selected file is invalid or missing required information.');
+          return;
+        }
         
         // Create file-like object for mobile
         const file = {
@@ -123,6 +139,13 @@ export function ImageUpload({
 
   const handleFileChange = (event: any) => {
     const file = event.target.files?.[0];
+    if (
+      !file ||
+      typeof file.type !== 'string' ||
+      !file.type ||
+      typeof file.name !== 'string' ||
+      !file.name
+    ) return;
     if (!file) return;
 
     // Validate file type

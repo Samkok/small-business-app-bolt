@@ -70,6 +70,9 @@ export const inventoryService = {
     importData: Partial<InventoryImportUpdate>, 
     costs: Omit<ImportCostInsert, 'import_id'>[]
   ) {
+
+    if (typeof importId !== 'string' || !importId) return;
+    
     // Get the original import record to calculate stock adjustment
     const { data: originalImport, error: getError } = await supabase
       .from('inventory_imports')
@@ -141,6 +144,7 @@ export const inventoryService = {
   },
 
   async deleteImport(importId: string) {
+    if (typeof importId !== 'string' || !importId) return;
     // Get import details first
     const { data: importRecord, error: getError } = await supabase
       .from('inventory_imports')
@@ -191,6 +195,7 @@ export const inventoryService = {
   },
 
   async getImportHistory(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
       .from('inventory_imports')
       .select(`
@@ -206,6 +211,7 @@ export const inventoryService = {
   },
 
   async getImportDetails(importId: string) {
+    if (typeof importId !== 'string' || !importId) return;
     const { data, error } = await supabase
       .from('inventory_imports')
       .select(`
