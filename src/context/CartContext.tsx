@@ -119,6 +119,151 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
+    if (!profile?.id) {
+      throw new Error('No business profile found');
+    }
+
+    // Get the latest cart data from AsyncStorage
+    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!storedCarts) {
+      throw new Error('No carts found in storage');
+    }
+    
+    const allCarts = JSON.parse(storedCarts) as Cart[];
+    const cartIndex = allCarts.findIndex(c => c.id === cartId);
+    
+    if (cartIndex === -1) {
+      throw new Error('Cart not found in storage');
+    }
+
+    const cart = allCarts[cartIndex];
+    
+    try {
+      let serverCartId = cart.id;
+      
+      // If the cart is not synced, create it on the server
+      if (!cart.synced) {
+        try {
+          // Create cart on server
+          const serverCart = await cartService.createCart({
+            id: cart.id, // Use the same UUID
+            customer_id: cart.customer_id,
+            business_id: cart.business_id,
+            created_by: cart.created_by,
+            status: cart.status,
+            total_amount: cart.total_amount,
+            discount_type: cart.discount_type,
+            discount_value: cart.discount_value,
+            delivery_cost: cart.delivery_cost,
+            notes: cart.notes,
+            created_at: cart.created_at,
+            updated_at: cart.updated_at
+          });
+          
+          serverCartId = serverCart.id;
+        } catch (error) {
+          console.error('Error creating cart on server:', error);
+          throw error;
+        }
+      }
+      
+      // Sync all cart items
+      for (const item of cart.items) {
+        try {
+          // Check if item exists on server (for synced carts)
+          if (cart.synced) {
+            try {
+              // Try to update the item if it exists
+              await cartService.updateCartItem(item.id, {
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                subtotal: item.subtotal,
+                original_subtotal: item.original_subtotal,
+                item_discount_type: item.item_discount_type,
+                item_discount_value: item.item_discount_value,
+                item_discount_amount: item.item_discount_amount
+              });
+            } catch (error) {
+              // If item doesn't exist, create it
+              await cartService.addItemToCart({
+                id: item.id, // Use the same UUID
+                cart_id: serverCartId,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                subtotal: item.subtotal,
+                original_subtotal: item.original_subtotal,
+                item_discount_type: item.item_discount_type,
+                item_discount_value: item.item_discount_value,
+                item_discount_amount: item.item_discount_amount
+              });
+            }
+          } else {
+            // For new carts, just add all items
+            await cartService.addItemToCart({
+              id: item.id, // Use the same UUID
+              cart_id: serverCartId,
+              product_id: item.product_id,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              subtotal: item.subtotal,
+              original_subtotal: item.original_subtotal,
+              item_discount_type: item.item_discount_type,
+              item_discount_value: item.item_discount_value,
+              item_discount_amount: item.item_discount_amount
+            });
+          }
+        } catch (error) {
+          console.error(`Error syncing cart item ${item.id}:`, error);
+          throw error;
+        }
+      }
+      
+      // Update cart on server with latest values
+      try {
+        await cartService.updateCart(serverCartId, {
+          status: cart.status,
+          total_amount: cart.total_amount,
+          discount_type: cart.discount_type,
+          discount_value: cart.discount_value,
+          delivery_cost: cart.delivery_cost,
+          notes: cart.notes
+        });
+      } catch (error) {
+        console.error('Error updating cart on server:', error);
+        throw error;
+      }
+      
+      // Mark cart as synced in AsyncStorage
+      allCarts[cartIndex] = {
+        ...cart,
+        synced: true
+      };
+      
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
+      
+      // Update state if needed
+      setCarts(prevCarts => {
+        const stateCartIndex = prevCarts.findIndex(c => c.id === cartId);
+        if (stateCartIndex !== -1) {
+          const newCarts = [...prevCarts];
+          newCarts[stateCartIndex] = {
+            ...newCarts[stateCartIndex],
+            synced: true
+          };
+          return newCarts;
+        }
+        return prevCarts;
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error syncing cart:', error);
+      return false;
+    }
+  }, [profile]);
+
   const refreshCarts = useCallback(async () => {
     if (!profile?.id) return;
     
@@ -711,151 +856,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       finalTotal
     };
   }, [carts, calculateCartDiscount]);
-
-  const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
-    if (!profile?.id) {
-      throw new Error('No business profile found');
-    }
-
-    // Get the latest cart data from AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!storedCarts) {
-      throw new Error('No carts found in storage');
-    }
-    
-    const allCarts = JSON.parse(storedCarts) as Cart[];
-    const cartIndex = allCarts.findIndex(c => c.id === cartId);
-    
-    if (cartIndex === -1) {
-      throw new Error('Cart not found in storage');
-    }
-
-    const cart = allCarts[cartIndex];
-    
-    try {
-      let serverCartId = cart.id;
-      
-      // If the cart is not synced, create it on the server
-      if (!cart.synced) {
-        try {
-          // Create cart on server
-          const serverCart = await cartService.createCart({
-            id: cart.id, // Use the same UUID
-            customer_id: cart.customer_id,
-            business_id: cart.business_id,
-            created_by: cart.created_by,
-            status: cart.status,
-            total_amount: cart.total_amount,
-            discount_type: cart.discount_type,
-            discount_value: cart.discount_value,
-            delivery_cost: cart.delivery_cost,
-            notes: cart.notes,
-            created_at: cart.created_at,
-            updated_at: cart.updated_at
-          });
-          
-          serverCartId = serverCart.id;
-        } catch (error) {
-          console.error('Error creating cart on server:', error);
-          throw error;
-        }
-      }
-      
-      // Sync all cart items
-      for (const item of cart.items) {
-        try {
-          // Check if item exists on server (for synced carts)
-          if (cart.synced) {
-            try {
-              // Try to update the item if it exists
-              await cartService.updateCartItem(item.id, {
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                subtotal: item.subtotal,
-                original_subtotal: item.original_subtotal,
-                item_discount_type: item.item_discount_type,
-                item_discount_value: item.item_discount_value,
-                item_discount_amount: item.item_discount_amount
-              });
-            } catch (error) {
-              // If item doesn't exist, create it
-              await cartService.addItemToCart({
-                id: item.id, // Use the same UUID
-                cart_id: serverCartId,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                subtotal: item.subtotal,
-                original_subtotal: item.original_subtotal,
-                item_discount_type: item.item_discount_type,
-                item_discount_value: item.item_discount_value,
-                item_discount_amount: item.item_discount_amount
-              });
-            }
-          } else {
-            // For new carts, just add all items
-            await cartService.addItemToCart({
-              id: item.id, // Use the same UUID
-              cart_id: serverCartId,
-              product_id: item.product_id,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              subtotal: item.subtotal,
-              original_subtotal: item.original_subtotal,
-              item_discount_type: item.item_discount_type,
-              item_discount_value: item.item_discount_value,
-              item_discount_amount: item.item_discount_amount
-            });
-          }
-        } catch (error) {
-          console.error(`Error syncing cart item ${item.id}:`, error);
-          throw error;
-        }
-      }
-      
-      // Update cart on server with latest values
-      try {
-        await cartService.updateCart(serverCartId, {
-          status: cart.status,
-          total_amount: cart.total_amount,
-          discount_type: cart.discount_type,
-          discount_value: cart.discount_value,
-          delivery_cost: cart.delivery_cost,
-          notes: cart.notes
-        });
-      } catch (error) {
-        console.error('Error updating cart on server:', error);
-        throw error;
-      }
-      
-      // Mark cart as synced in AsyncStorage
-      allCarts[cartIndex] = {
-        ...cart,
-        synced: true
-      };
-      
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-      
-      // Update state if needed
-      setCarts(prevCarts => {
-        const stateCartIndex = prevCarts.findIndex(c => c.id === cartId);
-        if (stateCartIndex !== -1) {
-          const newCarts = [...prevCarts];
-          newCarts[stateCartIndex] = {
-            ...newCarts[stateCartIndex],
-            synced: true
-          };
-          return newCarts;
-        }
-        return prevCarts;
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error syncing cart:', error);
-      return false;
-    }
-  }, [profile]);
 
   const completeSale = useCallback(async (cartId: string, paymentMethod: string): Promise<{ success: boolean; saleId?: string; error?: string }> => {
     if (!profile?.id) {
