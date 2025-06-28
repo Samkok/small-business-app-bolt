@@ -61,7 +61,7 @@ export const reportsService = {
       .from('products')
       .select('id')
       .eq('business_id', businessId)
-      .filter('current_stock', 'lte', 'min_stock_level');
+      .filter('current_stock', '<=', 'min_stock_level');
 
     const lowStockCount = lowStockProducts?.length || 0;
 
