@@ -894,18 +894,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         created_by: profile.id
       });
       
-      // Update product stock levels locally
-      for (const item of cart.items) {
-        try {
-          const product = await productService.getProduct(item.product_id);
-          const newStock = Math.max(0, product.current_stock - item.quantity);
-          await productService.updateStock(item.product_id, newStock);
-        } catch (error) {
-          console.error('Error updating product stock:', error);
-          // Continue even if stock update fails
-        }
-      }
-      
       // Remove the cart from local storage
       const updatedCarts = allCarts.filter(c => c.id !== cartId);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedCarts));
