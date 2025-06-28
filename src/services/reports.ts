@@ -89,12 +89,12 @@ export const reportsService = {
 
     const { count: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
       business_id_param: businessId,
-      start_date_param: startOfMonth,
-      end_date_param: endOfMonth
+      start_date_param: new Date(startOfMonth).toISOString(),
+      end_date_param: new Date(endOfMonth).toISOString()
     });
 
     console.log(new Date(startOfMonth).toISOString());
-    console.log(endOfMonth);
+    console.log(new Date(endOfMonth).toISOString());
     console.log(customersCountValue);
     
     const totalCustomersBought = customersCountValue || 0;
