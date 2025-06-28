@@ -137,6 +137,7 @@ export const productService = {
 
     // If the RPC function doesn't exist, fall back to client-side filtering
     if (error && error.code === '42883') {
+      console.log("RPC Failed");
       const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
