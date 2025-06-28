@@ -93,6 +93,7 @@ export const reportsService = {
       end_date_param: endOfMonth
     });
 
+    console.log(startOfMonth);
     console.log(customersCountValue);
     
     const totalCustomersBought = customersCountValue || 0;
