@@ -93,7 +93,7 @@ export const reportsService = {
       end_date_param: endOfMonth
     });
 
-    console.log(startOfMonth.toISOString());
+    console.log(new Date(startOfMonth).toISOString());
     console.log(endOfMonth);
     console.log(customersCountValue);
     
