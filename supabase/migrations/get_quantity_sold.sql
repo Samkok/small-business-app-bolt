@@ -14,4 +14,4 @@ RETURNS numeric AS $$
 $$ LANGUAGE sql SECURITY INVOKER;
 
 -- Grant permission
-GRANT EXECUTE ON FUNCTION get_business_cart_totals(uuid, timestamptz, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_quantity_sold(uuid, timestamptz, timestamptz) TO authenticated;
