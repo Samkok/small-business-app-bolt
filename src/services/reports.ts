@@ -74,6 +74,14 @@ export const reportsService = {
       .select('*', { count: 'exact', head: true })
       .eq('business_id', businessId);
 
+    const { data: totalProductsSoldData, error } = await supabase.rpc('get_quantity_sold', {
+      business_id_param: businessId,
+      start_date: startOfMonth,
+      end_date: endOfMonth
+    });
+
+    const totalProductsSold = totalProductsSoldData || 0;
+
     return {
       todayRevenue,
       monthlyRevenue,
@@ -83,7 +91,8 @@ export const reportsService = {
       netProfit,
       lowStockCount,
       totalCustomers: totalCustomers || 0,
-      totalProducts: totalProducts || 0
+      totalProducts: totalProducts || 0,
+      totalProductsSold: totalProductsSold || 0
     };
   },
 
