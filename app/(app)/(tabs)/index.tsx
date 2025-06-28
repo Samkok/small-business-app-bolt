@@ -32,6 +32,7 @@ interface DashboardStats {
   lowStockCount: number;
   totalCustomers: number;
   totalProducts: number;
+  totalProductsSold: number;
 }
 
 interface TopProduct {
