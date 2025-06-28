@@ -7,9 +7,10 @@ RETURNS numeric AS $$
   SELECT COALESCE(SUM(ct.quantity), 0)::numeric
   FROM cart_items ct
   JOIN carts c ON ct.cart_id = c.id
+  JOIN sales s ON s.cart_id = c.id
   WHERE ct.created_at >= start_date
     AND ct.created_at < end_date
-    AND c.status = 'completed'
+    AND s.status = 'completed'
     AND c.business_id = business_id_param;
 $$ LANGUAGE sql SECURITY INVOKER;
 
