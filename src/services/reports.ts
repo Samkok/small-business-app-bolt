@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { salesService } from './sales';
 import { expenseService } from './expenses';
+import { getLowStockProducts } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 
 export const reportsService = {
