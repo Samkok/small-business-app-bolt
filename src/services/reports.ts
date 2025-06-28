@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import { salesService } from './sales';
 import { expenseService } from './expenses';
 import { productService } from './products.ts';
-import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO } from 'date-fns';
+import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, now } from 'date-fns';
 
 export const reportsService = {
   async getDashboardStats(businessId: string) {
