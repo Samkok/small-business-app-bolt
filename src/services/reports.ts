@@ -89,7 +89,7 @@ export const reportsService = {
       .lte('sale_date', endOfMonth)
       .eq('business_id', businessId);
     
-    const totalCustomersBought = customersCount?.length || 0;
+    const totalCustomersBought = customersCount!.length || 0;
 
     return {
       todayRevenue,
