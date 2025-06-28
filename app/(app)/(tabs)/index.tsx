@@ -330,7 +330,7 @@ export default function DashboardScreen() {
             />
             <StatCard
               title="Total Customers"
-              value={stats!.totalCustomers.toString()}
+              value={stats!.totalCustomersBought.toString()}
               icon={<Users size={20} color="#06b6d4" />}
               color="#06b6d4"
             />
