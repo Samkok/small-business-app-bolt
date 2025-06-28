@@ -13,9 +13,7 @@ export const reportsService = {
     
     const today = toDateString(new Date());
     const startOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-    const endOfMonthDate = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
-    endOfMonthDate.setHours(23, 59, 59, 999);
-    const endOfMonth = endOfMonthDate.toISOString();
+    const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
 
     // Today's revenue
     const { data: todaySales } = await supabase
@@ -95,7 +93,7 @@ export const reportsService = {
       end_date_param: endOfMonth
     });
 
-    console.log(startOfMonth);
+    console.log(startOfMonth.toISOString());
     console.log(endOfMonth);
     console.log(customersCountValue);
     
