@@ -86,7 +86,7 @@ export const reportsService = {
       .from('sales')
       .select('customer_id', { count: 'exact', head: true })
       .gte('sale_date',  new Date(startOfMonth).toISOString())
-      .lte('sale_date', endOfMonth)
+      .lte('sale_date',  new Date(endOfMonth).toISOString())
       .eq('business_id', businessId);
     
     const totalCustomersBought = customersCount?.length || 0;
