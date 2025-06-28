@@ -94,6 +94,7 @@ export const reportsService = {
     });
 
     console.log(startOfMonth);
+    console.log(endOfMonth);
     console.log(customersCountValue);
     
     const totalCustomersBought = customersCountValue || 0;
