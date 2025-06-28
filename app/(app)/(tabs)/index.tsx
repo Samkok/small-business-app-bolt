@@ -322,8 +322,8 @@ export default function DashboardScreen() {
 
           <View style={styles.statsRow}>
             <StatCard
-              title="Total Products"
-              value={stats!.totalProducts.toString()}
+              title="Total Products Sold"
+              value={stats!.totalProductsSold.toString()}
               icon={<Package size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
