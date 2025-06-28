@@ -92,10 +92,6 @@ export const reportsService = {
       start_date_param: new Date(startOfMonth).toISOString(),
       end_date_param: new Date(endOfMonth).toISOString()
     });
-
-    console.log(new Date(startOfMonth).toISOString());
-    console.log(new Date(endOfMonth).toISOString());
-    console.log(customersCountValue);
     
     const totalCustomersBought = customersCountValue || 0;
 
