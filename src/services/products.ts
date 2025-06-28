@@ -147,11 +147,9 @@ export const productService = {
       // Filter on the client side
       // Client-side filtering - now safe
       return allProducts.filter(product => {
-        // Null checks added for robustness
-        if (product.current_stock === null || product.min_stock_level === null) {
-          return false;
-        }
-        return product.current_stock <= product.min_stock_level;
+        typeof product.current_stock === 'number' &&
+        typeof product.min_stock_level === 'number' &&
+        product.current_stock <= product.min_stock_level
       });
     }
 
