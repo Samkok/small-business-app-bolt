@@ -227,7 +227,7 @@ export const salesService = {
   async voidSale(saleId: string, reason: string, performedBy: string) {
     if (typeof saleId !== 'string' || !saleId) return;
     if (typeof reason !== 'string' || !reason) return;
-    if (typeof performedBy !== 'string' || !id) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
     return this.performSaleAction(saleId, 'void', reason, performedBy);
   },
 
@@ -235,15 +235,12 @@ export const salesService = {
     if (typeof saleId !== 'string' || !saleId) return;
     if (typeof amount !== 'number' || !amount) return;
     if (typeof reason !== 'string' || !reason) return;
-    if (typeof performedBy !== 'string' || !id) return;
+    if (typeof performedBy !== 'string' || !performedBy) return;
     return this.performSaleAction(saleId, 'refund', reason, performedBy, amount);
   },
 
   async returnItems(saleId: string, returnedItems: { productId: string; quantity: number }[], reason: string, performedBy: string) {
-
     if (typeof saleId !== 'string' || !saleId) return;
-    if (typeof productId !== 'string' || !productId) return;
-    if (typeof quantity !== 'number' || !quantity) return;
     if (typeof reason !== 'string' || !reason) return;
     if (typeof performedBy !== 'string' || !performedBy) return;
     
@@ -267,7 +264,6 @@ export const salesService = {
   },
 
   async performSaleAction(saleId: string, actionType: 'void' | 'refund' | 'return', reason: string, performedBy: string, amount?: number) {
-
     if (typeof saleId !== 'string' || !saleId) return;
     if (typeof reason !== 'string' || !reason) return;
     if (typeof performedBy !== 'string' || !performedBy) return;
