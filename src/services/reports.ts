@@ -4,12 +4,11 @@ import { expenseService } from './expenses';
 import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO } from 'date-fns';
 
-export const reportsService = {
+function toDateString(date) {
+  return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+}
 
-  toDateString(date) {
-    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
-  }
-  
+export const reportsService = {
   async getDashboardStats(businessId: string) {
     
     const today = toDateString(new Date());
