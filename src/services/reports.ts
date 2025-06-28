@@ -5,10 +5,15 @@ import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO } from 'date-fns';
 
 export const reportsService = {
+
+    function toDateString(date) {
+      return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    }
+  
   async getDashboardStats(businessId: string) {
-    const today = new Date().toISOString().split('T')[0];
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+    const today = toDateString(new Date());
+    const startOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
 
     // Today's revenue
     const { data: todaySales } = await supabase
