@@ -89,7 +89,7 @@ export const reportsService = {
       .lte('sale_date',  new Date(endOfMonth).toISOString())
       .eq('business_id', businessId);
 
-    console.log(customersCount);
+    console.log(customersCountValue);
     
     const totalCustomersBought = customersCountValue || 0;
 
