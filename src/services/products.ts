@@ -137,7 +137,6 @@ export const productService = {
 
     // If the RPC function doesn't exist, fall back to client-side filtering
     if (error && error.code === '42883') {
-      console.log("RPC Failed");
       const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
@@ -153,6 +152,7 @@ export const productService = {
         product.current_stock <= product.min_stock_level
       });
     }
+    console.log("RPC success");
 
     if (error) throw error;
     return data || [];
