@@ -146,9 +146,14 @@ export const productService = {
       if (productsError) throw productsError;
       
       // Filter on the client side
-      return allProducts.filter(product => 
-        product.current_stock <= product.min_stock_level
-      );
+      // Client-side filtering - now safe
+      return allProducts.filter(product => {
+        // Null checks added for robustness
+        if (product.current_stock === null || product.min_stock_level === null) {
+          return false;
+        }
+        return product.current_stock <= product.min_stock_level;
+      });
     }
 
     if (error) throw error;
