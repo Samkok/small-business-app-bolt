@@ -7,8 +7,8 @@ import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, 
 export const reportsService = {
   async getDashboardStats(businessId: string) {
     const today = new Date().toISOString().split('T')[0];
-        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+    const startOfMonth = formatISO(startOfMonth(now), { representation: 'date' });
+    const endOfMonth = formatISO(endOfMonth(now), { representation: 'date' });
 
     // Today's revenue
     const { data: todaySales } = await supabase
