@@ -141,7 +141,6 @@ export const productService = {
         .from('products')
         .select('*')
         .eq('business_id', businessId)
-        .order('current_stock');
 
       if (productsError) throw productsError;
       
