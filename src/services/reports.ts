@@ -87,14 +87,11 @@ export const reportsService = {
 
     const totalProductsSold = totalProductsSoldData || 0;
 
-    const { count: customersCountValue, error: customersCountError } = await supabase
-      .from('sales')
-      .select('customer_id', { count: 'exact', head: true })
-      .gte('sale_date',  startOfMonth)
-      .lte('sale_date',  endOfMonth)
-      .eq('business_id', businessId);
-
-    console.log(startOfMonth);
+    const { count: customersCountValue, error: customersCountError } = await supabase.rpc('get_distinct_customer_count_for_sales', {
+      business_id_param: businessId,
+      start_date_param: startOfMonth,
+      end_date_param: endOfMonth
+    });
     
     const totalCustomersBought = customersCountValue || 0;
 
