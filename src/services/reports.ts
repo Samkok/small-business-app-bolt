@@ -58,11 +58,7 @@ export const reportsService = {
     const netProfit = totalProfit - totalExpenses;
 
     // Low stock count
-    const { data: lowStockProducts } = await supabase
-      .from('products')
-      .select('id')
-      .eq('business_id', businessId)
-      .filter('current_stock', '<=', 'min_stock_level');
+    const { data: lowStockProducts } = getLowStockProducts(businessId);
 
     const lowStockCount = lowStockProducts?.length || 0;
 
