@@ -6,11 +6,12 @@ import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, 
 
 export const reportsService = {
 
-    function toDateString(date) {
-      return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
-    }
+  toDateString(date) {
+    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  }
   
   async getDashboardStats(businessId: string) {
+    
     const today = toDateString(new Date());
     const startOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
     const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
