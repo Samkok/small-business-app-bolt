@@ -140,13 +140,11 @@ export const productService = {
       
       // Filter on the client side
       // Client-side filtering - now safe
-      return allProducts.filter(product => {
-        return (
-          typeof product.current_stock === 'number' &&
-          typeof product.min_stock_level === 'number' &&
-          product.current_stock <= product.min_stock_level
-        );
-      });
+      return allProducts.filter(product =>
+        typeof product.current_stock === 'number' &&
+        typeof product.min_stock_level === 'number' &&
+        product.current_stock <= product.min_stock_level
+      );
   },
 
   async updateStock(productId: string, newStock: number) {
