@@ -25,9 +25,8 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import ImportSalesModal from '@/src/components/sales/ImportSalesModal';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -44,7 +43,6 @@ export default function SalesScreen() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   
@@ -339,10 +337,6 @@ export default function SalesScreen() {
 
   const handleCartPress = useCallback((cartId: string) => {
     router.push(`/sales/cart/${cartId}`);
-  }, [router]);
-
-  const handleImportSales = useCallback(() => {
-    router.push('/sales/import');
   }, [router]);
 
   const handleExportSales = useCallback(async () => {
@@ -683,22 +677,14 @@ export default function SalesScreen() {
         }
       </Text>
       {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
-        <View style={styles.emptyActions}>
-          <Button
-            title="Import Sales"
-            variant="outline"
-            onPress={handleImportSales}
-            style={styles.emptyButton}
-          />
-          <Button
-            title="New Sale"
-            onPress={handleNewSale}
-            style={styles.emptyButton}
-          />
-        </View>
+        <Button
+          title="New Sale"
+          onPress={handleNewSale}
+          style={styles.emptyButton}
+        />
       )}
     </Card>
-  ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleImportSales, handleNewSale]);
+  ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleNewSale]);
 
   const renderCartItem = useCallback(({ item }) => (
     <ActiveCartCard
@@ -735,12 +721,6 @@ export default function SalesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#059669' }]}
-              onPress={handleImportSales}
-            >
-              <FileUp size={20} color="#ffffff" />
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
               onPress={handleNewSale}
             >
@@ -776,12 +756,6 @@ export default function SalesScreen() {
           {t('sales.title')}
         </Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#059669' }]}
-            onPress={handleImportSales}
-          >
-            <FileUp size={20} color="#ffffff" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
             onPress={handleNewSale}
@@ -876,14 +850,6 @@ export default function SalesScreen() {
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={handleImportSales}
-                >
-                  <FileUp size={16} color="#2563eb" />
-                  <Text style={styles.actionButtonText}>Import</Text>
-                </TouchableOpacity>
-                
                 <TouchableOpacity
                   style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
                   onPress={handleExportSales}
@@ -1105,22 +1071,6 @@ export default function SalesScreen() {
           <LoadingSpinner text="Deleting cart..." />
         </View>
       )}
-
-      {/* Import Sales Modal */}
-      <Modal
-        visible={showImportModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowImportModal(false)}
-      >
-        <ImportSalesModal
-          onClose={() => setShowImportModal(false)}
-          onComplete={() => {
-            setShowImportModal(false);
-            loadData();
-          }}
-        />
-      </Modal>
 
       {/* Date Range Picker Modal */}
       {renderDateFilterOptions()}
