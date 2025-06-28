@@ -130,22 +130,33 @@ export const productService = {
   },
 
   async getLowStockProducts(businessId: string) {
-    // Use a raw SQL query to properly compare columns
-    const { data: allProducts, error: productsError } = await supabase
+    const { data, error } = await supabase.rpc('get_low_stock_products', {
+      business_id_param: businessId
+    });
+
+    if (error && error.code === '42883') {
+      console.log("RPC Failed");
+      
+      const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('business_id', businessId)
-
+        .eq('business_id', businessId);
+  
       if (productsError) throw productsError;
-      
-      // Filter on the client side
-      // Client-side filtering - now safe
+  
       return allProducts.filter(product =>
         typeof product.current_stock === 'number' &&
         typeof product.min_stock_level === 'number' &&
         product.current_stock <= product.min_stock_level
       );
+    }
+
+    if (error) throw error;
+  
+    console.log("RPC success");
+    return data || [];
   },
+
 
   async updateStock(productId: string, newStock: number) {
     const { data, error } = await supabase
