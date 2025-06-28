@@ -13,7 +13,7 @@ export const reportsService = {
     
     const today = toDateString(new Date());
     const startOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-    const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
+    const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0,23, 59, 59 ));
 
     // Today's revenue
     const { data: todaySales } = await supabase
