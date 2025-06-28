@@ -135,8 +135,6 @@ export const productService = {
     });
 
     if (error && error.code === '42883') {
-      console.log("RPC Failed");
-      
       const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
@@ -152,8 +150,6 @@ export const productService = {
     }
 
     if (error) throw error;
-  
-    console.log("RPC success");
     return data || [];
   },
 
