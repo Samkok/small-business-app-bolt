@@ -168,13 +168,16 @@ export default function CartScreen() {
     
     // Format the delivery cost to show two decimal places
     if (deliveryCost) {
-      const formattedValue = parseFloat(deliveryCost).toFixed(2);
+      // Ensure we have a valid number or default to 0
+      const numValue = parseFloat(deliveryCost);
+      const formattedValue = isNaN(numValue) ? '0.00' : numValue.toFixed(2);
       setDeliveryCost(formattedValue);
       
       // Update the cart with the formatted value
       if (cart) {
+        const deliveryAmount = isNaN(numValue) ? 0 : numValue;
         updateCart(cart.id, {
-          delivery_cost: parseFloat(formattedValue)
+          delivery_cost: deliveryAmount
         }).catch(error => {
           console.error('Error updating delivery cost on blur:', error);
         });

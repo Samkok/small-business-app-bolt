@@ -432,30 +432,50 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Cart not found');
     }
 
-    const updatedCart = {
-      ...carts[cartIndex],
-      ...updates,
-      updated_at: new Date().toISOString(),
-      synced: false
-    };
-
-    // Update state
-    const newCarts = [...carts];
-    newCarts[cartIndex] = updatedCart;
-    setCarts(newCarts);
-    
-    // Update in AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (storedCarts) {
-      const allCarts = JSON.parse(storedCarts) as Cart[];
-      const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
-      if (storedCartIndex !== -1) {
-        allCarts[storedCartIndex] = updatedCart;
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-      }
+    // Ensure delivery_cost is a valid number or undefined
+    if (updates.delivery_cost !== undefined) {
+      const deliveryCost = parseFloat(updates.delivery_cost as any);
+      updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
     }
 
-    return updatedCart;
+    try {
+      // Update the cart on the server if it's synced
+      let updatedServerCart;
+      if (carts[cartIndex].synced) {
+        updatedServerCart = await cartService.updateCart(cartId, updates);
+      }
+
+      // Create updated cart object
+      const updatedCart = {
+        ...carts[cartIndex],
+        ...updates,
+        // If we got an updated cart from the server with the correct total_amount, use it
+        ...(updatedServerCart && { total_amount: updatedServerCart.total_amount }),
+        updated_at: new Date().toISOString(),
+        synced: carts[cartIndex].synced
+      };
+
+      // Update state
+      const newCarts = [...carts];
+      newCarts[cartIndex] = updatedCart;
+      setCarts(newCarts);
+      
+      // Update in AsyncStorage
+      const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
+      if (storedCarts) {
+        const allCarts = JSON.parse(storedCarts) as Cart[];
+        const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
+        if (storedCartIndex !== -1) {
+          allCarts[storedCartIndex] = updatedCart;
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
+        }
+      }
+
+      return updatedCart;
+    } catch (error) {
+      console.error('Error updating cart:', error);
+      throw error;
+    }
   }, [carts]);
 
   const deleteCart = useCallback(async (cartId: string): Promise<void> => {
@@ -893,18 +913,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         business_id: profile.id,
         created_by: profile.id
       });
-      
-      // Update product stock levels
-      for (const item of cart.items) {
-        try {
-          const product = await productService.getProduct(item.product_id);
-          const newStock = Math.max(0, product.current_stock - item.quantity);
-          await productService.updateStock(item.product_id, newStock);
-        } catch (error) {
-          console.error('Error updating product stock:', error);
-          // Continue even if stock update fails
-        }
-      }
       
       // Remove the cart from local storage
       const updatedCarts = allCarts.filter(c => c.id !== cartId);
