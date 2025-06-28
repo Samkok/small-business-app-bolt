@@ -85,8 +85,8 @@ export const reportsService = {
     const { data: customersCount } = await supabase
       .from('sales')
       .select('customer_id', { count: 'exact', head: true })
-      .gte('sale_date', startOfMonth)
-      .lte('sale_date', endOfMonth)
+      .gte('sale_date', startOfMonth.toISOString())
+      .lte('sale_date', endOfMonth.toISOString())
       .eq('business_id', businessId);
     
     const totalCustomersBought = customersCount?.length || 0;
