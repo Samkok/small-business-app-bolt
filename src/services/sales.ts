@@ -228,6 +228,33 @@ export const salesService = {
     if (typeof saleId !== 'string' || !saleId) return;
     if (typeof reason !== 'string' || !reason) return;
     if (typeof performedBy !== 'string' || !performedBy) return;
+    
+    // Get the sale details first to access cart items
+    const sale = await this.getSale(saleId);
+    if (!sale) {
+      throw new Error('Sale not found');
+    }
+    
+    // Restore stock for all items in the sale
+    if (sale.carts?.cart_items) {
+      for (const item of sale.carts.cart_items) {
+        try {
+          // Get current product stock
+          const product = await productService.getProduct(item.product_id);
+          
+          // Add the sold quantity back to stock
+          const newStock = product.current_stock + item.quantity;
+          
+          // Update the product stock
+          await productService.updateStock(item.product_id, newStock);
+        } catch (error) {
+          console.error(`Error restoring stock for product ${item.product_id}:`, error);
+          // Continue with other items even if one fails
+        }
+      }
+    }
+    
+    // Perform the void action
     return this.performSaleAction(saleId, 'void', reason, performedBy);
   },
 
