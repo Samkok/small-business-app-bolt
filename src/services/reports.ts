@@ -82,7 +82,7 @@ export const reportsService = {
 
     const totalProductsSold = totalProductsSoldData || 0;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('sales')
       .select('customer_id', { count: 'exact', head: true })
       .gte('sale_date', startOfMonth)
