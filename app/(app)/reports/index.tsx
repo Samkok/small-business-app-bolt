@@ -98,8 +98,8 @@ export default function ReportsScreen() {
     }
     
     return {
-      startDate: format(startDate, 'yyyy-MM-dd'),
-      endDate: format(endDate, 'yyyy-MM-dd')
+      startDate: startDate,
+      endDate: endDate
     };
   };
 
