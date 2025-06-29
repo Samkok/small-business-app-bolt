@@ -215,6 +215,8 @@ export const reportsService = {
       .lte('sale_date', endDate)
       .order('sale_date');
 
+    console.log(endDate);
+
     if (error) throw error;
 
     // Convert dates to JS Date objects
