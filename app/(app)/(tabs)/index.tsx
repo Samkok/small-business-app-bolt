@@ -494,49 +494,6 @@ export default function DashboardScreen() {
         </>
       )}
 
-      <Card style={styles.quickActions}>
-        <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Quick Actions
-        </Text>
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleNewSale}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#2563eb20' }]}>
-              <ShoppingCart size={24} color="#2563eb" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              New Sale
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setShowProductForm(true)}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#05966920' }]}>
-              <Package size={24} color="#059669" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Add Product
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setShowCustomerForm(true)}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#8b5cf620' }]}>
-              <Users size={24} color="#8b5cf6" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Add Customer
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-
       {/* Modals */}
       <Modal
         visible={showProductForm}
