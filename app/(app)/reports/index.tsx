@@ -64,19 +64,19 @@ export default function ReportsScreen() {
     switch (dateRange) {
       case 'week':
         // Start from the beginning of the current week
-        startDate = startOfWeek(now, { weekStartsOn: 0 }); // 0 = Sunday
+        startDate = startOfWeek(endDate, { weekStartsOn: 0 }); // 0 = Sunday
         break;
       case 'month':
         // Start from the beginning of the current month
-        startDate = startOfMonth(now);
+        startDate = startOfMonth(endDate);
         break;
       case 'quarter':
         // Start from 3 months ago, beginning of that month
-        startDate = startOfMonth(subDays(now, 90));
+        startDate = startOfMonth(subDays(endDate, 90));
         break;
       case 'year':
         // Start from the beginning of the current year
-        startDate = startOfYear(now);
+        startDate = startOfYear(endDate);
         break;
       case 'custom':
         // Use custom date range
