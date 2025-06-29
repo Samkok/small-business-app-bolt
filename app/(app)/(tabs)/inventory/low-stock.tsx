@@ -20,7 +20,7 @@ import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ProductCard } from '@/src/components/products/ProductCard';
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportForm from '@/src/components/inventory/ImportForm';
-import { ArrowLeft, Package, DollarSign, Plus, Trash2, Calendar, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -221,7 +221,7 @@ export default function LowStockScreen() {
           style={styles.refreshButton}
           onPress={handleRefresh}
         >
-          <Calendar size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          <RefreshCw size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
       </View>
 
