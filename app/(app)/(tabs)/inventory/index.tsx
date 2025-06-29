@@ -28,7 +28,7 @@ import ProductForm from '@/src/components/products/ProductForm';
 import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -409,8 +409,6 @@ export default function InventoryScreen() {
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
     
-    if (!barcode) return;
-    
     // Simply set the search query to the scanned barcode
     setSearchQuery(barcode);
     setIsSearching(true);
@@ -531,7 +529,7 @@ export default function InventoryScreen() {
             style={[styles.barcodeButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
             onPress={() => setShowBarcodeScanner(true)}
           >
-            <Camera size={20} color="#2563eb" />
+            <Barcode size={20} color="#2563eb" />
           </TouchableOpacity>
         </View>
 
