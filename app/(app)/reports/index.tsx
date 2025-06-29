@@ -135,7 +135,7 @@ export default function ReportsScreen() {
       const { startDate, endDate } = getDateRange();
       
       // Load revenue data
-      const revenueChartData = await reportsService.getRevenueChart(profile.id, startDate, new Date(endDate).toISOString());
+      const revenueChartData = await reportsService.getRevenueChart(profile.id, startDate, endDate);
       setRevenueData(revenueChartData);
       
       // Load expenses data
