@@ -75,6 +75,10 @@ export default function DashboardScreen() {
     router.push('/sales/customer-selection');
   }, [router]);
 
+  const handleLowStockPress = () => {
+    router.push('/(app)/(tabs)/inventory/low-stock');
+  };
+
   const loadDashboardData = async (isRefresh = false) => {
     if (!profile?.id) {
       setLoading(false);
