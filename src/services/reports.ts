@@ -214,7 +214,7 @@ export const reportsService = {
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .gte('sale_date', startDate)
-      .lte('sale_date', endDate)
+      .lte('sale_date', toDateString(new Date(endOfDate)))
       .order('sale_date');
 
 
