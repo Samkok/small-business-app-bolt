@@ -72,7 +72,8 @@ export default function DashboardScreen() {
   }, [profile?.id]);
 
   const handleNewSale = useCallback(() => {
-    router.push('/sales/customer-selection');
+    // Use router.navigate instead of router.push to properly handle tab navigation
+    router.navigate('/sales/customer-selection');
   }, [router]);
 
   const loadDashboardData = async (isRefresh = false) => {
@@ -146,6 +147,11 @@ export default function DashboardScreen() {
 
   const handleViewReports = () => {
     router.push('/reports');
+  };
+
+  const handleLowStockPress = () => {
+    // Use router.navigate instead of router.push to properly handle tab navigation
+    router.navigate('/(app)/(tabs)/inventory/low-stock');
   };
 
   const StatCard = ({ 
@@ -442,6 +448,25 @@ export default function DashboardScreen() {
               </View>
             </Card>
           </TouchableOpacity>
+
+          {/* Low Stock Alert Card */}
+          {stats.lowStockCount > 0 && (
+            <TouchableOpacity onPress={handleLowStockPress}>
+              <Card style={styles.alertCard}>
+                <View style={styles.alertContent}>
+                  <AlertTriangle size={24} color="#ea580c" />
+                  <View style={styles.alertText}>
+                    <Text style={[styles.alertTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      Low Stock Alerts
+                    </Text>
+                    <Text style={[styles.alertSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      {stats.lowStockCount} products are running low on stock
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            </TouchableOpacity>
+          )}
 
           {/* Top Products Section */}
           {topProducts.length > 0 && (
