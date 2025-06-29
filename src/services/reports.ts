@@ -240,7 +240,6 @@ export const reportsService = {
         });
         
         const revenue = monthSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0);
-        if (revenue < 0) revenue = 0;
         
         return {
           date: format(month, 'yyyy-MM-dd'),
@@ -256,7 +255,6 @@ export const reportsService = {
         const dayStr = format(day, 'yyyy-MM-dd');
         const daySales = data.filter(sale => sale.sale_date.split('T')[0] === dayStr);
         const revenue = daySales.reduce((sum, sale) => sum + sale.total_amount, 0);
-        if (revenue < 0) revenue = 0;
         
         return {
           date: dayStr,
