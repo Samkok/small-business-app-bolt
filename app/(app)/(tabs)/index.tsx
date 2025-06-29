@@ -277,6 +277,40 @@ export default function DashboardScreen() {
     );
   }
 
+  // Show no data state when loading is complete but stats is null
+  if (!loading && !stats) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {profile?.business_name || 'Business Owner'}
+          </Text>
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Card style={styles.errorCard}>
+            <Package size={48} color="#6b7280" style={styles.errorIcon} />
+            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              No Dashboard Data Available
+            </Text>
+            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Unable to load dashboard statistics. Please try refreshing the data.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadDashboardData()}
+            >
+              <Text style={styles.retryButtonText}>Refresh Data</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
@@ -337,56 +371,56 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               title="Today's Revenue"
-              value={`$${stats!.todayRevenue.toFixed(2)}`}
+              value={`$${stats.todayRevenue.toFixed(2)}`}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
-              trend={stats!.todayRevenue > 0 ? "up" : undefined}
+              trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title="Monthly Revenue"
-              value={`$${stats!.monthlyRevenue.toFixed(2)}`}
+              value={`$${stats.monthlyRevenue.toFixed(2)}`}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
-              trend={stats!.monthlyRevenue > 0 ? "up" : undefined}
+              trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title="Monthly COGS"
-              value={`$${stats!.monthlyCOGS.toFixed(2)}`}
+              value={`$${stats.monthlyCOGS.toFixed(2)}`}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title="Total Profit"
-              value={`$${stats!.totalProfit.toFixed(2)}`}
+              value={`$${stats.totalProfit.toFixed(2)}`}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
-              trend={stats!.totalProfit >= 0 ? "up" : "down"}
+              trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title="Total Expenses"
-              value={`$${stats!.totalExpenses.toFixed(2)}`}
+              value={`$${stats.totalExpenses.toFixed(2)}`}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
               title="Net Profit"
-              value={`$${stats!.netProfit.toFixed(2)}`}
-              icon={<DollarSign size={20} color={stats!.netProfit >= 0 ? "#059669" : "#dc2626"} />}
-              color={stats!.netProfit >= 0 ? "#059669" : "#dc2626"}
-              trend={stats!.netProfit >= 0 ? "up" : "down"}
+              value={`$${stats.netProfit.toFixed(2)}`}
+              icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
+              color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
+              trend={stats.netProfit >= 0 ? "up" : "down"}
             />
           </View>
 
           <View style={styles.statsRow}>
             <StatCard
               title="Total Products Sold"
-              value={stats!.totalProductsSold.toString()}
+              value={stats.totalProductsSold.toString()}
               icon={<Package size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title="Monthly Customer"
-              value={stats!.totalCustomersBought.toString()}
+              value={stats.totalCustomersBought.toString()}
               icon={<Users size={20} color="#06b6d4" />}
               color="#06b6d4"
             />
@@ -409,7 +443,7 @@ export default function DashboardScreen() {
             </Card>
           </TouchableOpacity>
 
-          {stats!.lowStockCount > 0 && (
+          {stats.lowStockCount > 0 && (
             <TouchableOpacity>
               <Card style={styles.alertCard}>
                 <View style={styles.alertContent}>
@@ -419,7 +453,7 @@ export default function DashboardScreen() {
                       Low Stock Alerts
                     </Text>
                     <Text style={[styles.alertSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {stats!.lowStockCount} products are running low on stock
+                      {stats.lowStockCount} products are running low on stock
                     </Text>
                   </View>
                 </View>
