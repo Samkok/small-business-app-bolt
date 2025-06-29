@@ -58,8 +58,6 @@ export default function ReportsScreen() {
     // Set end time to 23:59:59
     const endDate = new Date(now);
     endDate.setHours(23, 59, 59, 999);
-
-    console.log(endDate);
     
     let startDate: Date;
     
