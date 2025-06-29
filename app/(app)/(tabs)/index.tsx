@@ -448,7 +448,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
 
           {stats.lowStockCount > 0 && (
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleLowStockPress}>
               <Card style={styles.alertCard}>
                 <View style={styles.alertContent}>
                   <AlertTriangle size={24} color="#ea580c" />
