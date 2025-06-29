@@ -409,36 +409,11 @@ export default function InventoryScreen() {
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
     
-    if (!profile?.id || !barcode) return;
+    if (!barcode) return;
     
-    try {
-      const product = await productService.searchByBarcode(barcode, profile.id);
-      
-      if (product) {
-        setSearchQuery(barcode);
-        setIsSearching(true);
-        setSearchResults([product]);
-        setFilteredProducts([product]);
-      } else {
-        Alert.alert(
-          'Barcode Not Found', 
-          `No product found with barcode ${barcode}. Would you like to add a new product with this barcode?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Add Product', 
-              onPress: () => {
-                setSelectedProduct({ barcode });
-                setShowProductForm(true);
-              }
-            }
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('Error searching by barcode:', error);
-      Alert.alert('Error', 'Failed to search by barcode');
-    }
+    // Simply set the search query to the scanned barcode
+    setSearchQuery(barcode);
+    setIsSearching(true);
   };
 
   const scrollToTop = () => {
