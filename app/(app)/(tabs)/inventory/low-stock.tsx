@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  RefreshControl,
-  Modal
+  Modal,
+  TextInput,
+  FlatList
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
@@ -20,19 +20,21 @@ import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ProductCard } from '@/src/components/products/ProductCard';
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportForm from '@/src/components/inventory/ImportForm';
-import { ArrowLeft, TriangleAlert as AlertTriangle, Package, TrendingUp, RefreshCw, Plus } from 'lucide-react-native';
+import { ArrowLeft, Package, DollarSign, Plus, Trash2, Calendar, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
+import { inventoryService } from '@/src/services/inventory';
 
 export default function LowStockScreen() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'out' | 'critical' | 'low'>('all');
   
   const router = useRouter();
-  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
 
@@ -40,19 +42,23 @@ export default function LowStockScreen() {
     loadLowStockProducts();
   }, []);
 
+  useEffect(() => {
+    filterProductsByStatus();
+  }, [lowStockProducts, selectedFilter]);
+
   const loadLowStockProducts = async (isRefresh = false) => {
     if (!profile?.id) return;
     
-    if (!isRefresh) {
-      setLoading(true);
-    }
-    
     try {
+      if (!isRefresh) {
+        setLoading(true);
+      }
+      
       const data = await productService.getLowStockProducts(profile.id);
       setLowStockProducts(data);
     } catch (error) {
       console.error('Error loading low stock products:', error);
-      Alert.alert(t('common.error'), 'Failed to load low stock products');
+      Alert.alert('Error', 'Failed to load low stock products');
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -62,39 +68,26 @@ export default function LowStockScreen() {
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadLowStockProducts(true);
-  };
-
-  const handleEditProduct = (product: any) => {
-    setSelectedProduct(product);
-    setShowProductForm(true);
-  };
-
-  const handleImportStock = (product: any) => {
-    setSelectedProduct(product);
-    setShowImportForm(true);
-  };
-
-  const handleProductSave = () => {
-    setShowProductForm(false);
-    setSelectedProduct(null);
-    loadLowStockProducts();
-  };
-
-  const handleImportComplete = () => {
-    setShowImportForm(false);
-    setSelectedProduct(null);
-    loadLowStockProducts();
-  };
-
   const getStockStatus = (product: any) => {
     const stockRatio = product.current_stock / Math.max(product.min_stock_level, 1);
     if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: 'Out of Stock' };
     if (stockRatio <= 0.5) return { status: 'critical', color: '#ea580c', label: 'Critical' };
     return { status: 'low', color: '#f59e0b', label: 'Low Stock' };
   };
+
+  const filterProductsByStatus = useCallback(() => {
+    if (selectedFilter === 'all') {
+      setDisplayedProducts(lowStockProducts);
+      return;
+    }
+
+    const filtered = lowStockProducts.filter(product => {
+      const status = getStockStatus(product).status;
+      return status === selectedFilter;
+    });
+
+    setDisplayedProducts(filtered);
+  }, [lowStockProducts, selectedFilter]);
 
   const getStockCounts = () => {
     const outOfStock = lowStockProducts.filter(p => p.current_stock === 0).length;
@@ -109,6 +102,40 @@ export default function LowStockScreen() {
 
     return { outOfStock, critical, low };
   };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadLowStockProducts(true);
+  };
+
+  const handleProductSave = () => {
+    setShowProductForm(false);
+    setSelectedProduct(null);
+    loadLowStockProducts();
+  };
+
+  const handleEditProduct = (product: any) => {
+    setSelectedProduct(product);
+    setShowProductForm(true);
+  };
+
+  const handleImportStock = (product: any) => {
+    setSelectedProduct(product);
+    setShowImportForm(true);
+  };
+
+  const handleImportComplete = () => {
+    setShowImportForm(false);
+    setSelectedProduct(null);
+    loadLowStockProducts();
+  };
+
+  const handleFilterPress = (filter: 'out' | 'critical' | 'low') => {
+    // Toggle filter: if already selected, clear it; otherwise, set it
+    setSelectedFilter(selectedFilter === filter ? 'all' : filter);
+  };
+
+  const { outOfStock, critical, low } = getStockCounts();
 
   if (loading) {
     return (
@@ -127,7 +154,7 @@ export default function LowStockScreen() {
             style={styles.refreshButton}
             onPress={handleRefresh}
           >
-            <RefreshCw size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            <Calendar size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
         </View>
 
@@ -177,8 +204,6 @@ export default function LowStockScreen() {
     );
   }
 
-  const { outOfStock, critical, low } = getStockCounts();
-
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       {/* Header */}
@@ -196,23 +221,13 @@ export default function LowStockScreen() {
           style={styles.refreshButton}
           onPress={handleRefresh}
         >
-          <RefreshCw size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          <Calendar size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#2563eb']}
-            tintColor="#2563eb"
-            title="Pull to refresh"
-            titleColor={isDark ? '#f9fafb' : '#111827'}
-          />
-        }
       >
         {/* Alert Banner */}
         <Card style={styles.alertBanner}>
@@ -223,7 +238,9 @@ export default function LowStockScreen() {
                 Stock Alert
               </Text>
               <Text style={[styles.alertSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {lowStockProducts.length} products need attention
+                {selectedFilter === 'all' 
+                  ? `${lowStockProducts.length} products need attention` 
+                  : `Showing ${displayedProducts.length} ${selectedFilter === 'out' ? 'out of stock' : selectedFilter === 'critical' ? 'critical' : 'low stock'} products`}
               </Text>
             </View>
           </View>
@@ -231,53 +248,80 @@ export default function LowStockScreen() {
 
         {/* Stock Status Summary */}
         <View style={styles.summaryGrid}>
-          <Card style={styles.summaryCard}>
-            <View style={styles.summaryContent}>
-              <View style={[styles.summaryIcon, { backgroundColor: '#dc262620' }]}>
-                <AlertTriangle size={20} color="#dc2626" />
+          <TouchableOpacity 
+            style={styles.summaryCardWrapper}
+            onPress={() => handleFilterPress('out')}
+            activeOpacity={0.7}
+          >
+            <Card style={[
+              styles.summaryCard, 
+              selectedFilter === 'out' && { borderColor: '#dc2626', borderWidth: 2 }
+            ]}>
+              <View style={styles.summaryContent}>
+                <View style={[styles.summaryIcon, { backgroundColor: '#dc262620' }]}>
+                  <AlertTriangle size={20} color="#dc2626" />
+                </View>
+                <View style={styles.summaryText}>
+                  <Text style={[styles.summaryValue, { color: '#dc2626' }]}>
+                    {outOfStock}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Out of Stock
+                  </Text>
+                </View>
               </View>
-              <View style={styles.summaryText}>
-                <Text style={[styles.summaryValue, { color: '#dc2626' }]}>
-                  {outOfStock}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Out of Stock
-                </Text>
-              </View>
-            </View>
-          </Card>
+            </Card>
+          </TouchableOpacity>
 
-          <Card style={styles.summaryCard}>
-            <View style={styles.summaryContent}>
-              <View style={[styles.summaryIcon, { backgroundColor: '#ea580c20' }]}>
-                <Package size={20} color="#ea580c" />
+          <TouchableOpacity 
+            style={styles.summaryCardWrapper}
+            onPress={() => handleFilterPress('critical')}
+            activeOpacity={0.7}
+          >
+            <Card style={[
+              styles.summaryCard, 
+              selectedFilter === 'critical' && { borderColor: '#ea580c', borderWidth: 2 }
+            ]}>
+              <View style={styles.summaryContent}>
+                <View style={[styles.summaryIcon, { backgroundColor: '#ea580c20' }]}>
+                  <Package size={20} color="#ea580c" />
+                </View>
+                <View style={styles.summaryText}>
+                  <Text style={[styles.summaryValue, { color: '#ea580c' }]}>
+                    {critical}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Critical
+                  </Text>
+                </View>
               </View>
-              <View style={styles.summaryText}>
-                <Text style={[styles.summaryValue, { color: '#ea580c' }]}>
-                  {critical}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Critical
-                </Text>
-              </View>
-            </View>
-          </Card>
+            </Card>
+          </TouchableOpacity>
 
-          <Card style={styles.summaryCard}>
-            <View style={styles.summaryContent}>
-              <View style={[styles.summaryIcon, { backgroundColor: '#f59e0b20' }]}>
-                <TrendingUp size={20} color="#f59e0b" />
+          <TouchableOpacity 
+            style={styles.summaryCardWrapper}
+            onPress={() => handleFilterPress('low')}
+            activeOpacity={0.7}
+          >
+            <Card style={[
+              styles.summaryCard, 
+              selectedFilter === 'low' && { borderColor: '#f59e0b', borderWidth: 2 }
+            ]}>
+              <View style={styles.summaryContent}>
+                <View style={[styles.summaryIcon, { backgroundColor: '#f59e0b20' }]}>
+                  <TrendingUp size={20} color="#f59e0b" />
+                </View>
+                <View style={styles.summaryText}>
+                  <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
+                    {low}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Low Stock
+                  </Text>
+                </View>
               </View>
-              <View style={styles.summaryText}>
-                <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
-                  {low}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Low Stock
-                </Text>
-              </View>
-            </View>
-          </Card>
+            </Card>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
@@ -310,12 +354,22 @@ export default function LowStockScreen() {
 
         {/* Products List */}
         <View style={styles.productsSection}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Products Requiring Attention ({lowStockProducts.length})
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Products Requiring Attention
+            </Text>
+            {selectedFilter !== 'all' && (
+              <TouchableOpacity 
+                style={styles.clearFilterButton}
+                onPress={() => setSelectedFilter('all')}
+              >
+                <Text style={styles.clearFilterText}>Clear Filter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-          {lowStockProducts.length > 0 ? (
-            lowStockProducts.map((product) => {
+          {displayedProducts.length > 0 ? (
+            displayedProducts.map((product) => {
               const stockStatus = getStockStatus(product);
               return (
                 <View key={product.id} style={styles.productWrapper}>
@@ -337,10 +391,14 @@ export default function LowStockScreen() {
             <Card style={styles.emptyState}>
               <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
               <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                All Products Well Stocked!
+                {selectedFilter !== 'all' 
+                  ? `No ${selectedFilter === 'out' ? 'out of stock' : selectedFilter === 'critical' ? 'critical' : 'low stock'} products found` 
+                  : 'All Products Well Stocked!'}
               </Text>
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Great job! All your products have sufficient stock levels.
+                {selectedFilter !== 'all'
+                  ? 'Try selecting a different filter'
+                  : 'Great job! All your products have sufficient stock levels.'}
               </Text>
               <Button
                 title="View All Products"
@@ -461,6 +519,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
+  summaryCardWrapper: {
+    flex: 1,
+  },
   summaryCard: {
     flex: 1,
     padding: 12,
@@ -516,10 +577,26 @@ const styles = StyleSheet.create({
   productsSection: {
     marginBottom: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
+  },
+  clearFilterButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#2563eb20',
+    borderRadius: 4,
+  },
+  clearFilterText: {
+    fontSize: 12,
+    color: '#2563eb',
+    fontWeight: '500',
   },
   productWrapper: {
     position: 'relative',
