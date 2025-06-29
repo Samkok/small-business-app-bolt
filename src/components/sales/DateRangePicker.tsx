@@ -97,7 +97,6 @@ export default function DateRangePicker({
       // Create a new date object with time set to beginning of day
       const newStartDate = new Date(date);
       newStartDate.setHours(0, 0, 0, 0);
-      newEndDateForStartSelection.setHours(23, 59, 59, 999);
       
       setStartDate(newStartDate);
       setEndDate(newStartDate); // Initially set end date same as start date
