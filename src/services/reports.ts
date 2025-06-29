@@ -270,13 +270,13 @@ export const reportsService = {
     return result;
   },
 
-  async getExpenseChart(businessId: string, startDate: string, endDate: string) {
+  async getExpenseChart(businessId: string, startDate: Date, endDate: Date) {
     const { data, error } = await supabase
       .from('expenses')
       .select('amount, expense_date')
       .eq('business_id', businessId)
-      .gte('expense_date', startDate)
-      .lte('expense_date', endDate)
+      .gte('expense_date', startDate.toISOString())
+      .lte('expense_date', endDate.toISOString())
       .order('expense_date');
 
     if (error) throw error;
@@ -331,7 +331,7 @@ export const reportsService = {
     return result;
   },
 
-  async getProfitChart(businessId: string, startDate: string, endDate: string) {
+  async getProfitChart(businessId: string, startDate: Date, endDate: Date) {
     // Get sales data with COGS
     const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
     
@@ -340,8 +340,8 @@ export const reportsService = {
       .from('expenses')
       .select('amount, expense_date')
       .eq('business_id', businessId)
-      .gte('expense_date', startDate)
-      .lte('expense_date', endDate)
+      .gte('expense_date', startDate.toISOString())
+      .lte('expense_date', endDate.toISOString())
       .order('expense_date');
 
     if (expenseError) throw expenseError;
