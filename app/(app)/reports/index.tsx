@@ -92,7 +92,7 @@ export default function ReportsScreen() {
         };
       default:
         // Default to month
-        startDate = startOfMonth(now);
+        startDate = startOfMonth(endDate);
     }
     
     return {
