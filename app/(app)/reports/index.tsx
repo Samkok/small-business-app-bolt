@@ -122,6 +122,10 @@ export default function ReportsScreen() {
     }
   };
 
+  const handleLowStockPress = () => {
+    router.push('/(app)/(tabs)/inventory/low-stock');
+  };
+
   const loadReportData = async () => {
     if (!profile?.id) return;
     
