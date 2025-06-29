@@ -106,17 +106,17 @@ export default function ReportsScreen() {
     
     switch (dateRange) {
       case 'week':
-        return 'This Week';
+        return t('reports.thisWeek');
       case 'month':
-        return 'This Month';
+        return t('reports.thisMonth');
       case 'quarter':
-        return 'Last 3 Months';
+        return t('reports.last3Months');
       case 'year':
-        return 'This Year';
+        return t('reports.thisYear');
       case 'custom':
         return `${format(customStartDate, 'MMM d, yyyy')} - ${format(customEndDate, 'MMM d, yyyy')}`;
       default:
-        return 'This Month';
+        return t('reports.thisMonth');
     }
   };
 
@@ -803,9 +803,15 @@ export default function ReportsScreen() {
           activeOpacity={1}
           onPress={() => setShowDateRangeModal(false)}
         >
-          <Card style={styles.modalContent}>
+          <View 
+            style={[
+              styles.modalContent,
+              { backgroundColor: isDark ? '#374151' : '#ffffff' }
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Select Date Range
+              {t('reports.selectDateRange')}
             </Text>
             
             <TouchableOpacity
@@ -819,7 +825,7 @@ export default function ReportsScreen() {
                 styles.modalOptionText,
                 { color: dateRange === 'week' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                This Week
+                {t('reports.thisWeek')}
               </Text>
             </TouchableOpacity>
             
@@ -834,7 +840,7 @@ export default function ReportsScreen() {
                 styles.modalOptionText,
                 { color: dateRange === 'month' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                This Month
+                {t('reports.thisMonth')}
               </Text>
             </TouchableOpacity>
             
@@ -849,7 +855,7 @@ export default function ReportsScreen() {
                 styles.modalOptionText,
                 { color: dateRange === 'quarter' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                Last 3 Months
+                {t('reports.last3Months')}
               </Text>
             </TouchableOpacity>
             
@@ -864,7 +870,7 @@ export default function ReportsScreen() {
                 styles.modalOptionText,
                 { color: dateRange === 'year' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                This Year
+                {t('reports.thisYear')}
               </Text>
             </TouchableOpacity>
             
@@ -879,17 +885,17 @@ export default function ReportsScreen() {
                 styles.modalOptionText,
                 { color: dateRange === 'custom' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                Custom Range
+                {t('reports.customRange')}
               </Text>
             </TouchableOpacity>
             
             <Button
-              title="Cancel"
+              title={t('common.cancel')}
               variant="outline"
               onPress={() => setShowDateRangeModal(false)}
               style={styles.modalCancelButton}
             />
-          </Card>
+          </View>
         </TouchableOpacity>
       </Modal>
 
@@ -905,9 +911,12 @@ export default function ReportsScreen() {
           activeOpacity={1}
           onPress={() => setShowCustomDateRangePicker(false)}
         >
-          <Card style={styles.modalContent}>
+          <Card 
+            style={styles.modalContent}
+            onStartShouldSetResponder={() => true}
+          >
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Select Custom Date Range
+              {t('reports.customRange')}
             </Text>
             
             <DateRangePicker
