@@ -4,115 +4,131 @@ import { expenseService } from './expenses';
 import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, endOfDay } from 'date-fns';
 
-function toDateString(date) {
-  return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
-}
-
 export const reportsService = {
   async getDashboardStats(businessId: string) {
+    if (!businessId) return null;
     
-    const today = toDateString(new Date());
-    const startOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-    const endOfMonth = toDateString(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0,23, 59, 59 ));
-
-    // Today's revenue
-    const { data: todaySales } = await supabase
-      .from('sales')
-      .select('total_amount')
-      .eq('business_id', businessId)
-      .eq('status', 'completed')
-      .gte('sale_date', today)
-      .lt('sale_date', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-
-    const todayRevenue = todaySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
-
-    // Monthly revenue
-    const { data: monthlySales } = await supabase
-      .from('sales')
-      .select('total_amount')
-      .eq('business_id', businessId)
-      .eq('status', 'completed')
-      .gte('sale_date', startOfMonth)
-      .lte('sale_date', endOfMonth);
-
-    const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
-
-    // Monthly COGS (Cost of Goods Sold) - based on actual sold items
-    const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
-      business_id_param: businessId,
-      start_date: startOfMonth,
-      end_date: endOfMonth
-    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString();
     
-    const monthlyCOGS = monthlyCOGSData || 0;
-
-    // Calculate Total Profit (Revenue - COGS)
-    const totalProfit = monthlyRevenue - monthlyCOGS;
-
-    // Monthly expenses
-    const { data: monthlyExpenses } = await supabase
-      .from('expenses')
-      .select('amount')
-      .eq('business_id', businessId)
-      .gte('expense_date', startOfMonth)
-      .lte('expense_date', endOfMonth);
-
-    const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-
-    // Net Profit = Total Profit - Total Expenses
-    const netProfit = totalProfit - totalExpenses;
-
-    // Low stock count
-    const { data: lowStockProducts } = productService.getLowStockProducts(businessId);
-
-    const lowStockCount = lowStockProducts?.length || 0;
-
-    // Total customers
-    const { count: totalCustomers } = await supabase
-      .from('customers')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
-
-    // Total products
-    const { count: totalProducts } = await supabase
-      .from('products')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
-
-    const { data: totalProductsSoldData, error } = await supabase.rpc('get_quantity_sold', {
-      business_id_param: businessId,
-      start_date: startOfMonth,
-      end_date: endOfMonth
-    });
-
-    const totalProductsSold = totalProductsSoldData || 0;
-
-    const { data: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
-      business_id_param: businessId,
-      start_date_param: new Date(startOfMonth).toISOString(),
-      end_date_param: new Date(endOfMonth).toISOString()
-    });
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString();
     
-    const totalCustomersBought = customersCountValue || 0;
+    const startOfMonthDate = startOfMonth(today);
+    const startOfMonthStr = startOfMonthDate.toISOString();
+    
+    const endOfMonthDate = endOfMonth(today);
+    endOfMonthDate.setHours(23, 59, 59, 999);
+    const endOfMonthStr = endOfMonthDate.toISOString();
 
-    return {
-      todayRevenue,
-      monthlyRevenue,
-      monthlyCOGS,
-      totalProfit,
-      totalExpenses,
-      netProfit,
-      lowStockCount,
-      totalCustomers: totalCustomers || 0,
-      totalProducts: totalProducts || 0,
-      totalCustomersBought: totalCustomersBought || 0,
-      totalProductsSold: totalProductsSold || 0
-    };
+    try {
+      // Today's revenue
+      const { data: todaySales } = await supabase
+        .from('sales')
+        .select('total_amount')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .gte('sale_date', todayStr)
+        .lt('sale_date', tomorrowStr);
+
+      const todayRevenue = todaySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+
+      // Monthly revenue
+      const { data: monthlySales } = await supabase
+        .from('sales')
+        .select('total_amount')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .gte('sale_date', startOfMonthStr)
+        .lte('sale_date', endOfMonthStr);
+
+      const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+
+      // Monthly COGS (Cost of Goods Sold) - based on actual sold items
+      const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
+        business_id_param: businessId,
+        start_date: startOfMonthStr,
+        end_date: endOfMonthStr
+      });
+      
+      const monthlyCOGS = monthlyCOGSData || 0;
+
+      // Calculate Total Profit (Revenue - COGS)
+      const totalProfit = monthlyRevenue - monthlyCOGS;
+
+      // Monthly expenses
+      const { data: monthlyExpenses } = await supabase
+        .from('expenses')
+        .select('amount')
+        .eq('business_id', businessId)
+        .gte('expense_date', startOfMonthStr)
+        .lte('expense_date', endOfMonthStr);
+
+      const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+
+      // Net Profit = Total Profit - Total Expenses
+      const netProfit = totalProfit - totalExpenses;
+
+      // Low stock count
+      const lowStockProducts = await productService.getLowStockProducts(businessId);
+      const lowStockCount = lowStockProducts?.length || 0;
+
+      // Total customers
+      const { count: totalCustomers } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId);
+
+      // Total products
+      const { count: totalProducts } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId);
+
+      const { data: totalProductsSoldData } = await supabase.rpc('get_quantity_sold', {
+        business_id_param: businessId,
+        start_date: startOfMonthStr,
+        end_date: endOfMonthStr
+      });
+
+      const totalProductsSold = totalProductsSoldData || 0;
+
+      const { data: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
+        business_id_param: businessId,
+        start_date_param: startOfMonthStr,
+        end_date_param: endOfMonthStr
+      });
+      
+      const totalCustomersBought = customersCountValue || 0;
+
+      return {
+        todayRevenue,
+        monthlyRevenue,
+        monthlyCOGS,
+        totalProfit,
+        totalExpenses,
+        netProfit,
+        lowStockCount,
+        totalCustomers: totalCustomers || 0,
+        totalProducts: totalProducts || 0,
+        totalCustomersBought: totalCustomersBought || 0,
+        totalProductsSold: totalProductsSold || 0
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      return null;
+    }
   },
 
   async getTopProducts(businessId: string, limit = 5) {
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+    const startOfMonthDate = startOfMonth(new Date());
+    const startOfMonthStr = startOfMonthDate.toISOString();
+    
+    const endOfMonthDate = endOfMonth(new Date());
+    endOfMonthDate.setHours(23, 59, 59, 999);
+    const endOfMonthStr = endOfMonthDate.toISOString();
 
     const { data, error } = await supabase
       .from('cart_items')
@@ -129,8 +145,8 @@ export const reportsService = {
       `)
       .eq('carts.sales.business_id', businessId)
       .eq('carts.sales.status', 'completed')
-      .gte('carts.sales.sale_date', startOfMonth)
-      .lte('carts.sales.sale_date', endOfMonth);
+      .gte('carts.sales.sale_date', startOfMonthStr)
+      .lte('carts.sales.sale_date', endOfMonthStr);
 
     if (error) throw error;
 
@@ -164,8 +180,12 @@ export const reportsService = {
   },
 
   async getTopCustomers(businessId: string, limit = 5) {
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+    const startOfMonthDate = startOfMonth(new Date());
+    const startOfMonthStr = startOfMonthDate.toISOString();
+    
+    const endOfMonthDate = endOfMonth(new Date());
+    endOfMonthDate.setHours(23, 59, 59, 999);
+    const endOfMonthStr = endOfMonthDate.toISOString();
 
     const { data, error } = await supabase
       .from('sales')
@@ -175,8 +195,8 @@ export const reportsService = {
       `)
       .eq('business_id', businessId)
       .eq('status', 'completed')
-      .gte('sale_date', startOfMonth)
-      .lte('sale_date', endOfMonth);
+      .gte('sale_date', startOfMonthStr)
+      .lte('sale_date', endOfMonthStr);
 
     if (error) throw error;
 
@@ -206,8 +226,6 @@ export const reportsService = {
   },
 
   async getRevenueChart(businessId: string, startDate: Date, endDate: Date) {
-    const endOfDate = endOfDay(endDate);
-    console.log(endOfDate);
     const { data, error } = await supabase
       .from('sales')
       .select('total_amount, sale_date')
@@ -216,7 +234,6 @@ export const reportsService = {
       .gte('sale_date', startDate.toISOString())
       .lte('sale_date', endDate.toISOString())
       .order('sale_date');
-
 
     if (error) throw error;
 
@@ -333,7 +350,7 @@ export const reportsService = {
 
   async getProfitChart(businessId: string, startDate: Date, endDate: Date) {
     // Get sales data with COGS
-    const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
+    const salesData = await salesService.getSalesWithCOGS(businessId, startDate.toISOString(), endDate.toISOString());
     
     // Get expense data
     const { data: expenseData, error: expenseError } = await supabase
@@ -478,7 +495,7 @@ export const reportsService = {
   async getCashFlowStatement(businessId: string, month: number, year: number) {
     // Calculate date range for the month
     const startDate = new Date(year, month, 1).toISOString();
-    const endDate = new Date(year, month + 1, 0).toISOString();
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
     
     try {
       // Get sales data for the month

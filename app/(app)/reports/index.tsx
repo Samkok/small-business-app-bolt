@@ -89,8 +89,8 @@ export default function ReportsScreen() {
         const customEnd = new Date(customEndDate);
         customEnd.setHours(23, 59, 59, 999);
         return {
-          startDate: format(startDate, 'yyyy-MM-dd'),
-          endDate: format(customEnd, 'yyyy-MM-dd')
+          startDate: startDate,
+          endDate: customEnd
         };
       default:
         // Default to month
@@ -162,7 +162,7 @@ export default function ReportsScreen() {
 
   const handleViewIncomeStatement = () => {
     const { startDate, endDate } = getDateRange();
-    router.push(`/reports/income-statement?startDate=${startDate}&endDate=${endDate}`);
+    router.push(`/reports/income-statement?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
   };
 
   const handleViewCashFlow = () => {
