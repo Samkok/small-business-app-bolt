@@ -447,24 +447,6 @@ export default function DashboardScreen() {
             </Card>
           </TouchableOpacity>
 
-          {stats.lowStockCount > 0 && (
-            <TouchableOpacity onPress={handleLowStockPress}>
-              <Card style={styles.alertCard}>
-                <View style={styles.alertContent}>
-                  <AlertTriangle size={24} color="#ea580c" />
-                  <View style={styles.alertText}>
-                    <Text style={[styles.alertTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      Low Stock Alerts
-                    </Text>
-                    <Text style={[styles.alertSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {stats.lowStockCount} products are running low on stock
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            </TouchableOpacity>
-          )}
-
           {/* Top Products Section */}
           {topProducts.length > 0 && (
             <Card style={styles.topSection}>
