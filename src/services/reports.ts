@@ -206,16 +206,17 @@ export const reportsService = {
   },
 
   async getRevenueChart(businessId: string, startDate: string, endDate: string) {
+    const endOfDate = endOfDay(endDate);
     const { data, error } = await supabase
       .from('sales')
       .select('total_amount, sale_date')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .gte('sale_date', startDate)
-      .lte('sale_date', new Date(endOfDay(endDate)).toISOString())
+      .lte('sale_date', endOfDate))
       .order('sale_date');
 
-    console.log( new Date(endDate).toISOString());
+    console.log(endOfDate);
 
     if (error) throw error;
 
