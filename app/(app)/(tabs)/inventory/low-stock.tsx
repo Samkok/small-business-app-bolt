@@ -150,10 +150,6 @@ export default function LowStockScreen() {
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Low Stock Alert
           </Text>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={handleRefresh}
-          >
             <Calendar size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
         </View>
