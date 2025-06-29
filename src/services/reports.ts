@@ -441,7 +441,7 @@ export const reportsService = {
     return result;
   },
 
-  async getExpensesByCategory(businessId: string, startDate: string, endDate: string) {
+  async getExpensesByCategory(businessId: string, startDate: Date, endDate: Date) {
     const { data, error } = await supabase
       .from('expenses')
       .select(`
@@ -449,8 +449,8 @@ export const reportsService = {
         expense_categories(name)
       `)
       .eq('business_id', businessId)
-      .gte('expense_date', startDate)
-      .lte('expense_date', endDate);
+      .gte('expense_date', startDate.toISOString())
+      .lte('expense_date', endDate.toISOString());
 
     if (error) throw error;
 
