@@ -925,12 +925,12 @@ export default function ReportsScreen() {
               {t('reports.customRange')}
             </Text>
             
-            <DateRangePicker
+            {showCustomDateRangePicker && <DateRangePicker
               startDate={customStartDate}
               endDate={customEndDate}
               onConfirm={handleDateRangeConfirm}
               onCancel={() => setShowCustomDateRangePicker(false)}
-            />
+            />}
           </Card>
         </TouchableOpacity>
       </Modal>
