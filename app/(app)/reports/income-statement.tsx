@@ -15,6 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { expenseService } from '@/src/services/expenses';
@@ -146,8 +147,132 @@ export default function IncomeStatementScreen() {
     }
   };
 
+  const renderSkeleton = () => (
+    <View style={styles.content}>
+      <SkeletonCard style={styles.periodCard}>
+        <SkeletonLoader height={16} width="60%" />
+      </SkeletonCard>
+
+      {/* Revenue Section */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <TrendingUp size={20} color="#059669" />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Revenue
+          </Text>
+        </View>
+        
+        <View style={[styles.row, styles.totalRow]}>
+          <SkeletonLoader height={16} width="40%" />
+          <SkeletonLoader height={18} width="30%" />
+        </View>
+      </SkeletonCard>
+
+      {/* COGS Section */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <TrendingDown size={20} color="#dc2626" />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Cost of Goods Sold
+          </Text>
+        </View>
+        
+        <View style={[styles.row, styles.totalRow]}>
+          <SkeletonLoader height={16} width="40%" />
+          <SkeletonLoader height={18} width="30%" />
+        </View>
+      </SkeletonCard>
+
+      {/* Gross Profit Section */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <DollarSign size={20} color="#2563eb" />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Gross Profit
+          </Text>
+        </View>
+        
+        <View style={styles.row}>
+          <SkeletonLoader height={14} width="40%" />
+          <SkeletonLoader height={14} width="30%" />
+        </View>
+        
+        <View style={styles.row}>
+          <SkeletonLoader height={14} width="40%" />
+          <SkeletonLoader height={14} width="30%" />
+        </View>
+      </SkeletonCard>
+
+      {/* Expenses Section */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <TrendingDown size={20} color="#ea580c" />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Operating Expenses
+          </Text>
+        </View>
+        
+        {[1, 2, 3].map(index => (
+          <View key={index} style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+        ))}
+        
+        <View style={[styles.row, styles.totalRow]}>
+          <SkeletonLoader height={16} width="40%" />
+          <SkeletonLoader height={18} width="30%" />
+        </View>
+      </SkeletonCard>
+
+      {/* Net Income Section */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <DollarSign size={20} color="#059669" />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Net Income
+          </Text>
+        </View>
+        
+        <View style={styles.row}>
+          <SkeletonLoader height={14} width="40%" />
+          <SkeletonLoader height={14} width="30%" />
+        </View>
+        
+        <View style={styles.row}>
+          <SkeletonLoader height={14} width="40%" />
+          <SkeletonLoader height={14} width="30%" />
+        </View>
+      </SkeletonCard>
+    </View>
+  );
+
   if (loading) {
-    return <LoadingSpinner text="Loading income statement..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Income Statement
+          </Text>
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={handleExport}
+          >
+            <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {renderSkeleton()}
+        </ScrollView>
+      </View>
+    );
   }
 
   if (!incomeData) {

@@ -18,6 +18,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
@@ -56,8 +57,7 @@ export default function ReportsScreen() {
   const getDateRange = () => {
     const now = new Date();
     // Set end time to 23:59:59
-    const endDate = new Date(now);
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = endOfDay(now);
     
     let startDate: Date;
     
@@ -84,8 +84,7 @@ export default function ReportsScreen() {
         startDate.setHours(0, 0, 0, 0);
         
         // For custom range, also set the end date
-        const customEnd = new Date(customEndDate);
-        customEnd.setHours(23, 59, 59, 999);
+        const customEnd = endOfDay(new Date(customEndDate));
         return {
           startDate: startDate,
           endDate: customEnd
@@ -229,14 +228,102 @@ export default function ReportsScreen() {
     </TouchableOpacity>
   );
 
+  // Skeleton components for charts
+  const SkeletonChartCard = ({ title, icon }: { title: string, icon: React.ReactNode }) => (
+    <SkeletonCard style={styles.chartCard}>
+      <View style={styles.chartHeader}>
+        <View style={styles.chartTitleContainer}>
+          {icon}
+          <Text style={[styles.chartTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {title}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.skeletonChartContainer}>
+        <SkeletonLoader height={220} width={screenWidth - 64} borderRadius={16} />
+      </View>
+    </SkeletonCard>
+  );
+
+  const SkeletonPieChartCard = () => (
+    <SkeletonCard style={styles.chartCard}>
+      <View style={styles.chartHeader}>
+        <View style={styles.chartTitleContainer}>
+          <PieChart size={20} color="#8b5cf6" />
+          <Text style={[styles.chartTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Expense Categories
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.skeletonChartContainer}>
+        <SkeletonLoader height={220} width={screenWidth - 64} borderRadius={16} />
+      </View>
+    </SkeletonCard>
+  );
+
+  const SkeletonStatementsCard = () => (
+    <SkeletonCard style={styles.statementsCard}>
+      <SkeletonLoader height={16} width="60%" style={{ marginBottom: 16 }} />
+      
+      <SkeletonLoader height={56} width="100%" borderRadius={8} style={{ marginBottom: 12 }} />
+      <SkeletonLoader height={56} width="100%" borderRadius={8} />
+    </SkeletonCard>
+  );
+
+  const SkeletonIncomeSummaryCard = () => (
+    <SkeletonCard style={styles.incomeCard}>
+      <SkeletonLoader height={16} width="60%" style={{ marginBottom: 16 }} />
+      
+      <View style={{ marginBottom: 16 }}>
+        {[1, 2, 3, 4, 5].map(index => (
+          <View key={index} style={styles.incomeRow}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="20%" />
+          </View>
+        ))}
+      </View>
+      
+      <SkeletonLoader height={40} width="100%" borderRadius={8} />
+    </SkeletonCard>
+  );
+
+  const SkeletonCashFlowMonths = () => (
+    <View style={styles.tabContent}>
+      <SkeletonLoader height={18} width="60%" style={{ marginBottom: 8 }} />
+      <SkeletonLoader height={14} width="80%" style={{ marginBottom: 16 }} />
+      
+      {[1, 2, 3, 4, 5, 6].map(index => (
+        <SkeletonLoader 
+          key={index}
+          height={56} 
+          width="100%" 
+          borderRadius={8} 
+          style={{ marginBottom: 12 }}
+        />
+      ))}
+    </View>
+  );
+
   const renderOverviewTab = () => {
     if (chartsLoading) {
       return (
-        <View style={styles.loadingChartsContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={[styles.loadingChartsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Loading charts...
-          </Text>
+        <View style={styles.tabContent}>
+          <SkeletonChartCard 
+            title="Revenue" 
+            icon={<TrendingUp size={20} color="#059669" />} 
+          />
+          <SkeletonChartCard 
+            title="Expenses" 
+            icon={<TrendingDown size={20} color="#dc2626" />} 
+          />
+          <SkeletonChartCard 
+            title="Net Profit" 
+            icon={<DollarSign size={20} color="#059669" />} 
+          />
+          <SkeletonPieChartCard />
+          <SkeletonStatementsCard />
         </View>
       );
     }
@@ -497,11 +584,16 @@ export default function ReportsScreen() {
   const renderIncomeTab = () => {
     if (chartsLoading) {
       return (
-        <View style={styles.loadingChartsContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={[styles.loadingChartsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Loading charts...
-          </Text>
+        <View style={styles.tabContent}>
+          <SkeletonIncomeSummaryCard />
+          <SkeletonChartCard 
+            title="Net Profit Trend" 
+            icon={<DollarSign size={20} color="#059669" />} 
+          />
+          <SkeletonChartCard 
+            title="Revenue vs Expenses" 
+            icon={<BarChart size={20} color="#2563eb" />} 
+          />
         </View>
       );
     }
@@ -694,6 +786,10 @@ export default function ReportsScreen() {
   };
 
   const renderCashFlowTab = () => {
+    if (chartsLoading) {
+      return <SkeletonCashFlowMonths />;
+    }
+    
     // Get current month and year
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -737,7 +833,62 @@ export default function ReportsScreen() {
   };
 
   if (initialLoading) {
-    return <LoadingSpinner text="Loading reports..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Reports
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+
+        {/* Skeleton Tabs */}
+        <View style={styles.tabs}>
+          {['Overview', 'Income', 'Cash Flow'].map((tab, index) => (
+            <SkeletonLoader 
+              key={index}
+              height={44} 
+              width={`${100/3}%`} 
+              borderRadius={8} 
+              style={{ marginHorizontal: 4 }}
+            />
+          ))}
+        </View>
+
+        {/* Skeleton Date Range */}
+        <View style={styles.dateRangeContainer}>
+          <SkeletonLoader 
+            height={44} 
+            width="100%" 
+            borderRadius={8}
+          />
+        </View>
+
+        {/* Skeleton Charts */}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <SkeletonChartCard 
+            title="Revenue" 
+            icon={<TrendingUp size={20} color="#059669" />} 
+          />
+          <SkeletonChartCard 
+            title="Expenses" 
+            icon={<TrendingDown size={20} color="#dc2626" />} 
+          />
+          <SkeletonChartCard 
+            title="Net Profit" 
+            icon={<DollarSign size={20} color="#059669" />} 
+          />
+          <SkeletonPieChartCard />
+          <SkeletonStatementsCard />
+        </ScrollView>
+      </View>
+    );
   }
 
   return (
@@ -1054,6 +1205,11 @@ const styles = StyleSheet.create({
   noDataText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  skeletonChartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 220,
   },
   chartCard: {
     padding: 16,
