@@ -21,7 +21,8 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
-import { format, subDays, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, startOfYear, endOfYear } from 'date-fns';
+import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -29,12 +30,15 @@ export default function ReportsScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'cash-flow'>('overview');
-  const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
+  const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year' | 'custom'>('month');
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [revenueData, setRevenueData] = useState<any>(null);
   const [expensesData, setExpensesData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
   const [expenseCategoriesData, setExpenseCategoriesData] = useState<any>(null);
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -47,27 +51,48 @@ export default function ReportsScreen() {
     } else {
       setInitialLoading(false);
     }
-  }, [profile?.id, dateRange]);
+  }, [profile?.id, dateRange, customStartDate, customEndDate]);
 
   const getDateRange = () => {
-    const endDate = new Date();
+    const now = new Date();
+    // Set end time to 23:59:59
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999);
+    
     let startDate: Date;
     
     switch (dateRange) {
       case 'week':
-        startDate = subDays(endDate, 7);
+        // Start from the beginning of the current week
+        startDate = startOfWeek(now, { weekStartsOn: 0 }); // 0 = Sunday
         break;
       case 'month':
-        startDate = subDays(endDate, 30);
+        // Start from the beginning of the current month
+        startDate = startOfMonth(now);
         break;
       case 'quarter':
-        startDate = subDays(endDate, 90);
+        // Start from 3 months ago, beginning of that month
+        startDate = startOfMonth(subDays(now, 90));
         break;
       case 'year':
-        startDate = subDays(endDate, 365);
+        // Start from the beginning of the current year
+        startDate = startOfYear(now);
         break;
+      case 'custom':
+        // Use custom date range
+        startDate = new Date(customStartDate);
+        startDate.setHours(0, 0, 0, 0);
+        
+        // For custom range, also set the end date
+        const customEnd = new Date(customEndDate);
+        customEnd.setHours(23, 59, 59, 999);
+        return {
+          startDate: format(startDate, 'yyyy-MM-dd'),
+          endDate: format(customEnd, 'yyyy-MM-dd')
+        };
       default:
-        startDate = subDays(endDate, 30);
+        // Default to month
+        startDate = startOfMonth(now);
     }
     
     return {
@@ -77,17 +102,21 @@ export default function ReportsScreen() {
   };
 
   const getDateRangeText = () => {
+    const now = new Date();
+    
     switch (dateRange) {
       case 'week':
-        return '7 Days';
+        return 'This Week';
       case 'month':
-        return '30 Days';
+        return 'This Month';
       case 'quarter':
-        return '90 Days';
+        return 'Last 3 Months';
       case 'year':
-        return '1 Year';
+        return 'This Year';
+      case 'custom':
+        return `${format(customStartDate, 'MMM d, yyyy')} - ${format(customEndDate, 'MMM d, yyyy')}`;
       default:
-        return '30 Days';
+        return 'This Month';
     }
   };
 
@@ -147,6 +176,23 @@ export default function ReportsScreen() {
     return labels.map((label, index) => (index % interval === 0) ? label : '');
   };
 
+  const handleDateFilterChange = (filter: 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
+    setDateRange(filter);
+    
+    if (filter === 'custom') {
+      setShowCustomDateRangePicker(true);
+    } else {
+      setShowDateRangeModal(false);
+    }
+  };
+
+  const handleDateRangeConfirm = (start: Date, end: Date) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    setShowCustomDateRangePicker(false);
+    setShowDateRangeModal(false);
+  };
+
   const TabButton = ({ 
     title, 
     isActive, 
@@ -170,36 +216,6 @@ export default function ReportsScreen() {
     >
       <Text style={[
         styles.tabButtonText,
-        { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-      ]}>
-        {title}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const DateRangeButton = ({ 
-    title, 
-    isActive, 
-    onPress 
-  }: { 
-    title: string; 
-    isActive: boolean; 
-    onPress: () => void; 
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.dateRangeButton,
-        {
-          backgroundColor: isActive 
-            ? '#059669' 
-            : (isDark ? '#374151' : '#f3f4f6'),
-          borderColor: isActive ? '#059669' : (isDark ? '#4b5563' : '#d1d5db'),
-        }
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[
-        styles.dateRangeButtonText,
         { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
       ]}>
         {title}
@@ -797,16 +813,13 @@ export default function ReportsScreen() {
                 styles.modalOption,
                 dateRange === 'week' && { backgroundColor: '#059669' }
               ]}
-              onPress={() => {
-                setDateRange('week');
-                setShowDateRangeModal(false);
-              }}
+              onPress={() => handleDateFilterChange('week')}
             >
               <Text style={[
                 styles.modalOptionText,
                 { color: dateRange === 'week' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                7 Days
+                This Week
               </Text>
             </TouchableOpacity>
             
@@ -815,16 +828,13 @@ export default function ReportsScreen() {
                 styles.modalOption,
                 dateRange === 'month' && { backgroundColor: '#059669' }
               ]}
-              onPress={() => {
-                setDateRange('month');
-                setShowDateRangeModal(false);
-              }}
+              onPress={() => handleDateFilterChange('month')}
             >
               <Text style={[
                 styles.modalOptionText,
                 { color: dateRange === 'month' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                30 Days
+                This Month
               </Text>
             </TouchableOpacity>
             
@@ -833,16 +843,13 @@ export default function ReportsScreen() {
                 styles.modalOption,
                 dateRange === 'quarter' && { backgroundColor: '#059669' }
               ]}
-              onPress={() => {
-                setDateRange('quarter');
-                setShowDateRangeModal(false);
-              }}
+              onPress={() => handleDateFilterChange('quarter')}
             >
               <Text style={[
                 styles.modalOptionText,
                 { color: dateRange === 'quarter' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                90 Days
+                Last 3 Months
               </Text>
             </TouchableOpacity>
             
@@ -851,16 +858,28 @@ export default function ReportsScreen() {
                 styles.modalOption,
                 dateRange === 'year' && { backgroundColor: '#059669' }
               ]}
-              onPress={() => {
-                setDateRange('year');
-                setShowDateRangeModal(false);
-              }}
+              onPress={() => handleDateFilterChange('year')}
             >
               <Text style={[
                 styles.modalOptionText,
                 { color: dateRange === 'year' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
               ]}>
-                1 Year
+                This Year
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                dateRange === 'custom' && { backgroundColor: '#059669' }
+              ]}
+              onPress={() => handleDateFilterChange('custom')}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                { color: dateRange === 'custom' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }
+              ]}>
+                Custom Range
               </Text>
             </TouchableOpacity>
             
@@ -869,6 +888,33 @@ export default function ReportsScreen() {
               variant="outline"
               onPress={() => setShowDateRangeModal(false)}
               style={styles.modalCancelButton}
+            />
+          </Card>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Custom Date Range Picker Modal */}
+      <Modal
+        visible={showCustomDateRangePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCustomDateRangePicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCustomDateRangePicker(false)}
+        >
+          <Card style={styles.modalContent}>
+            <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Custom Date Range
+            </Text>
+            
+            <DateRangePicker
+              startDate={customStartDate}
+              endDate={customEndDate}
+              onConfirm={handleDateRangeConfirm}
+              onCancel={() => setShowCustomDateRangePicker(false)}
             />
           </Card>
         </TouchableOpacity>
