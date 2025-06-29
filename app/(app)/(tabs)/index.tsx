@@ -245,6 +245,7 @@ export default function DashboardScreen() {
 
   // Show error state
   if (error && !loading) {
+    if (!stats) { return <LoadingSpinner text="Preparing dashboard..." />; }
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
