@@ -216,7 +216,7 @@ export const reportsService = {
       .lte('sale_date', endOfDate)
       .order('sale_date');
 
-    console.log(endOfDate);
+    console.log(startDate);
 
     if (error) throw error;
 
