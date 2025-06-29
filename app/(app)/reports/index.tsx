@@ -149,7 +149,9 @@ export default function ReportsScreen() {
       setExpenseCategoriesData(expenseCategoriesChartData);
     } catch (error) {
       console.error('Error loading report data:', error);
-      Alert.alert('Error', 'Failed to load report data');
+      if (Platform.OS !== 'web') {
+        Alert.alert('Error', 'Failed to load report data');
+      }
     } finally {
       setInitialLoading(false);
       setChartsLoading(false);
@@ -808,7 +810,6 @@ export default function ReportsScreen() {
               styles.modalContent,
               { backgroundColor: isDark ? '#374151' : '#ffffff' }
             ]}
-            onStartShouldSetResponder={() => true}
           >
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('reports.selectDateRange')}
@@ -913,7 +914,6 @@ export default function ReportsScreen() {
         >
           <Card 
             style={styles.modalContent}
-            onStartShouldSetResponder={() => true}
           >
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('reports.customRange')}

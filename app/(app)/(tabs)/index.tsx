@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +58,7 @@ export default function DashboardScreen() {
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
@@ -74,13 +76,26 @@ export default function DashboardScreen() {
   }, [router]);
 
   const loadDashboardData = async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      setLoading(false);
+      return;
+    }
     
     if (!isRefresh) {
       setLoading(true);
     }
     
+    setError(null);
+    
     try {
+      // Check if environment variables are properly set
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration is missing. Please check your environment variables.');
+      }
+
       const [dashboardStats, products, customers] = await Promise.all([
         reportsService.getDashboardStats(profile.id),
         reportsService.getTopProducts(profile.id, 3),
@@ -90,9 +105,16 @@ export default function DashboardScreen() {
       setStats(dashboardStats);
       setTopProducts(products);
       setTopCustomers(customers);
+      setError(null);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      Alert.alert(t('common.error'), 'Failed to load dashboard data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
+      setError(errorMessage);
+      
+      // Only show alert on mobile platforms, show inline error on web
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('common.error'), errorMessage);
+      }
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -220,6 +242,40 @@ export default function DashboardScreen() {
       ))}
     </SkeletonCard>
   );
+
+  // Show error state
+  if (error && !loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {profile?.business_name || 'Business Owner'}
+          </Text>
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Card style={styles.errorCard}>
+            <AlertTriangle size={48} color="#dc2626" style={styles.errorIcon} />
+            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Unable to Load Dashboard
+            </Text>
+            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadDashboardData()}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -495,6 +551,44 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorCard: {
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  errorIcon: {
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',
