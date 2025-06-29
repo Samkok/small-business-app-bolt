@@ -21,7 +21,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
-import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, startOfYear, endOfYear } from 'date-fns';
+import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 const screenWidth = Dimensions.get('window').width;
@@ -56,27 +56,26 @@ export default function ReportsScreen() {
   const getDateRange = () => {
     const now = new Date();
     // Set end time to 23:59:59
-    const endDate = new Date(now);
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = endOfDay(now);
     
     let startDate: Date;
     
     switch (dateRange) {
       case 'week':
         // Start from the beginning of the current week
-        startDate = startOfWeek(endDate, { weekStartsOn: 0 }); // 0 = Sunday
+        startDate = startOfWeek(now, { weekStartsOn: 0 }); // 0 = Sunday
         break;
       case 'month':
         // Start from the beginning of the current month
-        startDate = startOfMonth(endDate);
+        startDate = startOfMonth(now);
         break;
       case 'quarter':
         // Start from 3 months ago, beginning of that month
-        startDate = startOfMonth(subDays(endDate, 90));
+        startDate = startOfMonth(subDays(now, 90));
         break;
       case 'year':
         // Start from the beginning of the current year
-        startDate = startOfYear(endDate);
+        startDate = startOfYear(now);
         break;
       case 'custom':
         // Use custom date range
@@ -92,7 +91,7 @@ export default function ReportsScreen() {
         };
       default:
         // Default to month
-        startDate = startOfMonth(endDate);
+        startDate = startOfMonth(now);
     }
     
     return {
