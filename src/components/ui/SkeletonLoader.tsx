@@ -85,12 +85,32 @@ export function SkeletonCard({ children, style }: { children?: React.ReactNode; 
 export function SkeletonProductCard() {
   return (
     <SkeletonCard style={styles.productCard}>
-      <SkeletonLoader height={200} borderRadius={8} style={{ marginBottom: 16 }} />
-      <SkeletonLoader height={20} width="80%" style={{ marginBottom: 8 }} />
-      <SkeletonLoader height={16} width="60%" style={{ marginBottom: 12 }} />
-      <View style={styles.productCardFooter}>
-        <SkeletonLoader height={16} width={60} />
-        <SkeletonLoader height={16} width={40} />
+      <View style={styles.productCardInnerContainer}>
+        {/* Image skeleton */}
+        <SkeletonLoader 
+          height={80} 
+          width={80} 
+          borderRadius={8} 
+          style={styles.productImageSkeleton} 
+        />
+        
+        {/* Content skeleton */}
+        <View style={styles.productContentSkeleton}>
+          <SkeletonLoader height={18} width="80%" style={{ marginBottom: 6 }} />
+          <SkeletonLoader height={14} width="60%" style={{ marginBottom: 8 }} />
+          
+          <View style={styles.productPriceStockSkeleton}>
+            <SkeletonLoader height={16} width={60} />
+            <SkeletonLoader height={12} width={50} />
+          </View>
+          
+          <SkeletonLoader height={10} width="40%" style={{ marginBottom: 8 }} />
+          
+          <View style={styles.productCardActions}>
+            <SkeletonLoader height={32} width="48%" borderRadius={6} />
+            <SkeletonLoader height={32} width="48%" borderRadius={6} />
+          </View>
+        </View>
       </View>
     </SkeletonCard>
   );
@@ -204,8 +224,26 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   productCard: {
-    padding: 0,
-    overflow: 'hidden',
+    padding: 12,
+  },
+  productCardInnerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productImageSkeleton: {
+    marginRight: 12,
+  },
+  productContentSkeleton: {
+    flex: 1,
+  },
+  productPriceStockSkeleton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  productCardActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   productCardFooter: {
     flexDirection: 'row',
