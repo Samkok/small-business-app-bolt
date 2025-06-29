@@ -56,7 +56,8 @@ export default function ReportsScreen() {
   const getDateRange = () => {
     const now = new Date();
     // Set end time to 23:59:59
-    const endDate = new Date(endOfDay(now));
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999);
 
     console.log(endDate);
     
