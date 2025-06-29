@@ -213,7 +213,7 @@ export const reportsService = {
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .gte('sale_date', startDate)
-      .lte('sale_date', endOfDate))
+      .lte('sale_date', endOfDate)
       .order('sale_date');
 
     console.log(endOfDate);
