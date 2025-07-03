@@ -7,14 +7,16 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, Package, DollarSign, Plus, Trash2 } from 'lucide-react-native';
+import { X, Package, DollarSign, Plus, Trash2, Calendar, CheckCircle, Clock } from 'lucide-react-native';
 import { inventoryService } from '@/src/services/inventory';
+import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 interface EditImportFormProps {
   importRecord: any;
@@ -30,6 +32,11 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [loading, setLoading] = useState(false);
   const [productName, setProductName] = useState('Unknown Product');
   const [productBarcode, setProductBarcode] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState('');
+  const [arrivalDate, setArrivalDate] = useState<string | undefined>(undefined);
+  const [status, setStatus] = useState<'pending' | 'completed'>('pending');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isMarkingAsArrived, setIsMarkingAsArrived] = useState(false);
   
   const { isDark } = useTheme();
 
@@ -39,6 +46,9 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
       setBaseUnitCost(importRecord.base_unit_cost?.toString() || '');
       setNotes(importRecord.notes || '');
       setAdditionalCosts(importRecord.import_costs || []);
+      setPurchaseDate(importRecord.purchase_date || importRecord.created_at || '');
+      setArrivalDate(importRecord.arrival_date || undefined);
+      setStatus(importRecord.status || 'pending');
       
       // Safely access product information
       if (importRecord.products) {
@@ -149,7 +159,35 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
     }
   };
 
+  const handleMarkAsArrived = async () => {
+    if (!importRecord.id) return;
+
+    setIsMarkingAsArrived(true);
+    try {
+      await inventoryService.markImportAsArrived(importRecord.id, arrivalDate);
+      Alert.alert('Success', 'Import marked as arrived successfully');
+      onComplete();
+    } catch (error) {
+      console.error('Error marking import as arrived:', error);
+      Alert.alert('Error', 'Failed to mark import as arrived');
+    } finally {
+      setIsMarkingAsArrived(false);
+    }
+  };
+
+  const handleDateConfirm = (start: Date) => {
+    setArrivalDate(start.toISOString());
+    setShowDatePicker(false);
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString();
+  };
+
   const { finalUnitCost, totalCost } = calculateFinalCost();
+
+  const isEditable = status === 'pending';
 
   return (
     <KeyboardAvoidingView 
@@ -187,6 +225,51 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
+              <Calendar size={20} color="#8b5cf6" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Import Dates
+              </Text>
+            </View>
+            
+            <Input
+              label="Purchase Date"
+              value={formatDate(purchaseDate)}
+              editable={false}
+              style={{ opacity: 0.8 }}
+            />
+            
+            <View style={styles.statusRow}>
+              <View style={[
+                styles.statusBadge, 
+                { backgroundColor: status === 'completed' ? '#059669' : '#f59e0b' }
+              ]}>
+                {status === 'completed' ? (
+                  <CheckCircle size={16} color="#ffffff" />
+                ) : (
+                  <Clock size={16} color="#ffffff" />
+                )}
+                <Text style={styles.statusText}>
+                  {status === 'completed' ? 'Completed' : 'Pending'}
+                </Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              disabled={!isEditable}
+              onPress={() => setShowDatePicker(true)}
+              style={{ opacity: isEditable ? 1 : 0.7 }}
+            >
+              <Input
+                label="Arrival Date"
+                value={formatDate(arrivalDate)}
+                editable={false}
+                placeholder={isEditable ? "Tap to set arrival date" : "Not arrived yet"}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
               <DollarSign size={20} color="#059669" />
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Import Details
@@ -200,6 +283,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               placeholder="Enter quantity"
               keyboardType="number-pad"
               required
+              editable={isEditable}
+              style={{ opacity: isEditable ? 1 : 0.7 }}
             />
             
             <Input
@@ -209,6 +294,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               placeholder="0.00"
               keyboardType="decimal-pad"
               required
+              editable={isEditable}
+              style={{ opacity: isEditable ? 1 : 0.7 }}
             />
           </View>
 
@@ -218,26 +305,30 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Additional Costs
               </Text>
-              <TouchableOpacity
-                style={[styles.addCostButton, { backgroundColor: '#8b5cf6' }]}
-                onPress={addCost}
-              >
-                <Plus size={16} color="#ffffff" />
-              </TouchableOpacity>
+              {isEditable && (
+                <TouchableOpacity
+                  style={[styles.addCostButton, { backgroundColor: '#8b5cf6' }]}
+                  onPress={addCost}
+                >
+                  <Plus size={16} color="#ffffff" />
+                </TouchableOpacity>
+              )}
             </View>
             
             {additionalCosts.map((cost, index) => (
               <View key={index} style={styles.costItem}>
                 <View style={styles.costHeader}>
-                  <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#374151' }]}>
+                  <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                     Cost #{index + 1}
                   </Text>
-                  <TouchableOpacity
-                    style={[styles.removeCostButton, { backgroundColor: '#dc2626' }]}
-                    onPress={() => removeCost(index)}
-                  >
-                    <Trash2 size={14} color="#ffffff" />
-                  </TouchableOpacity>
+                  {isEditable && (
+                    <TouchableOpacity
+                      style={[styles.removeCostButton, { backgroundColor: '#dc2626' }]}
+                      onPress={() => removeCost(index)}
+                    >
+                      <Trash2 size={14} color="#ffffff" />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 
                 <Input
@@ -245,6 +336,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   value={cost.cost_type}
                   onChangeText={(value) => updateCost(index, 'cost_type', value)}
                   placeholder="e.g., Shipping, Tax, Handling"
+                  editable={isEditable}
+                  style={{ opacity: isEditable ? 1 : 0.7 }}
                 />
                 
                 <Input
@@ -253,6 +346,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   onChangeText={(value) => updateCost(index, 'amount', value)}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
+                  editable={isEditable}
+                  style={{ opacity: isEditable ? 1 : 0.7 }}
                 />
                 
                 <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
@@ -269,9 +364,11 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                         borderColor: cost.calculation_type === 'per_unit' 
                           ? '#8b5cf6' 
                           : (isDark ? '#4b5563' : '#d1d5db'),
+                        opacity: isEditable ? 1 : 0.7
                       }
                     ]}
-                    onPress={() => updateCost(index, 'calculation_type', 'per_unit')}
+                    onPress={() => isEditable && updateCost(index, 'calculation_type', 'per_unit')}
+                    disabled={!isEditable}
                   >
                     <Text style={[
                       styles.calculationButtonText,
@@ -295,9 +392,11 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                         borderColor: cost.calculation_type === 'per_total' 
                           ? '#8b5cf6' 
                           : (isDark ? '#4b5563' : '#d1d5db'),
+                        opacity: isEditable ? 1 : 0.7
                       }
                     ]}
-                    onPress={() => updateCost(index, 'calculation_type', 'per_total')}
+                    onPress={() => isEditable && updateCost(index, 'calculation_type', 'per_total')}
+                    disabled={!isEditable}
                   >
                     <Text style={[
                       styles.calculationButtonText,
@@ -317,6 +416,8 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   value={cost.description || ''}
                   onChangeText={(value) => updateCost(index, 'description', value)}
                   placeholder="Additional details"
+                  editable={isEditable}
+                  style={{ opacity: isEditable ? 1 : 0.7 }}
                 />
               </View>
             ))}
@@ -375,13 +476,46 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
           onPress={onCancel}
           style={styles.footerButton}
         />
-        <Button
-          title="Update Import"
-          onPress={handleUpdate}
-          loading={loading}
-          style={styles.footerButton}
-        />
+        
+        {status === 'pending' && arrivalDate ? (
+          <Button
+            title="Mark as Arrived"
+            onPress={handleMarkAsArrived}
+            loading={isMarkingAsArrived}
+            style={[styles.footerButton, { backgroundColor: '#059669' }]}
+          />
+        ) : (
+          <Button
+            title="Update Import"
+            onPress={handleUpdate}
+            loading={loading}
+            style={styles.footerButton}
+          />
+        )}
       </View>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.datePickerContainer}>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Arrival Date
+            </Text>
+            
+            <DateRangePicker
+              startDate={arrivalDate ? new Date(arrivalDate) : new Date()}
+              endDate={arrivalDate ? new Date(arrivalDate) : new Date()}
+              onConfirm={(start) => handleDateConfirm(start)}
+              onCancel={() => setShowDatePicker(false)}
+            />
+          </Card>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -441,6 +575,24 @@ const styles = StyleSheet.create({
   barcode: {
     fontSize: 12,
     fontFamily: 'monospace',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginLeft: 4,
   },
   label: {
     fontSize: 14,
@@ -525,5 +677,23 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerContainer: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });

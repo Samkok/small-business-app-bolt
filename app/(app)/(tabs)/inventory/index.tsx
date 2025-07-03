@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  FlatList,
   RefreshControl,
-  ActivityIndicator,
   TextInput,
+  FlatList,
+  ActivityIndicator,
   Animated,
   Platform
 } from 'react-native';
@@ -59,6 +59,7 @@ export default function InventoryScreen() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -222,7 +223,7 @@ export default function InventoryScreen() {
   const handleDeleteImport = async (importRecord: any) => {
     Alert.alert(
       'Delete Import Record',
-      `Are you sure you want to delete this import record? This will also adjust the product stock.`,
+      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -239,6 +240,37 @@ export default function InventoryScreen() {
               Alert.alert('Error', 'Failed to delete import record');
             } finally {
               setDeletingImport(null);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleMarkAsArrived = async (importRecord: any) => {
+    if (importRecord.status === 'completed') {
+      Alert.alert('Already Arrived', 'This import has already been marked as arrived.');
+      return;
+    }
+
+    Alert.alert(
+      'Mark as Arrived',
+      'Are you sure you want to mark this import as arrived? This will update the product stock and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Confirm', 
+          onPress: async () => {
+            try {
+              setMarkingAsArrived(importRecord.id);
+              await inventoryService.markImportAsArrived(importRecord.id);
+              Alert.alert('Success', 'Import marked as arrived successfully');
+              loadData();
+            } catch (error) {
+              console.error('Error marking import as arrived:', error);
+              Alert.alert('Error', 'Failed to mark import as arrived');
+            } finally {
+              setMarkingAsArrived(null);
             }
           }
         },
@@ -282,7 +314,7 @@ export default function InventoryScreen() {
 
     Alert.alert(
       'Delete Selected Imports',
-      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels.`,
+      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels for completed imports.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -455,7 +487,7 @@ export default function InventoryScreen() {
       onPress={onPress}
     >
       <View style={styles.tabButtonContent}>
-        <View style={[styles.tabIcon, { opacity: isActive ? 1 : 0.7 }]}>
+        <View style={styles.tabIcon}>
           {icon}
         </View>
         <Text style={[
@@ -873,6 +905,7 @@ export default function InventoryScreen() {
                     importRecord={importRecord}
                     onEdit={handleEditImport}
                     onDelete={handleDeleteImport}
+                    onMarkAsArrived={handleMarkAsArrived}
                   />
                 </View>
               </View>
@@ -1023,6 +1056,13 @@ export default function InventoryScreen() {
       {bulkDeleteLoading && (
         <View style={styles.loadingOverlay}>
           <LoadingSpinner text={`Deleting ${selectedImports.size} import records...`} />
+        </View>
+      )}
+
+      {/* Loading overlay for marking as arrived */}
+      {markingAsArrived && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Marking import as arrived..." />
         </View>
       )}
     </View>
