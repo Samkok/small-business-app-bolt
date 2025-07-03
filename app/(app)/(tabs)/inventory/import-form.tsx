@@ -11,6 +11,7 @@ import {
   Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
