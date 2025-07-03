@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  RefreshControl,
-  TextInput,
   FlatList,
+  RefreshControl,
   ActivityIndicator,
+  TextInput,
   Animated,
   Platform
 } from 'react-native';
@@ -35,7 +35,7 @@ import { inventoryService } from '@/src/services/inventory';
 const PRODUCTS_PER_PAGE = 5;
 
 export default function InventoryScreen() {
-  const [activeTab, setActiveTab] = useState<'products' | 'import' | 'history'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'history'>('products');
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [importHistory, setImportHistory] = useState<any[]>([]);
@@ -220,33 +220,6 @@ export default function InventoryScreen() {
     setShowEditImportForm(true);
   };
 
-  const handleDeleteImport = async (importRecord: any) => {
-    Alert.alert(
-      'Delete Import Record',
-      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setDeletingImport(importRecord.id);
-              await inventoryService.deleteImport(importRecord.id);
-              Alert.alert('Success', 'Import record deleted successfully');
-              loadData();
-            } catch (error) {
-              console.error('Error deleting import:', error);
-              Alert.alert('Error', 'Failed to delete import record');
-            } finally {
-              setDeletingImport(null);
-            }
-          }
-        },
-      ]
-    );
-  };
-
   const handleMarkAsArrived = async (importRecord: any) => {
     if (importRecord.status === 'completed') {
       Alert.alert('Already Arrived', 'This import has already been marked as arrived.');
@@ -271,6 +244,33 @@ export default function InventoryScreen() {
               Alert.alert('Error', 'Failed to mark import as arrived');
             } finally {
               setMarkingAsArrived(null);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleDeleteImport = async (importRecord: any) => {
+    Alert.alert(
+      'Delete Import Record',
+      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingImport(importRecord.id);
+              await inventoryService.deleteImport(importRecord.id);
+              Alert.alert('Success', 'Import record deleted successfully');
+              loadData();
+            } catch (error) {
+              console.error('Error deleting import:', error);
+              Alert.alert('Error', 'Failed to delete import record');
+            } finally {
+              setDeletingImport(null);
             }
           }
         },
@@ -693,53 +693,6 @@ export default function InventoryScreen() {
     );
   };
 
-  const renderImportTab = () => {
-    if (loading) {
-      return (
-        <ScrollView style={styles.tabContent}>
-          <SkeletonCard style={styles.emptyState}>
-            <SkeletonLoader height={48} width={48} borderRadius={24} style={{ marginBottom: 16 }} />
-            <SkeletonLoader height={18} width="60%" style={{ marginBottom: 8 }} />
-            <SkeletonLoader height={14} width="80%" style={{ marginBottom: 20 }} />
-            <SkeletonLoader height={40} width={150} borderRadius={8} />
-          </SkeletonCard>
-        </ScrollView>
-      );
-    }
-
-    return (
-      <ScrollView
-        style={styles.tabContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#2563eb']}
-            tintColor="#2563eb"
-            title="Pull to refresh"
-            titleColor={isDark ? '#f9fafb' : '#111827'}
-          />
-        }
-      >
-        <Card style={styles.emptyState}>
-          <TrendingUp size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-          <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Import Inventory
-          </Text>
-          <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Add stock to your products with detailed cost tracking
-          </Text>
-          <Button
-            title="Manual Import"
-            onPress={() => setShowImportForm(true)}
-            style={styles.importButton}
-          />
-        </Card>
-      </ScrollView>
-    );
-  };
-
   const renderHistoryTab = () => {
     if (loading) {
       return (
@@ -782,6 +735,26 @@ export default function InventoryScreen() {
           />
         }
       >
+        {/* Import Button */}
+        <Card style={styles.importButtonCard}>
+          <View style={styles.importButtonHeader}>
+            <View style={styles.importButtonTitleContainer}>
+              <TrendingUp size={20} color="#2563eb" />
+              <Text style={[styles.importButtonTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Import Stock
+              </Text>
+            </View>
+            <Text style={[styles.importButtonSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Add new inventory with detailed cost tracking
+            </Text>
+          </View>
+          <Button
+            title="Create New Import"
+            onPress={() => setShowImportForm(true)}
+            style={styles.importButton}
+          />
+        </Card>
+
         {/* Search and Filter Bar for Import History */}
         <View style={styles.importSearchContainer}>
           <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff', flex: 1 }]}>
@@ -923,10 +896,16 @@ export default function InventoryScreen() {
                 : 'Import history will appear here once you start importing inventory'
               }
             </Text>
-            {isImportSearching && (
+            {isImportSearching ? (
               <Button
                 title="Clear Search"
                 onPress={handleClearImportSearch}
+                style={styles.emptyButton}
+              />
+            ) : (
+              <Button
+                title="Create New Import"
+                onPress={() => setShowImportForm(true)}
                 style={styles.emptyButton}
               />
             )}
@@ -952,12 +931,6 @@ export default function InventoryScreen() {
           onPress={() => setActiveTab('products')}
         />
         <TabButton
-          title="Import Stock"
-          icon={<TrendingUp size={18} color={activeTab === 'import' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-          isActive={activeTab === 'import'}
-          onPress={() => setActiveTab('import')}
-        />
-        <TabButton
           title="Import History"
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
@@ -967,7 +940,6 @@ export default function InventoryScreen() {
 
       <View style={styles.content}>
         {activeTab === 'products' && renderProductsTab()}
-        {activeTab === 'import' && renderImportTab()}
         {activeTab === 'history' && renderHistoryTab()}
       </View>
 
@@ -1300,8 +1272,29 @@ const styles = StyleSheet.create({
   emptyButton: {
     marginTop: 16,
   },
+  importButtonCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  importButtonHeader: {
+    marginBottom: 16,
+  },
+  importButtonTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  importButtonTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  importButtonSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   importButton: {
-    marginTop: 16,
+    backgroundColor: '#2563eb',
   },
   importButtonsContainer: {
     flexDirection: 'row',
