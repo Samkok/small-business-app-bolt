@@ -142,15 +142,31 @@ export default function InventoryScreen() {
         setProducts(productsData);
         setFilteredProducts(productsData);
       } else {
-        const combined = [...(page === 0 ? [] : products), ...productsData];
-
-        // Deduplicate by `id`
-        const uniqueById = Array.from(
-          new Map(combined.map(item => [item.id, item])).values()
-        );
+        // Use functional update to ensure we're working with the latest state
+        setProducts(prevProducts => {
+          const combined = [...prevProducts, ...productsData];
+          
+          // Deduplicate by `id`
+          const uniqueById = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          
+          return uniqueById;
+        });
         
-        setProducts(uniqueById);
-        setFilteredProducts(uniqueById);
+        // Also update filtered products if not searching
+        if (!isSearching) {
+          setFilteredProducts(prevFiltered => {
+            const combined = [...prevFiltered, ...productsData];
+            
+            // Deduplicate by `id`
+            const uniqueById = Array.from(
+              new Map(combined.map(item => [item.id, item])).values()
+            );
+            
+            return uniqueById;
+          });
+        }
       }
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
@@ -619,7 +635,7 @@ export default function InventoryScreen() {
           ref={flatListRef}
           data={filteredProducts}
           renderItem={renderProductItem}
-          keyExtractor={(item, index) => item.id}
+          keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
