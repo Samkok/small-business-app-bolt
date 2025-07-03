@@ -1,6 +1,5 @@
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
-import { productService } from './products';
 
 type InventoryImport = Database['public']['Tables']['inventory_imports']['Row'];
 type InventoryImportInsert = Database['public']['Tables']['inventory_imports']['Insert'];
@@ -21,10 +20,6 @@ export const inventoryService = {
       importData.final_unit_cost = calculatedCosts.finalUnitCost;
       importData.total_cost = calculatedCosts.totalCost;
     }
-
-    // Set purchase date and status
-    importData.purchase_date = new Date().toISOString();
-    importData.status = 'pending';
 
     const { data: importRecord, error: importError } = await supabase
       .from('inventory_imports')
@@ -48,8 +43,24 @@ export const inventoryService = {
       if (costsError) throw costsError;
     }
 
-    // Note: We no longer update product stock or cost_per_unit here
-    // This will be done when the import is marked as arrived
+    // Update product stock
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', importData.product_id)
+      .single();
+
+    if (productError) throw productError;
+
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ 
+        current_stock: (product.current_stock || 0) + importData.quantity,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', importData.product_id);
+
+    if (updateError) throw updateError;
 
     return importRecord;
   },
@@ -59,36 +70,19 @@ export const inventoryService = {
     importData: Partial<InventoryImportUpdate>, 
     costs: Omit<ImportCostInsert, 'import_id'>[]
   ) {
+
     if (typeof importId !== 'string' || !importId) return;
     
-    // Get the original import record to check status
+    // Get the original import record to calculate stock adjustment
     const { data: originalImport, error: getError } = await supabase
       .from('inventory_imports')
-      .select('product_id, quantity, status')
+      .select('product_id, quantity')
       .eq('id', importId)
       .single();
 
     if (getError) throw getError;
 
-    // If the import is already completed, prevent changes to quantity, costs, etc.
-    if (originalImport.status === 'completed') {
-      // Filter out fields that shouldn't be updated for completed imports
-      const { quantity, base_unit_cost, final_unit_cost, total_cost, ...allowedUpdates } = importData;
-      
-      // Only allow updating notes for completed imports
-      const { data: updatedImport, error: importError } = await supabase
-        .from('inventory_imports')
-        .update(allowedUpdates)
-        .eq('id', importId)
-        .select()
-        .single();
-
-      if (importError) throw importError;
-      
-      return updatedImport;
-    }
-
-    // For pending imports, allow full updates
+    // Update the import record
     const { data: updatedImport, error: importError } = await supabase
       .from('inventory_imports')
       .update(importData)
@@ -120,16 +114,41 @@ export const inventoryService = {
       if (costsError) throw costsError;
     }
 
+    // Update product stock if quantity changed
+    if (importData.quantity && importData.quantity !== originalImport.quantity) {
+      // Get current product stock
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('current_stock')
+        .eq('id', originalImport.product_id)
+        .single();
+
+      if (productError) throw productError;
+
+      // Calculate the stock adjustment (new quantity - old quantity)
+      const stockAdjustment = importData.quantity - originalImport.quantity;
+      
+      // Update the product stock
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          current_stock: Math.max(0, (product.current_stock || 0) + stockAdjustment),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', originalImport.product_id);
+
+      if (updateError) throw updateError;
+    }
+
     return updatedImport;
   },
 
   async deleteImport(importId: string) {
     if (typeof importId !== 'string' || !importId) return;
-    
     // Get import details first
     const { data: importRecord, error: getError } = await supabase
       .from('inventory_imports')
-      .select('product_id, quantity, status')
+      .select('product_id, quantity')
       .eq('id', importId)
       .single();
 
@@ -151,115 +170,28 @@ export const inventoryService = {
 
     if (deleteImportError) throw deleteImportError;
 
-    // If the import was completed, we need to reverse its effect on the product
-    if (importRecord.status === 'completed') {
-      // Get current product data
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select('current_stock, cost_per_unit')
-        .eq('id', importRecord.product_id)
-        .single();
+    // Update product stock (subtract the imported quantity)
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', importRecord.product_id)
+      .single();
 
-      if (productError) throw productError;
+    if (productError) throw productError;
 
-      // Reverse the stock update
-      const newStock = Math.max(0, (product.current_stock || 0) - importRecord.quantity);
-      
-      // Recalculate the cost_per_unit
-      await productService.recalculateProductCost(importRecord.product_id);
-      
-      // Update the product stock
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ 
-          current_stock: newStock,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', importRecord.product_id);
-
-      if (updateError) throw updateError;
-    }
-
-    return true;
-  },
-
-  async markImportAsArrived(importId: string, arrivalDate?: string) {
-    if (typeof importId !== 'string' || !importId) return;
+    const newStock = Math.max(0, (product.current_stock || 0) - importRecord.quantity);
     
-    // Get the import record
-    const { data: importRecord, error: getError } = await supabase
-      .from('inventory_imports')
-      .select('product_id, quantity, final_unit_cost, status')
-      .eq('id', importId)
-      .single();
-
-    if (getError) throw getError;
-
-    // If already completed, return early
-    if (importRecord.status === 'completed') {
-      return importRecord;
-    }
-
-    // Set arrival date to current time if not provided
-    const arrival = arrivalDate || new Date().toISOString();
-
-    // Update the import record
-    const { data: updatedImport, error: updateError } = await supabase
-      .from('inventory_imports')
+    const { error: updateError } = await supabase
+      .from('products')
       .update({ 
-        status: 'completed',
-        arrival_date: arrival
+        current_stock: newStock,
+        updated_at: new Date().toISOString()
       })
-      .eq('id', importId)
-      .select()
-      .single();
+      .eq('id', importRecord.product_id);
 
     if (updateError) throw updateError;
 
-    // Now update the product stock and cost_per_unit
-    try {
-      // Get current product data
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select('current_stock, cost_per_unit')
-        .eq('id', importRecord.product_id)
-        .single();
-
-      if (productError) throw productError;
-
-      // Calculate new weighted average cost
-      const currentStock = product.current_stock || 0;
-      const currentCost = product.cost_per_unit || 0;
-      const newQuantity = importRecord.quantity;
-      const newCost = importRecord.final_unit_cost;
-      
-      const newTotalQuantity = currentStock + newQuantity;
-      let newCostPerUnit = 0;
-      
-      if (newTotalQuantity > 0) {
-        const currentTotalCost = currentStock * currentCost;
-        const newItemTotalCost = newQuantity * newCost;
-        const newTotalCost = currentTotalCost + newItemTotalCost;
-        newCostPerUnit = newTotalCost / newTotalQuantity;
-      }
-
-      // Update the product
-      const { error: updateProductError } = await supabase
-        .from('products')
-        .update({ 
-          current_stock: newTotalQuantity,
-          cost_per_unit: newCostPerUnit,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', importRecord.product_id);
-
-      if (updateProductError) throw updateProductError;
-    } catch (error) {
-      console.error('Error updating product after import arrival:', error);
-      throw error;
-    }
-
-    return updatedImport;
+    return true;
   },
 
   async getImportHistory(businessId: string) {
@@ -273,40 +205,6 @@ export const inventoryService = {
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data;
-  },
-
-  async getPendingImports(businessId: string) {
-    if (typeof businessId !== 'string' || !businessId) return;
-    const { data, error } = await supabase
-      .from('inventory_imports')
-      .select(`
-        *,
-        products(name, barcode),
-        import_costs(*)
-      `)
-      .eq('business_id', businessId)
-      .eq('status', 'pending')
-      .order('purchase_date', { ascending: false });
-
-    if (error) throw error;
-    return data;
-  },
-
-  async getCompletedImports(businessId: string) {
-    if (typeof businessId !== 'string' || !businessId) return;
-    const { data, error } = await supabase
-      .from('inventory_imports')
-      .select(`
-        *,
-        products(name, barcode),
-        import_costs(*)
-      `)
-      .eq('business_id', businessId)
-      .eq('status', 'completed')
-      .order('arrival_date', { ascending: false });
 
     if (error) throw error;
     return data;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-  Modal
+  Platform
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, Package, DollarSign, Plus, Trash2, Calendar, CircleCheck as CheckCircle, Clock, Truck as TruckDelivery } from 'lucide-react-native';
+import { X, Package, DollarSign, Plus, Trash2 } from 'lucide-react-native';
 import { inventoryService } from '@/src/services/inventory';
-import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 interface EditImportFormProps {
   importRecord: any;
@@ -32,12 +30,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [loading, setLoading] = useState(false);
   const [productName, setProductName] = useState('Unknown Product');
   const [productBarcode, setProductBarcode] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState<Date>(new Date());
-  const [arrivalDate, setArrivalDate] = useState<Date | null>(null);
-  const [status, setStatus] = useState<'pending' | 'completed'>('pending');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [datePickerType, setDatePickerType] = useState<'purchase' | 'arrival'>('purchase');
-  const [markingAsArrived, setMarkingAsArrived] = useState(false);
   
   const { isDark } = useTheme();
 
@@ -47,17 +39,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
       setBaseUnitCost(importRecord.base_unit_cost?.toString() || '');
       setNotes(importRecord.notes || '');
       setAdditionalCosts(importRecord.import_costs || []);
-      setStatus(importRecord.status || 'pending');
-      
-      // Set purchase date
-      if (importRecord.purchase_date) {
-        setPurchaseDate(new Date(importRecord.purchase_date));
-      }
-      
-      // Set arrival date if available
-      if (importRecord.arrival_date) {
-        setArrivalDate(new Date(importRecord.arrival_date));
-      }
       
       // Safely access product information
       if (importRecord.products) {
@@ -100,7 +81,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
       }
     });
 
-    const finalUnitCost = baseCost + (totalAdditionalCost / qty);
+    const finalUnitCost = baseCost + (qty > 0 ? (totalAdditionalCost / qty) : 0);
     const totalCost = finalUnitCost * qty;
 
     return { finalUnitCost: isNaN(finalUnitCost) ? 0 : finalUnitCost, totalCost: isNaN(totalCost) ? 0 : totalCost };
@@ -148,7 +129,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
         final_unit_cost: finalUnitCost,
         total_cost: totalCost,
         notes: notes.trim() || null,
-        purchase_date: purchaseDate.toISOString(),
       };
 
       const costs = additionalCosts.map(cost => ({
@@ -169,40 +149,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
     }
   };
 
-  const handleMarkAsArrived = async () => {
-    if (!importRecord.id) return;
-    
-    setMarkingAsArrived(true);
-    try {
-      const now = new Date();
-      await inventoryService.markImportAsArrived(importRecord.id, now.toISOString());
-      setArrivalDate(now);
-      setStatus('completed');
-      Alert.alert('Success', 'Import marked as arrived successfully');
-    } catch (error) {
-      console.error('Error marking import as arrived:', error);
-      Alert.alert('Error', 'Failed to mark import as arrived');
-    } finally {
-      setMarkingAsArrived(false);
-    }
-  };
-
-  const handleOpenDatePicker = (type: 'purchase' | 'arrival') => {
-    setDatePickerType(type);
-    setShowDatePicker(true);
-  };
-
-  const handleDateConfirm = (start: Date, end: Date) => {
-    if (datePickerType === 'purchase') {
-      setPurchaseDate(start);
-    } else {
-      setArrivalDate(start);
-    }
-    setShowDatePicker(false);
-  };
-
   const { finalUnitCost, totalCost } = calculateFinalCost();
-  const isCompleted = status === 'completed';
 
   return (
     <KeyboardAvoidingView 
@@ -240,79 +187,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Calendar size={20} color="#8b5cf6" />
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Import Dates
-              </Text>
-            </View>
-            
-            <View style={styles.dateRow}>
-              <View style={styles.dateField}>
-                <Text style={[styles.dateLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                  Purchase Date:
-                </Text>
-                <TouchableOpacity 
-                  style={[styles.dateButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={() => handleOpenDatePicker('purchase')}
-                  disabled={isCompleted}
-                >
-                  <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-                  <Text style={[styles.dateButtonText, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                    {purchaseDate.toLocaleDateString()}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.dateField}>
-                <Text style={[styles.dateLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                  Arrival Date:
-                </Text>
-                {arrivalDate ? (
-                  <View style={[styles.dateButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                    <TruckDelivery size={16} color="#059669" />
-                    <Text style={[styles.dateButtonText, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                      {arrivalDate.toLocaleDateString()}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={[styles.dateButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                    <Clock size={16} color="#f59e0b" />
-                    <Text style={[styles.dateButtonText, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                      Pending Arrival
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            
-            <View style={styles.statusContainer}>
-              <Text style={[styles.statusLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                Status:
-              </Text>
-              <View style={[
-                styles.statusBadge, 
-                { 
-                  backgroundColor: isCompleted ? '#05966920' : '#f59e0b20',
-                  borderColor: isCompleted ? '#059669' : '#f59e0b',
-                }
-              ]}>
-                {isCompleted ? (
-                  <CheckCircle size={16} color="#059669" />
-                ) : (
-                  <Clock size={16} color="#f59e0b" />
-                )}
-                <Text style={[
-                  styles.statusText, 
-                  { color: isCompleted ? '#059669' : '#f59e0b' }
-                ]}>
-                  {isCompleted ? 'Completed' : 'Pending Arrival'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
               <DollarSign size={20} color="#059669" />
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Import Details
@@ -326,7 +200,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               placeholder="Enter quantity"
               keyboardType="number-pad"
               required
-              editable={!isCompleted}
             />
             
             <Input
@@ -336,7 +209,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               placeholder="0.00"
               keyboardType="decimal-pad"
               required
-              editable={!isCompleted}
             />
           </View>
 
@@ -346,14 +218,12 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Additional Costs
               </Text>
-              {!isCompleted && (
-                <TouchableOpacity
-                  style={[styles.addCostButton, { backgroundColor: '#8b5cf6' }]}
-                  onPress={addCost}
-                >
-                  <Plus size={16} color="#ffffff" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={[styles.addCostButton, { backgroundColor: '#8b5cf6' }]}
+                onPress={addCost}
+              >
+                <Plus size={16} color="#ffffff" />
+              </TouchableOpacity>
             </View>
             
             {additionalCosts.map((cost, index) => (
@@ -362,14 +232,12 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#374151' }]}>
                     Cost #{index + 1}
                   </Text>
-                  {!isCompleted && (
-                    <TouchableOpacity
-                      style={[styles.removeCostButton, { backgroundColor: '#dc2626' }]}
-                      onPress={() => removeCost(index)}
-                    >
-                      <Trash2 size={14} color="#ffffff" />
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={[styles.removeCostButton, { backgroundColor: '#dc2626' }]}
+                    onPress={() => removeCost(index)}
+                  >
+                    <Trash2 size={14} color="#ffffff" />
+                  </TouchableOpacity>
                 </View>
                 
                 <Input
@@ -377,7 +245,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   value={cost.cost_type}
                   onChangeText={(value) => updateCost(index, 'cost_type', value)}
                   placeholder="e.g., Shipping, Tax, Handling"
-                  editable={!isCompleted}
                 />
                 
                 <Input
@@ -386,7 +253,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   onChangeText={(value) => updateCost(index, 'amount', value)}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
-                  editable={!isCompleted}
                 />
                 
                 <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
@@ -405,8 +271,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                           : (isDark ? '#4b5563' : '#d1d5db'),
                       }
                     ]}
-                    onPress={() => !isCompleted && updateCost(index, 'calculation_type', 'per_unit')}
-                    disabled={isCompleted}
+                    onPress={() => updateCost(index, 'calculation_type', 'per_unit')}
                   >
                     <Text style={[
                       styles.calculationButtonText,
@@ -432,8 +297,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                           : (isDark ? '#4b5563' : '#d1d5db'),
                       }
                     ]}
-                    onPress={() => !isCompleted && updateCost(index, 'calculation_type', 'per_total')}
-                    disabled={isCompleted}
+                    onPress={() => updateCost(index, 'calculation_type', 'per_total')}
                   >
                     <Text style={[
                       styles.calculationButtonText,
@@ -453,7 +317,6 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   value={cost.description || ''}
                   onChangeText={(value) => updateCost(index, 'description', value)}
                   placeholder="Additional details"
-                  editable={!isCompleted}
                 />
               </View>
             ))}
@@ -512,58 +375,13 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
           onPress={onCancel}
           style={styles.footerButton}
         />
-        
-        {!isCompleted ? (
-          <>
-            <Button
-              title="Update Import"
-              onPress={handleUpdate}
-              loading={loading}
-              style={[styles.footerButton, { flex: 2 }]}
-            />
-            <Button
-              title="Mark as Arrived"
-              onPress={handleMarkAsArrived}
-              loading={markingAsArrived}
-              style={[styles.footerButton, { backgroundColor: '#059669' }]}
-            />
-          </>
-        ) : (
-          <Button
-            title="Update Notes"
-            onPress={handleUpdate}
-            loading={loading}
-            style={styles.footerButton}
-          />
-        )}
+        <Button
+          title="Update Import"
+          onPress={handleUpdate}
+          loading={loading}
+          style={styles.footerButton}
+        />
       </View>
-
-      {/* Date Picker Modal */}
-      <Modal
-        visible={showDatePicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDatePicker(false)}
-        >
-          <Card style={styles.datePickerContainer}>
-            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {datePickerType === 'purchase' ? 'Select Purchase Date' : 'Select Arrival Date'}
-            </Text>
-            
-            <DateRangePicker
-              startDate={datePickerType === 'purchase' ? purchaseDate : (arrivalDate || new Date())}
-              endDate={datePickerType === 'purchase' ? purchaseDate : (arrivalDate || new Date())}
-              onConfirm={handleDateConfirm}
-              onCancel={() => setShowDatePicker(false)}
-            />
-          </Card>
-        </TouchableOpacity>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -623,54 +441,6 @@ const styles = StyleSheet.create({
   barcode: {
     fontSize: 12,
     fontFamily: 'monospace',
-  },
-  dateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 12,
-  },
-  dateField: {
-    flex: 1,
-  },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  dateButtonText: {
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  statusContainer: {
-    marginBottom: 16,
-  },
-  statusLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
   },
   label: {
     fontSize: 14,
@@ -755,23 +525,5 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  datePickerContainer: {
-    width: '100%',
-    maxWidth: 400,
-    padding: 20,
-  },
-  datePickerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
   },
 });

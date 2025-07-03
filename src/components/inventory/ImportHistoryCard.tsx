@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User, CircleCheck as CheckCircle, Clock, Truck as TruckDelivery } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User } from 'lucide-react-native';
 
 interface ImportHistoryCardProps {
   importRecord: {
@@ -13,9 +13,6 @@ interface ImportHistoryCardProps {
     total_cost: number;
     notes?: string;
     created_at: string;
-    purchase_date: string;
-    arrival_date?: string;
-    status: 'pending' | 'completed';
     products?: {
       name: string;
       barcode?: string;
@@ -29,10 +26,9 @@ interface ImportHistoryCardProps {
   };
   onEdit: (importRecord: any) => void;
   onDelete: (importRecord: any) => void;
-  onMarkAsArrived: (importRecord: any) => void;
 }
 
-export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArrived }: ImportHistoryCardProps) {
+export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHistoryCardProps) {
   const { isDark } = useTheme();
 
   const formatDate = (dateString: string) => {
@@ -42,19 +38,6 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
   const formatCurrency = (amount: number) => {
     return `$${amount.toFixed(2)}`;
   };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '#f59e0b'; // Amber
-      case 'completed':
-        return '#059669'; // Green
-      default:
-        return '#6b7280'; // Gray
-    }
-  };
-
-  const isPending = importRecord.status === 'pending';
 
   return (
     <Card style={styles.card}>
@@ -75,36 +58,9 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
             <View style={styles.metaItem}>
               <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Purchased: {formatDate(importRecord.purchase_date)}
+                {formatDate(importRecord.created_at)}
               </Text>
             </View>
-          </View>
-          
-          {importRecord.arrival_date && (
-            <View style={styles.metaItem}>
-              <TruckDelivery size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Arrived: {formatDate(importRecord.arrival_date)}
-              </Text>
-            </View>
-          )}
-          
-          <View style={styles.statusContainer}>
-            {isPending ? (
-              <View style={styles.statusBadge}>
-                <Clock size={12} color={getStatusColor(importRecord.status)} />
-                <Text style={[styles.statusText, { color: getStatusColor(importRecord.status) }]}>
-                  Pending Arrival
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.statusBadge}>
-                <CheckCircle size={12} color={getStatusColor(importRecord.status)} />
-                <Text style={[styles.statusText, { color: getStatusColor(importRecord.status) }]}>
-                  Completed
-                </Text>
-              </View>
-            )}
           </View>
           
           {importRecord.products?.barcode && (
@@ -115,15 +71,6 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
         </View>
         
         <View style={styles.actions}>
-          {isPending && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6', marginBottom: 8 }]}
-              onPress={() => onMarkAsArrived(importRecord)}
-            >
-              <TruckDelivery size={16} color="#059669" />
-            </TouchableOpacity>
-          )}
-          
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
             onPress={() => onEdit(importRecord)}
@@ -194,18 +141,6 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
           </Text>
         </View>
       )}
-      
-      {isPending && (
-        <TouchableOpacity
-          style={[styles.arriveButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-          onPress={() => onMarkAsArrived(importRecord)}
-        >
-          <TruckDelivery size={16} color="#059669" />
-          <Text style={[styles.arriveButtonText, { color: '#059669' }]}>
-            Mark as Arrived
-          </Text>
-        </TouchableOpacity>
-      )}
     </Card>
   );
 }
@@ -239,28 +174,9 @@ const styles = StyleSheet.create({
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
   metaText: {
     fontSize: 12,
-    marginLeft: 4,
-  },
-  statusContainer: {
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
     marginLeft: 4,
   },
   barcode: {
@@ -342,19 +258,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontStyle: 'italic',
-  },
-  arriveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  arriveButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
   },
 });

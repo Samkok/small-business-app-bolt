@@ -92,9 +92,6 @@ export interface Database {
           business_id: string;
           imported_by: string;
           created_at: string;
-          purchase_date: string;
-          arrival_date?: string;
-          status: 'pending' | 'completed';
         };
         Insert: {
           id?: string;
@@ -107,9 +104,6 @@ export interface Database {
           business_id: string;
           imported_by: string;
           created_at?: string;
-          purchase_date?: string;
-          arrival_date?: string;
-          status?: 'pending' | 'completed';
         };
         Update: {
           id?: string;
@@ -122,9 +116,6 @@ export interface Database {
           business_id?: string;
           imported_by?: string;
           created_at?: string;
-          purchase_date?: string;
-          arrival_date?: string;
-          status?: 'pending' | 'completed';
         };
       };
       import_costs: {
