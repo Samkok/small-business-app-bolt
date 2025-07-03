@@ -104,7 +104,7 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
         <View style={styles.actions}>
           {importRecord.status === 'pending' && (
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6', marginBottom: 8 }]}
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
               onPress={() => onMarkAsArrived(importRecord)}
             >
               <CheckCircle size={16} color="#059669" />
@@ -119,7 +119,7 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArri
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6', marginLeft: 8 }]}
+            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
             onPress={() => onDelete(importRecord)}
           >
             <Trash2 size={16} color="#dc2626" />
@@ -248,7 +248,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actions: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    gap: 8,
   },
   actionButton: {
     width: 32,
