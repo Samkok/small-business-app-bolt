@@ -28,7 +28,7 @@ import ProductForm from '@/src/components/products/ProductForm';
 import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, Truck as TruckDelivery, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, Clock, CircleCheck as CheckCircle } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, CircleCheck as CheckCircle, Clock, Truck as TruckDelivery } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
@@ -60,6 +60,7 @@ export default function InventoryScreen() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [importStatusFilter, setImportStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -67,7 +68,6 @@ export default function InventoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalProducts, setTotalProducts] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [pendingImportsCount, setPendingImportsCount] = useState(0);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -102,18 +102,16 @@ export default function InventoryScreen() {
     }
     
     try {
-      const [historyData, totalCount, lowStockProducts, pendingImports] = await Promise.all([
+      const [historyData, totalCount, lowStockProducts] = await Promise.all([
         inventoryService.getImportHistory(profile.id),
         productService.getProductsCount(profile.id),
-        productService.getLowStockProducts(profile.id),
-        inventoryService.getPendingImports(profile.id)
+        productService.getLowStockProducts(profile.id)
       ]);
       
       setImportHistory(historyData);
       setFilteredImportHistory(historyData);
       setTotalProducts(totalCount);
       setLowStockCount(lowStockProducts.length);
-      setPendingImportsCount(pendingImports.length);
       
       // Reset pagination and load first page of products
       if (isRefresh) {
@@ -226,7 +224,7 @@ export default function InventoryScreen() {
   const handleDeleteImport = async (importRecord: any) => {
     Alert.alert(
       'Delete Import Record',
-      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
+      `Are you sure you want to delete this import record? This will also adjust the product stock.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -251,21 +249,16 @@ export default function InventoryScreen() {
   };
 
   const handleMarkAsArrived = async (importRecord: any) => {
-    if (importRecord.status === 'completed') {
-      Alert.alert('Already Arrived', 'This import has already been marked as arrived.');
-      return;
-    }
-    
     Alert.alert(
       'Mark as Arrived',
-      `Are you sure you want to mark this import as arrived? This will update the product stock and cost.`,
+      `Are you sure you want to mark this import as arrived? This will update the product stock.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Confirm', 
           onPress: async () => {
             try {
-              setDeletingImport(importRecord.id); // Reuse the loading indicator
+              setMarkingAsArrived(importRecord.id);
               await inventoryService.markImportAsArrived(importRecord.id);
               Alert.alert('Success', 'Import marked as arrived successfully');
               loadData();
@@ -273,7 +266,7 @@ export default function InventoryScreen() {
               console.error('Error marking import as arrived:', error);
               Alert.alert('Error', 'Failed to mark import as arrived');
             } finally {
-              setDeletingImport(null);
+              setMarkingAsArrived(null);
             }
           }
         },
@@ -317,7 +310,7 @@ export default function InventoryScreen() {
 
     Alert.alert(
       'Delete Selected Imports',
-      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels for completed imports.`,
+      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -398,7 +391,7 @@ export default function InventoryScreen() {
   const handleClearImportSearch = () => {
     setImportSearchQuery('');
     setIsImportSearching(false);
-    filterImportHistory();
+    setFilteredImportHistory(importHistory);
   };
 
   const filterImportHistory = () => {
@@ -434,10 +427,12 @@ export default function InventoryScreen() {
     
     // Apply sort order
     filtered.sort((a, b) => {
-      // For pending items, sort by purchase_date
-      // For completed items, sort by arrival_date
-      const dateA = a.status === 'pending' ? new Date(a.purchase_date).getTime() : new Date(a.arrival_date || a.purchase_date).getTime();
-      const dateB = b.status === 'pending' ? new Date(b.purchase_date).getTime() : new Date(b.arrival_date || b.purchase_date).getTime();
+      const dateA = new Date(sortOrder === 'newest' ? 
+        (a.status === 'completed' ? a.arrival_date : a.purchase_date) : 
+        (a.status === 'completed' ? a.arrival_date : a.purchase_date)).getTime();
+      const dateB = new Date(sortOrder === 'newest' ? 
+        (b.status === 'completed' ? b.arrival_date : b.purchase_date) : 
+        (b.status === 'completed' ? b.arrival_date : b.purchase_date)).getTime();
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
     
@@ -477,14 +472,12 @@ export default function InventoryScreen() {
     title, 
     icon,
     isActive, 
-    onPress,
-    badge
+    onPress 
   }: { 
     title: string; 
     icon: React.ReactNode;
     isActive: boolean; 
-    onPress: () => void;
-    badge?: number;
+    onPress: () => void; 
   }) => (
     <TouchableOpacity
       style={[
@@ -499,7 +492,7 @@ export default function InventoryScreen() {
       onPress={onPress}
     >
       <View style={styles.tabButtonContent}>
-        <View style={[styles.tabIcon, { opacity: isActive ? 1 : 0.7 }]}>
+        <View style={styles.tabIcon}>
           {icon}
         </View>
         <Text style={[
@@ -508,13 +501,6 @@ export default function InventoryScreen() {
         ]} numberOfLines={1}>
           {title}
         </Text>
-        {badge !== undefined && badge > 0 && (
-          <View style={[styles.badgeContainer, { backgroundColor: isActive ? '#ffffff' : '#f59e0b' }]}>
-            <Text style={[styles.badgeText, { color: isActive ? '#2563eb' : '#ffffff' }]}>
-              {badge}
-            </Text>
-          </View>
-        )}
       </View>
     </TouchableOpacity>
   );
@@ -742,7 +728,7 @@ export default function InventoryScreen() {
         }
       >
         <Card style={styles.emptyState}>
-          <TruckDelivery size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+          <TrendingUp size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
           <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Import Inventory
           </Text>
@@ -755,36 +741,6 @@ export default function InventoryScreen() {
             style={styles.importButton}
           />
         </Card>
-        
-        {pendingImportsCount > 0 && (
-          <Card style={[styles.pendingImportsCard, { marginTop: 16 }]}>
-            <View style={styles.pendingImportsHeader}>
-              <View style={styles.pendingImportsTitle}>
-                <Clock size={20} color="#f59e0b" />
-                <Text style={[styles.pendingImportsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  Pending Imports
-                </Text>
-              </View>
-              <View style={styles.pendingImportsBadge}>
-                <Text style={styles.pendingImportsBadgeText}>
-                  {pendingImportsCount}
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.pendingImportsDescription, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              You have {pendingImportsCount} pending import{pendingImportsCount !== 1 ? 's' : ''} waiting to be marked as arrived.
-              Go to the Import History tab to manage them.
-            </Text>
-            <Button
-              title="View Pending Imports"
-              onPress={() => {
-                setActiveTab('history');
-                setImportStatusFilter('pending');
-              }}
-              style={{ marginTop: 12 }}
-            />
-          </Card>
-        )}
       </ScrollView>
     );
   };
@@ -905,30 +861,18 @@ export default function InventoryScreen() {
             ]}
             onPress={() => setImportStatusFilter('pending')}
           >
-            <Clock size={14} color={importStatusFilter === 'pending' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Clock size={14} color={importStatusFilter === 'pending' ? '#ffffff' : '#f59e0b'} />
             <Text style={[
               styles.statusFilterText,
               { 
                 color: importStatusFilter === 'pending' 
                   ? '#ffffff' 
-                  : (isDark ? '#f9fafb' : '#374151') 
+                  : (isDark ? '#f9fafb' : '#374151'),
+                marginLeft: 4
               }
             ]}>
               Pending
             </Text>
-            {pendingImportsCount > 0 && (
-              <View style={[
-                styles.statusFilterBadge,
-                { backgroundColor: importStatusFilter === 'pending' ? '#ffffff' : '#f59e0b' }
-              ]}>
-                <Text style={[
-                  styles.statusFilterBadgeText,
-                  { color: importStatusFilter === 'pending' ? '#f59e0b' : '#ffffff' }
-                ]}>
-                  {pendingImportsCount}
-                </Text>
-              </View>
-            )}
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -945,13 +889,14 @@ export default function InventoryScreen() {
             ]}
             onPress={() => setImportStatusFilter('completed')}
           >
-            <CheckCircle size={14} color={importStatusFilter === 'completed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <CheckCircle size={14} color={importStatusFilter === 'completed' ? '#ffffff' : '#059669'} />
             <Text style={[
               styles.statusFilterText,
               { 
                 color: importStatusFilter === 'completed' 
                   ? '#ffffff' 
-                  : (isDark ? '#f9fafb' : '#374151') 
+                  : (isDark ? '#f9fafb' : '#374151'),
+                marginLeft: 4
               }
             ]}>
               Completed
@@ -1098,7 +1043,7 @@ export default function InventoryScreen() {
         />
         <TabButton
           title="Import Stock"
-          icon={<TruckDelivery size={18} color={activeTab === 'import' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
+          icon={<TrendingUp size={18} color={activeTab === 'import' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'import'}
           onPress={() => setActiveTab('import')}
         />
@@ -1107,14 +1052,22 @@ export default function InventoryScreen() {
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
-          badge={pendingImportsCount}
         />
       </View>
 
       <View style={styles.content}>
-        {activeTab === 'products' && renderProductsTab()}
-        {activeTab === 'import' && renderImportTab()}
-        {activeTab === 'history' && renderHistoryTab()}
+        {/* Render all tabs but only show the active one */}
+        <View style={activeTab === 'products' ? styles.tabContentVisible : styles.tabContentHidden}>
+          {renderProductsTab()}
+        </View>
+        
+        <View style={activeTab === 'import' ? styles.tabContentVisible : styles.tabContentHidden}>
+          {renderImportTab()}
+        </View>
+        
+        <View style={activeTab === 'history' ? styles.tabContentVisible : styles.tabContentHidden}>
+          {renderHistoryTab()}
+        </View>
       </View>
 
       {showBackToTop && (
@@ -1194,7 +1147,14 @@ export default function InventoryScreen() {
       {/* Loading overlay for deleting import */}
       {deletingImport && (
         <View style={styles.loadingOverlay}>
-          <LoadingSpinner text="Processing import record..." />
+          <LoadingSpinner text="Deleting import record..." />
+        </View>
+      )}
+
+      {/* Loading overlay for marking as arrived */}
+      {markingAsArrived && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Marking import as arrived..." />
         </View>
       )}
 
@@ -1259,24 +1219,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-  badgeContainer: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
   },
   tabContent: {
+    flex: 1,
+  },
+  tabContentVisible: {
+    flex: 1,
+  },
+  tabContentHidden: {
+    display: 'none',
     flex: 1,
   },
   searchContainer: {
@@ -1328,32 +1282,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusFilterButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 20,
     borderWidth: 1,
   },
   statusFilterText: {
     fontSize: 14,
     fontWeight: '500',
-    marginLeft: 4,
-  },
-  statusFilterBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-    paddingHorizontal: 4,
-  },
-  statusFilterBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   searchResultsHeader: {
     flexDirection: 'row',
@@ -1560,41 +1498,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
-  },
-  pendingImportsCard: {
-    padding: 16,
-  },
-  pendingImportsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  pendingImportsTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pendingImportsText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  pendingImportsBadge: {
-    backgroundColor: '#f59e0b',
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  pendingImportsBadgeText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  pendingImportsDescription: {
-    fontSize: 14,
-    lineHeight: 20,
   },
 });
