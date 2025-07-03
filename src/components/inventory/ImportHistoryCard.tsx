@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User, CheckCircle, Clock, TruckDelivery } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User, CircleCheck as CheckCircle, Clock, Truck as TruckDelivery } from 'lucide-react-native';
 
 interface ImportHistoryCardProps {
   importRecord: {
