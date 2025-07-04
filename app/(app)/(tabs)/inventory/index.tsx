@@ -219,8 +219,8 @@ export default function InventoryScreen() {
     setShowProductForm(true);
   };
 
-  const handleImportStock = (product: any) => {
-    router.push(`/inventory/product-selection`);
+  const handleViewDetails = (product: any) => {
+    router.push(`/inventory/product-details?productId=${product.id}`);
   };
 
   const handleMarkAsArrived = async (importRecord: any) => {
@@ -518,7 +518,7 @@ export default function InventoryScreen() {
     <ProductCard
       product={item}
       onEdit={handleEditProduct}
-      onImportStock={handleImportStock}
+      onViewDetails={handleViewDetails}
     />
   );
 

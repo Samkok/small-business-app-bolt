@@ -274,6 +274,21 @@ export const inventoryService = {
     return data;
   },
 
+  async getImportsByProductId(productId: string) {
+    if (typeof productId !== 'string' || !productId) return;
+    const { data, error } = await supabase
+      .from('inventory_imports')
+      .select(`
+        *,
+        import_costs(*)
+      `)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
   async getImportDetails(importId: string) {
     if (typeof importId !== 'string' || !importId) return;
     const { data, error } = await supabase

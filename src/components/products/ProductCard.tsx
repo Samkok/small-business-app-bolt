@@ -4,6 +4,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X } from 'lucide-react-native';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { useRouter } from 'expo-router';
 
 interface ProductCardProps {
   product: {
@@ -17,12 +18,13 @@ interface ProductCardProps {
     min_stock_level: number;
   };
   onEdit: (product: any) => void;
-  onImportStock: (product: any) => void;
+  onViewDetails: (product: any) => void;
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onImportStock }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
+  const router = useRouter();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
   const isOutOfStock = product.current_stock === 0;
@@ -34,6 +36,10 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
   };
 
   const stockStatus = getStockStatus();
+
+  const handleViewDetails = () => {
+    router.push(`/inventory/product-details?productId=${product.id}`);
+  };
 
   return (
     <Card style={styles.card}>
@@ -105,7 +111,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-              onPress={() => onImportStock(product)}
+              onPress={handleViewDetails}
             >
               <TrendingUp size={16} color="#059669" />
               <Text style={[styles.actionText, { color: '#059669' }]}>Stock</Text>

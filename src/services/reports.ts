@@ -639,5 +639,62 @@ export const reportsService = {
         items: itemDetails
       };
     });
+  },
+
+  async getProductFinancialSummary(productId: string, businessId: string, startDate: Date, endDate: Date) {
+    try {
+      // Get all sales containing this product
+      const { data: cartItems, error: cartItemsError } = await supabase
+        .from('cart_items')
+        .select(`
+          quantity,
+          unit_price,
+          subtotal,
+          carts!inner(
+            sales!inner(
+              id,
+              sale_date,
+              status,
+              business_id
+            )
+          )
+        `)
+        .eq('product_id', productId)
+        .eq('carts.sales.business_id', businessId)
+        .eq('carts.sales.status', 'completed')
+        .gte('carts.sales.sale_date', startDate.toISOString())
+        .lte('carts.sales.sale_date', endDate.toISOString());
+
+      if (cartItemsError) throw cartItemsError;
+
+      // Get product cost per unit
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('cost_per_unit')
+        .eq('id', productId)
+        .single();
+
+      if (productError) throw productError;
+
+      // Calculate totals
+      const quantitySold = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+      const totalRevenue = cartItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+      const costPerUnit = product?.cost_per_unit || 0;
+      const totalCOGS = quantitySold * costPerUnit;
+      const totalProfit = totalRevenue - totalCOGS;
+      const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+      return {
+        quantitySold,
+        totalRevenue,
+        costPerUnit,
+        totalCOGS,
+        totalProfit,
+        profitMargin
+      };
+    } catch (error) {
+      console.error('Error getting product financial summary:', error);
+      throw error;
+    }
   }
 };

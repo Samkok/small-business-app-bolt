@@ -8,6 +8,7 @@ export default function InventoryLayout() {
       <Stack.Screen name="low-stock" />
       <Stack.Screen name="product-selection" />
       <Stack.Screen name="import-form" />
+      <Stack.Screen name="product-details" />
     </Stack>
   );
 }
