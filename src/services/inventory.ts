@@ -283,6 +283,7 @@ export const inventoryService = {
         import_costs(*)
       `)
       .eq('product_id', productId)
+      .eq('status', 'completed')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
