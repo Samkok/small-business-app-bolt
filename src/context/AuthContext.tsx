@@ -194,9 +194,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('*')
             .eq('user_id', userId)
             .single();
-
-          console.log(`Attempt ${attempt + 1}: Supabase profile query result - Data:`, data);
-          console.log(`Attempt ${attempt + 1}: Supabase profile query result - Error:`, error);
             
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
