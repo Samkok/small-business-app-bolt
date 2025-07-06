@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -17,19 +18,31 @@ interface AuthContextType {
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
+  signedOutDueToInactivity: boolean;
+  resetInactivitySignOutFlag: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// One week in milliseconds
+const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
+  const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      // Check if session exists and if it's expired due to inactivity
+      if (session) {
+        checkSessionActivity(session);
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -42,6 +55,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event);
+        
+        if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
+          // If signed out but not explicitly by the user, it was due to inactivity
+          setSignedOutDueToInactivity(true);
+        }
+        
+        if (event === 'SIGNED_IN') {
+          // Reset the inactivity flag when user signs in
+          setSignedOutDueToInactivity(false);
+          
+          // Update last activity timestamp
+          await updateLastActivityTimestamp();
+        }
+        
+        // Reset the explicit sign out flag
+        setIsExplicitSignOut(false);
+        
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -56,6 +87,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Check for session activity whenever the app comes to foreground
+  useEffect(() => {
+    const checkActivity = async () => {
+      if (session) {
+        checkSessionActivity(session);
+      }
+    };
+    
+    // Add app state change listener for foreground/background transitions
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkActivity();
+        // Update last activity timestamp when app comes to foreground
+        if (session) {
+          updateLastActivityTimestamp();
+        }
+      }
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [session]);
+
+  const checkSessionActivity = async (currentSession: Session) => {
+    try {
+      const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
+      
+      if (lastActivity) {
+        const lastActivityTime = parseInt(lastActivity, 10);
+        const currentTime = Date.now();
+        
+        // If inactive for more than one week, sign out
+        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
+          console.log('Session expired due to inactivity');
+          setSignedOutDueToInactivity(true);
+          await supabase.auth.signOut();
+        }
+      } else {
+        // If no last activity timestamp exists, create one
+        await updateLastActivityTimestamp();
+      }
+    } catch (error) {
+      console.error('Error checking session activity:', error);
+    }
+  };
+
+  const updateLastActivityTimestamp = async () => {
+    try {
+      await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
+    } catch (error) {
+      console.error('Error updating last activity timestamp:', error);
+    }
+  };
+
+  const resetInactivitySignOutFlag = () => {
+    setSignedOutDueToInactivity(false);
+  };
 
   const loadProfile = async (userId: string) => {
     try {
@@ -114,6 +204,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Set flag to indicate this is an explicit sign out
+    setIsExplicitSignOut(true);
+    
     // Clear any saved credentials
     try {
       await AsyncStorage.removeItem('rememberMe');
@@ -166,6 +259,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     resetPassword,
     updatePassword,
+    signedOutDueToInactivity,
+    resetInactivitySignOutFlag,
   };
 
   return (
