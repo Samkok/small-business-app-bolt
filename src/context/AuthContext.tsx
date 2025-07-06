@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadProfile = async (userId: string) => {
+    console.log("AuthContext: LoadProfile start");
     try {
       const { data, error } = await supabase
         .from('profiles')
