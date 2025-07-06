@@ -34,24 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
-  
-  // Add a safety timeout to prevent the app from being stuck in loading state
-  useEffect(() => {
-    if (loading) {
-      // Set a maximum loading time of 10 seconds
-      const MAX_LOADING_TIME = 10000; // 10 seconds
-      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
-      const safetyTimeout = setTimeout(() => {
-        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
-        setLoading(false);
-      }, MAX_LOADING_TIME);
-
-      return () => {
-        clearTimeout(safetyTimeout);
-        console.log('Auth loading safety timeout cleared');
-      };
-    }
-  }, [loading]);
 
   useEffect(() => {
     // Get initial session
@@ -111,6 +93,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+  
+  // Add a safety timeout to prevent the app from being stuck in loading state
+  useEffect(() => {
+    if (loading) {
+      // Set a maximum loading time of 10 seconds
+      const MAX_LOADING_TIME = 10000; // 10 seconds
+      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
+      const safetyTimeout = setTimeout(() => {
+        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
+        setLoading(false);
+      }, MAX_LOADING_TIME);
+
+      return () => {
+        clearTimeout(safetyTimeout);
+        console.log('Auth loading safety timeout cleared');
+      };
+    }
+  }, [loading]);
 
   // Check for session activity whenever the app comes to foreground
   useEffect(() => {
