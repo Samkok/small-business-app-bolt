@@ -127,60 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadProfile = async (userId: string) => {
-    console.log('AuthContext: Loading profile for user ID:', userId);
     try {
-      // Add a timeout for profile loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile loading timeout')), 5000)
-      );
-      
-      // Create the actual profile loading promise
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      // Race the promises
-      const result = await Promise.race([
-        profilePromise,
-        timeoutPromise.catch(error => {
-          console.warn('Profile loading timed out:', error);
-          return { data: null, error: new Error('Profile loading timeout') };
-        })
-      ]) as any;
-      
-      const { data, error } = result;
-
-      if (error) {
-        if (error.message === 'Profile loading timeout') {
-          console.warn('Profile loading timed out, continuing without profile');
-        } else if (error.code !== 'PGRST116') {
-          console.error('Profile load error:', error);
-        } else {
-          console.log('No profile found for user ID:', userId);
-        }
-        setProfile(null);
-      } else if (data) {
-        console.log('Profile loaded successfully:', data.id);
-        setProfile(data);
-      } else {
-        console.log('No profile data returned for user ID:', userId);
-        setProfile(null);
-      }
-    } catch (err) {
-      console.error('Unexpected error loading profile:', err);
-      setProfile(null);
-    } finally {
-      console.log('Profile loading completed, setting loading to false');
-      setLoading(false);
-    }
-  };
-
-  // Original loadProfile function (commented out)
-  /*
-  const loadProfile = async (userId: string) => {
-    console.log('loadProfile started for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -198,7 +145,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
-  */
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

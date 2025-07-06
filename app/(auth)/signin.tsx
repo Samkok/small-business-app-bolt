@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Input } from '@/src/components/ui/Input';
-import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,8 +25,7 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const { signIn, session } = useAuth();
+  const { signIn } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
 
@@ -53,12 +51,10 @@ export default function SignInScreen() {
   const handleSignIn = async () => {
     if (!email || !password) {
       Alert.alert(t('common.error'), 'Please fill in all fields');
-      setAuthError('Please fill in all fields');
       return;
     }
 
     setLoading(true);
-    setAuthError(null);
     
     try {
       // Save or remove credentials based on "Remember Me" checkbox
@@ -74,7 +70,6 @@ export default function SignInScreen() {
       
       if (error) {
         Alert.alert(t('common.error'), error.message);
-        setAuthError(error.message);
       }
     } catch (error) {
       console.error('Sign in error:', error);
@@ -92,7 +87,6 @@ export default function SignInScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.inner}>
@@ -106,12 +100,6 @@ export default function SignInScreen() {
           </View>
 
           <Card style={styles.card}>
-            {authError && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{authError}</Text>
-              </View>
-            )}
-            
             <Input
               label={t('auth.email')}
               value={email}
@@ -234,17 +222,5 @@ const styles = StyleSheet.create({
   link: {
     color: '#2563eb',
     fontWeight: '600',
-  },
-  errorContainer: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  errorText: {
-    color: '#b91c1c',
-    fontSize: 14,
   },
 });
