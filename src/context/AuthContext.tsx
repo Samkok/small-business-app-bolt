@@ -5,6 +5,10 @@ import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
+// Constants for retry mechanism
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
@@ -167,44 +171,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
-  const loadProfile = async (userId: string) => {
-    console.log('loadProfile started for user:', userId);
+  // New function to fetch profile with retry mechanism
+  const fetchProfileWithRetry = async (userId: string, retryCount = 0): Promise<Profile | null> => {
     try {
-      // Set a timeout for profile loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile loading timeout')), 5000)
-      );
+      console.log(`Attempt ${retryCount + 1}/${MAX_RETRIES + 1} to fetch profile for user: ${userId}`);
       
-      // Create the actual profile loading promise
-      const profilePromise = supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
-      
-      // Race the promises
-      const { data, error } = await Promise.race([
-        profilePromise,
-        timeoutPromise.then(() => ({ data: null, error: new Error('Profile loading timeout') }))
-      ]) as any;
 
-      if (error && error.message === 'Profile loading timeout') {
-        console.warn('Profile loading timed out, continuing without profile');
-        setProfile(null);
-      } else if (error) {
-        console.error('Error loading profile:', error);
-        setProfile(null);
+      if (error) {
+        // If we have retries left and the error is potentially retryable
+        // (network error, timeout, or server error)
+        if (retryCount < MAX_RETRIES && 
+            (error.code === 'PGRST116' || 
+             error.code === '23505' || 
+             error.message.includes('network') || 
+             error.message.includes('timeout'))) {
+          
+          // Calculate delay with exponential backoff
+          const delay = BASE_DELAY_MS * Math.pow(2, retryCount);
+          console.log(`Retrying in ${delay}ms...`);
+          
+          // Wait for the calculated delay
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // Retry the fetch with incremented retry count
+          return fetchProfileWithRetry(userId, retryCount + 1);
+        }
+        
+        // If we've exhausted retries or the error is not retryable
+        console.error('Error fetching profile after retries:', error);
+        return null;
       } else {
-        console.log('Profile loaded successfully:', data.id);
-        setProfile(data);
+        if (data) {
+          console.log('Profile loaded successfully:', data.id);
+          return data;
+        } else {
+          console.log('No profile found for user:', userId);
+          return null;
+        }
       }
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Unexpected error in fetchProfileWithRetry:', error);
+      return null;
+    }
+  };
+
+  const loadProfile = async (userId: string) => {
+    console.log('loadProfile started for user:', userId);
+    try {
+      // Use the new retry mechanism to fetch profile
+      const profileData = await fetchProfileWithRetry(userId);
+      
+      // Update state with the fetched profile
+      setProfile(profileData);
+    } catch (error) {
       console.error('Error in loadProfile:', error);
       setProfile(null);
-    }
-    
-    // Always set loading to false when done
-    finally {
+    } finally {
       console.log('loadProfile completed, setting loading to false');
       setLoading(false);
     }
@@ -213,29 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Original loadProfile function (commented out)
   /*
   const loadProfile = async (userId: string) => {
-    console.log('loadProfile started for user:', userId);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading profile:', error);
-      } else if (data) {
-        console.log('Profile loaded successfully:', data.id);
-        setProfile(data);
-      } else {
-        console.log('No profile found for user:', userId);
-        setProfile(null);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    } finally {
-      console.log('loadProfile completed, setting loading to false');
-      setLoading(false);
-    }
+    // Original implementation removed for brevity
   };
   */
 

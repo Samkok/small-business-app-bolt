@@ -280,7 +280,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const timeoutId = setTimeout(() => {
         console.log('CartContext: refreshCarts timeout reached, forcing loading state to false');
         setLoading(false);
-      }, 5000);
+      }, 8000);
       
       // Get the current carts from storage to ensure we're working with the latest data
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
