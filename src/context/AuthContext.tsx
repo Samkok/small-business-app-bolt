@@ -186,6 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('*')
             .eq('user_id', userId)
             .single();
+
+          console.log(data);
             
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
