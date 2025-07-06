@@ -180,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           // Attempt to fetch the profile
+          console.log("Attempt to fetch profile");
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
