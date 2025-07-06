@@ -78,11 +78,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Load carts from AsyncStorage on mount
   useEffect(() => {
     loadCarts();
+    console.log('CartContext: Initial loadCarts called');
   }, []);
 
   // Load carts from AsyncStorage
   const loadCarts = async () => {
     try {
+      console.log('CartContext: loadCarts started');
       setLoading(true);
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
       if (storedCarts) {
@@ -93,13 +95,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             cart.business_id === profile.id && cart.status === 'active'
           );
           setCarts(filteredCarts);
+          console.log(`CartContext: Loaded ${filteredCarts.length} carts for business ${profile.id}`);
         } else {
+          console.log('CartContext: No profile ID, setting empty carts');
           setCarts([]);
         }
       }
     } catch (error) {
       console.error('Error loading carts from storage:', error);
     } finally {
+      console.log('CartContext: loadCarts completed, setting loading to false');
       setLoading(false);
     }
   };
@@ -268,7 +273,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (!profile?.id) return;
     
     try {
+      console.log('CartContext: refreshCarts started for profile:', profile.id);
       setLoading(true);
+      
+      // Set a timeout to ensure loading state doesn't get stuck
+      const timeoutId = setTimeout(() => {
+        console.log('CartContext: refreshCarts timeout reached, forcing loading state to false');
+        setLoading(false);
+      }, 5000);
       
       // Get the current carts from storage to ensure we're working with the latest data
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
@@ -381,6 +393,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCarts(mergedCarts);
     } catch (error) {
       console.error('Error refreshing carts:', error);
+    } finally {
+      console.log('CartContext: refreshCarts completed');
+      setLoading(false);
+      // Clear the timeout
+      clearTimeout(timeoutId);
     } finally {
       setLoading(false);
     }
