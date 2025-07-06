@@ -65,12 +65,12 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
-  console.log('DashboardScreen: Profile on render:', profile); 
+  console.log('DashboardScreen: Profile on render:', profile ? `ID: ${profile.id}` : 'null'); 
   const router = useRouter();
 
   useEffect(() => {
     loadDashboardData();
-  }, [profile?.id]);
+  }, [profile]);
 
   const handleNewSale = useCallback(() => {
     // Use router.navigate instead of router.push to properly handle tab navigation
@@ -79,10 +79,12 @@ export default function DashboardScreen() {
 
   const loadDashboardData = async (isRefresh = false) => {
     if (!profile?.id) {
+      console.log('DashboardScreen: No profile ID available, skipping data load');
       setLoading(false);
       return;
     }
     
+    console.log('DashboardScreen: Loading data for profile ID:', profile.id);
     if (!isRefresh) {
       setLoading(true);
     }

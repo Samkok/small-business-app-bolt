@@ -38,12 +38,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Add a safety timeout to prevent the app from being stuck in loading state
   useEffect(() => {
     if (loading) {
-      const timeoutId = setTimeout(() => {
-        console.log('Loading timeout reached, forcing loading state to false');
+      // Set a maximum loading time of 10 seconds
+      const MAX_LOADING_TIME = 10000; // 10 seconds
+      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
+      const safetyTimeout = setTimeout(() => {
+        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
         setLoading(false);
-      }, 5000); // 5 seconds timeout
-      
-      return () => clearTimeout(timeoutId);
+      }, MAX_LOADING_TIME);
+
+      return () => {
+        clearTimeout(safetyTimeout);
+        console.log('Auth loading safety timeout cleared');
+      };
     }
   }, [loading]);
 
@@ -53,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check if session exists and if it's expired due to inactivity
       console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
       if (session) {
+        console.log('Initial session user ID:', session.user.id);
         checkSessionActivity(session);
       }
       
@@ -174,13 +181,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Retry configuration
       const MAX_RETRIES = 3;
       const INITIAL_DELAY_MS = 500;
+      console.log(`Profile loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
       let lastError = null;
       
       // Try to load profile with retries
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           // Attempt to fetch the profile
-          console.log("Attempt to fetch profile");
+          console.log(`Profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -208,10 +216,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data) {
             console.log('Profile loaded successfully:', data.id);
             setProfile(data);
+            setLoading(false);
             return; // Exit the function early on success
           } else {
             console.log('No profile found for user:', userId);
             setProfile(null);
+            setLoading(false);
             return; // Exit the function early
           }
         } catch (retryError) {
@@ -233,17 +243,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (lastError) {
         console.error('All profile loading attempts failed:', lastError);
         setProfile(null);
+        setLoading(false);
+        return;
       }
     } catch (error: any) {
       console.error('Error in loadProfile:', error);
       setProfile(null);
+      setLoading(false);
+      return;
     }
     
     // Always set loading to false when done
-    finally {
-      console.log('loadProfile completed, setting loading to false');
-      setLoading(false);
-    }
+    console.log('loadProfile completed, setting loading to false');
+    setLoading(false);
   };
 
   // Original loadProfile function (commented out)

@@ -9,14 +9,14 @@ import { useFocusEffect } from '@react-navigation/native';
 export default function AppLayout() {
   const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag } = useAuth();
   const { refreshCarts } = useCart();
-  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? 'exists' : 'null');
+  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session.user.id})` : 'null');
 
   // Refresh carts when the app screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       console.log('AppLayout: Focus effect triggered');
       if (session) {
-        console.log('AppLayout: Refreshing carts for session');
+        console.log('AppLayout: Refreshing carts for user:', session.user.id);
         refreshCarts();
       } else {
         console.log('AppLayout: Not refreshing carts, no session');
@@ -43,15 +43,15 @@ export default function AppLayout() {
 
   if (loading) {
     console.log('AppLayout: Showing loading spinner due to auth loading state');
-    return <LoadingSpinner text="Loading..." />;
+    return <LoadingSpinner text="Loading your account..." />;
   }
 
   if (!session) {
-    console.log('AppLayout: Redirecting to signin due to no session');
+    console.log('AppLayout: No session available, redirecting to signin');
     return <Redirect href="/(auth)/signin" />;
   }
 
-  console.log('AppLayout: Rendering tabs layout with valid session');
+  console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />

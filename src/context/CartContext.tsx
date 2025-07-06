@@ -77,15 +77,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Load carts from AsyncStorage on mount
   useEffect(() => {
-    loadCarts();
-    console.log('CartContext: Initial loadCarts called');
-  }, []);
+    if (profile?.id) {
+      loadCarts();
+      console.log('CartContext: Initial loadCarts called with profile ID:', profile.id);
+    } else {
+      console.log('CartContext: Waiting for profile ID before loading carts');
+      // Set empty carts when profile is not available
+      setCarts([]);
+      setLoading(false);
+    }
+  }, [profile?.id]);
 
   // Load carts from AsyncStorage
   const loadCarts = async () => {
     try {
       console.log('CartContext: loadCarts started');
       setLoading(true);
+      
+      if (!profile?.id) {
+        console.log('CartContext: No profile ID in loadCarts, aborting');
+        setLoading(false);
+        return;
+      }
+      
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
       if (storedCarts) {
         const parsedCarts = JSON.parse(storedCarts) as Cart[];
@@ -273,7 +287,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (!profile?.id) return;
     
     try {
-      console.log('CartContext: refreshCarts started for profile:', profile.id);
+      console.log('CartContext: refreshCarts started for profile ID:', profile.id);
       setLoading(true);
             
       // Get the current carts from storage to ensure we're working with the latest data
@@ -394,8 +408,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [profile?.id, syncCart]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
-    if (!profile?.id) {
-      throw new Error('No business profile found');
+    if (!profile || !profile.id) {
+      console.error('CartContext: Cannot create cart - No business profile found');
+      throw new Error('No business profile found. Please try again later.');
     }
 
     const now = new Date().toISOString();
