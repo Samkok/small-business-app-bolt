@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) {
       // Set a maximum loading time of 10 seconds
-      const MAX_LOADING_TIME = 15000; // 15 seconds
+      const MAX_LOADING_TIME = 10000; // 10 seconds
       console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
         console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       // Check if session exists and if it's expired due to inactivity
-      console.log('Initial getSession result:', session ? `Session exists for user ${session.user.id}` : 'No session');
+      console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
       if (session) {
         console.log('Initial session user ID:', session.user.id);
         checkSessionActivity(session);
@@ -65,8 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setSession(session);
       setUser(session?.user ?? null);
-      
-      if (session?.user?.id) {
+      if (session?.user) {
         console.log('Initial session: Loading profile for user:', session.user.id);
         loadProfile(session.user.id);
       } else {
@@ -79,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state change:', event);
-        console.log('AuthContext: Session object on auth state change:', session ? `User ID: ${session.user.id}` : 'null');
+        console.log('AuthContext: Session object on auth state change:', session);
         
         if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
           // If signed out but not explicitly by the user, it was due to inactivity
@@ -100,11 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (session?.user?.id) {
-          console.log('Auth state change: Loading profile for user:', session.user.id);
+        if (session?.user) {
           await loadProfile(session.user.id);
         } else {
-          console.log('Auth state change: No user, setting profile to null');
           console.log("AuthContext: NO SESSION");
           setProfile(null);
           setLoading(false);
@@ -184,35 +181,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async (userId: string) => {
     console.log('loadProfile started for user:', userId);
     try {
-      // Add a timeout for profile loading
-      const PROFILE_TIMEOUT = 8000; // 8 seconds
-      const timeoutPromise = new Promise((_, reject) => {
-        const id = setTimeout(() => {
-          console.log(`Profile loading timeout of ${PROFILE_TIMEOUT}ms reached for user:`, userId);
-          reject(new Error('Profile loading timeout'));
-        }, PROFILE_TIMEOUT);
-        return () => clearTimeout(id);
-      });
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('No profile found for user:', userId);
-        } else {
-          console.error('Error loading profile:', error);
-        }
-        setProfile(null);
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading profile:', error);
       } else if (data) {
         console.log('Profile loaded successfully:', data.id);
         setProfile(data);
       } else {
-        console.log('No profile data returned for user:', userId);
-        console.error('Error loading profile:', error);
+        console.log('No profile found for user:', userId);
         setProfile(null);
       }
     } catch (error) {
@@ -220,7 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       console.log('loadProfile completed, setting loading to false');
       setLoading(false);
-      console.log('Auth loading state set to false');
     }
   };
 
