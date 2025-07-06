@@ -259,7 +259,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Original loadProfile function (commented out)
-  /*
   const loadProfile = async (userId: string) => {
     console.log('loadProfile started for user:', userId);
     try {
@@ -285,7 +284,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
-  */
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
