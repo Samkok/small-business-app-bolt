@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user') };
     const { error } = await supabase.from('profiles').update(updates).eq('user_id', user.id);
-    if (!error && profile) setProfile({ ...profile, ...updates });
+    if (!error) setProfile((prev) => (prev ? { ...prev, ...updates } : prev));
     return { error };
   };
 
