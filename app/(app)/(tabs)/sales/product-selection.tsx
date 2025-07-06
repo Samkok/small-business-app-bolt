@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
-  FlatList
+  FlatList,
+  Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -15,9 +16,10 @@ import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus } from 'lucide-react-native';
+import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus, Barcode } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -26,6 +28,7 @@ export default function ProductSelectionScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -128,6 +131,13 @@ export default function ProductSelectionScreen() {
       setAddingToCart(null);
     }
   }, [cartId, selectedProducts, products, getCart, updateCartItem, addItemToCart]);
+
+  const handleBarcodeScanned = async (barcode: string) => {
+    setShowBarcodeScanner(false);
+    
+    // Simply set the search query to the scanned barcode
+    setSearchQuery(barcode);
+  };
 
   const getTotalItems = useCallback(() => {
     return Object.values(selectedProducts).reduce((sum, quantity) => sum + quantity, 0);
@@ -284,15 +294,24 @@ export default function ProductSelectionScreen() {
 
       {/* Search */}
       <View style={styles.searchSection}>
-        <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-          <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <TextInput
-            style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-            placeholder="Search products..."
-            placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+        <View style={styles.searchContainer}>
+          <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+            <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <TextInput
+              style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+              placeholder="Search products..."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.barcodeButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
+            onPress={() => setShowBarcodeScanner(true)}
+          >
+            <Barcode size={20} color="#2563eb" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -319,6 +338,18 @@ export default function ProductSelectionScreen() {
           />
         </View>
       )}
+
+      {/* Barcode Scanner Modal */}
+      <Modal
+        visible={showBarcodeScanner}
+        animationType="slide"
+        onRequestClose={() => setShowBarcodeScanner(false)}
+      >
+        <BarcodeScanner
+          onBarcodeScan={handleBarcodeScanned}
+          onClose={() => setShowBarcodeScanner(false)}
+        />
+      </Modal>
     </View>
   );
 }
@@ -384,10 +415,25 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  barcodeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
