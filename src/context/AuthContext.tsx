@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  useEffect( async () => {
+  useEffect(() => {
     const initSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
@@ -133,6 +133,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .eq('user_id', userId)
         .single();
+
+      console.log("AuthContext: Profile Data: ", data)
 
       if (error && error.code !== 'PGRST116') {
         console.error('Profile load error:', error);
