@@ -27,53 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to handle connection errors and retry loading profile
-  const loadProfileWithRetry = async (userId: string, retryCount = 0) => {
-    const MAX_RETRIES = 3;
-    
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading profile:', error);
-        
-        // Retry logic for network errors
-        if (retryCount < MAX_RETRIES && 
-            (error.message.includes('network') || 
-             error.message.includes('timeout') || 
-             error.message.includes('connection'))) {
-          console.log(`Retrying profile load (${retryCount + 1}/${MAX_RETRIES})...`);
-          
-          // Exponential backoff
-          const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 10000);
-          setTimeout(() => loadProfileWithRetry(userId, retryCount + 1), backoffTime);
-          return;
-        }
-      } else {
-        setProfile(data);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    } finally {
-      if (retryCount === 0) {
-        // Only set loading to false on the initial attempt
-        // to avoid UI flicker during retries
-        setLoading(false);
-      }
-    }
-  };
-
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        loadProfileWithRetry(session.user.id);
+        loadProfile(session.user.id);
       } else {
         setLoading(false);
       }
@@ -86,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await loadProfileWithRetry(session.user.id);
+          await loadProfile(session.user.id);
         } else {
           setProfile(null);
           setLoading(false);
@@ -96,6 +56,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading profile:', error);
+      } else {
+        setProfile(data);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

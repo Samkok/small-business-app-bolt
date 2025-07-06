@@ -14,8 +14,8 @@
       "bundleIdentifier": "com.businessmanager.pro",
       "infoPlist": {
         "NSCameraUsageDescription": "We need camera access for scanning",
-        "NSPhotoLibraryUsageDescription": "Allow access your photo library to upload images",
-        "NSPhotoLibraryAddUsageDescription": "Allow app to save images to your photo library",
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to upload images",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save images to your photo library",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
