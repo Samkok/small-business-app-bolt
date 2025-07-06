@@ -65,6 +65,7 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
+  console.log('DashboardScreen: Profile on render:', profile); 
   const router = useRouter();
 
   useEffect(() => {
