@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', userId)
         .single();
 
-      console.log("AuthContext: Profile Data: ", data)
+      console.log("AuthContext: Profile Data: ", data);
 
       if (error && error.code !== 'PGRST116') {
         console.error('Profile load error:', error);
