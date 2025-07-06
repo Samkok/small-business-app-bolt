@@ -1,21 +1,16 @@
 import React from 'react';
-import { Redirect, Stack, useSegments, useRouter } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 
 export default function AuthLayout() {
   const { session, loading, profile } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
   
   console.log('AuthLayout rendering with loading:', loading, 'session:', session ? 'exists' : 'null', 'profile:', profile ? 'exists' : 'null');
 
-  // Determine if we're on a protected route
-  const isProtectedRoute = segments[0] === '(app)';
-
   // Show loading state while authentication is in progress
-  if (loading && !isProtectedRoute) {
+  if (loading) {
     console.log('AuthLayout: Showing loading spinner while authenticating');
     return (
       <View style={styles.loadingContainer}>
@@ -28,7 +23,7 @@ export default function AuthLayout() {
   // If we have a session and profile, redirect to the app
   if (session && profile) {
     console.log('AuthLayout: Session and profile found, redirecting to app');
-    return <Redirect href="/(app)/(tabs)" replace={true} />;
+    return <Redirect href="/(app)" replace={true} />;
   }
 
   // If we have a session but no profile, show a loading state
@@ -43,7 +38,7 @@ export default function AuthLayout() {
     return <Redirect href="/(auth)/signin" replace={true} />;
   }
 
-  // If no session and not loading, show auth screens
+  // If no session, show auth screens
   console.log('AuthLayout: No session, showing auth screens');
   return (
     <Stack screenOptions={{ headerShown: false }}>

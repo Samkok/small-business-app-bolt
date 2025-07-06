@@ -91,7 +91,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Load carts from AsyncStorage
   const loadCarts = async () => {
     try {
-      console.log('CartContext: loadCarts started');
+      console.log('CartContext: loadCarts started', new Date().toISOString());
       setLoading(true);
       
       if (!profile?.id) {
@@ -108,11 +108,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           const filteredCarts = parsedCarts.filter(cart => 
             cart.business_id === profile.id && cart.status === 'active'
           );
-          setCarts(filteredCarts);
+          // Use functional update to avoid dependency on carts state
+          setCarts(() => filteredCarts);
           console.log(`CartContext: Loaded ${filteredCarts.length} carts for business ${profile.id}`);
         } else {
           console.log('CartContext: No profile ID, setting empty carts');
-          setCarts([]);
+          setCarts(() => []);
         }
       }
     } catch (error) {
@@ -286,15 +287,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const refreshCarts = useCallback(async () => {
     if (!profile?.id) return;
     
+    const startTime = new Date();
+    console.log('CartContext: refreshCarts started at', startTime.toISOString());
+    
     try {
-      console.log('CartContext: refreshCarts started for profile ID:', profile.id);
       setLoading(true);
             
       // Get the current carts from storage to ensure we're working with the latest data
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
       let localCarts: Cart[] = [];
       if (storedCarts) {
-        localCarts = JSON.parse(storedCarts) as Cart[];
+        localCarts = JSON.parse(storedCarts || '[]') as Cart[];
         localCarts = localCarts.filter(cart => 
           cart.business_id === profile.id && cart.status === 'active'
         );
@@ -398,12 +401,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mergedCarts));
       
       // Update state
-      setCarts(mergedCarts);
+      setCarts(() => mergedCarts);
     } catch (error) {
       console.error('Error refreshing carts:', error);
     } finally {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
+      const endTime = new Date();
+      console.log('CartContext: refreshCarts completed in', endTime.getTime() - startTime.getTime(), 'ms');
     }
   }, [profile?.id, syncCart]);
 

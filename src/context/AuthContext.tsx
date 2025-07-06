@@ -38,8 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Add a safety timeout to prevent the app from being stuck in loading state
   useEffect(() => {
     if (loading) {
-      // Set a maximum loading time of 10 seconds
-      const MAX_LOADING_TIME = 15000; // 15 seconds
+      // Set a maximum loading time of 8 seconds
+      const MAX_LOADING_TIME = 8000; // 8 seconds
       console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
         console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
@@ -56,21 +56,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // Check if session exists and if it's expired due to inactivity
-      console.log('Initial getSession result:', session ? `Session exists for user ${session.user.id}` : 'No session');
-      if (session) {
-        console.log('Initial session user ID:', session.user.id);
-        checkSessionActivity(session);
-      }
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user?.id) {
-        console.log('Initial session: Loading profile for user:', session.user.id);
-        loadProfile(session.user.id);
-      } else {
-        console.log('Initial session: No user, setting loading to false');
+      try {
+        // Check if session exists and if it's expired due to inactivity
+        console.log('Initial getSession result:', session ? `Session exists for user ${session.user.id}` : 'No session');
+        if (session) {
+          console.log('Initial session user ID:', session.user.id);
+          checkSessionActivity(session);
+        }
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user?.id) {
+          console.log('Initial session: Loading profile for user:', session.user.id);
+          loadProfile(session.user.id);
+        } else {
+          console.log('Initial session: No user, setting loading to false');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error in initial session handling:', error);
         setLoading(false);
       }
     });
@@ -184,21 +189,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async (userId: string) => {
     console.log('loadProfile started for user:', userId);
     try {
-      // Add a timeout for profile loading
-      const PROFILE_TIMEOUT = 8000; // 8 seconds
-      const timeoutPromise = new Promise((_, reject) => {
-        const id = setTimeout(() => {
-          console.log(`Profile loading timeout of ${PROFILE_TIMEOUT}ms reached for user:`, userId);
-          reject(new Error('Profile loading timeout'));
-        }, PROFILE_TIMEOUT);
-        return () => clearTimeout(id);
-      });
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
+
+      console.log('Profile query completed for user:', userId, 'data:', data ? 'exists' : 'null', 'error:', error ? error.message : 'none');
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -208,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setProfile(null);
       } else if (data) {
-        console.log('Profile loaded successfully:', data.id);
+        console.log('Profile loaded successfully for user:', userId, 'profile ID:', data.id);
         setProfile(data);
       } else {
         console.log('No profile data returned for user:', userId);
@@ -216,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
       }
     } catch (error) {
+      console.log('Error in loadProfile:', error);
       console.error('Error loading profile:', error);
     } finally {
       console.log('loadProfile completed, setting loading to false');

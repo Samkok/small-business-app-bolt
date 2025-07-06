@@ -6,9 +6,14 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 
+// Maximum number of retries for cart loading
+const MAX_CART_LOADING_RETRIES = 3;
+
 export default function AppLayout() {
   const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag } = useAuth();
-  const { refreshCarts, loading: cartsLoading } = useCart();
+  const { refreshCarts, loading: cartsLoading, carts } = useCart();
+  const [cartLoadRetries, setCartLoadRetries] = React.useState(0);
+  
   console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session?.user?.id})` : 'null');
 
   // Refresh carts when the app screen comes into focus
@@ -41,13 +46,26 @@ export default function AppLayout() {
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
 
+  // Retry cart loading if it's taking too long
+  React.useEffect(() => {
+    if (cartsLoading && cartLoadRetries < MAX_CART_LOADING_RETRIES) {
+      const timer = setTimeout(() => {
+        console.log(`AppLayout: Cart loading retry ${cartLoadRetries + 1}/${MAX_CART_LOADING_RETRIES}`);
+        refreshCarts();
+        setCartLoadRetries(prev => prev + 1);
+      }, 3000); // Retry every 3 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [cartsLoading, cartLoadRetries, refreshCarts]);
+
   if (!session) {
     console.log('AppLayout: No session available, redirecting to signin');
     return <Redirect href="/(auth)/signin" />;
   }
 
-  // Show loading spinner if carts are still loading
-  if (cartsLoading) {
+  // Show loading spinner if carts are still loading (but not if we've exceeded retries)
+  if (cartsLoading && cartLoadRetries < MAX_CART_LOADING_RETRIES) {
     console.log('AppLayout: Showing loading spinner due to carts loading state');
     return <LoadingSpinner text="Loading your data..." />;
   }
