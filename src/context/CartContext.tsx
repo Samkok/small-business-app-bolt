@@ -396,10 +396,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
-      // Clear the timeout
-      clearTimeout(timeoutId);
-    } finally {
-      setLoading(false);
     }
   }, [profile?.id, syncCart]);
 

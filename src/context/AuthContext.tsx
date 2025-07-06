@@ -228,8 +228,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         console.log('No profile found for user:', userId);
         setProfile(null);
-      } else {
-        setProfile(data);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
