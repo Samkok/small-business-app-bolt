@@ -2,7 +2,7 @@ import React from 'react';
 import { Redirect, Stack, useSegments, useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
 export default function AuthLayout() {
   const { session, loading, profile } = useAuth();
@@ -34,13 +34,14 @@ export default function AuthLayout() {
   // If we have a session but no profile, show a loading state
   if (session && !profile && !loading) {
     console.log('AuthLayout: Session found but no profile, showing error state');
-    // Instead of showing an error state, redirect to sign-in
-    Alert.alert(
-      'Account Setup Incomplete',
-      'We couldn\'t load your profile information. Please sign in again.',
-      [{ text: 'OK' }]
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Account Setup Incomplete</Text>
+        <Text style={styles.errorMessage}>
+          We couldn't load your profile information. Please try signing in again.
+        </Text>
+      </View>
     );
-    return <Redirect href="/(auth)/signin" replace={true} />;
   }
 
   // If no session and not loading, show auth screens
