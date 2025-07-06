@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Alert,
   Modal,
   TextInput,
-  FlatList,
-  TouchableOpacity
+  FlatList
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -29,7 +29,6 @@ export default function CustomerSelectionScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [creatingCart, setCreatingCart] = useState(false);
-  const [quickCustomers, setQuickCustomers] = useState<any[]>([]);
   
   const router = useRouter();
   const { isDark } = useTheme();
@@ -40,14 +39,6 @@ export default function CustomerSelectionScreen() {
   useEffect(() => {
     loadCustomers();
   }, []);
-
-  // Set initial quick customers when customers are loaded
-  useEffect(() => {
-    if (customers.length > 0 && quickCustomers.length === 0) {
-      // Initially set the first 5 customers as quick customers
-      setQuickCustomers(customers.slice(0, 5));
-    }
-  }, [customers]);
 
   useEffect(() => {
     filterCustomers();
@@ -102,73 +93,45 @@ export default function CustomerSelectionScreen() {
     }
   }, [profile?.id, createCart, router]);
 
-  const handleAddToQuickCustomers = useCallback((customer: any) => {
-    // Check if customer is already in quick customers
-    if (!quickCustomers.some(c => c.id === customer.id)) {
-      // Add to quick customers (limit to 10)
-      setQuickCustomers(prev => {
-        const updated = [...prev, customer];
-        return updated.slice(0, 10); // Keep only the 10 most recent
-      });
-    } else {
-      // Remove from quick customers
-      setQuickCustomers(prev => prev.filter(c => c.id !== customer.id));
-    }
-  }, [quickCustomers]);
-
   const handleCustomerSave = useCallback(async () => {
     setShowCustomerForm(false);
     await loadCustomers();
   }, [loadCustomers]);
 
   const renderCustomerItem = useCallback(({ item }) => (
-    <Card style={styles.customerCard}>
-      <TouchableOpacity
-        style={[styles.customerCardInner, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
-        onPress={() => handleCustomerSelect(item)}
-        disabled={creatingCart}
-      >
-        <View style={styles.customerInfo}>
-          <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
-            <Text style={styles.avatarText}>
-              {item.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.customerDetails}>
-            <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {item.name}
-            </Text>
-            {item.phone && (
-              <Text style={[styles.customerPhone, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {item.phone}
-              </Text>
-            )}
-            {item.platform && (
-              <Text style={[styles.customerPlatform, { color: '#2563eb' }]}>
-                {item.platform.charAt(0).toUpperCase() + item.platform.slice(1).replace('_', ' ')}
-              </Text>
-            )}
-          </View>
+    <TouchableOpacity
+      style={[styles.customerCard, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
+      onPress={() => handleCustomerSelect(item)}
+      disabled={creatingCart}
+    >
+      <View style={styles.customerInfo}>
+        <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
+          <Text style={styles.avatarText}>
+            {item.name.charAt(0).toUpperCase()}
+          </Text>
         </View>
-        <View style={styles.customerActions}>
-          <TouchableOpacity
-            style={[styles.quickAddButton, { backgroundColor: quickCustomers.some(c => c.id === item.id) ? '#2563eb20' : '#f3f4f620' }]}
-            onPress={() => handleAddToQuickCustomers(item)}
-          >
-            <Text style={[styles.quickAddButtonText, { 
-              color: quickCustomers.some(c => c.id === item.id) ? '#2563eb' : (isDark ? '#9ca3af' : '#6b7280') 
-            }]}>
-              {quickCustomers.some(c => c.id === item.id) ? 'Remove' : 'Quick Add'}
+        <View style={styles.customerDetails}>
+          <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {item.name}
+          </Text>
+          {item.phone && (
+            <Text style={[styles.customerPhone, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {item.phone}
             </Text>
-          </TouchableOpacity>
-          <View style={[styles.selectButton, { backgroundColor: '#2563eb20' }]}>
-            <Text style={[styles.selectButtonText, { color: '#2563eb' }]}>
-              Select
+          )}
+          {item.platform && (
+            <Text style={[styles.customerPlatform, { color: '#2563eb' }]}>
+              {item.platform.charAt(0).toUpperCase() + item.platform.slice(1).replace('_', ' ')}
             </Text>
-          </View>
+          )}
         </View>
-      </TouchableOpacity>
-    </Card>
+      </View>
+      <View style={[styles.selectButton, { backgroundColor: '#2563eb20' }]}>
+        <Text style={[styles.selectButtonText, { color: '#2563eb' }]}>
+          Select
+        </Text>
+      </View>
+    </TouchableOpacity>
   ), [isDark, handleCustomerSelect, creatingCart]);
 
   const renderEmptyComponent = useCallback(() => (
@@ -217,49 +180,6 @@ export default function CustomerSelectionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Quick Customer Bar */}
-      {quickCustomers.length > 0 && (
-        <View style={styles.quickCustomerBarContainer}>
-          <View style={styles.quickCustomerBarHeader}>
-            <Text style={[styles.quickCustomerBarTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Quick Select
-            </Text>
-            <TouchableOpacity onPress={() => setQuickCustomers([])}>
-              <Text style={styles.clearQuickCustomersText}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            style={styles.quickCustomerScrollView}
-            contentContainerStyle={styles.quickCustomerScrollContent}
-          >
-            {quickCustomers.map((customer) => (
-              <TouchableOpacity
-                key={customer.id}
-                style={[
-                  styles.quickCustomerButton,
-                  { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
-                ]}
-                onPress={() => handleCustomerSelect(customer)}
-              >
-                <View style={[styles.quickCustomerAvatar, { backgroundColor: '#2563eb' }]}>
-                  <Text style={styles.quickCustomerAvatarText}>
-                    {customer.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <Text 
-                  style={[styles.quickCustomerButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}
-                  numberOfLines={1}
-                >
-                  {customer.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       {/* Search */}
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
@@ -283,7 +203,6 @@ export default function CustomerSelectionScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={filteredCustomers.length === 0 ? styles.emptyContainer : undefined}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
       />
 
       {/* Loading Overlay */}
@@ -354,59 +273,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 16
-  },
-  quickCustomerBarContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16
-  },
-  quickCustomerBarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  quickCustomerBarTitle: {
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  clearQuickCustomersText: {
-    fontSize: 12,
-    color: '#2563eb',
-    fontWeight: '500'
-  },
-  quickCustomerScrollView: {
-    flexGrow: 0
-  },
-  quickCustomerScrollContent: {
-    paddingBottom: 4
-  },
-  quickCustomerButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginRight: 10,
-    minWidth: 80
-  },
-  quickCustomerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4
-  },
-  quickCustomerAvatarText: {
-    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold'
-  },
-  quickCustomerButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 4,
-    maxWidth: 80
   },
   content: {
     flex: 1,
@@ -417,15 +284,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   customerCard: {
-    marginBottom: 0,
-    overflow: 'hidden'
-  },
-  customerCardInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    borderRadius: 12
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   customerInfo: {
     flexDirection: 'row',
@@ -459,16 +327,6 @@ const styles = StyleSheet.create({
   customerPlatform: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  customerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  quickAddButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16
   },
   selectButton: {
     paddingHorizontal: 16,
