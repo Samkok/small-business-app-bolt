@@ -1,21 +1,24 @@
 import 'react-native-get-random-values'; // Add this at the very top
 import React from 'react';
-import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/src/context/AuthContext';
 import { ThemeProvider } from '@/src/context/ThemeContext';
 import { CartProvider } from '@/src/context/CartContext';
+import { ConnectionStatusBar } from '@/src/components/ui/ConnectionStatusBar';
+import { useSupabaseRefresh } from '@/src/hooks/useSupabaseRefresh';
 import '@/src/locales';
 
 export default function RootLayout() {
   useFrameworkReady();
+  useSupabaseRefresh();
 
   return (
     <ThemeProvider>
       <AuthProvider>
         <CartProvider>
+          <ConnectionStatusBar />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
