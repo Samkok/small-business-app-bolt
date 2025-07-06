@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state change:', event);
+        console.log('AuthContext: Session object on auth state change:', session);
         
         if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
           // If signed out but not explicitly by the user, it was due to inactivity
