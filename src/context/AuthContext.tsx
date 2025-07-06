@@ -172,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Set a timeout for profile loading
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile loading timeout')), 5000)
+        setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
       );
       
       // Create the actual profile loading promise
