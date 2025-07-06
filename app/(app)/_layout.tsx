@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { Redirect, Stack } from 'expo-router';
 import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
-import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -40,11 +39,6 @@ export default function AppLayout() {
       );
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
-
-  if (loading) {
-    console.log('AppLayout: Showing loading spinner due to auth loading state');
-    return <LoadingSpinner text="Loading your account..." />;
-  }
 
   if (!session) {
     console.log('AppLayout: No session available, redirecting to signin');

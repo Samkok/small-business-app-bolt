@@ -12,6 +12,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  splashLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [splashLoading, setSplashLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
 
@@ -52,11 +54,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initSession = async () => {
       const { data } = await supabase.auth.getSession();
+      
       if (data.session) {
         await checkSessionActivity(data.session);
       }
+      
       await handleSessionChange(data.session);
+      
+      // Mark initial splash loading as complete
+      setSplashLoading(false);
     };
+    
     initSession();
   }, [handleSessionChange]);
 
@@ -96,7 +104,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) {
       const timeout = setTimeout(() => {
+        // Ensure both loading states are set to false after timeout
         setLoading(false);
+        setSplashLoading(false);
       }, 10000);
       return () => clearTimeout(timeout);
     }
@@ -200,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
+    splashLoading,
     signIn,
     signUp,
     signOut,
