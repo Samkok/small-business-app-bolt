@@ -191,19 +191,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error && error.message === 'Profile loading timeout') {
         console.warn('Profile loading timed out, continuing without profile');
         setProfile(null);
-      } else if (error && error.code !== 'PGRST116') {
+      } else if (error) {
         console.error('Error loading profile:', error);
-      } else if (data) {
+        setProfile(null);
+      } else {
         console.log('Profile loaded successfully:', data.id);
         setProfile(data);
-      } else {
-        console.log('No profile found for user:', userId);
-        setProfile(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in loadProfile:', error);
       setProfile(null);
-    } finally {
+    }
+    
+    // Always set loading to false when done
+    finally {
       console.log('loadProfile completed, setting loading to false');
       setLoading(false);
     }

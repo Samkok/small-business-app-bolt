@@ -282,7 +282,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }, 5000);
       
-      // Get the current carts from storage to ensure we're working with the latest data
+      try {
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
       let localCarts: Cart[] = [];
       if (storedCarts) {
@@ -393,7 +393,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCarts(mergedCarts);
     } catch (error) {
       console.error('Error refreshing carts:', error);
-    } finally {
+    }
+    
+    // Always set loading to false when done
+    finally {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
     }
@@ -420,7 +423,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       synced: false
     };
 
-    // Update state
+      } catch (error) {
+        console.error('Error in refreshCarts:', error);
+      }
+      
+      // Always set loading to false when done
+      finally {
     setCarts(prevCarts => [...prevCarts, newCart]);
     
     // Save to AsyncStorage
