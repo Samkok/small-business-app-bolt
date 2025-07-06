@@ -170,33 +170,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async (userId: string) => {
     console.log('loadProfile started for user:', userId);
     try {
-      // Set a timeout for profile loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
-      );
+      // Retry configuration
+      const MAX_RETRIES = 3;
+      const INITIAL_DELAY_MS = 500;
+      let lastError = null;
       
-      // Create the actual profile loading promise
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      // Try to load profile with retries
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          // Attempt to fetch the profile
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .single();
+            
+          if (error) {
+            // Store the error but don't throw yet (unless it's the last attempt)
+            lastError = error;
+            console.warn(`Profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
+            
+            // If it's not the last attempt, wait with exponential backoff before retrying
+            if (attempt < MAX_RETRIES - 1) {
+              const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+              console.log(`Retrying in ${delayMs}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+              continue;
+            }
+            
+            // On the last attempt, if there's an error, we'll handle it below
+            throw error;
+          }
+          
+          // If we got here, the request succeeded
+          if (data) {
+            console.log('Profile loaded successfully:', data.id);
+            setProfile(data);
+            return; // Exit the function early on success
+          } else {
+            console.log('No profile found for user:', userId);
+            setProfile(null);
+            return; // Exit the function early
+          }
+        } catch (retryError) {
+          // Store the error for the final attempt
+          lastError = retryError;
+          
+          // If this is the last attempt, we'll let it fall through to the error handling below
+          if (attempt === MAX_RETRIES - 1) {
+            break;
+          }
+          
+          // Otherwise, we'll continue to the next iteration (after the delay)
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
       
-      // Race the promises
-      const { data, error } = await Promise.race([
-        profilePromise,
-        timeoutPromise.then(() => ({ data: null, error: new Error('Profile loading timeout') }))
-      ]) as any;
-
-      if (error && error.message === 'Profile loading timeout') {
-        console.warn('Profile loading timed out, continuing without profile');
+      // If we got here, all retries failed
+      if (lastError) {
+        console.error('All profile loading attempts failed:', lastError);
         setProfile(null);
-      } else if (error) {
-        console.error('Error loading profile:', error);
-        setProfile(null);
-      } else {
-        console.log('Profile loaded successfully:', data.id);
-        setProfile(data);
       }
     } catch (error: any) {
       console.error('Error in loadProfile:', error);

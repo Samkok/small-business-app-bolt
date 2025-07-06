@@ -275,13 +275,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('CartContext: refreshCarts started for profile:', profile.id);
       setLoading(true);
-      
-      // Set a timeout to ensure loading state doesn't get stuck
-      const timeoutId = setTimeout(() => {
-        console.log('CartContext: refreshCarts timeout reached, forcing loading state to false');
-        setLoading(false);
-      }, 5000);
-      
+            
       // Get the current carts from storage to ensure we're working with the latest data
       const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
       let localCarts: Cart[] = [];
@@ -391,9 +385,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       
       // Update state
       setCarts(mergedCarts);
-      
-      // Clear the timeout
-      clearTimeout(timeoutId);
     } catch (error) {
       console.error('Error refreshing carts:', error);
     } finally {
