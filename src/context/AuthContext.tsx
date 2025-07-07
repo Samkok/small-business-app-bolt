@@ -5,7 +5,7 @@ import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
+type Profile = Database['public']['TablAuth loading safety timeout reached afteres']['profiles']['Row'];
 
 interface AuthContextType {
   session: Session | null;
