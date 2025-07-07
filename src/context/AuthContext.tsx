@@ -212,6 +212,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
+  const signInWithToken = async (token: string) => {
+    const { data, error } = await supabase.auth.setAuth(token);
+    return { error };
+  }
+
   const signUp = async (email: string, password: string, businessName: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
