@@ -196,8 +196,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('No profile found for user:', userId);
         setProfile(null);
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
+    } catch (err) {
+      console.error('Error loading profile:', err);
     } finally {
       console.log('loadProfile completed, setting loading to false');
       setLoading(false);
