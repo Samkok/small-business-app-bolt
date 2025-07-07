@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -19,12 +20,15 @@ import {
   Globe, 
   LogOut, 
   ChevronRight 
+  // No need to import Briefcase as it's not used
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
   const { signOut, profile } = useAuth();
+  const router = useRouter();
 
   const handleLanguageChange = async (language: string) => {
     try {
@@ -97,11 +101,20 @@ export default function SettingsScreen() {
 
       <Card style={styles.profileCard}>
         <View style={styles.profileContent}>
-          <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
-            <Text style={styles.avatarText}>
-              {profile?.full_name?.charAt(0) || 'U'}
-            </Text>
-          </View>
+          {profile?.avatar_url ? (
+            <OptimizedImage
+              source={{ uri: profile.avatar_url }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+              alt="Profile Avatar"
+            />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
+              <Text style={styles.avatarText}>
+                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {profile?.full_name || 'User'}
@@ -120,8 +133,8 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<User size={20} color="#2563eb" />}
           title={t('settings.profile')}
-          subtitle="Edit your profile information"
-          onPress={() => Alert.alert('Profile', 'Profile editing coming soon')}
+          subtitle="Edit your personal and business information"
+          onPress={() => router.push('/settings/profile')}
         />
 
         <SettingItem
@@ -213,6 +226,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   avatarText: {
     color: '#ffffff',

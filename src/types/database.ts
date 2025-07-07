@@ -10,6 +10,7 @@ export interface Database {
           role: 'admin' | 'staff';
           phone?: string;
           address?: string;
+          avatar_url?: string;
           created_at: string;
           updated_at: string;
         };
@@ -21,6 +22,7 @@ export interface Database {
           role?: 'admin' | 'staff';
           phone?: string;
           address?: string;
+          avatar_url?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -32,6 +34,7 @@ export interface Database {
           role?: 'admin' | 'staff';
           phone?: string;
           address?: string;
+          avatar_url?: string;
           created_at?: string;
           updated_at?: string;
         };
