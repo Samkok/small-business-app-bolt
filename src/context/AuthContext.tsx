@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           console.log("Session: ", session.access_token);
-          await signInWithToken(session.access_token);
+          await loadProfile(session.user.id);
         } else {
           console.log("AuthContext: NO SESSION");
           setProfile(null);
