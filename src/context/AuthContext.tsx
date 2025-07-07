@@ -213,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithToken = async () => {
-    const { error } = await supabase.auth.setSession(session);
+    const { error } = await supabase.auth.setSession(session.access_token);
     return { error };
   }
 
