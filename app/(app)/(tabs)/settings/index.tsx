@@ -228,6 +228,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarImage: {
+    overflow: 'hidden',
     width: 60,
     height: 60,
     borderRadius: 30,
