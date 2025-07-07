@@ -226,7 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (retryError) {
           // Store the error for the final attempt
-          console.log(retryError);
+          console.log("Retry Error: ", retryError);
           lastError = retryError;
           
           // If this is the last attempt, we'll let it fall through to the error handling below
