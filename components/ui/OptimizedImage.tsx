@@ -76,7 +76,6 @@ export function OptimizedImage({
 }
 
 const styles = StyleSheet.create({
-  overflow: 'hidden',
   placeholder: {
     flex: 1,
     alignItems: 'center',
