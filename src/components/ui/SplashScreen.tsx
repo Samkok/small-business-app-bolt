@@ -5,9 +5,10 @@ import { Package } from 'lucide-react-native';
 
 interface SplashScreenProps {
   message?: string;
+  showSpinner?: boolean;
 }
 
-export function SplashScreen({ message = 'Loading your business...' }: SplashScreenProps) {
+export function SplashScreen({ message = 'Loading your business...', showSpinner = true }: SplashScreenProps) {
   const { isDark } = useTheme();
 
   return (
@@ -30,12 +31,14 @@ export function SplashScreen({ message = 'Loading your business...' }: SplashScr
           Complete business management solution
         </Text>
         
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
-          <Text style={[styles.loadingText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {message}
-          </Text>
-        </View>
+        {showSpinner && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
+            <Text style={[styles.loadingText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {message}
+            </Text>
+          </View>
+        )}
       </View>
       
       <Text style={[styles.versionText, { color: isDark ? '#6b7280' : '#9ca3af' }]}>

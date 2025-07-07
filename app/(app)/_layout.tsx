@@ -10,7 +10,7 @@ import { SplashScreen } from '@/src/components/ui/SplashScreen';
 export default function AppLayout() {
   const { session, profile, loading, signedOutDueToInactivity, resetInactivitySignOutFlag, splashLoading } = useAuth();
   const { refreshCarts } = useCart();
-  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session.user.id})` : 'null', 'profile:', profile ? `exists (${profile.id})` : 'null');
+  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session.user.id})` : 'null', 'profile:', profile ? `exists (${profile.id})` : 'null', 'splashLoading:', splashLoading);
 
   // Refresh carts when the app screen comes into focus
   useFocusEffect(
@@ -51,15 +51,23 @@ export default function AppLayout() {
     return <LoadingSpinner text="Loading your account..." />;
   }
 
-  if (!session || (session && !profile && !loading)) {
+  // If no session, redirect to sign in
+  if (!session) {
     console.log('AppLayout: No session or session exists but no profile, redirecting to signin');
     return <Redirect href="/(auth)/signin" />;
+  }
+  
+  // If session exists but no profile, redirect to profile setup
+  if (session && !profile && !loading) {
+    console.log('AppLayout: Session exists but no profile, redirecting to profile setup');
+    return <Redirect href="/(app)/profile-setup" />;
   }
 
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="profile-setup" />
     </Stack>
   );
 }

@@ -139,14 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async (userId: string) => {
     console.log("AuthContext: LoadProfile start");
     try {
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      console.log("AuthContext: Profile Data: ", data);
+      console.log("AuthContext: Profile Data: ", data, "Status:", status);
 
+      // PGRST116 means no rows returned, which is expected if profile doesn't exist yet
       if (error && error.code !== 'PGRST116') {
         console.error('Profile load error:', error);
       }
@@ -154,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(data ?? null);
     } catch (err) {
       console.error('Unexpected error loading profile:', err);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
