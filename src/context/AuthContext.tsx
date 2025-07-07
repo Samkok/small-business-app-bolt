@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -12,7 +12,6 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  splashLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -24,6 +23,8 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// One week in milliseconds
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -31,188 +32,264 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [splashLoading, setSplashLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+  
+  // Add a safety timeout to prevent the app from being stuck in loading state
+  useEffect(() => {
+    if (loading) {
+      // Set a maximum loading time of 10 seconds
+      const MAX_LOADING_TIME = 10000; // 10 seconds
+      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
+      const safetyTimeout = setTimeout(() => {
+        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
+        setLoading(false);
+      }, MAX_LOADING_TIME);
 
-  const handleSessionChange = useCallback(
-    async (session: Session | null) => {
+      return () => {
+        clearTimeout(safetyTimeout);
+        console.log('Auth loading safety timeout cleared');
+      };
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Check if session exists and if it's expired due to inactivity
+      console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
+      if (session) {
+        console.log('Initial session user ID:', session.user.id);
+        checkSessionActivity(session);
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
-
       if (session?.user) {
-        await updateLastActivityTimestamp();
-        await loadProfile(session.user.id);
+        console.log('Initial session: Loading profile for user:', session.user.id);
+        loadProfile(session.user.id);
       } else {
-        setProfile(null);
+        console.log('Initial session: No user, setting loading to false');
         setLoading(false);
       }
-    },
-    []
-  );
+    });
 
-  useEffect(() => {
-    const initSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      
-      if (data.session) {
-        await checkSessionActivity(data.session);
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state change:', event);
+        console.log('AuthContext: Session object on auth state change:', session);
+        
+        if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
+          // If signed out but not explicitly by the user, it was due to inactivity
+          setSignedOutDueToInactivity(true);
+        }
+        
+        if (event === 'SIGNED_IN') {
+          // Reset the inactivity flag when user signs in
+          setSignedOutDueToInactivity(false);
+          
+          // Update last activity timestamp
+          await updateLastActivityTimestamp();
+        }
+        
+        // Reset the explicit sign out flag
+        setIsExplicitSignOut(false);
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          console.log("AuthContext: NO SESSION");
+          setProfile(null);
+          setLoading(false);
+        }
       }
-      
-      await handleSessionChange(data.session);
-      
-      // Mark initial splash loading as complete
-      setSplashLoading(false);
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Check for session activity whenever the app comes to foreground
+  useEffect(() => {
+    const checkActivity = async () => {
+      if (session) {
+        checkSessionActivity(session);
+      }
     };
     
-    initSession();
-  }, [handleSessionChange]);
-
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
-        setSignedOutDueToInactivity(true);
-      }
-
-      if (event === 'SIGNED_IN') {
-        setSignedOutDueToInactivity(false);
-        await updateLastActivityTimestamp();
-      }
-
-      setIsExplicitSignOut(false);
-      await handleSessionChange(session);
-    });
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
-  }, [handleSessionChange, isExplicitSignOut]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (state) => {
-      if (state === 'active' && session) {
-        await checkSessionActivity(session);
-        await updateLastActivityTimestamp();
+    // Add app state change listener for foreground/background transitions
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkActivity();
+        // Update last activity timestamp when app comes to foreground
+        if (session) {
+          updateLastActivityTimestamp();
+        }
       }
     });
-
+    
     return () => {
       subscription.remove();
     };
   }, [session]);
 
-  useEffect(() => {
-    if (loading) {
-      const timeout = setTimeout(() => {
-        // Ensure both loading states are set to false after timeout
-        setLoading(false);
-        setSplashLoading(false);
-      }, 10000);
-      return () => clearTimeout(timeout);
-    }
-  }, [loading]);
-
   const checkSessionActivity = async (currentSession: Session) => {
     try {
+      console.log('Checking session activity');
       const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
-      if (!lastActivity) return await updateLastActivityTimestamp();
-
-      const lastTime = parseInt(lastActivity, 10);
-      const now = Date.now();
-      if (now - lastTime > INACTIVITY_TIMEOUT) {
-        setSignedOutDueToInactivity(true);
-        await supabase.auth.signOut();
+      
+      if (lastActivity) {
+        const lastActivityTime = parseInt(lastActivity, 10);
+        const currentTime = Date.now();
+        
+        // If inactive for more than one week, sign out
+        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
+          console.log('Session expired due to inactivity');
+          setSignedOutDueToInactivity(true);
+          await supabase.auth.signOut();
+        } else {
+          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
+        }
+      } else {
+        // If no last activity timestamp exists, create one
+        console.log('No last activity timestamp, creating one');
+        await updateLastActivityTimestamp();
       }
-    } catch (err) {
-      console.error('Failed to check session activity:', err);
+    } catch (error) {
+      console.error('Error checking session activity:', error);
     }
   };
 
   const updateLastActivityTimestamp = async () => {
     try {
       await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
-    } catch (err) {
-      console.error('Failed to update activity timestamp:', err);
+    } catch (error) {
+      console.error('Error updating last activity timestamp:', error);
     }
   };
 
+  const resetInactivitySignOutFlag = () => {
+    setSignedOutDueToInactivity(false);
+  };
+
+  
+
+  // Original loadProfile function (commented out)
   const loadProfile = async (userId: string) => {
-    console.log("AuthContext: LoadProfile start");
+    console.log('loadProfile started for user:', userId);
     try {
-      const { data, error, status } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      console.log("AuthContext: Profile Data: ", data, "Status:", status);
-
-      // PGRST116 means no rows returned, which is expected if profile doesn't exist yet
       if (error && error.code !== 'PGRST116') {
-        console.error('Profile load error:', error);
+        console.error('Error loading profile:', error);
+      } else if (data) {
+        console.log('Profile loaded successfully:', data.id);
+        setProfile(data);
+      } else {
+        console.log('No profile found for user:', userId);
+        setProfile(null);
       }
-
-      setProfile(data ?? null);
-    } catch (err) {
-      console.error('Unexpected error loading profile:', err);
-      setProfile(null);
+    } catch (error) {
+      console.error('Error loading profile:', error);
     } finally {
+      console.log('loadProfile completed, setting loading to false');
       setLoading(false);
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     return { error };
   };
 
   const signUp = async (email: string, password: string, businessName: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error || !data.user) return { error };
-
-    const { error: profileError } = await supabase.from('profiles').insert({
-      user_id: data.user.id,
-      business_name: businessName,
-      full_name: fullName,
-      role: 'admin',
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
     });
 
-    return { error: profileError };
+    if (error) return { error };
+
+    if (data.user) {
+      // Create profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: data.user.id,
+          business_name: businessName,
+          full_name: fullName,
+          role: 'admin',
+        });
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+        return { error: profileError };
+      }
+    }
+
+    return { error: null };
   };
 
   const signOut = async () => {
+    // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
-    await AsyncStorage.removeItem('rememberMe');
+    
+    // Clear any saved credentials
+    try {
+      await AsyncStorage.removeItem('rememberMe');
+      // Don't remove savedEmail here to allow it to persist if user wants to sign in again
+    } catch (error) {
+      console.error('Error clearing saved credentials:', error);
+    }
+    
+    // Sign out from Supabase
     await supabase.auth.signOut();
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user') };
-    const { error } = await supabase.from('profiles').update(updates).eq('user_id', user.id);
-    if (!error) setProfile((prev) => (prev ? { ...prev, ...updates } : prev));
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('user_id', user.id);
+
+    if (!error && profile) {
+      setProfile({ ...profile, ...updates });
+    }
+
     return { error };
   };
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window?.location?.origin}/reset-password`,
+      redirectTo: window.location.origin + '/reset-password',
     });
     return { error };
   };
 
   const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({
+      password,
+    });
     return { error };
   };
 
-  const resetInactivitySignOutFlag = () => setSignedOutDueToInactivity(false);
-
-  const value: AuthContextType = {
+  const value = {
     session,
     user,
     profile,
     loading,
-    splashLoading,
     signIn,
     signUp,
     signOut,
@@ -223,11 +300,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetInactivitySignOutFlag,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 }

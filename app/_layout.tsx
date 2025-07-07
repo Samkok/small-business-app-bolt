@@ -1,5 +1,6 @@
 import 'react-native-get-random-values'; // Add this at the very top
 import React from 'react';
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';

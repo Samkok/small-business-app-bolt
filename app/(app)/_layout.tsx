@@ -5,12 +5,11 @@ import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { SplashScreen } from '@/src/components/ui/SplashScreen';
 
 export default function AppLayout() {
-  const { session, profile, loading, signedOutDueToInactivity, resetInactivitySignOutFlag, splashLoading } = useAuth();
+  const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag } = useAuth();
   const { refreshCarts } = useCart();
-  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session.user.id})` : 'null', 'profile:', profile ? `exists (${profile.id})` : 'null', 'splashLoading:', splashLoading);
+  console.log('AppLayout rendering with auth loading:', loading, 'session:', session ? `exists (${session.user.id})` : 'null');
 
   // Refresh carts when the app screen comes into focus
   useFocusEffect(
@@ -42,32 +41,20 @@ export default function AppLayout() {
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
 
-  if (splashLoading) {
-    return <SplashScreen />;
-  }
-
   if (loading) {
     console.log('AppLayout: Showing loading spinner due to auth loading state');
     return <LoadingSpinner text="Loading your account..." />;
   }
 
-  // If no session, redirect to sign in
   if (!session) {
-    console.log('AppLayout: No session or session exists but no profile, redirecting to signin');
+    console.log('AppLayout: No session available, redirecting to signin');
     return <Redirect href="/(auth)/signin" />;
-  }
-  
-  // If session exists but no profile, redirect to profile setup
-  if (session && !profile && !loading) {
-    console.log('AppLayout: Session exists but no profile, redirecting to profile setup');
-    return <Redirect href="/(app)/profile-setup" />;
   }
 
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="profile-setup" />
     </Stack>
   );
 }
