@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { useTranslation as useReactI18nTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import translations
@@ -53,5 +54,10 @@ AsyncStorage.getItem('language').then((savedLanguage) => {
     i18n.changeLanguage(savedLanguage);
   }
 });
+
+// Export a wrapped version of useTranslation to ensure it's properly initialized
+export const useTranslation = () => {
+  return useReactI18nTranslation();
+};
 
 export default i18n;
