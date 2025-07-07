@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await loadProfile(session.user.id);
+          loadProfile(session.user.id);
         } else {
           console.log("AuthContext: NO SESSION");
           setProfile(null);
