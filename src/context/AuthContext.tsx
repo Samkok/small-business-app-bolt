@@ -212,8 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
-  const signInWithToken = async (token: string) => {
-    const { data, error } = await supabase.auth.setAuth(token);
+  const signInWithToken = async () => {
+    const { data, error } = await supabase.auth.setSession(session);
     return { error };
   }
 
