@@ -100,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          console.log("Session: ", session.access_token);
           await loadProfile(session.user.id);
         } else {
           console.log("AuthContext: NO SESSION");
@@ -212,11 +211,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return { error };
   };
-
-  const signInWithToken = async (token: string) => {
-    const { error } = await supabase.auth.setSession(token);
-    return { error };
-  }
 
   const signUp = async (email: string, password: string, businessName: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
