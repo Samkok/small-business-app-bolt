@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          console.log(session.access_token);
+          console.log("Session: ", session.access_token);
           await signInWithToken(session.access_token);
         } else {
           console.log("AuthContext: NO SESSION");
