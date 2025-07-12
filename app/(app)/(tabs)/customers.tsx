@@ -44,7 +44,7 @@ export default function CustomersScreen() {
   
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -56,14 +56,14 @@ export default function CustomersScreen() {
   }, [customers, debouncedSearchQuery, selectedPlatform]);
 
   const loadCustomers = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
     }
     
     try {
-      const data = await customerService.getCustomers(profile.id);
+      const data = await customerService.getCustomers(currentBusiness.id);
       setCustomers(data);
       
       // Count platforms manually
@@ -112,7 +112,7 @@ export default function CustomersScreen() {
         setLoading(false);
       }
     }
-  }, [profile?.id, t]);
+  }, [currentBusiness?.id, t]);
 
   const filterCustomers = useCallback(() => {
     let filtered = customers;
