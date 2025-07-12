@@ -64,7 +64,7 @@ export default function SalesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -180,7 +180,7 @@ export default function SalesScreen() {
   }, [statsCollapsed, collapseAnim]);
 
   const loadData = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -200,10 +200,10 @@ export default function SalesScreen() {
       Alert.alert(t('common.error'), 'Failed to load data');
       setLoading(false);
     }
-  }, [profile?.id, activeTab, t, refreshCarts]);
+  }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
   const loadSalesData = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh && !loadingMore) {
       setLoading(true);
@@ -219,7 +219,7 @@ export default function SalesScreen() {
       
       // First get the total count for pagination
       const count = await salesService.getSalesCount(
-        profile.id, 
+        currentBusiness.id, 
         start.toISOString(), 
         end.toISOString(),
         selectedStatus !== 'all' ? selectedStatus : undefined,
@@ -231,7 +231,7 @@ export default function SalesScreen() {
       
       // Then get the paginated data
       const salesData = await salesService.getSalesPaginated(
-        profile.id,
+        currentBusiness.id,
         start.toISOString(),
         end.toISOString(),
         currentPage * SALES_PER_PAGE,
@@ -249,7 +249,7 @@ export default function SalesScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [profile?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
+  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
 
   const filterSales = useCallback(() => {
     if (!debouncedSearchQuery.trim()) {
@@ -291,8 +291,8 @@ export default function SalesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (!profile?.id) return;
-              await salesService.voidSale(sale.id, 'Sale voided by user', profile.id);
+              if (!currentBusiness?.id) return;
+              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
               Alert.alert('Success', 'Sale voided successfully');
               loadData();
             } catch (error) {
@@ -303,7 +303,7 @@ export default function SalesScreen() {
         },
       ]
     );
-  }, [profile?.id, loadData]);
+  }, [currentBusiness?.id, loadData]);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
     Alert.alert(
@@ -345,8 +345,8 @@ export default function SalesScreen() {
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -359,7 +359,7 @@ export default function SalesScreen() {
       end.setHours(23, 59, 59, 999);
       
       const csvData = await importService.exportSalesToCsv(
-        profile.id, 
+        currentBusiness.id, 
         start.toISOString(), 
         end.toISOString()
       );
@@ -380,7 +380,7 @@ export default function SalesScreen() {
       console.error('Error exporting sales:', error);
       Alert.alert('Error', 'Failed to export sales data');
     }
-  }, [profile?.id, startDate, endDate]);
+  }, [currentBusiness?.id, startDate, endDate]);
 
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
