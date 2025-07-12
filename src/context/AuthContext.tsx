@@ -274,7 +274,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
             setUserBusinesses(businesses);
-            setCurrentBusiness(businesses[0]);
             
             // Set current business (either from saved preference or first in list)
             await loadSavedBusinessId(userId, businesses);
