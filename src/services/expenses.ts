@@ -36,7 +36,7 @@ export const expenseService = {
       .select(`
         *,
         expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
+        created_by_user:profiles(full_name)
       `)
       .eq('business_id', businessId)
       .order('expense_date', { ascending: false });
