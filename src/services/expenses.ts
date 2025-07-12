@@ -36,7 +36,7 @@ export const expenseService = {
         .select(`
           *,
           expense_categories(name),
-          created_by_business:businesses!expenses_created_by_fkey(name)
+          created_by_business:businesses!expenses_created_by_fkey(business_name)
         `)
         .eq('business_id', businessId)
         .order('expense_date', { ascending: false });
