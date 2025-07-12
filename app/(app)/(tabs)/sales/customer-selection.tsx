@@ -32,7 +32,7 @@ export default function CustomerSelectionScreen() {
   
   const router = useRouter();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { createCart } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -45,10 +45,10 @@ export default function CustomerSelectionScreen() {
   }, [customers, debouncedSearchQuery]);
 
   const loadCustomers = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     try {
-      const data = await customerService.getCustomers(profile.id);
+      const data = await customerService.getCustomers(currentBusiness.id);
       setCustomers(data);
       setFilteredCustomers(data);
     } catch (error) {
@@ -57,7 +57,7 @@ export default function CustomerSelectionScreen() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [currentBusiness?.id]);
 
   const filterCustomers = useCallback(() => {
     if (debouncedSearchQuery.trim() === '') {
@@ -72,7 +72,7 @@ export default function CustomerSelectionScreen() {
   }, [customers, debouncedSearchQuery]);
 
   const handleCustomerSelect = useCallback(async (customer: any) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     setCreatingCart(true);
     try {
@@ -91,7 +91,7 @@ export default function CustomerSelectionScreen() {
     } finally {
       setCreatingCart(false);
     }
-  }, [profile?.id, createCart, router]);
+  }, [currentBusiness?.id, createCart, router]);
 
   const handleCustomerSave = useCallback(async () => {
     setShowCustomerForm(false);
