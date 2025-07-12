@@ -42,8 +42,6 @@ export const expenseService = {
         .order('expense_date', { ascending: false });
 
 
-
-
     if (limit) {
       query = query.limit(limit);
     }
