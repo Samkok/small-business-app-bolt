@@ -277,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // Set current business (either from saved preference or first in list)
             await loadSavedBusinessId(userId, businesses);
+            setCurrentBusiness(businesses[0] || null);
             
             setLoading(false);
             return; // Exit the function early on success
