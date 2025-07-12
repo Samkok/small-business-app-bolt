@@ -1,4 +1,4 @@
-```sql
+
 -- Drop the existing foreign key constraint first to allow data modification
 ALTER TABLE public.expenses
 DROP CONSTRAINT IF EXISTS expenses_created_by_fkey;
@@ -92,4 +92,3 @@ CREATE POLICY "Business admins can delete user roles" ON public.user_business_ro
   );
 
 ALTER TABLE public.user_business_roles ENABLE ROW LEVEL SECURITY;
-```
