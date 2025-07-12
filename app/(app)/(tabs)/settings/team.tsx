@@ -72,10 +72,14 @@ export default function TeamScreen() {
         .eq('business_id', currentBusiness.id);
         
       if (rolesError) throw rolesError;
+
+      const { data: allUsers, error } = await supabase.auth.admin.listUsers();
+      
+      console.log("USERS: ", allUsers);
       
       // Get user emails (requires additional query)
       const userIds = roles.map(role => role.user_id);
-      const { data: users, error: usersError } = await supabase.auth.admin
+      const { data: users, error: usersError } = await supabase
         .from('auth.users')
         .select('id, email')
         .in('id', userIds);
@@ -94,8 +98,6 @@ export default function TeamScreen() {
       }
       
 
-      console.log("Profile: ", profiles);
-      
       // Combine the data
       const members: TeamMember[] = roles.map(role => ({
         user_id: role.user_id,
