@@ -31,6 +31,7 @@ export interface Database {
           phone?: string;
           address?: string;
           avatar_url?: string;
+          email?: string;
           created_at: string;
           updated_at: string;
         };
@@ -40,6 +41,7 @@ export interface Database {
           phone?: string;
           address?: string;
           avatar_url?: string;
+          email?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -49,6 +51,7 @@ export interface Database {
           phone?: string;
           address?: string;
           avatar_url?: string;
+          email?: string;
           created_at?: string;
           updated_at?: string;
         };
