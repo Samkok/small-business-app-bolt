@@ -354,6 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .insert({
             user_id: data.user.id,
             full_name: fullName,
+            email: email,
           });
 
         if (profileError) {

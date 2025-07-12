@@ -73,24 +73,11 @@ export default function TeamScreen() {
         
       if (rolesError) throw rolesError;
 
-      const { data: allUsers, error } = await supabase.auth.admin.listUsers();
-      
-      console.log("USERS: ", allUsers);
-      
-      // Get user emails (requires additional query)
+      // Get user profiles for names and emails
       const userIds = roles.map(role => role.user_id);
-      const { data: users, error: usersError } = await supabase
-        .from('auth.users')
-        .select('id, email')
-        .in('id', userIds);
-
-      if (usersError) {
-        console.warn('Could not fetch user emails:', usersError);
-      }
-      
       const { data: profiles, error: profilesError } = await supabase
         .from('user_profiles')
-        .select('full_name')
+        .select('user_id, full_name, email')
         .in('user_id', userIds);
 
       if (profilesError) {
@@ -103,8 +90,8 @@ export default function TeamScreen() {
         user_id: role.user_id,
         business_id: role.business_id,
         role: role.role as 'admin' | 'staff',
-        user_name: profiles?.find(p => p.user_id === role.user_id)?.full_name,
-        user_email: users?.find(u => u.id === role.user_id)?.email
+        user_name: profiles?.find(p => p.user_id === role.user_id)?.full_name || 'Unnamed User',
+        user_email: profiles?.find(p => p.user_id === role.user_id)?.email || 'No email'
       }));
       
       setTeamMembers(members);

@@ -32,6 +32,7 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
 
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
+  const [email, setEmail] = useState(userProfile?.email || '');
   const [address, setAddress] = useState(userProfile?.address || '');
   const [avatarFile, setAvatarFile] = useState<any>(null);
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || '');
@@ -42,6 +43,7 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
     if (userProfile) {
       setFullName(userProfile.full_name || '');
       setPhone(userProfile.phone || '');
+      setEmail(userProfile.email || '');
       setAddress(userProfile.address || '');
       setAvatarUrl(userProfile.avatar_url || '');
     }
@@ -162,6 +164,16 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
               onChangeText={setPhone}
               placeholder="Enter your phone number"
               keyboardType="phone-pad"
+            />
+            
+            <Input
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Your email address"
+              keyboardType="email-address"
+              editable={false}
+              style={{ opacity: 0.7 }}
             />
             
             <Input
