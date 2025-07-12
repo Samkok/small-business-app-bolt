@@ -64,7 +64,7 @@ export default function DashboardScreen() {
   const [showSalesForm, setShowSalesForm] = useState(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
   const router = useRouter();
 
