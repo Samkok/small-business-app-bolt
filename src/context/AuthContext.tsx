@@ -5,17 +5,24 @@ import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
-type Profile = Database['public']['TablAuth loading safety timeout reached afteres']['profiles']['Row'];
+type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
+type Business = Database['public']['Tables']['businesses']['Row'];
+type UserBusinessRole = Database['public']['Tables']['user_business_roles']['Row'];
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  profile: Profile | null;
+  userProfile: UserProfile | null;
+  userBusinesses: Business[];
+  currentBusiness: Business | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
+  updateUserProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
+  updateBusiness: (businessId: string, updates: Partial<Business>) => Promise<{ error: any }>;
+  switchBusiness: (businessId: string) => Promise<void>;
+  createBusiness: (businessName: string) => Promise<{ error: any, business?: Business }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
   signedOutDueToInactivity: boolean;
@@ -30,7 +37,9 @@ const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userBusinesses, setUserBusinesses] = useState<Business[]>([]);
+  const [currentBusiness, setCurrentBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
@@ -48,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        console.log('Initial session: Loading profile for user:', session.user.id);
-        loadProfile(session.user.id);
+        console.log('Initial session: Loading auth data for user:', session.user.id);
+        loadAuthData(session.user.id);
       } else {
         console.log('Initial session: No user, setting loading to false');
         setLoading(false);
@@ -82,10 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          loadProfile(session.user.id);
+          loadAuthData(session.user.id);
         } else {
           console.log("AuthContext: NO SESSION");
-          setProfile(null);
+          setUserProfile(null);
+          setUserBusinesses([]);
+          setCurrentBusiness(null);
           setLoading(false);
         }
       }
@@ -111,6 +122,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
   }, [loading]);
+
+  // Load saved current business ID from AsyncStorage
+  const loadSavedBusinessId = async (userId: string, businesses: Business[]) => {
+    try {
+      const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
+      if (savedBusinessId && businesses.length > 0) {
+        const business = businesses.find(b => b.id === savedBusinessId);
+        if (business) {
+          setCurrentBusiness(business);
+          return;
+        }
+      }
+      
+      // If no saved business or saved business not found, use the first one
+      if (businesses.length > 0) {
+        setCurrentBusiness(businesses[0]);
+      }
+    } catch (error) {
+      console.error('Error loading saved business ID:', error);
+      // Default to first business if there's an error
+      if (businesses.length > 0) {
+        setCurrentBusiness(businesses[0]);
+      }
+    }
+  };
 
   // Check for session activity whenever the app comes to foreground
   useEffect(() => {
@@ -175,22 +211,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
-  const loadProfile = async (userId: string) => {
-    console.log('loadProfile started for user:', userId);
+  const loadAuthData = async (userId: string) => {
+    console.log('loadAuthData started for user:', userId);
     try {
       // Retry configuration
       const MAX_RETRIES = 3;
       const INITIAL_DELAY_MS = 500;
-      console.log(`Profile loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
+      console.log(`Auth data loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
       let lastError = null;
       
-      // Try to load profile with retries
+      // Try to load user profile with retries
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          // Attempt to fetch the profile
-          console.log(`Profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
+          // Attempt to fetch the user profile
+          console.log(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
           const { data, error } = await supabase
-            .from('profiles')
+            .from('user_profiles')
             .select('*')
             .eq('user_id', userId)
             .single();
@@ -200,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
-            console.warn(`Profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
+            console.warn(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
             
             // If it's not the last attempt, wait with exponential backoff before retrying
             if (attempt < MAX_RETRIES - 1) {
@@ -214,15 +250,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw error;
           }
           
-          // If we got here, the request succeeded
+          // If we got here, the user profile request succeeded
           if (data) {
-            console.log('Profile loaded successfully:', data.id);
-            setProfile(data);
+            console.log('User profile loaded successfully:', data.user_id);
+            setUserProfile(data);
+            
+            // Now fetch the user's businesses
+            const { data: businessRoles, error: businessRolesError } = await supabase
+              .from('user_business_roles')
+              .select(`
+                business_id,
+                role,
+                businesses:business_id(*)
+              `)
+              .eq('user_id', userId);
+              
+            if (businessRolesError) {
+              console.error('Error loading business roles:', businessRolesError);
+              throw businessRolesError;
+            }
+            
+            // Extract businesses from the nested structure
+            const businesses = businessRoles.map(role => role.businesses) as Business[];
+            console.log(`Loaded ${businesses.length} businesses for user:`, userId);
+            setUserBusinesses(businesses);
+            
+            // Set current business (either from saved preference or first in list)
+            await loadSavedBusinessId(userId, businesses);
+            
             setLoading(false);
             return; // Exit the function early on success
           } else {
-            console.log('No profile found for user:', userId);
-            setProfile(null);
+            console.log('No user profile found for user:', userId);
+            setUserProfile(null);
+            setUserBusinesses([]);
+            setCurrentBusiness(null);
             setLoading(false);
             return; // Exit the function early
           }
@@ -244,20 +306,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // If we got here, all retries failed
       if (lastError) {
-        console.error('All profile loading attempts failed:', lastError);
-        setProfile(null);
+        console.error('All auth data loading attempts failed:', lastError);
+        setUserProfile(null);
+        setUserBusinesses([]);
+        setCurrentBusiness(null);
         setLoading(false);
         return;
       }
     } catch (error: any) {
-      console.error('Error in loadProfile:', error);
-      setProfile(null);
+      console.error('Error in loadAuthData:', error);
+      setUserProfile(null);
+      setUserBusinesses([]);
+      setCurrentBusiness(null);
       setLoading(false);
       return;
     }
     
     // Always set loading to false when done
-    console.log('loadProfile completed, setting loading to false');
+    console.log('loadAuthData completed, setting loading to false');
     setLoading(false);
   };
 
@@ -280,23 +346,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) return { error };
 
     if (data.user) {
-      // Create profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: data.user.id,
-          business_name: businessName,
-          full_name: fullName,
-          role: 'admin',
-        });
+      try {
+        // Create user profile
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            user_id: data.user.id,
+            full_name: fullName,
+          });
 
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-        return { error: profileError };
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+          return { error: profileError };
+        }
+
+        // Create business
+        const { data: businessData, error: businessError } = await supabase
+          .rpc('create_business', {
+            business_name_param: businessName,
+            owner_user_id_param: data.user.id
+          });
+
+        if (businessError) {
+          console.error('Error creating business:', businessError);
+          return { error: businessError };
+        }
+
+        return { error: null };
+      } catch (createError) {
+        console.error('Error in signup process:', createError);
+        return { error: createError };
       }
     }
 
     return { error: null };
+  };
+
+  const createBusiness = async (businessName: string) => {
+    if (!user) {
+      return { error: new Error('No authenticated user') };
+    }
+
+    try {
+      // Call the RPC function to create a new business
+      const { data: businessId, error } = await supabase
+        .rpc('create_business', {
+          business_name_param: businessName
+        });
+
+      if (error) {
+        console.error('Error creating business:', error);
+        return { error };
+      }
+
+      // Fetch the newly created business
+      const { data: business, error: fetchError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', businessId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching new business:', fetchError);
+        return { error: fetchError };
+      }
+
+      // Update the userBusinesses state
+      setUserBusinesses(prev => [...prev, business]);
+
+      // Set as current business if it's the first one
+      if (userBusinesses.length === 0) {
+        setCurrentBusiness(business);
+        await AsyncStorage.setItem(`currentBusiness_${user.id}`, business.id);
+      }
+
+      return { error: null, business };
+    } catch (error) {
+      console.error('Error in createBusiness:', error);
+      return { error };
+    }
+  };
+
+  const switchBusiness = async (businessId: string) => {
+    if (!user) return;
+
+    const business = userBusinesses.find(b => b.id === businessId);
+    if (!business) {
+      console.error('Business not found:', businessId);
+      return;
+    }
+
+    setCurrentBusiness(business);
+    
+    // Save preference to AsyncStorage
+    try {
+      await AsyncStorage.setItem(`currentBusiness_${user.id}`, businessId);
+    } catch (error) {
+      console.error('Error saving business preference:', error);
+    }
   };
 
   const signOut = async () => {
@@ -315,16 +462,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const updateProfile = async (updates: Partial<Profile>) => {
+  const updateUserProfile = async (updates: Partial<UserProfile>) => {
     if (!user) return { error: new Error('No user') };
 
     const { error } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .update(updates)
       .eq('user_id', user.id);
 
-    if (!error && profile) {
-      setProfile({ ...profile, ...updates });
+    if (!error && userProfile) {
+      setUserProfile({ ...userProfile, ...updates });
+    }
+
+    return { error };
+  };
+
+  const updateBusiness = async (businessId: string, updates: Partial<Business>) => {
+    if (!user) return { error: new Error('No user') };
+
+    // Check if user has admin access to this business
+    const { data: hasAccess, error: accessError } = await supabase
+      .rpc('user_has_business_access', {
+        user_uid: user.id,
+        business_id_param: businessId
+      });
+
+    if (accessError || !hasAccess) {
+      return { error: new Error('You do not have permission to update this business') };
+    }
+
+    const { error } = await supabase
+      .from('businesses')
+      .update(updates)
+      .eq('id', businessId);
+
+    if (!error) {
+      // Update userBusinesses state
+      setUserBusinesses(prev => 
+        prev.map(b => b.id === businessId ? { ...b, ...updates } : b)
+      );
+      
+      // Update currentBusiness if it's the one being modified
+      if (currentBusiness && currentBusiness.id === businessId) {
+        setCurrentBusiness({ ...currentBusiness, ...updates });
+      }
     }
 
     return { error };
@@ -347,12 +528,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     session,
     user,
-    profile,
+    userProfile,
+    userBusinesses,
+    currentBusiness,
     loading,
     signIn,
     signUp,
     signOut,
-    updateProfile,
+    updateUserProfile,
+    updateBusiness,
+    switchBusiness,
+    createBusiness,
     resetPassword,
     updatePassword,
     signedOutDueToInactivity,

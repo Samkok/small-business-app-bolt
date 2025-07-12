@@ -19,7 +19,7 @@ import { X, User, Phone, MapPin, Briefcase } from 'lucide-react-native';
 import { storageService } from '@/src/services/storage';
 import { Database } from '@/src/types/database';
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
+type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 interface ProfileFormProps {
   onSave: () => void;
@@ -27,27 +27,25 @@ interface ProfileFormProps {
 }
 
 export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
-  const { profile, user, updateProfile } = useAuth();
+  const { userProfile, user, updateUserProfile } = useAuth();
   const { isDark } = useTheme();
 
-  const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [businessName, setBusinessName] = useState(profile?.business_name || '');
-  const [phone, setPhone] = useState(profile?.phone || '');
-  const [address, setAddress] = useState(profile?.address || '');
+  const [fullName, setFullName] = useState(userProfile?.full_name || '');
+  const [phone, setPhone] = useState(userProfile?.phone || '');
+  const [address, setAddress] = useState(userProfile?.address || '');
   const [avatarFile, setAvatarFile] = useState<any>(null);
-  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
+  const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || '');
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
 
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name || '');
-      setBusinessName(profile.business_name || '');
-      setPhone(profile.phone || '');
-      setAddress(profile.address || '');
-      setAvatarUrl(profile.avatar_url || '');
+    if (userProfile) {
+      setFullName(userProfile.full_name || '');
+      setPhone(userProfile.phone || '');
+      setAddress(userProfile.address || '');
+      setAvatarUrl(userProfile.avatar_url || '');
     }
-  }, [profile]);
+  }, [userProfile]);
 
   const handleImageSelect = (file: any) => {
     setAvatarFile(file);
@@ -59,8 +57,8 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
   };
 
   const handleSave = async () => {
-    if (!fullName.trim() || !businessName.trim()) {
-      Alert.alert('Error', 'Full name and business name are required');
+    if (!fullName.trim()) {
+      Alert.alert('Error', 'Full name is required');
       return;
     }
 
@@ -85,24 +83,23 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
         } finally {
           setImageLoading(false);
         }
-      } else if (avatarUrl === '' && profile?.avatar_url) {
+      } else if (avatarUrl === '' && userProfile?.avatar_url) {
         // If image was removed and there was an old one, delete it from storage
         try {
-          await storageService.deleteProfileImage(profile.avatar_url);
+          await storageService.deleteProfileImage(userProfile.avatar_url);
         } catch (error) {
           console.error('Error deleting old profile image:', error);
         }
       }
 
-      const updates: Partial<Profile> = {
+      const updates: Partial<UserProfile> = {
         full_name: fullName.trim(),
-        business_name: businessName.trim(),
         phone: phone.trim() || null,
         address: address.trim() || null,
         avatar_url: finalAvatarUrl || null,
       };
 
-      const { error } = await updateProfile(updates);
+      const { error } = await updateUserProfile(updates);
 
       if (error) {
         Alert.alert('Error', error.message);
@@ -147,7 +144,7 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
             <View style={styles.sectionHeader}>
               <User size={20} color="#2563eb" />
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Personal Information
+                User Profile
               </Text>
             </View>
             
@@ -165,23 +162,6 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
               onChangeText={setPhone}
               placeholder="Enter your phone number"
               keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Briefcase size={20} color="#059669" />
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Business Information
-              </Text>
-            </View>
-            
-            <Input
-              label="Business Name"
-              value={businessName}
-              onChangeText={setBusinessName}
-              placeholder="Enter your business name"
-              required
             />
             
             <Input
