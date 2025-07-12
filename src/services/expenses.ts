@@ -76,7 +76,7 @@ export const expenseService = {
       .select(`
         *,
         expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
+        created_by_business:businesses!expenses_created_by_fkey(business_name)
       `)
       .single();
 
