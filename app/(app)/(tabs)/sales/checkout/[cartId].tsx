@@ -25,7 +25,7 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { getCart, getCartSummary, completeSale } = useCart();
 
   // Get cart and summary
@@ -40,7 +40,7 @@ export default function CheckoutScreen() {
   ];
 
   const handleCompleteSale = useCallback(async () => {
-    if (!profile?.id || !cartId || !cart) {
+    if (!currentBusiness?.id || !cartId || !cart) {
       Alert.alert('Error', 'Missing required information');
       return;
     }
@@ -74,7 +74,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [profile?.id, cartId, cart, paymentMethod, completeSale, router]);
+  }, [currentBusiness?.id, cartId, cart, paymentMethod, completeSale, router]);
 
   if (!cart || !cartSummary) {
     return (
