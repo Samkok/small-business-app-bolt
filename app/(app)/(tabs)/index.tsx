@@ -84,7 +84,7 @@ export default function DashboardScreen() {
       return;
     }
     
-    console.log('DashboardScreen: Loading data for profile ID:', profile.id);
+    console.log('DashboardScreen: Loading data for profile ID:', currentBusiness.id);
     if (!isRefresh) {
       setLoading(true);
     }
@@ -101,9 +101,9 @@ export default function DashboardScreen() {
       }
 
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(profile.id),
-        reportsService.getTopProducts(profile.id, 3),
-        reportsService.getTopCustomers(profile.id, 3)
+        reportsService.getDashboardStats(currentBusiness.id),
+        reportsService.getTopProducts(currentBusiness.id, 3),
+        reportsService.getTopCustomers(currentBusiness.id, 3)
       ]);
       
       setStats(dashboardStats);
