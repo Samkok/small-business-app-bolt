@@ -94,7 +94,7 @@ export default function TeamScreen() {
         user_id: role.user_id,
         business_id: role.business_id,
         role: role.role as 'admin' | 'staff',
-        user_name: role.user_profiles?.full_name,
+        user_name: profiles?.find(p => p.user_id === role.user_id)?.full_name,
         user_email: users?.find(u => u.id === role.user_id)?.email
       }));
       
