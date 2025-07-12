@@ -53,14 +53,15 @@ export const expenseService = {
 
   async createExpense(expense: ExpenseInsert) {
     const { data, error } = await supabase
-      .from('expenses')
-      .insert(expense)
-      .select(`
-        *,
-        expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
-      `)
-      .single();
+        .from('expenses')
+        .insert(expense)
+        .select(`
+          *,
+          expense_categories(name),
+          created_by_business:businesses!expenses_created_by_fkey(business_name)
+        `)
+        .single();
+
 
     if (error) throw error;
     return data;
