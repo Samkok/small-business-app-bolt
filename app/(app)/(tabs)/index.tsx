@@ -78,7 +78,7 @@ export default function DashboardScreen() {
   }, [router]);
 
   const loadDashboardData = async (isRefresh = false) => {
-    if (!profile?.id) {
+    if (!currentBusiness?.id) {
       console.log('DashboardScreen: No profile ID available, skipping data load');
       setLoading(false);
       return;
