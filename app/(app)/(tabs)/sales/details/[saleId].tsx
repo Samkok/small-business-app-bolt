@@ -25,7 +25,7 @@ export default function SaleDetailsScreen() {
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     loadSaleDetails();
@@ -51,7 +51,7 @@ export default function SaleDetailsScreen() {
   };
 
   const handleVoidSale = () => {
-    if (!profile?.id || !sale) return;
+    if (!currentBusiness?.id || !sale) return;
     
     Alert.alert(
       'Void Sale',
@@ -64,7 +64,7 @@ export default function SaleDetailsScreen() {
           onPress: async () => {
             setVoidingInProgress(true);
             try {
-              await salesService.voidSale(sale.id, 'Sale voided by user', profile.id);
+              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
               Alert.alert('Success', 'Sale voided successfully');
               loadSaleDetails();
             } catch (error) {
@@ -409,7 +409,7 @@ export default function SaleDetailsScreen() {
                     )}
                     
                     <Text style={[styles.actionPerformer, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                      Performed by: {action.profiles?.full_name || 'Unknown'}
+                      Performed by: {action.currentBusinesss?.full_name || 'Unknown'}
                     </Text>
                   </View>
                 ))}
