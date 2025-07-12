@@ -35,11 +35,16 @@ export const expenseService = {
       .from('expenses')
       .select(`
         *,
-        expense_categories(name),
-        created_by_user:profiles(full_name)
+        expense_categories (
+          name
+        ),
+        created_by_user:profiles (
+          full_name
+        )
       `)
       .eq('business_id', businessId)
       .order('expense_date', { ascending: false });
+
 
     if (limit) {
       query = query.limit(limit);
