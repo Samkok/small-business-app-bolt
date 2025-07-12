@@ -88,6 +88,8 @@ export default function TeamScreen() {
       if (usersError) {
         console.warn('Could not fetch user emails:', usersError);
       }
+
+      console.log("Profile: ", profiles);
       
       // Combine the data
       const members: TeamMember[] = roles.map(role => ({
