@@ -69,7 +69,7 @@ export default function InventoryScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const flatListRef = useRef<FlatList>(null);
   const historyFlatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
