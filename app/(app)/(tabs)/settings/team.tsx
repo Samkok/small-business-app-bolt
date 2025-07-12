@@ -80,14 +80,19 @@ export default function TeamScreen() {
         .select('id, email')
         .in('id', userIds);
 
+      if (usersError) {
+        console.warn('Could not fetch user emails:', usersError);
+      }
+      
       const { data: profiles, error: profilesError } = await supabase
         .from('user_profiles')
         .select('full_name')
         .in('user_id', userIds);
-      
-      if (usersError) {
-        console.warn('Could not fetch user emails:', usersError);
+
+      if (profilesError) {
+        console.warn('Could not fetch user information:', profilesError);
       }
+      
 
       console.log("Profile: ", profiles);
       
