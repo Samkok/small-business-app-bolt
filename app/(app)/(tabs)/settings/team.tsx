@@ -65,7 +65,9 @@ export default function TeamScreen() {
           user_id,
           business_id,
           role,
-          user_profiles:user_id(full_name)
+          user_profiles (
+            full_name
+          )
         `)
         .eq('business_id', currentBusiness.id);
         
