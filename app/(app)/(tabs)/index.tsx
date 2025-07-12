@@ -65,7 +65,7 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { profile } = useAuth();
-  console.log('DashboardScreen: Profile on render:', profile ? `ID: ${profile.id}` : 'null'); 
+  console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
   const router = useRouter();
 
   useEffect(() => {
