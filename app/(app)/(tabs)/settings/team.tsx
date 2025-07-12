@@ -74,7 +74,7 @@ export default function TeamScreen() {
       if (rolesError) throw rolesError;
       
       // Get user emails (requires additional query)
-      const userIds = roles.map(role => role.user_id);)
+      const userIds = roles.map(role => role.user_id);
       const { data: users, error: usersError } = await supabase
         .from('auth.users')
         .select('id, email')
