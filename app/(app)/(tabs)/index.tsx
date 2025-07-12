@@ -261,7 +261,7 @@ export default function DashboardScreen() {
             Welcome back,
           </Text>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-            {profile?.business_name || 'Business Owner'}
+            {currentBusiness?.business_name || 'Business Owner'}
           </Text>
         </View>
         
@@ -295,7 +295,7 @@ export default function DashboardScreen() {
             Welcome back,
           </Text>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-            {profile?.business_name || 'Business Owner'}
+            {currentBusiness?.business_name || 'Business Owner'}
           </Text>
         </View>
         
@@ -341,7 +341,7 @@ export default function DashboardScreen() {
           Welcome back,
         </Text>
         <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-          {profile?.business_name || 'Business Owner'}
+          {currentBusiness?.business_name || 'Business Owner'}
         </Text>
       </View>
 
