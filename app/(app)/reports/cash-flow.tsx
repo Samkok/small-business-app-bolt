@@ -31,22 +31,22 @@ export default function CashFlowScreen() {
   const { month, year } = params;
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
-    if (profile?.id && month !== undefined && year !== undefined) {
+    if (currentBusiness?.id && month !== undefined && year !== undefined) {
       loadCashFlowStatement();
     } else {
       setLoading(false);
     }
-  }, [profile?.id, month, year]);
+  }, [currentBusiness?.id, month, year]);
 
   const loadCashFlowStatement = async () => {
     try {
       setLoading(true);
       
       const data = await reportsService.getCashFlowStatement(
-        profile!.id, 
+        currentBusiness!.id, 
         parseInt(month as string),
         parseInt(year as string)
       );
@@ -61,14 +61,14 @@ export default function CashFlowScreen() {
   };
 
   const handleExport = async () => {
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
     try {
       const csvData = await importService.exportCashFlowToCsv(
-        profile.id, 
+        currentBusiness.id, 
         parseInt(month as string),
         parseInt(year as string)
       );
