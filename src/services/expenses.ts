@@ -32,14 +32,15 @@ export const expenseService = {
 
   async getExpenses(businessId: string, limit?: number) {
     let query = supabase
-      .from('expenses')
-      .select(`
-        *,
-        expense_categories(name),
-        created_by_business:businesses(name)
-      `)
-      .eq('business_id', businessId)
-      .order('expense_date', { ascending: false });
+        .from('expenses')
+        .select(`
+          *,
+          expense_categories(name),
+          created_by_business:businesses!expenses_created_by_fkey(name)
+        `)
+        .eq('business_id', businessId)
+        .order('expense_date', { ascending: false });
+
 
 
 
