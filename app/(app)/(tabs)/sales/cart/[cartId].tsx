@@ -31,7 +31,7 @@ export default function CartScreen() {
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { 
     getCart, 
     updateCart, 
