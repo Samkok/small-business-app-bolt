@@ -73,20 +73,20 @@ const STORAGE_KEY = 'local_carts';
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [loading, setLoading] = useState(true);
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   // Load carts from AsyncStorage on mount
   useEffect(() => {
-    if (profile?.id) {
+    if (currentBusiness?.id) {
       loadCarts();
-      console.log('CartContext: Initial loadCarts called with profile ID:', profile.id);
+      console.log('CartContext: Initial loadCarts called with currentBusiness ID:', currentBusiness.id);
     } else {
-      console.log('CartContext: Waiting for profile ID before loading carts');
-      // Set empty carts when profile is not available
+      console.log('CartContext: Waiting for currentBusiness ID before loading carts');
+      // Set empty carts when currentBusiness is not available
       setCarts([]);
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [currentBusiness?.id]);
 
   // Load carts from AsyncStorage
   const loadCarts = async () => {
@@ -94,8 +94,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.log('CartContext: loadCarts started');
       setLoading(true);
       
-      if (!profile?.id) {
-        console.log('CartContext: No profile ID in loadCarts, aborting');
+      if (!currentBusiness?.id) {
+        console.log('CartContext: No currentBusiness ID in loadCarts, aborting');
         setLoading(false);
         return;
       }
@@ -104,14 +104,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (storedCarts) {
         const parsedCarts = JSON.parse(storedCarts) as Cart[];
         // Only load carts for the current business
-        if (profile?.id) {
+        if (currentBusiness?.id) {
           const filteredCarts = parsedCarts.filter(cart => 
-            cart.business_id === profile.id && cart.status === 'active'
+            cart.business_id === currentBusiness.id && cart.status === 'active'
           );
           setCarts(filteredCarts);
-          console.log(`CartContext: Loaded ${filteredCarts.length} carts for business ${profile.id}`);
+          console.log(`CartContext: Loaded ${filteredCarts.length} carts for business ${currentBusiness.id}`);
         } else {
-          console.log('CartContext: No profile ID, setting empty carts');
+          console.log('CartContext: No currentBusiness ID, setting empty carts');
           setCarts([]);
         }
       }
@@ -139,8 +139,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
-    if (!profile?.id) {
-      throw new Error('No business profile found');
+    if (!currentBusiness?.id) {
+      throw new Error('No business currentBusiness found');
     }
 
     // Get the latest cart data from AsyncStorage
@@ -281,13 +281,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error syncing cart:', error);
       return false;
     }
-  }, [profile]);
+  }, [currentBusiness]);
 
   const refreshCarts = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     try {
-      console.log('CartContext: refreshCarts started for profile ID:', profile.id);
+      console.log('CartContext: refreshCarts started for currentBusiness ID:', currentBusiness.id);
       setLoading(true);
             
       // Get the current carts from storage to ensure we're working with the latest data
@@ -296,7 +296,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (storedCarts) {
         localCarts = JSON.parse(storedCarts) as Cart[];
         localCarts = localCarts.filter(cart => 
-          cart.business_id === profile.id && cart.status === 'active'
+          cart.business_id === currentBusiness.id && cart.status === 'active'
         );
       }
       
@@ -313,14 +313,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Get active carts from the server
-      const serverCarts = await cartService.getActiveCarts(profile.id);
+      const serverCarts = await cartService.getActiveCarts(currentBusiness.id);
       
       // Reload local carts after sync attempts
       const refreshedStoredCarts = await AsyncStorage.getItem(STORAGE_KEY);
       if (refreshedStoredCarts) {
         localCarts = JSON.parse(refreshedStoredCarts) as Cart[];
         localCarts = localCarts.filter(cart => 
-          cart.business_id === profile.id && cart.status === 'active'
+          cart.business_id === currentBusiness.id && cart.status === 'active'
         );
       }
       
@@ -405,12 +405,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
     }
-  }, [profile?.id, syncCart]);
+  }, [currentBusiness?.id, syncCart]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
-    if (!profile || !profile.id) {
-      console.error('CartContext: Cannot create cart - No business profile found');
-      throw new Error('No business profile found. Please try again later.');
+    if (!currentBusiness || !currentBusiness.id) {
+      console.error('CartContext: Cannot create cart - No business currentBusiness found');
+      throw new Error('No business currentBusiness found. Please try again later.');
     }
 
     const now = new Date().toISOString();
@@ -421,8 +421,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       customer_phone: customerData.phone,
       status: 'active',
       total_amount: 0,
-      business_id: profile.id,
-      created_by: profile.id,
+      business_id: currentBusiness.id,
+      created_by: currentBusiness.id,
       created_at: now,
       updated_at: now,
       items: [],
@@ -442,7 +442,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
     
     return newCart;
-  }, [profile]);
+  }, [currentBusiness]);
 
   const getCart = useCallback((cartId: string): Cart | undefined => {
     return carts.find(cart => cart.id === cartId);
@@ -900,8 +900,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [carts, calculateCartDiscount]);
 
   const completeSale = useCallback(async (cartId: string, paymentMethod: string): Promise<{ success: boolean; saleId?: string; error?: string }> => {
-    if (!profile?.id) {
-      return { success: false, error: 'No business profile found' };
+    if (!currentBusiness?.id) {
+      return { success: false, error: 'No business currentBusiness found' };
     }
 
     // Get the latest cart data from AsyncStorage
@@ -932,8 +932,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         customer_id: cart.customer_id,
         payment_method: paymentMethod as any,
         notes: cart.notes,
-        business_id: profile.id,
-        created_by: profile.id
+        business_id: currentBusiness.id,
+        created_by: currentBusiness.id
       });
       
       // Remove the cart from local storage
@@ -948,7 +948,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error completing sale:', error);
       return { success: false, error: 'Failed to complete sale' };
     }
-  }, [profile, syncCart]);
+  }, [currentBusiness, syncCart]);
 
   const value = {
     carts,
