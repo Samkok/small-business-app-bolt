@@ -33,7 +33,7 @@ export default function ProductSelectionScreen() {
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { getCart, addItemToCart, updateCartItem } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -46,11 +46,11 @@ export default function ProductSelectionScreen() {
   }, [products, debouncedSearchQuery]);
 
   const loadData = useCallback(async () => {
-    if (!profile?.id || !cartId) return;
+    if (!currentBusiness?.id || !cartId) return;
     
     try {
       // Load products
-      const productsData = await productService.getInStockProducts(profile.id);
+      const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
       setFilteredProducts(productsData);
       
@@ -70,7 +70,7 @@ export default function ProductSelectionScreen() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, cartId, getCart]);
+  }, [currentBusiness?.id, cartId, getCart]);
 
   const filterProducts = useCallback(() => {
     if (debouncedSearchQuery.trim() === '') {
