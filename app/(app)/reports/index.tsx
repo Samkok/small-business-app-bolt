@@ -44,15 +44,15 @@ export default function ReportsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
-    if (profile?.id) {
+    if (currentBusiness?.id) {
       loadReportData();
     } else {
       setInitialLoading(false);
     }
-  }, [profile?.id, dateRange, customStartDate, customEndDate]);
+  }, [currentBusiness?.id, dateRange, customStartDate, customEndDate]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -124,7 +124,7 @@ export default function ReportsScreen() {
   };
 
   const loadReportData = async () => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (initialLoading) {
       setInitialLoading(true);
@@ -136,19 +136,19 @@ export default function ReportsScreen() {
       const { startDate, endDate } = getDateRange();
       
       // Load revenue data
-      const revenueChartData = await reportsService.getRevenueChart(profile.id, startDate, endDate);
+      const revenueChartData = await reportsService.getRevenueChart(currentBusiness.id, startDate, endDate);
       setRevenueData(revenueChartData);
       
       // Load expenses data
-      const expensesChartData = await reportsService.getExpenseChart(profile.id, startDate, endDate);
+      const expensesChartData = await reportsService.getExpenseChart(currentBusiness.id, startDate, endDate);
       setExpensesData(expensesChartData);
       
       // Load profit data
-      const profitChartData = await reportsService.getProfitChart(profile.id, startDate, endDate);
+      const profitChartData = await reportsService.getProfitChart(currentBusiness.id, startDate, endDate);
       setProfitData(profitChartData);
       
       // Load expense categories data
-      const expenseCategoriesChartData = await reportsService.getExpensesByCategory(profile.id, startDate, endDate);
+      const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate);
       setExpenseCategoriesData(expenseCategoriesChartData);
     } catch (error) {
       console.error('Error loading report data:', error);
