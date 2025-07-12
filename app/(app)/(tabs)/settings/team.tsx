@@ -65,7 +65,7 @@ export default function TeamScreen() {
           user_id,
           business_id,
           role,
-          businessess (
+          businesses (
             business_name
           )
         `)
