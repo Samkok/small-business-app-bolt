@@ -93,7 +93,7 @@ export default function InventoryScreen() {
   }, [importHistory, importSearchQuery, sortOrder]);
 
   const loadData = async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -101,9 +101,9 @@ export default function InventoryScreen() {
     
     try {
       const [historyData, totalCount, lowStockProducts] = await Promise.all([
-        inventoryService.getImportHistory(profile.id),
-        productService.getProductsCount(profile.id),
-        productService.getLowStockProducts(profile.id)
+        inventoryService.getImportHistory(currentBusiness.id),
+        productService.getProductsCount(currentBusiness.id),
+        productService.getLowStockProducts(currentBusiness.id)
       ]);
       
       setImportHistory(historyData);
@@ -132,11 +132,11 @@ export default function InventoryScreen() {
   };
 
   const loadProducts = async (page: number, reset: boolean = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     try {
       const offset = page * PRODUCTS_PER_PAGE;
-      const productsData = await productService.getProducts(profile.id, PRODUCTS_PER_PAGE, offset);
+      const productsData = await productService.getProducts(currentBusiness.id, PRODUCTS_PER_PAGE, offset);
       
       if (reset) {
         setProducts(productsData);
@@ -186,7 +186,7 @@ export default function InventoryScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [currentPage, hasMoreProducts, loadingMore, profile?.id, isSearching]);
+  }, [currentPage, hasMoreProducts, loadingMore, currentBusiness?.id, isSearching]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -376,11 +376,11 @@ export default function InventoryScreen() {
   };
 
   const handleSearch = async () => {
-    if (!profile?.id || searchQuery.trim() === '') return;
+    if (!currentBusiness?.id || searchQuery.trim() === '') return;
     
     setIsSearching(true);
     try {
-      const results = await productService.searchProducts(profile.id, searchQuery);
+      const results = await productService.searchProducts(currentBusiness.id, searchQuery);
       setSearchResults(results);
       setFilteredProducts(results);
     } catch (error) {
