@@ -70,7 +70,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [profile]);
+  }, [currentBusiness]);
 
   const handleNewSale = useCallback(() => {
     // Use router.navigate instead of router.push to properly handle tab navigation
