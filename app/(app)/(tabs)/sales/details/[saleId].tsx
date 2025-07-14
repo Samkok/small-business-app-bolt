@@ -355,7 +355,7 @@ export default function SaleDetailsScreen() {
         </Card>
 
         {/* Additional Information */}
-        {(sale.notes || sale.performed_by_user_full_name ?.length > 0) && (
+        {(sale.notes || sale.performed_by_user_full_name?.length > 0) && (
           <Card style={styles.section}>
             {sale.notes && (
               <>
@@ -372,7 +372,7 @@ export default function SaleDetailsScreen() {
               </>
             )}
             
-            {sale.performed_by_user_full_name ?.length > 0 && (
+            {sale.performed_by_user_full_name?.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { marginTop: sale.notes ? 16 : 0 }]}>
                   <AlertTriangle size={20} color="#dc2626" />
@@ -381,7 +381,7 @@ export default function SaleDetailsScreen() {
                   </Text>
                 </View>
                 
-                {sale.performed_by_user_full_name .map((action: any, index: number) => (
+                {sale.performed_by_user_full_name.map((action: any, index: number) => (
                   <View key={index} style={styles.actionItem}>
                     <View style={styles.actionHeader}>
                       <Text style={[styles.actionType, { color: '#dc2626' }]}>
