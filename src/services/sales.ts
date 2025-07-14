@@ -191,7 +191,7 @@ export const salesService = {
   async getSale(saleId: string) {
     if (!saleId) return null;
     
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('sales')
       .select(`
         *,
@@ -203,15 +203,55 @@ export const salesService = {
             products(*)
           )
         ),
-        sale_actions(
-          *, 
-          businesses!sale_actions_performed_by_fkey(users(user_profiles(full_name)))
-        )
+        sale_actions(*)
       `)
       .eq('id', saleId)
       .single();
 
     if (error) throw error;
+    
+    // If there are sale actions, fetch the performer names separately
+    if (data && data.sale_actions && data.sale_actions.length > 0) {
+      const performerIds = data.sale_actions.map(action => action.performed_by);
+      
+      const { data: businesses, error: businessError } = await supabase
+        .from('businesses')
+        .select('id, owner_user_id')
+        .in('id', performerIds);
+        
+      if (!businessError && businesses) {
+        // Map business IDs to owner user IDs
+        const businessOwners = businesses.reduce((map, business) => {
+          map[business.id] = business.owner_user_id;
+          return map;
+        }, {});
+        
+        // Get user profiles for the owner IDs
+        const ownerIds = businesses.map(b => b.owner_user_id);
+        const { data: profiles, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('user_id, full_name')
+          .in('user_id', ownerIds);
+          
+        if (!profileError && profiles) {
+          // Map user IDs to full names
+          const userNames = profiles.reduce((map, profile) => {
+            map[profile.user_id] = profile.full_name;
+            return map;
+          }, {});
+          
+          // Add performer name to each sale action
+          data.sale_actions = data.sale_actions.map(action => {
+            const ownerId = businessOwners[action.performed_by];
+            return {
+              ...action,
+              performer_name: ownerId ? userNames[ownerId] || 'Unknown' : 'Unknown'
+            };
+          });
+        }
+      }
+    }
+    
     return data;
   },
 

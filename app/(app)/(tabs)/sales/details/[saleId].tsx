@@ -409,7 +409,7 @@ export default function SaleDetailsScreen() {
                     )}
                     
                     <Text style={[styles.actionPerformer, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                      Performed by: {action.currentBusinesss?.full_name || 'Unknown'}
+                      Performed by: {action.performer_name || 'Unknown'}
                     </Text>
                   </View>
                 ))}
