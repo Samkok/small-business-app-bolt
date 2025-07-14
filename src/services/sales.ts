@@ -205,7 +205,7 @@ export const salesService = {
         ),
         sale_actions(
           *,
-          profiles!sale_actions_performed_by_fkey(full_name)
+          user_profiles!sale_actions_performed_by_fkey(full_name)
         )
       `)
       .eq('id', saleId)
