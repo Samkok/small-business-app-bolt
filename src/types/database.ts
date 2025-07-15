@@ -123,6 +123,38 @@ export interface Database {
           updated_at?: string;
         };
       };
+      product_history: {
+        Row: {
+          id: string;
+          product_id: string;
+          changed_by_user_id: string;
+          business_id: string;
+          change_date: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          changed_by_user_id: string;
+          business_id: string;
+          change_date?: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          changed_by_user_id?: string;
+          business_id?: string;
+          change_date?: string;
+          field_name?: string;
+          old_value?: string;
+          new_value?: string;
+        };
+      };
       inventory_imports: {
         Row: {
           id: string;

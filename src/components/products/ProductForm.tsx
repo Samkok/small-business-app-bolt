@@ -37,7 +37,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   
-  const { isDark } = useTheme();
+  const { isDark } = useTheme(); 
   const { profile } = useAuth();
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
       let savedProduct;
       if (product) {
-        savedProduct = await productService.updateProduct(product.id, productData);
+        savedProduct = await productService.updateProduct(product.id, productData, currentBusiness.owner_user_id);
       } else {
         savedProduct = await productService.createProduct(productData);
       }
