@@ -31,7 +31,7 @@ export default function ProductDetailsScreen() {
   const params = useLocalSearchParams();
   const { productId } = params;
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     if (productId) {
@@ -40,7 +40,7 @@ export default function ProductDetailsScreen() {
   }, [productId]);
 
   const loadProductDetails = async (isRefresh = false) => {
-    if (!productId || !profile?.id) return;
+    if (!productId || !currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -63,7 +63,7 @@ export default function ProductDetailsScreen() {
       
       const summaryData = await reportsService.getProductFinancialSummary(
         productId as string,
-        profile.id,
+        currentBusiness.id,
         startDate,
         endDate
       );
@@ -82,7 +82,7 @@ export default function ProductDetailsScreen() {
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadProductDetails(true);
-  }, [productId, profile?.id]);
+  }, [productId, currentBusiness?.id]);
 
   const handleImportStock = useCallback(() => {
     router.push(`/inventory/import-form?productId=${productId}`);
