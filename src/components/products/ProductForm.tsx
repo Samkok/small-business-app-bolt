@@ -38,7 +38,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [imageLoading, setImageLoading] = useState(false);
   
   const { isDark } = useTheme(); 
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     if (product) {
@@ -81,8 +81,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -112,7 +112,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         current_stock: stockValue,
         min_stock_level: minStockValue,
         image_url: finalImageUrl || null,
-        business_id: profile.id,
+        business_id: currentBusiness.id,
       };
 
       let savedProduct;
