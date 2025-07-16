@@ -37,7 +37,7 @@ export default function ImportFormScreen() {
   const params = useLocalSearchParams();
   const { productId } = params;
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     if (productId) {
@@ -136,8 +136,8 @@ export default function ImportFormScreen() {
       }
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -152,8 +152,8 @@ export default function ImportFormScreen() {
         final_unit_cost: finalUnitCost,
         total_cost: totalCost,
         notes: notes.trim() || null,
-        business_id: profile.id,
-        imported_by: profile.id,
+        business_id: currentBusiness.id,
+        imported_by: currentBusiness.id,
         purchase_date: purchaseDate,
         status: 'pending' as const
       };
