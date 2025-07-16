@@ -16,6 +16,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "hengsamkok76@gmail.com"
+      }
+    }
   }
 }
