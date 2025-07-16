@@ -8,9 +8,6 @@ jobs:
     name: Build and Submit iOS
     runs-on: ubuntu-latest
 
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}  # ✅ Authenticates EAS in all steps
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -26,7 +23,9 @@ jobs:
       - name: 📂 Install dependencies
         run: npm install
 
-      - name: 🛠️ Build and Submit iOS app for TestFlight
-        run: eas build -p ios --submit --non-interactive
+      - name: Build & Submit to TestFlight
+        run: eas build -p ios --profile production --submit --non-interactive
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EAS_APPLE_APP_SPECIFIC_PASSWORD }}
+
