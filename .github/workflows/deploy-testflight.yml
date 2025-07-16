@@ -23,6 +23,11 @@ jobs:
       - name: 📂 Install dependencies
         run: npm install
 
+      - name: Set EXPO_TOKEN environment
+        run: echo "Authenticated via EXPO_TOKEN"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: 🛠️ Build iOS app for TestFlight
         run: eas build --platform ios --profile production --non-interactive
 
