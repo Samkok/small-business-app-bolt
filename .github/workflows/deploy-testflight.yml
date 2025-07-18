@@ -28,4 +28,3 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EAS_APPLE_APP_SPECIFIC_PASSWORD }}
-
