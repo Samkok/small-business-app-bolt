@@ -29,7 +29,7 @@ export default function ProductSelectionScreen() {
   
   const router = useRouter();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -41,14 +41,14 @@ export default function ProductSelectionScreen() {
   }, [products, debouncedSearchQuery]);
 
   const loadProducts = async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
     }
     
     try {
-      const data = await productService.getProducts(profile.id);
+      const data = await productService.getProducts(currentBusiness.id);
       setProducts(data);
       setFilteredProducts(data);
     } catch (error) {
