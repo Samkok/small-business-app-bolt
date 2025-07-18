@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  TouchableOpacity,
   Keyboard,
   Alert
 } from 'react-native';
@@ -46,8 +47,10 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
+        console.log("Error: ", error);
         Alert.alert(t('common.error'), error.message);
       } else {
+        console.log("Forget password: Successfully sent");
         setResetSent(true);
       }
     } catch (error) {

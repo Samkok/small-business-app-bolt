@@ -25,7 +25,7 @@ export default function SaleDetailsScreen() {
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     loadSaleDetails();
@@ -51,7 +51,7 @@ export default function SaleDetailsScreen() {
   };
 
   const handleVoidSale = () => {
-    if (!profile?.id || !sale) return;
+    if (!currentBusiness?.id || !sale) return;
     
     Alert.alert(
       'Void Sale',
@@ -64,7 +64,7 @@ export default function SaleDetailsScreen() {
           onPress: async () => {
             setVoidingInProgress(true);
             try {
-              await salesService.voidSale(sale.id, 'Sale voided by user', profile.id);
+              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
               Alert.alert('Success', 'Sale voided successfully');
               loadSaleDetails();
             } catch (error) {
@@ -355,7 +355,7 @@ export default function SaleDetailsScreen() {
         </Card>
 
         {/* Additional Information */}
-        {(sale.notes || sale.sale_actions?.length > 0) && (
+        {(sale.notes || sale.sale_actions_performed_by_fkey?.length > 0) && (
           <Card style={styles.section}>
             {sale.notes && (
               <>
@@ -372,7 +372,7 @@ export default function SaleDetailsScreen() {
               </>
             )}
             
-            {sale.sale_actions?.length > 0 && (
+            {sale.sale_actions_performed_by_fkey?.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { marginTop: sale.notes ? 16 : 0 }]}>
                   <AlertTriangle size={20} color="#dc2626" />
@@ -381,7 +381,7 @@ export default function SaleDetailsScreen() {
                   </Text>
                 </View>
                 
-                {sale.sale_actions.map((action: any, index: number) => (
+                {sale.sale_actions_performed_by_fkey.map((action: any, index: number) => (
                   <View key={index} style={styles.actionItem}>
                     <View style={styles.actionHeader}>
                       <Text style={[styles.actionType, { color: '#dc2626' }]}>
@@ -409,7 +409,7 @@ export default function SaleDetailsScreen() {
                     )}
                     
                     <Text style={[styles.actionPerformer, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                      Performed by: {action.profiles?.full_name || 'Unknown'}
+                      Performed by: {action.performer_name || 'Unknown'}
                     </Text>
                   </View>
                 ))}

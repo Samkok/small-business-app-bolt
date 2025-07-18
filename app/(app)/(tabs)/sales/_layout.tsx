@@ -10,7 +10,6 @@ export default function SalesLayout() {
       <Stack.Screen name="cart/[cartId]" />
       <Stack.Screen name="checkout/[cartId]" />
       <Stack.Screen name="details/[saleId]" />
-      <Stack.Screen name="import" />
     </Stack>
   );
 }

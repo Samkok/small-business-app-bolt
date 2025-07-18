@@ -7,16 +7,18 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, Package, DollarSign, Plus, Trash2 } from 'lucide-react-native';
-import { productService } from '@/src/services/products';
+import { X, Package, DollarSign, Plus, Trash2, Calendar } from 'lucide-react-native';
 import { inventoryService } from '@/src/services/inventory';
+import { productService } from '@/src/services/products';
+import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 interface ImportFormProps {
   productId?: string;
@@ -32,6 +34,8 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
   const [notes, setNotes] = useState('');
   const [additionalCosts, setAdditionalCosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   const { isDark } = useTheme();
   const { profile } = useAuth();
@@ -85,7 +89,7 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
       }
     });
 
-    const finalUnitCost = baseCost + (totalAdditionalCost / qty);
+    const finalUnitCost = baseCost + (qty > 0 ? (totalAdditionalCost / qty) : 0);
     const totalCost = finalUnitCost * qty;
 
     return { finalUnitCost: isNaN(finalUnitCost) ? 0 : finalUnitCost, totalCost: isNaN(totalCost) ? 0 : totalCost };
@@ -141,17 +145,19 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
         notes: notes.trim() || null,
         business_id: profile.id,
         imported_by: profile.id,
+        purchase_date: purchaseDate,
+        status: 'pending' as const
       };
 
       const costs = additionalCosts.map(cost => ({
         cost_type: cost.cost_type.trim(),
         amount: parseFloat(cost.amount),
         calculation_type: cost.calculation_type,
-        description: cost.description.trim() || null,
+        description: cost.description?.trim() || null,
       }));
 
       await inventoryService.createImport(importData, costs);
-      Alert.alert('Success', 'Stock imported successfully');
+      Alert.alert('Success', 'Stock import created successfully');
       onComplete();
     } catch (error) {
       console.error('Error importing stock:', error);
@@ -159,6 +165,15 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDateConfirm = (start: Date) => {
+    setPurchaseDate(start.toISOString());
+    setShowDatePicker(false);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   const { finalUnitCost, totalCost } = calculateFinalCost();
@@ -234,6 +249,24 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
+              <Calendar size={20} color="#8b5cf6" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Purchase Date
+              </Text>
+            </View>
+            
+            <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+              <Input
+                label="Purchase Date"
+                value={formatDate(purchaseDate)}
+                editable={false}
+                placeholder="Tap to set purchase date"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
               <DollarSign size={20} color="#059669" />
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Import Details
@@ -276,7 +309,7 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
             {additionalCosts.map((cost, index) => (
               <View key={index} style={styles.costItem}>
                 <View style={styles.costHeader}>
-                  <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#374151' }]}>
+                  <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                     Cost #{index + 1}
                   </Text>
                   <TouchableOpacity
@@ -423,12 +456,35 @@ export default function ImportForm({ productId, onComplete, onCancel }: ImportFo
           style={styles.footerButton}
         />
         <Button
-          title="Import Stock"
+          title="Create Import"
           onPress={handleImport}
           loading={loading}
           style={styles.footerButton}
         />
       </View>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.datePickerContainer}>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Purchase Date
+            </Text>
+            
+            <DateRangePicker
+              startDate={purchaseDate ? new Date(purchaseDate) : new Date()}
+              endDate={purchaseDate ? new Date(purchaseDate) : new Date()}
+              onConfirm={(start) => handleDateConfirm(start)}
+              onCancel={() => setShowDatePicker(false)}
+            />
+          </Card>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -583,5 +639,23 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerContainer: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });

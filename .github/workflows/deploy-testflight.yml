@@ -23,10 +23,8 @@ jobs:
       - name: 📂 Install dependencies
         run: npm install
 
-      - name: 🛠️ Build iOS app for TestFlight
-        run: eas build --platform ios --profile production --non-interactive
-
-      - name: 🚀 Submit to TestFlight
-        run: eas submit --platform ios --profile production --non-interactive
+      - name: Build & Submit to TestFlight
+        run: eas build -p ios --profile production --submit --non-interactive
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EAS_APPLE_APP_SPECIFIC_PASSWORD }}

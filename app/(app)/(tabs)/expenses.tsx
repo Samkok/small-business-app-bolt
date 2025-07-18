@@ -45,7 +45,7 @@ export default function ExpensesScreen() {
   
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
@@ -74,7 +74,7 @@ export default function ExpensesScreen() {
   }, [statsCollapsed, collapseAnim]);
 
   const loadData = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -82,8 +82,8 @@ export default function ExpensesScreen() {
     
     try {
       const [expensesData, categoriesData] = await Promise.all([
-        expenseService.getExpenses(profile.id),
-        expenseService.getCategories(profile.id)
+        expenseService.getExpenses(currentBusiness.id),
+        expenseService.getCategories(currentBusiness.id)
       ]);
       
       setExpenses(expensesData);
@@ -98,7 +98,7 @@ export default function ExpensesScreen() {
         setLoading(false);
       }
     }
-  }, [profile?.id, t]);
+  }, [currentBusiness?.id, t]);
 
   const filterExpenses = useCallback(() => {
     let filtered = expenses;

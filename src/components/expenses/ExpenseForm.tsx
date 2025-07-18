@@ -33,7 +33,7 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
   const [loading, setLoading] = useState(false);
   
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     if (expense) {
@@ -60,8 +60,8 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -73,8 +73,8 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
         category_id: categoryId,
         expense_date: expenseDate || new Date().toISOString(),
         notes: notes.trim() || null,
-        business_id: profile.id,
-        created_by: profile.id,
+        business_id: currentBusiness.id,
+        created_by: currentBusiness.id,
       };
 
       if (expense) {

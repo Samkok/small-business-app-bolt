@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
 import { 
   LayoutDashboard, 

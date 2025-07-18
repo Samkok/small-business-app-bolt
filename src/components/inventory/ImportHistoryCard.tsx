@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, User, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
 
 interface ImportHistoryCardProps {
   importRecord: {
@@ -13,6 +13,9 @@ interface ImportHistoryCardProps {
     total_cost: number;
     notes?: string;
     created_at: string;
+    purchase_date: string;
+    arrival_date?: string;
+    status: 'pending' | 'completed';
     products?: {
       name: string;
       barcode?: string;
@@ -26,9 +29,10 @@ interface ImportHistoryCardProps {
   };
   onEdit: (importRecord: any) => void;
   onDelete: (importRecord: any) => void;
+  onMarkAsArrived: (importRecord: any) => void;
 }
 
-export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHistoryCardProps) {
+export function ImportHistoryCard({ importRecord, onEdit, onDelete, onMarkAsArrived }: ImportHistoryCardProps) {
   const { isDark } = useTheme();
 
   const formatDate = (dateString: string) => {
@@ -37,6 +41,18 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHist
 
   const formatCurrency = (amount: number) => {
     return `$${amount.toFixed(2)}`;
+  };
+
+  const getStatusColor = (status: 'pending' | 'completed') => {
+    return status === 'completed' ? '#059669' : '#f59e0b';
+  };
+
+  const getStatusIcon = (status: 'pending' | 'completed') => {
+    return status === 'completed' ? (
+      <CheckCircle size={14} color={getStatusColor(status)} />
+    ) : (
+      <Clock size={14} color={getStatusColor(status)} />
+    );
   };
 
   return (
@@ -58,9 +74,24 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHist
             <View style={styles.metaItem}>
               <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {formatDate(importRecord.created_at)}
+                Purchased: {formatDate(importRecord.purchase_date)}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.statusRow}>
+            <View style={styles.statusBadge}>
+              {getStatusIcon(importRecord.status)}
+              <Text style={[styles.statusText, { color: getStatusColor(importRecord.status) }]}>
+                {importRecord.status === 'completed' ? 'Completed' : 'Pending'}
+              </Text>
+            </View>
+            
+            {importRecord.arrival_date && (
+              <Text style={[styles.arrivalDate, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Arrived: {formatDate(importRecord.arrival_date)}
+              </Text>
+            )}
           </View>
           
           {importRecord.products?.barcode && (
@@ -71,6 +102,15 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHist
         </View>
         
         <View style={styles.actions}>
+          {importRecord.status === 'pending' && (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={() => onMarkAsArrived(importRecord)}
+            >
+              <CheckCircle size={16} color="#059669" />
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
             onPress={() => onEdit(importRecord)}
@@ -79,7 +119,7 @@ export function ImportHistoryCard({ importRecord, onEdit, onDelete }: ImportHist
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6', marginLeft: 8 }]}
+            style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
             onPress={() => onDelete(importRecord)}
           >
             <Trash2 size={16} color="#dc2626" />
@@ -179,6 +219,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  arrivalDate: {
+    fontSize: 12,
+  },
   barcode: {
     fontSize: 11,
     fontFamily: 'monospace',
@@ -186,6 +249,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    gap: 8,
   },
   actionButton: {
     width: 32,

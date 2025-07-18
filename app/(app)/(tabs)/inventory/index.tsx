@@ -25,18 +25,16 @@ import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ProductCard } from '@/src/components/products/ProductCard';
 import { ImportHistoryCard } from '@/src/components/inventory/ImportHistoryCard';
 import ProductForm from '@/src/components/products/ProductForm';
-import ImportForm from '@/src/components/inventory/ImportForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
-import ImportCSVModal from '@/src/components/inventory/ImportCSVModal';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Camera, History, TrendingUp, Archive, ArrowUp, X, FileUp, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 
 const PRODUCTS_PER_PAGE = 5;
 
 export default function InventoryScreen() {
-  const [activeTab, setActiveTab] = useState<'products' | 'import' | 'history'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'history'>('products');
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [importHistory, setImportHistory] = useState<any[]>([]);
@@ -44,10 +42,8 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [showImportForm, setShowImportForm] = useState(false);
   const [showEditImportForm, setShowEditImportForm] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const [showImportCSVModal, setShowImportCSVModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedImport, setSelectedImport] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +57,7 @@ export default function InventoryScreen() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -72,8 +69,9 @@ export default function InventoryScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const flatListRef = useRef<FlatList>(null);
+  const historyFlatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -95,7 +93,7 @@ export default function InventoryScreen() {
   }, [importHistory, importSearchQuery, sortOrder]);
 
   const loadData = async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -103,9 +101,9 @@ export default function InventoryScreen() {
     
     try {
       const [historyData, totalCount, lowStockProducts] = await Promise.all([
-        inventoryService.getImportHistory(profile.id),
-        productService.getProductsCount(profile.id),
-        productService.getLowStockProducts(profile.id)
+        inventoryService.getImportHistory(currentBusiness.id),
+        productService.getProductsCount(currentBusiness.id),
+        productService.getLowStockProducts(currentBusiness.id)
       ]);
       
       setImportHistory(historyData);
@@ -134,25 +132,41 @@ export default function InventoryScreen() {
   };
 
   const loadProducts = async (page: number, reset: boolean = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     try {
       const offset = page * PRODUCTS_PER_PAGE;
-      const productsData = await productService.getProducts(profile.id, PRODUCTS_PER_PAGE, offset);
+      const productsData = await productService.getProducts(currentBusiness.id, PRODUCTS_PER_PAGE, offset);
       
       if (reset) {
         setProducts(productsData);
         setFilteredProducts(productsData);
       } else {
-        const combined = [...(page === 0 ? [] : products), ...productsData];
-
-        // Deduplicate by `id`
-        const uniqueById = Array.from(
-          new Map(combined.map(item => [item.id, item])).values()
-        );
+        // Use functional update to ensure we're working with the latest state
+        setProducts(prevProducts => {
+          const combined = [...prevProducts, ...productsData];
+          
+          // Deduplicate by `id`
+          const uniqueById = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          
+          return uniqueById;
+        });
         
-        setProducts(uniqueById);
-        setFilteredProducts(uniqueById);
+        // Also update filtered products if not searching
+        if (!isSearching) {
+          setFilteredProducts(prevFiltered => {
+            const combined = [...prevFiltered, ...productsData];
+            
+            // Deduplicate by `id`
+            const uniqueById = Array.from(
+              new Map(combined.map(item => [item.id, item])).values()
+            );
+            
+            return uniqueById;
+          });
+        }
       }
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
@@ -172,7 +186,7 @@ export default function InventoryScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [currentPage, hasMoreProducts, loadingMore, profile?.id, isSearching]);
+  }, [currentPage, hasMoreProducts, loadingMore, currentBusiness?.id, isSearching]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -194,20 +208,9 @@ export default function InventoryScreen() {
     }
   };
 
-  const handleImportComplete = () => {
-    setShowImportForm(false);
-    setSelectedProduct(null);
-    loadData();
-  };
-
   const handleEditImportComplete = () => {
     setShowEditImportForm(false);
     setSelectedImport(null);
-    loadData();
-  };
-
-  const handleCSVImportComplete = () => {
-    setShowImportCSVModal(false);
     loadData();
   };
 
@@ -216,9 +219,39 @@ export default function InventoryScreen() {
     setShowProductForm(true);
   };
 
-  const handleImportStock = (product: any) => {
-    setSelectedProduct(product);
-    setShowImportForm(true);
+  const handleViewDetails = (product: any) => {
+    router.push(`/inventory/product-details?productId=${product.id}`);
+  };
+
+  const handleMarkAsArrived = async (importRecord: any) => {
+    if (importRecord.status === 'completed') {
+      Alert.alert('Already Arrived', 'This import has already been marked as arrived.');
+      return;
+    }
+
+    Alert.alert(
+      'Mark as Arrived',
+      'Are you sure you want to mark this import as arrived? This will update the product stock and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Confirm', 
+          onPress: async () => {
+            try {
+              setMarkingAsArrived(importRecord.id);
+              await inventoryService.markImportAsArrived(importRecord.id);
+              Alert.alert('Success', 'Import marked as arrived successfully');
+              loadData();
+            } catch (error) {
+              console.error('Error marking import as arrived:', error);
+              Alert.alert('Error', 'Failed to mark import as arrived');
+            } finally {
+              setMarkingAsArrived(null);
+            }
+          }
+        },
+      ]
+    );
   };
 
   const handleEditImport = (importRecord: any) => {
@@ -229,7 +262,7 @@ export default function InventoryScreen() {
   const handleDeleteImport = async (importRecord: any) => {
     Alert.alert(
       'Delete Import Record',
-      `Are you sure you want to delete this import record? This will also adjust the product stock.`,
+      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -289,7 +322,7 @@ export default function InventoryScreen() {
 
     Alert.alert(
       'Delete Selected Imports',
-      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels.`,
+      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels for completed imports.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -343,11 +376,11 @@ export default function InventoryScreen() {
   };
 
   const handleSearch = async () => {
-    if (!profile?.id || searchQuery.trim() === '') return;
+    if (!currentBusiness?.id || searchQuery.trim() === '') return;
     
     setIsSearching(true);
     try {
-      const results = await productService.searchProducts(profile.id, searchQuery);
+      const results = await productService.searchProducts(currentBusiness.id, searchQuery);
       setSearchResults(results);
       setFilteredProducts(results);
     } catch (error) {
@@ -416,41 +449,20 @@ export default function InventoryScreen() {
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
     
-    if (!profile?.id || !barcode) return;
-    
-    try {
-      const product = await productService.searchByBarcode(barcode, profile.id);
-      
-      if (product) {
-        setSearchQuery(barcode);
-        setIsSearching(true);
-        setSearchResults([product]);
-        setFilteredProducts([product]);
-      } else {
-        Alert.alert(
-          'Barcode Not Found', 
-          `No product found with barcode ${barcode}. Would you like to add a new product with this barcode?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Add Product', 
-              onPress: () => {
-                setSelectedProduct({ barcode });
-                setShowProductForm(true);
-              }
-            }
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('Error searching by barcode:', error);
-      Alert.alert('Error', 'Failed to search by barcode');
-    }
+    // Simply set the search query to the scanned barcode
+    setSearchQuery(barcode);
+    setIsSearching(true);
   };
 
   const scrollToTop = () => {
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
+    }
+  };
+
+  const scrollHistoryToTop = () => {
+    if (historyFlatListRef.current) {
+      historyFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
     }
   };
 
@@ -489,7 +501,7 @@ export default function InventoryScreen() {
       onPress={onPress}
     >
       <View style={styles.tabButtonContent}>
-        <View style={[styles.tabIcon, { opacity: isActive ? 1 : 0.7 }]}>
+        <View style={styles.tabIcon}>
           {icon}
         </View>
         <Text style={[
@@ -506,7 +518,7 @@ export default function InventoryScreen() {
     <ProductCard
       product={item}
       onEdit={handleEditProduct}
-      onImportStock={handleImportStock}
+      onViewDetails={handleViewDetails}
     />
   );
 
@@ -563,7 +575,7 @@ export default function InventoryScreen() {
             style={[styles.barcodeButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
             onPress={() => setShowBarcodeScanner(true)}
           >
-            <Camera size={20} color="#2563eb" />
+            <Barcode size={20} color="#2563eb" />
           </TouchableOpacity>
         </View>
 
@@ -623,7 +635,7 @@ export default function InventoryScreen() {
           ref={flatListRef}
           data={filteredProducts}
           renderItem={renderProductItem}
-          keyExtractor={(item, index) => item.id}
+          keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -695,103 +707,10 @@ export default function InventoryScreen() {
     );
   };
 
-  const renderImportTab = () => {
-    if (loading) {
-      return (
-        <ScrollView style={styles.tabContent}>
-          <SkeletonCard style={styles.emptyState}>
-            <SkeletonLoader height={48} width={48} borderRadius={24} style={{ marginBottom: 16 }} />
-            <SkeletonLoader height={18} width="60%" style={{ marginBottom: 8 }} />
-            <SkeletonLoader height={14} width="80%" style={{ marginBottom: 20 }} />
-            <SkeletonLoader height={40} width={150} borderRadius={8} />
-          </SkeletonCard>
-        </ScrollView>
-      );
-    }
-
-    return (
-      <ScrollView
-        style={styles.tabContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#2563eb']}
-            tintColor="#2563eb"
-            title="Pull to refresh"
-            titleColor={isDark ? '#f9fafb' : '#111827'}
-          />
-        }
-      >
-        <Card style={styles.importOptionsCard}>
-          <Text style={[styles.importOptionsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Import Options
-          </Text>
-          
-          <View style={styles.importOptionsGrid}>
-            <TouchableOpacity
-              style={[styles.importOption, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-              onPress={() => setShowImportForm(true)}
-            >
-              <View style={[styles.importOptionIcon, { backgroundColor: '#2563eb20' }]}>
-                <TrendingUp size={24} color="#2563eb" />
-              </View>
-              <Text style={[styles.importOptionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Manual Import
-              </Text>
-              <Text style={[styles.importOptionSubtext, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                Add stock for a single product
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.importOption, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-              onPress={() => setShowImportCSVModal(true)}
-            >
-              <View style={[styles.importOptionIcon, { backgroundColor: '#05966920' }]}>
-                <FileUp size={24} color="#059669" />
-              </View>
-              <Text style={[styles.importOptionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Bulk Import
-              </Text>
-              <Text style={[styles.importOptionSubtext, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                Import from CSV file
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Card>
-        
-        <Card style={styles.emptyState}>
-          <TrendingUp size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-          <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Import Inventory
-          </Text>
-          <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Add stock to your products with detailed cost tracking
-          </Text>
-          <View style={styles.importButtonsContainer}>
-            <Button
-              title="Manual Import"
-              onPress={() => setShowImportForm(true)}
-              style={styles.importButton}
-            />
-            <Button
-              title="Bulk Import"
-              variant="outline"
-              onPress={() => setShowImportCSVModal(true)}
-              style={styles.importButton}
-            />
-          </View>
-        </Card>
-      </ScrollView>
-    );
-  };
-
   const renderHistoryTab = () => {
     if (loading) {
       return (
-        <ScrollView style={styles.tabContent}>
+        <View style={styles.tabContent}>
           <SkeletonList 
             itemComponent={() => (
               <SkeletonCard style={{ padding: 16, marginBottom: 12 }}>
@@ -811,25 +730,57 @@ export default function InventoryScreen() {
             )}
             itemCount={5}
           />
-        </ScrollView>
+        </View>
       );
     }
 
-    return (
-      <ScrollView
-        style={styles.tabContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#2563eb']}
-            tintColor="#2563eb"
-            title="Pull to refresh"
-            titleColor={isDark ? '#f9fafb' : '#111827'}
+    const renderHistoryItem = ({ item }: { item: any }) => (
+      <View style={styles.importCardContainer}>
+        {isMultiSelectMode && (
+          <TouchableOpacity
+            style={styles.selectCheckbox}
+            onPress={() => handleToggleSelectImport(item.id)}
+          >
+            {selectedImports.has(item.id) ? (
+              <CheckSquare size={24} color="#2563eb" />
+            ) : (
+              <Square size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
+            )}
+          </TouchableOpacity>
+        )}
+        <View style={[styles.importCardWrapper, isMultiSelectMode && styles.importCardWithCheckbox]}>
+          <ImportHistoryCard 
+            importRecord={item}
+            onEdit={handleEditImport}
+            onDelete={handleDeleteImport}
+            onMarkAsArrived={handleMarkAsArrived}
           />
-        }
-      >
+        </View>
+      </View>
+    );
+
+    const renderHistoryHeader = () => (
+      <>
+        {/* Import Button */}
+        <Card style={styles.importButtonCard}>
+          <View style={styles.importButtonHeader}>
+            <View style={styles.importButtonTitleContainer}>
+              <TrendingUp size={20} color="#2563eb" />
+              <Text style={[styles.importButtonTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Import Stock
+              </Text>
+            </View>
+            <Text style={[styles.importButtonSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Add new inventory with detailed cost tracking
+            </Text>
+          </View>
+          <Button
+            title="Create New Import"
+            onPress={() => router.push('/inventory/product-selection')}
+            style={styles.importButton}
+          />
+        </Card>
+
         {/* Search and Filter Bar for Import History */}
         <View style={styles.importSearchContainer}>
           <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff', flex: 1 }]}>
@@ -875,111 +826,128 @@ export default function InventoryScreen() {
           </View>
         )}
 
-        {filteredImportHistory.length > 0 ? (
-          <View style={styles.historyList}>
-            <View style={styles.historyActions}>
-              <TouchableOpacity 
-                style={[
-                  styles.multiSelectButton, 
-                  { backgroundColor: isMultiSelectMode ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6') }
-                ]}
-                onPress={handleToggleMultiSelectMode}
-              >
-                <CheckSquare size={16} color={isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
-                <Text style={[
-                  styles.multiSelectButtonText, 
-                  { color: isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-                ]}>
-                  {isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple'}
-                </Text>
-              </TouchableOpacity>
+        {filteredImportHistory.length > 0 && (
+          <View style={styles.historyActions}>
+            <TouchableOpacity 
+              style={[
+                styles.multiSelectButton, 
+                { backgroundColor: isMultiSelectMode ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6') }
+              ]}
+              onPress={handleToggleMultiSelectMode}
+            >
+              <CheckSquare size={16} color={isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+              <Text style={[
+                styles.multiSelectButtonText, 
+                { color: isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+              ]}>
+                {isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple'}
+              </Text>
+            </TouchableOpacity>
 
-              {isMultiSelectMode && (
-                <View style={styles.bulkActionButtons}>
-                  <TouchableOpacity 
-                    style={[
-                      styles.bulkActionButton, 
-                      { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
-                    ]}
-                    onPress={handleSelectAllImports}
-                  >
-                    <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
-                      {selectedImports.size === filteredImportHistory.length ? 'Deselect All' : 'Select All'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[
-                      styles.bulkActionButton, 
-                      { 
-                        backgroundColor: selectedImports.size > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                        opacity: selectedImports.size > 0 ? 1 : 0.5
-                      }
-                    ]}
-                    onPress={handleBulkDelete}
-                    disabled={selectedImports.size === 0 || bulkDeleteLoading}
-                  >
-                    {bulkDeleteLoading ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <>
-                        <Trash2 size={16} color="#ffffff" />
-                        <Text style={{ color: '#ffffff', marginLeft: 4 }}>
-                          Delete ({selectedImports.size})
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {filteredImportHistory.map((importRecord) => (
-              <View key={importRecord.id} style={styles.importCardContainer}>
-                {isMultiSelectMode && (
-                  <TouchableOpacity
-                    style={styles.selectCheckbox}
-                    onPress={() => handleToggleSelectImport(importRecord.id)}
-                  >
-                    {selectedImports.has(importRecord.id) ? (
-                      <CheckSquare size={24} color="#2563eb" />
-                    ) : (
-                      <Square size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
-                    )}
-                  </TouchableOpacity>
-                )}
-                <View style={[styles.importCardWrapper, isMultiSelectMode && styles.importCardWithCheckbox]}>
-                  <ImportHistoryCard 
-                    importRecord={importRecord}
-                    onEdit={handleEditImport}
-                    onDelete={handleDeleteImport}
-                  />
-                </View>
+            {isMultiSelectMode && (
+              <View style={styles.bulkActionButtons}>
+                <TouchableOpacity 
+                  style={[
+                    styles.bulkActionButton, 
+                    { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+                  ]}
+                  onPress={handleSelectAllImports}
+                >
+                  <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
+                    {selectedImports.size === filteredImportHistory.length ? 'Deselect All' : 'Select All'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.bulkActionButton, 
+                    { 
+                      backgroundColor: selectedImports.size > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
+                      opacity: selectedImports.size > 0 ? 1 : 0.5
+                    }
+                  ]}
+                  onPress={handleBulkDelete}
+                  disabled={selectedImports.size === 0 || bulkDeleteLoading}
+                >
+                  {bulkDeleteLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Trash2 size={16} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', marginLeft: 4 }}>
+                        Delete ({selectedImports.size})
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
-            ))}
-          </View>
-        ) : (
-          <Card style={styles.emptyState}>
-            <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {isImportSearching ? 'No matching imports found' : 'No Import History'}
-            </Text>
-            <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {isImportSearching 
-                ? `No imports match your search "${importSearchQuery}"`
-                : 'Import history will appear here once you start importing inventory'
-              }
-            </Text>
-            {isImportSearching && (
-              <Button
-                title="Clear Search"
-                onPress={handleClearImportSearch}
-                style={styles.emptyButton}
-              />
             )}
-          </Card>
+          </View>
         )}
-      </ScrollView>
+      </>
+    );
+
+    const renderHistoryEmpty = () => (
+      <Card style={styles.emptyState}>
+        <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+        <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          {isImportSearching ? 'No matching imports found' : 'No Import History'}
+        </Text>
+        <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+          {isImportSearching 
+            ? `No imports match your search "${importSearchQuery}"`
+            : 'Import history will appear here once you start importing inventory'
+          }
+        </Text>
+        {isImportSearching ? (
+          <Button
+            title="Clear Search"
+            onPress={handleClearImportSearch}
+            style={styles.emptyButton}
+          />
+        ) : (
+          <Button
+            title="Create New Import"
+            onPress={() => router.push('/inventory/product-selection')}
+            style={styles.emptyButton}
+          />
+        )}
+      </Card>
+    );
+
+    return (
+      <View style={styles.tabContent}>
+        <FlatList
+          ref={historyFlatListRef}
+          data={filteredImportHistory}
+          renderItem={renderHistoryItem}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderHistoryHeader}
+          ListEmptyComponent={renderHistoryEmpty}
+          contentContainerStyle={filteredImportHistory.length === 0 ? styles.emptyContainer : styles.historyList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#2563eb']}
+              tintColor="#2563eb"
+              title="Pull to refresh"
+              titleColor={isDark ? '#f9fafb' : '#111827'}
+            />
+          }
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { 
+              useNativeDriver: false,
+              listener: (event: any) => {
+                const offsetY = event.nativeEvent.contentOffset.y;
+                setShowBackToTop(offsetY > 200);
+              }
+            }
+          )}
+          scrollEventThrottle={16}
+        />
+      </View>
     );
   };
 
@@ -999,12 +967,6 @@ export default function InventoryScreen() {
           onPress={() => setActiveTab('products')}
         />
         <TabButton
-          title="Import Stock"
-          icon={<TrendingUp size={18} color={activeTab === 'import' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
-          isActive={activeTab === 'import'}
-          onPress={() => setActiveTab('import')}
-        />
-        <TabButton
           title="Import History"
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
@@ -1014,14 +976,13 @@ export default function InventoryScreen() {
 
       <View style={styles.content}>
         {activeTab === 'products' && renderProductsTab()}
-        {activeTab === 'import' && renderImportTab()}
         {activeTab === 'history' && renderHistoryTab()}
       </View>
 
       {showBackToTop && (
         <TouchableOpacity 
           style={[styles.backToTopButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
-          onPress={scrollToTop}
+          onPress={activeTab === 'products' ? scrollToTop : scrollHistoryToTop}
         >
           <ArrowUp size={20} color="#2563eb" />
         </TouchableOpacity>
@@ -1052,21 +1013,6 @@ export default function InventoryScreen() {
       </Modal>
 
       <Modal
-        visible={showImportForm}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <ImportForm
-          productId={selectedProduct?.id}
-          onComplete={handleImportComplete}
-          onCancel={() => {
-            setShowImportForm(false);
-            setSelectedProduct(null);
-          }}
-        />
-      </Modal>
-
-      <Modal
         visible={showEditImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1078,17 +1024,6 @@ export default function InventoryScreen() {
             setShowEditImportForm(false);
             setSelectedImport(null);
           }}
-        />
-      </Modal>
-
-      <Modal
-        visible={showImportCSVModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <ImportCSVModal
-          onComplete={handleCSVImportComplete}
-          onClose={() => setShowImportCSVModal(false)}
         />
       </Modal>
 
@@ -1114,6 +1049,13 @@ export default function InventoryScreen() {
       {bulkDeleteLoading && (
         <View style={styles.loadingOverlay}>
           <LoadingSpinner text={`Deleting ${selectedImports.size} import records...`} />
+        </View>
+      )}
+
+      {/* Loading overlay for marking as arrived */}
+      {markingAsArrived && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Marking import as arrived..." />
         </View>
       )}
     </View>
@@ -1351,8 +1293,29 @@ const styles = StyleSheet.create({
   emptyButton: {
     marginTop: 16,
   },
+  importButtonCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  importButtonHeader: {
+    marginBottom: 16,
+  },
+  importButtonTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  importButtonTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  importButtonSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   importButton: {
-    marginTop: 16,
+    backgroundColor: '#2563eb',
   },
   importButtonsContainer: {
     flexDirection: 'row',
@@ -1415,42 +1378,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
-  },
-  importOptionsCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  importOptionsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  importOptionsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  importOption: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  importOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  importOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  importOptionSubtext: {
-    fontSize: 12,
-    textAlign: 'center',
   },
   loadingOverlay: {
     position: 'absolute',

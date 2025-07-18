@@ -4,8 +4,11 @@ import { Stack } from 'expo-router';
 export default function InventoryLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen key="index-inventory" name="index" />
-      <Stack.Screen key="low-stock" name="low-stock" />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="low-stock" />
+      <Stack.Screen name="product-selection" />
+      <Stack.Screen name="import-form" />
+      <Stack.Screen name="product-details" />
     </Stack>
   );
 }

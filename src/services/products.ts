@@ -80,7 +80,42 @@ export const productService = {
     return data;
   },
 
-  async updateProduct(id: string, updates: ProductUpdate) {
+  async updateProduct(id: string, updates: ProductUpdate, userId: string) {
+    // Fetch the current product to compare values
+    const { data: currentProduct, error: fetchError } = await supabase
+      .from('products')
+      .select('name, price, business_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const historyRecords = [];
+
+    // Check for name change
+    if (updates.name !== undefined && updates.name !== currentProduct.name) {
+      historyRecords.push({
+        product_id: id,
+        changed_by_user_id: userId,
+        business_id: currentProduct.business_id,
+        field_name: 'name',
+        old_value: currentProduct.name,
+        new_value: updates.name,
+      });
+    }
+
+    // Check for price change
+    if (updates.price !== undefined && updates.price !== currentProduct.price) {
+      historyRecords.push({
+        product_id: id,
+        changed_by_user_id: userId,
+        business_id: currentProduct.business_id,
+        field_name: 'price',
+        old_value: currentProduct.price?.toString(),
+        new_value: updates.price?.toString(),
+      });
+    }
+
     const { data, error } = await supabase
       .from('products')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -89,6 +124,16 @@ export const productService = {
       .single();
 
     if (error) throw error;
+
+    // Insert history records if there are any changes
+    if (historyRecords.length > 0) {
+      const { error: historyError } = await supabase
+        .from('product_history')
+        .insert(historyRecords);
+
+      if (historyError) console.error('Error inserting product history:', historyError);
+    }
+
     return data;
   },
 
@@ -130,23 +175,21 @@ export const productService = {
   },
 
   async getLowStockProducts(businessId: string) {
-    // Use a raw SQL query to properly compare columns
     const { data, error } = await supabase.rpc('get_low_stock_products', {
       business_id_param: businessId
     });
 
-    // If the RPC function doesn't exist, fall back to client-side filtering
     if (error && error.code === '42883') {
       const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('business_id', businessId)
-        .order('current_stock');
-
+        .eq('business_id', businessId);
+  
       if (productsError) throw productsError;
-      
-      // Filter on the client side
-      return allProducts.filter(product => 
+  
+      return allProducts.filter(product =>
+        typeof product.current_stock === 'number' &&
+        typeof product.min_stock_level === 'number' &&
         product.current_stock <= product.min_stock_level
       );
     }
@@ -154,6 +197,7 @@ export const productService = {
     if (error) throw error;
     return data || [];
   },
+
 
   async updateStock(productId: string, newStock: number) {
     const { data, error } = await supabase

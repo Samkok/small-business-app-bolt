@@ -1,37 +1,80 @@
 export interface Database {
   public: {
     Tables: {
-      profiles: {
+      businesses: {
         Row: {
           id: string;
-          user_id: string;
+          owner_user_id: string;
           business_name: string;
-          full_name: string;
-          role: 'admin' | 'staff';
-          phone?: string;
-          address?: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          user_id: string;
+          owner_user_id: string;
           business_name: string;
-          full_name: string;
-          role?: 'admin' | 'staff';
-          phone?: string;
-          address?: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          user_id?: string;
+          owner_user_id?: string;
           business_name?: string;
-          full_name?: string;
-          role?: 'admin' | 'staff';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      user_profiles: {
+        Row: {
+          user_id: string;
+          full_name: string;
           phone?: string;
           address?: string;
+          avatar_url?: string;
+          email?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          full_name: string;
+          phone?: string;
+          address?: string;
+          avatar_url?: string;
+          email?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          full_name?: string;
+          phone?: string;
+          address?: string;
+          avatar_url?: string;
+          email?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      user_business_roles: {
+        Row: {
+          user_id: string;
+          business_id: string;
+          role: 'admin' | 'staff';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          business_id: string;
+          role?: 'admin' | 'staff';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          business_id?: string;
+          role?: 'admin' | 'staff';
           created_at?: string;
           updated_at?: string;
         };
@@ -80,6 +123,38 @@ export interface Database {
           updated_at?: string;
         };
       };
+      product_history: {
+        Row: {
+          id: string;
+          product_id: string;
+          changed_by_user_id: string;
+          business_id: string;
+          change_date: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          changed_by_user_id: string;
+          business_id: string;
+          change_date?: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          changed_by_user_id?: string;
+          business_id?: string;
+          change_date?: string;
+          field_name?: string;
+          old_value?: string;
+          new_value?: string;
+        };
+      };
       inventory_imports: {
         Row: {
           id: string;
@@ -92,6 +167,9 @@ export interface Database {
           business_id: string;
           imported_by: string;
           created_at: string;
+          purchase_date: string;
+          arrival_date?: string;
+          status: 'pending' | 'completed';
         };
         Insert: {
           id?: string;
@@ -104,6 +182,9 @@ export interface Database {
           business_id: string;
           imported_by: string;
           created_at?: string;
+          purchase_date?: string;
+          arrival_date?: string;
+          status?: 'pending' | 'completed';
         };
         Update: {
           id?: string;
@@ -116,6 +197,9 @@ export interface Database {
           business_id?: string;
           imported_by?: string;
           created_at?: string;
+          purchase_date?: string;
+          arrival_date?: string;
+          status?: 'pending' | 'completed';
         };
       };
       import_costs: {
@@ -424,7 +508,43 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      create_business: {
+        Args: {
+          business_name_param: string;
+          owner_user_id_param?: string;
+        };
+        Returns: string;
+      };
+      invite_user_to_business: {
+        Args: {
+          business_id_param: string;
+          user_email_param: string;
+          role_param?: string;
+        };
+        Returns: boolean;
+      };
+      change_user_business_role: {
+        Args: {
+          business_id_param: string;
+          user_id_param: string;
+          new_role_param: string;
+        };
+        Returns: boolean;
+      };
+      remove_user_from_business: {
+        Args: {
+          business_id_param: string;
+          user_id_param: string;
+        };
+        Returns: boolean;
+      };
+      user_has_business_access: {
+        Args: {
+          user_uid: string;
+          business_id_param: string;
+        };
+        Returns: boolean;
+      };
     };
     Enums: {
       [_ in never]: never;

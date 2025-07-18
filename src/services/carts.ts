@@ -121,6 +121,13 @@ export const cartService = {
 
   async updateCart(cartId: string, updates: CartUpdate) {
     if (typeof cartId !== 'string' || !cartId) return;
+    
+    // Ensure delivery_cost is a valid number or null
+    if (updates.delivery_cost !== undefined) {
+      const deliveryCost = parseFloat(updates.delivery_cost as any);
+      updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
+    }
+    
     const { data, error } = await supabase
       .from('carts')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -141,6 +148,27 @@ export const cartService = {
             updated_at: new Date().toISOString() 
           })
           .eq('id', cartId);
+          
+        // Get the fully updated cart to return
+        const { data: updatedCart, error: getError } = await supabase
+          .from('carts')
+          .select(`
+            *,
+            customers(*),
+            cart_items(
+              *,
+              products(*)
+            )
+          `)
+          .eq('id', cartId)
+          .single();
+          
+        if (!getError) {
+          return {
+            ...updatedCart,
+            total_amount: summary.finalTotal
+          };
+        }
       } catch (summaryError) {
         console.error(`Error updating cart total for cart ${cartId}:`, summaryError);
       }

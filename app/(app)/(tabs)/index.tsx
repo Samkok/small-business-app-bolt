@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +33,8 @@ interface DashboardStats {
   lowStockCount: number;
   totalCustomers: number;
   totalProducts: number;
+  totalCustomersBought: number;
+  totalProductsSold: number;
 }
 
 interface TopProduct {
@@ -55,42 +58,67 @@ export default function DashboardScreen() {
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
+  console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
   const router = useRouter();
 
   useEffect(() => {
     loadDashboardData();
-  }, [profile?.id]);
+  }, [currentBusiness]);
 
   const handleNewSale = useCallback(() => {
-    router.push('/sales/customer-selection');
+    // Use router.navigate instead of router.push to properly handle tab navigation
+    router.navigate('/sales/customer-selection');
   }, [router]);
 
   const loadDashboardData = async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) {
+      console.log('DashboardScreen: No profile ID available, skipping data load');
+      setLoading(false);
+      return;
+    }
     
+    console.log('DashboardScreen: Loading data for profile ID:', currentBusiness.id);
     if (!isRefresh) {
       setLoading(true);
     }
     
+    setError(null);
+    
     try {
+      // Check if environment variables are properly set
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration is missing. Please check your environment variables.');
+      }
+
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(profile.id),
-        reportsService.getTopProducts(profile.id, 3),
-        reportsService.getTopCustomers(profile.id, 3)
+        reportsService.getDashboardStats(currentBusiness.id),
+        reportsService.getTopProducts(currentBusiness.id, 3),
+        reportsService.getTopCustomers(currentBusiness.id, 3)
       ]);
       
       setStats(dashboardStats);
       setTopProducts(products);
       setTopCustomers(customers);
+      setError(null);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      Alert.alert(t('common.error'), 'Failed to load dashboard data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
+      setError(errorMessage);
+      
+      // Only show alert on mobile platforms, show inline error on web
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('common.error'), errorMessage);
+      }
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -122,6 +150,11 @@ export default function DashboardScreen() {
 
   const handleViewReports = () => {
     router.push('/reports');
+  };
+
+  const handleLowStockPress = () => {
+    // Use router.navigate instead of router.push to properly handle tab navigation
+    router.navigate('/(app)/(tabs)/inventory/low-stock');
   };
 
   const StatCard = ({ 
@@ -219,6 +252,74 @@ export default function DashboardScreen() {
     </SkeletonCard>
   );
 
+  // Show error state
+  if (error && !loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {currentBusiness?.business_name || 'Business Owner'}
+          </Text>
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Card style={styles.errorCard}>
+            <AlertTriangle size={48} color="#dc2626" style={styles.errorIcon} />
+            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Unable to Load Dashboard
+            </Text>
+            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadDashboardData()}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+      </View>
+    );
+  }
+
+  // Show no data state when loading is complete but stats is null
+  if (!loading && !stats) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {currentBusiness?.business_name || 'Business Owner'}
+          </Text>
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Card style={styles.errorCard}>
+            <Package size={48} color="#6b7280" style={styles.errorIcon} />
+            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              No Dashboard Data Available
+            </Text>
+            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Unable to load dashboard statistics. Please try refreshing the data.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadDashboardData()}
+            >
+              <Text style={styles.retryButtonText}>Refresh Data</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
@@ -240,7 +341,7 @@ export default function DashboardScreen() {
           Welcome back,
         </Text>
         <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-          {profile?.business_name || 'Business Owner'}
+          {currentBusiness?.business_name || 'Business Owner'}
         </Text>
       </View>
 
@@ -279,56 +380,56 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               title="Today's Revenue"
-              value={`$${stats!.todayRevenue.toFixed(2)}`}
+              value={`$${stats.todayRevenue.toFixed(2)}`}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
-              trend={stats!.todayRevenue > 0 ? "up" : undefined}
+              trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title="Monthly Revenue"
-              value={`$${stats!.monthlyRevenue.toFixed(2)}`}
+              value={`$${stats.monthlyRevenue.toFixed(2)}`}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
-              trend={stats!.monthlyRevenue > 0 ? "up" : undefined}
+              trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title="Monthly COGS"
-              value={`$${stats!.monthlyCOGS.toFixed(2)}`}
+              value={`$${stats.monthlyCOGS.toFixed(2)}`}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title="Total Profit"
-              value={`$${stats!.totalProfit.toFixed(2)}`}
+              value={`$${stats.totalProfit.toFixed(2)}`}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
-              trend={stats!.totalProfit >= 0 ? "up" : "down"}
+              trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title="Total Expenses"
-              value={`$${stats!.totalExpenses.toFixed(2)}`}
+              value={`$${stats.totalExpenses.toFixed(2)}`}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
               title="Net Profit"
-              value={`$${stats!.netProfit.toFixed(2)}`}
-              icon={<DollarSign size={20} color={stats!.netProfit >= 0 ? "#059669" : "#dc2626"} />}
-              color={stats!.netProfit >= 0 ? "#059669" : "#dc2626"}
-              trend={stats!.netProfit >= 0 ? "up" : "down"}
+              value={`$${stats.netProfit.toFixed(2)}`}
+              icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
+              color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
+              trend={stats.netProfit >= 0 ? "up" : "down"}
             />
           </View>
 
           <View style={styles.statsRow}>
             <StatCard
-              title="Total Products"
-              value={stats!.totalProducts.toString()}
+              title="Total Products Sold"
+              value={stats.totalProductsSold.toString()}
               icon={<Package size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
-              title="Total Customers"
-              value={stats!.totalCustomers.toString()}
+              title="Monthly Customer"
+              value={stats.totalCustomersBought.toString()}
               icon={<Users size={20} color="#06b6d4" />}
               color="#06b6d4"
             />
@@ -350,24 +451,6 @@ export default function DashboardScreen() {
               </View>
             </Card>
           </TouchableOpacity>
-
-          {stats!.lowStockCount > 0 && (
-            <TouchableOpacity>
-              <Card style={styles.alertCard}>
-                <View style={styles.alertContent}>
-                  <AlertTriangle size={24} color="#ea580c" />
-                  <View style={styles.alertText}>
-                    <Text style={[styles.alertTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      Low Stock Alerts
-                    </Text>
-                    <Text style={[styles.alertSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {stats!.lowStockCount} products are running low on stock
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            </TouchableOpacity>
-          )}
 
           {/* Top Products Section */}
           {topProducts.length > 0 && (
@@ -394,49 +477,6 @@ export default function DashboardScreen() {
           )}
         </>
       )}
-
-      <Card style={styles.quickActions}>
-        <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Quick Actions
-        </Text>
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleNewSale}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#2563eb20' }]}>
-              <ShoppingCart size={24} color="#2563eb" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              New Sale
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setShowProductForm(true)}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#05966920' }]}>
-              <Package size={24} color="#059669" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Add Product
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setShowCustomerForm(true)}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#8b5cf620' }]}>
-              <Users size={24} color="#8b5cf6" />
-            </View>
-            <Text style={[styles.actionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Add Customer
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
 
       {/* Modals */}
       <Modal
@@ -493,6 +533,44 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorCard: {
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  errorIcon: {
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',

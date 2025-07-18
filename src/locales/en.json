@@ -136,7 +136,13 @@
     "from": "From",
     "to": "To",
     "generate": "Generate Report",
-    "export": "Export"
+    "export": "Export",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "last3Months": "Last 3 Months",
+    "thisYear": "This Year",
+    "customRange": "Custom Range",
+    "selectDateRange": "Select Date Range"
   },
   "settings": {
     "title": "Settings",

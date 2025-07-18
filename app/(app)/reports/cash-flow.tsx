@@ -15,6 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { importService } from '@/src/services/importService';
@@ -30,23 +31,22 @@ export default function CashFlowScreen() {
   const { month, year } = params;
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
-    if (profile?.id && month !== undefined && year !== undefined) {
-      
+    if (currentBusiness?.id && month !== undefined && year !== undefined) {
       loadCashFlowStatement();
     } else {
       setLoading(false);
     }
-  }, [profile?.id, month, year]);
+  }, [currentBusiness?.id, month, year]);
 
   const loadCashFlowStatement = async () => {
     try {
       setLoading(true);
       
       const data = await reportsService.getCashFlowStatement(
-        profile!.id, 
+        currentBusiness!.id, 
         parseInt(month as string),
         parseInt(year as string)
       );
@@ -61,14 +61,14 @@ export default function CashFlowScreen() {
   };
 
   const handleExport = async () => {
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
     try {
       const csvData = await importService.exportCashFlowToCsv(
-        profile.id, 
+        currentBusiness.id, 
         parseInt(month as string),
         parseInt(year as string)
       );
@@ -112,8 +112,116 @@ export default function CashFlowScreen() {
     }
   };
 
+  const renderSkeleton = () => (
+    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <SkeletonCard style={styles.periodCard}>
+        <SkeletonLoader height={16} width="60%" />
+      </SkeletonCard>
+
+      <SkeletonCard style={styles.cashFlowCard}>
+        {/* Operating Activities */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingUp size={20} color="#059669" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Operating Activities
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+          
+          <View style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+          
+          <View style={[styles.row, styles.subtotalRow]}>
+            <SkeletonLoader height={14} width="50%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+        </View>
+        
+        {/* Investing Activities */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingDown size={20} color="#8b5cf6" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Investing Activities
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+          
+          <View style={[styles.row, styles.subtotalRow]}>
+            <SkeletonLoader height={14} width="50%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+        </View>
+        
+        {/* Financing Activities */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DollarSign size={20} color="#ea580c" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Financing Activities
+            </Text>
+          </View>
+          
+          <View style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+          
+          <View style={styles.row}>
+            <SkeletonLoader height={14} width="40%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+          
+          <View style={[styles.row, styles.subtotalRow]}>
+            <SkeletonLoader height={14} width="50%" />
+            <SkeletonLoader height={14} width="30%" />
+          </View>
+        </View>
+        
+        {/* Net Cash Flow */}
+        <View style={[styles.row, styles.totalRow]}>
+          <SkeletonLoader height={16} width="50%" />
+          <SkeletonLoader height={18} width="30%" />
+        </View>
+      </SkeletonCard>
+    </ScrollView>
+  );
+
   if (loading) {
-    return <LoadingSpinner text="Loading cash flow statement..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Cash Flow Statement
+          </Text>
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={handleExport}
+          >
+            <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+        </View>
+
+        {renderSkeleton()}
+      </View>
+    );
   }
 
   if (!cashFlowData) {

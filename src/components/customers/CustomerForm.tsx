@@ -47,7 +47,7 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   ]);
   
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   // List of built-in platforms that cannot be modified
   const builtInPlatforms = ['facebook', 'instagram', 'telegram', 'walk_in', 'other'];
@@ -65,10 +65,10 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
   }, [customer]);
 
   const loadPlatformUsage = async () => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     try {
-      const platformUsage = await customerService.getPlatformUsage(profile.id);
+      const platformUsage = await customerService.getPlatformUsage(currentBusiness.id);
       
       // Update available platforms with usage information
       const updatedPlatforms = availablePlatforms.map(platform => ({
@@ -89,8 +89,8 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -102,7 +102,7 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
         address: address.trim() || null,
         platform: platform || null,
         notes: notes.trim() || null,
-        business_id: profile.id,
+        business_id: currentBusiness.id,
       };
 
       if (customer) {

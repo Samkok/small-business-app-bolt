@@ -136,7 +136,13 @@
     "from": "ពី",
     "to": "ដល់",
     "generate": "បង្កើតរបាយការណ៍",
-    "export": "នាំចេញ"
+    "export": "នាំចេញ",
+    "thisWeek": "សប្តាហ៍នេះ",
+    "thisMonth": "ខែនេះ",
+    "last3Months": "៣ ខែចុងក្រោយ",
+    "thisYear": "ឆ្នាំនេះ",
+    "customRange": "ជ្រើសរើសកាលបរិច្ឆេទ",
+    "selectDateRange": "ជ្រើសរើសចន្លោះកាលបរិច្ឆេទ"
   },
   "settings": {
     "title": "ការកំណត់",

@@ -10,6 +10,7 @@ import { CartProvider } from '@/src/context/CartContext';
 import '@/src/locales';
 
 export default function RootLayout() {
+  console.log('RootLayout rendering');
   useFrameworkReady();
 
   return (

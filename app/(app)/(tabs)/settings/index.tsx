@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -18,13 +19,17 @@ import {
   Palette, 
   Globe, 
   LogOut, 
-  ChevronRight 
+  ChevronRight,
+  Building,
+  Users
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
-  const { signOut, profile } = useAuth();
+  const { signOut, userProfile, currentBusiness, userBusinesses } = useAuth();
+  const router = useRouter();
 
   const handleLanguageChange = async (language: string) => {
     try {
@@ -97,21 +102,35 @@ export default function SettingsScreen() {
 
       <Card style={styles.profileCard}>
         <View style={styles.profileContent}>
-          <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
-            <Text style={styles.avatarText}>
-              {profile?.full_name?.charAt(0) || 'U'}
-            </Text>
-          </View>
+          {userProfile?.avatar_url ? (
+            <OptimizedImage
+              source={{ uri: userProfile.avatar_url }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+              alt="Profile Avatar"
+            />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
+              <Text style={styles.avatarText}>
+                {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {profile?.full_name || 'User'}
+              {userProfile?.full_name || 'User'}
             </Text>
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {profile?.business_name || 'Business'}
+              {currentBusiness?.business_name || 'No Business Selected'}
             </Text>
-            <Text style={[styles.profileRole, { color: '#2563eb' }]}>
-              {profile?.role?.charAt(0).toUpperCase() + profile?.role?.slice(1) || 'Admin'}
-            </Text>
+            {userBusinesses.length > 1 && (
+              <TouchableOpacity 
+                style={styles.switchBusinessButton}
+                onPress={() => router.push('/business-selection')}
+              >
+                <Text style={styles.switchBusinessText}>Switch Business</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Card>
@@ -120,8 +139,22 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<User size={20} color="#2563eb" />}
           title={t('settings.profile')}
-          subtitle="Edit your profile information"
-          onPress={() => Alert.alert('Profile', 'Profile editing coming soon')}
+          subtitle="Edit your personal and business information"
+          onPress={() => router.push('/settings/profile')}
+        />
+
+        <SettingItem
+          icon={<Building size={20} color="#8b5cf6" />}
+          title="Business Settings"
+          subtitle="Manage your business information"
+          onPress={() => router.push('/settings/business')}
+        />
+
+        <SettingItem
+          icon={<Users size={20} color="#ea580c" />}
+          title="Team Members"
+          subtitle="Manage users and permissions"
+          onPress={() => router.push('/settings/team')}
         />
 
         <SettingItem
@@ -214,6 +247,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
+  avatarImage: {
+    overflow: 'hidden',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
   avatarText: {
     color: '#ffffff',
     fontSize: 24,
@@ -231,10 +273,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 2,
   },
-  profileRole: {
+  switchBusinessButton: {
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#2563eb20',
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  switchBusinessText: {
     fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    color: '#2563eb',
+    fontWeight: '500',
   },
   section: {
     marginBottom: 24,

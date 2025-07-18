@@ -32,14 +32,15 @@ export const expenseService = {
 
   async getExpenses(businessId: string, limit?: number) {
     let query = supabase
-      .from('expenses')
-      .select(`
-        *,
-        expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
-      `)
-      .eq('business_id', businessId)
-      .order('expense_date', { ascending: false });
+        .from('expenses')
+        .select(`
+          *,
+          expense_categories(name),
+          created_by_business:businesses!expenses_created_by_fkey(business_name)
+        `)
+        .eq('business_id', businessId)
+        .order('expense_date', { ascending: false });
+
 
     if (limit) {
       query = query.limit(limit);
@@ -52,14 +53,15 @@ export const expenseService = {
 
   async createExpense(expense: ExpenseInsert) {
     const { data, error } = await supabase
-      .from('expenses')
-      .insert(expense)
-      .select(`
-        *,
-        expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
-      `)
-      .single();
+        .from('expenses')
+        .insert(expense)
+        .select(`
+          *,
+          expense_categories(name),
+          created_by_business:businesses!expenses_created_by_fkey(business_name)
+        `)
+        .single();
+
 
     if (error) throw error;
     return data;
@@ -74,7 +76,7 @@ export const expenseService = {
       .select(`
         *,
         expense_categories(name),
-        profiles!expenses_created_by_fkey(full_name)
+        created_by_business:businesses!expenses_created_by_fkey(business_name)
       `)
       .single();
 

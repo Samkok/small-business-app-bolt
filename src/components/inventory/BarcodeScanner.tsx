@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { useTheme } from '@/src/context/ThemeContext';
-import { X, Camera as CameraIcon } from 'lucide-react-native';
+import { X, Barcode } from 'lucide-react-native';
 
 interface BarcodeScannerProps {
   onBarcodeScan: (barcode: string) => void;
@@ -54,7 +54,7 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         </View>
         
         <View style={styles.content}>
-          <CameraIcon size={64} color={isDark ? '#6b7280' : '#9ca3af'} />
+          <Barcode size={64} color={isDark ? '#6b7280' : '#9ca3af'} />
           <Text style={[styles.message, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Camera access is required to scan barcodes
           </Text>
@@ -77,16 +77,18 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         </TouchableOpacity>
       </View>
 
-      <View style={styles.cameraWrapper}>
+      <View style={styles.cameraContainer}>
+        {/* CameraView without children */}
         <CameraView
-        style={styles.camera}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr', 'pdf417', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
-        }}
-      >
-        <View style={StyleSheet.absoluteFillObject}>
-          <View style={styles.overlay}>
+          style={styles.camera}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr', 'pdf417', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+          }}
+        />
+        
+        {/* Overlay as a sibling to CameraView, not a child */}
+        <View style={styles.overlay}>
           <View style={styles.scanArea}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
@@ -107,8 +109,6 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
             </TouchableOpacity>
           )}
         </View>
-        </View>
-      </CameraView>
       </View>
     </View>
   );
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 1,
+    zIndex: 10,
   },
   title: {
     fontSize: 20,
@@ -157,11 +157,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   camera: {
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,9 +230,5 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  cameraWrapper: {
-    flex: 1,
-    position: 'relative',
   },
 });

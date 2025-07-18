@@ -136,7 +136,13 @@
     "from": "从",
     "to": "到",
     "generate": "生成报告",
-    "export": "导出"
+    "export": "导出",
+    "thisWeek": "本周",
+    "thisMonth": "本月",
+    "last3Months": "最近3个月",
+    "thisYear": "今年",
+    "customRange": "自定义范围",
+    "selectDateRange": "选择日期范围"
   },
   "settings": {
     "title": "设置",

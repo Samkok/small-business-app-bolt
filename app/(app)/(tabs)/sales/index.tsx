@@ -25,9 +25,8 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import ImportSalesModal from '@/src/components/sales/ImportSalesModal';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, FileUp, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -44,7 +43,6 @@ export default function SalesScreen() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   
@@ -66,7 +64,7 @@ export default function SalesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -182,7 +180,7 @@ export default function SalesScreen() {
   }, [statsCollapsed, collapseAnim]);
 
   const loadData = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh) {
       setLoading(true);
@@ -202,10 +200,10 @@ export default function SalesScreen() {
       Alert.alert(t('common.error'), 'Failed to load data');
       setLoading(false);
     }
-  }, [profile?.id, activeTab, t, refreshCarts]);
+  }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
   const loadSalesData = useCallback(async (isRefresh = false) => {
-    if (!profile?.id) return;
+    if (!currentBusiness?.id) return;
     
     if (!isRefresh && !loadingMore) {
       setLoading(true);
@@ -221,7 +219,7 @@ export default function SalesScreen() {
       
       // First get the total count for pagination
       const count = await salesService.getSalesCount(
-        profile.id, 
+        currentBusiness.id, 
         start.toISOString(), 
         end.toISOString(),
         selectedStatus !== 'all' ? selectedStatus : undefined,
@@ -233,7 +231,7 @@ export default function SalesScreen() {
       
       // Then get the paginated data
       const salesData = await salesService.getSalesPaginated(
-        profile.id,
+        currentBusiness.id,
         start.toISOString(),
         end.toISOString(),
         currentPage * SALES_PER_PAGE,
@@ -251,7 +249,7 @@ export default function SalesScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [profile?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
+  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
 
   const filterSales = useCallback(() => {
     if (!debouncedSearchQuery.trim()) {
@@ -293,8 +291,8 @@ export default function SalesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (!profile?.id) return;
-              await salesService.voidSale(sale.id, 'Sale voided by user', profile.id);
+              if (!currentBusiness?.id) return;
+              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
               Alert.alert('Success', 'Sale voided successfully');
               loadData();
             } catch (error) {
@@ -305,7 +303,7 @@ export default function SalesScreen() {
         },
       ]
     );
-  }, [profile?.id, loadData]);
+  }, [currentBusiness?.id, loadData]);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
     Alert.alert(
@@ -341,18 +339,14 @@ export default function SalesScreen() {
     router.push(`/sales/cart/${cartId}`);
   }, [router]);
 
-  const handleImportSales = useCallback(() => {
-    router.push('/sales/import');
-  }, [router]);
-
   const handleExportSales = useCallback(async () => {
     if (Platform.OS !== 'web') {
       Alert.alert('Not Supported', 'Export is only available on web platform');
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -365,7 +359,7 @@ export default function SalesScreen() {
       end.setHours(23, 59, 59, 999);
       
       const csvData = await importService.exportSalesToCsv(
-        profile.id, 
+        currentBusiness.id, 
         start.toISOString(), 
         end.toISOString()
       );
@@ -386,7 +380,7 @@ export default function SalesScreen() {
       console.error('Error exporting sales:', error);
       Alert.alert('Error', 'Failed to export sales data');
     }
-  }, [profile?.id, startDate, endDate]);
+  }, [currentBusiness?.id, startDate, endDate]);
 
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
@@ -683,22 +677,14 @@ export default function SalesScreen() {
         }
       </Text>
       {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
-        <View style={styles.emptyActions}>
-          <Button
-            title="Import Sales"
-            variant="outline"
-            onPress={handleImportSales}
-            style={styles.emptyButton}
-          />
-          <Button
-            title="New Sale"
-            onPress={handleNewSale}
-            style={styles.emptyButton}
-          />
-        </View>
+        <Button
+          title="New Sale"
+          onPress={handleNewSale}
+          style={styles.emptyButton}
+        />
       )}
     </Card>
-  ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleImportSales, handleNewSale]);
+  ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleNewSale]);
 
   const renderCartItem = useCallback(({ item }) => (
     <ActiveCartCard
@@ -735,12 +721,6 @@ export default function SalesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#059669' }]}
-              onPress={handleImportSales}
-            >
-              <FileUp size={20} color="#ffffff" />
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
               onPress={handleNewSale}
             >
@@ -776,12 +756,6 @@ export default function SalesScreen() {
           {t('sales.title')}
         </Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#059669' }]}
-            onPress={handleImportSales}
-          >
-            <FileUp size={20} color="#ffffff" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
             onPress={handleNewSale}
@@ -876,14 +850,6 @@ export default function SalesScreen() {
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={handleImportSales}
-                >
-                  <FileUp size={16} color="#2563eb" />
-                  <Text style={styles.actionButtonText}>Import</Text>
-                </TouchableOpacity>
-                
                 <TouchableOpacity
                   style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
                   onPress={handleExportSales}
@@ -1105,22 +1071,6 @@ export default function SalesScreen() {
           <LoadingSpinner text="Deleting cart..." />
         </View>
       )}
-
-      {/* Import Sales Modal */}
-      <Modal
-        visible={showImportModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowImportModal(false)}
-      >
-        <ImportSalesModal
-          onClose={() => setShowImportModal(false)}
-          onComplete={() => {
-            setShowImportModal(false);
-            loadData();
-          }}
-        />
-      </Modal>
 
       {/* Date Range Picker Modal */}
       {renderDateFilterOptions()}
