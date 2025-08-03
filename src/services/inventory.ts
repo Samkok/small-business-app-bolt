@@ -125,6 +125,10 @@ export const inventoryService = {
   },
 
   // Updated to work with new batch structure
+  async createImportRecord(
+    importData: InventoryImportInsert, 
+    costs: Omit<ImportCostInsert, 'import_id'>[]
+  ) {
     // Ensure final_unit_cost and total_cost are calculated correctly
     if (!importData.final_unit_cost || !importData.total_cost) {
       const calculatedCosts = this.calculateFinalCost(
