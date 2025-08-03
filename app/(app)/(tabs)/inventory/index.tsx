@@ -25,7 +25,7 @@ import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ProductCard } from '@/src/components/products/ProductCard';
 import { ImportHistoryCard } from '@/src/components/inventory/ImportHistoryCard';
 import ProductForm from '@/src/components/products/ProductForm';
-import MultiProductImportForm from '@/src/components/inventory/MultiProductImportForm';
+import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, ShoppingCart } from 'lucide-react-native';
@@ -43,7 +43,7 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [showMultiImportForm, setShowMultiImportForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const [showEditImportForm, setShowEditImportForm] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -217,7 +217,7 @@ export default function InventoryScreen() {
   };
 
   const handleMultiImportComplete = () => {
-    setShowMultiImportForm(false);
+    setShowImportForm(false);
     loadData();
   };
 
@@ -778,23 +778,15 @@ export default function InventoryScreen() {
               </Text>
             </View>
             <Text style={[styles.importButtonSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Add new inventory with detailed cost tracking and batch imports
+              Add new inventory with detailed cost tracking. Select one or multiple products as needed.
             </Text>
           </View>
           
-          <View style={styles.importButtonsContainer}>
-            <Button
-              title="Single Product"
-              onPress={() => router.push('/inventory/product-selection')}
-              style={[styles.importButton, { flex: 1, marginRight: 6 }]}
-              variant="outline"
-            />
-            <Button
-              title="Batch Import"
-              onPress={() => setShowMultiImportForm(true)}
-              style={[styles.importButton, { flex: 1, marginLeft: 6 }]}
-            />
-          </View>
+          <Button
+            title="Import Stock"
+            onPress={() => setShowImportForm(true)}
+            style={styles.importButton}
+          />
         </Card>
 
         {/* Search and Filter Bar for Import History */}
@@ -924,7 +916,7 @@ export default function InventoryScreen() {
         ) : (
           <Button
             title="Create New Import"
-            onPress={() => router.push('/inventory/product-selection')}
+            onPress={() => setShowImportForm(true)}
             style={styles.emptyButton}
           />
         )}
@@ -1029,13 +1021,13 @@ export default function InventoryScreen() {
       </Modal>
 
       <Modal
-        visible={showMultiImportForm}
+        visible={showImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <MultiProductImportForm
+        <ImportStockForm
           onComplete={handleMultiImportComplete}
-          onCancel={() => setShowMultiImportForm(false)}
+          onCancel={() => setShowImportForm(false)}
         />
       </Modal>
 
@@ -1342,12 +1334,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   importButton: {
-    backgroundColor: '#2563eb',
-  },
-  importButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    width: '100%',
   },
   loadingMore: {
     flexDirection: 'row',
