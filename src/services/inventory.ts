@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { productService } from './products';
+import { batchImportService } from './batchImport';
 
 type InventoryImport = Database['public']['Tables']['inventory_imports']['Row'];
 type InventoryImportInsert = Database['public']['Tables']['inventory_imports']['Insert'];
@@ -8,8 +9,122 @@ type InventoryImportUpdate = Database['public']['Tables']['inventory_imports']['
 type ImportCost = Database['public']['Tables']['import_costs']['Row'];
 type ImportCostInsert = Database['public']['Tables']['import_costs']['Insert'];
 
+// Legacy support - map old structure to new batch structure
+type LegacyInventoryImportInsert = {
+  product_id: string;
+  quantity: number;
+  base_unit_cost: number;
+  final_unit_cost: number;
+  total_cost: number;
+  notes?: string;
+  business_id: string;
+  imported_by: string;
+  purchase_date?: string;
+  status?: 'pending' | 'completed';
+};
+
 export const inventoryService = {
-  async createImport(importData: InventoryImportInsert, costs: Omit<ImportCostInsert, 'import_id'>[]) {
+  // Legacy method - creates a single-item batch for backward compatibility
+  async createImport(importData: LegacyInventoryImportInsert, costs: Omit<ImportCostInsert, 'batch_id'>[]) {
+    // Convert legacy format to new batch format
+    const batchData = {
+      business_id: importData.business_id,
+      imported_by: importData.imported_by,
+      purchase_date: importData.purchase_date,
+      notes: importData.notes,
+      items: [{
+        product_id: importData.product_id,
+        quantity: importData.quantity,
+        base_unit_cost_per_item: importData.base_unit_cost
+      }],
+      costs: costs.map(cost => ({
+        cost_type: cost.cost_type,
+        amount: cost.amount,
+        calculation_type: cost.calculation_type,
+        description: cost.description
+      }))
+    };
+
+    const result = await batchImportService.createBatchImport(batchData);
+    
+    // Return the first (and only) import record for backward compatibility
+    return result.imports[0];
+  },
+
+  // New batch import method
+  async createBatchImport(batchData: any) {
+    return batchImportService.createBatchImport(batchData);
+  },
+
+  // Legacy method - now works with batches
+  async updateImport(importId: string, importData: any, costs: any[]) {
+    // This is more complex now since we need to update the batch
+    // For now, we'll keep it simple and just update the import record
+    const { data: updatedImport, error: importError } = await supabase
+      .from('inventory_imports')
+      .update({
+        quantity: importData.quantity,
+        base_unit_cost_per_item: importData.base_unit_cost,
+        final_unit_cost_per_item: importData.final_unit_cost,
+        total_cost_for_item: importData.total_cost
+      })
+      .eq('id', importId)
+      .select()
+      .single();
+
+    if (importError) throw importError;
+    return updatedImport;
+  },
+
+  // Legacy method - now deletes the entire batch if it's a single-item batch
+  async deleteImport(importId: string) {
+    // Get the import and its batch
+    const { data: importRecord, error: getError } = await supabase
+      .from('inventory_imports')
+      .select('batch_id, inventory_batches(*)')
+      .eq('id', importId)
+      .single();
+
+    if (getError) throw getError;
+
+    // Check if this is the only import in the batch
+    const { data: batchImports, error: batchImportsError } = await supabase
+      .from('inventory_imports')
+      .select('id')
+      .eq('batch_id', importRecord.batch_id);
+
+    if (batchImportsError) throw batchImportsError;
+
+    if (batchImports.length === 1) {
+      // Delete the entire batch
+      return batchImportService.deleteBatchImport(importRecord.batch_id);
+    } else {
+      // Just delete this import record
+      const { error: deleteError } = await supabase
+        .from('inventory_imports')
+        .delete()
+        .eq('id', importId);
+
+      if (deleteError) throw deleteError;
+      return true;
+    }
+  },
+
+  // Legacy method - now marks the entire batch as arrived
+  async markImportAsArrived(importId: string, arrivalDate?: string) {
+    // Get the batch ID for this import
+    const { data: importRecord, error: getError } = await supabase
+      .from('inventory_imports')
+      .select('batch_id')
+      .eq('id', importId)
+      .single();
+
+    if (getError) throw getError;
+
+    return batchImportService.markBatchAsArrived(importRecord.batch_id, arrivalDate);
+  },
+
+  // Updated to work with new batch structure
     // Ensure final_unit_cost and total_cost are calculated correctly
     if (!importData.final_unit_cost || !importData.total_cost) {
       const calculatedCosts = this.calculateFinalCost(
@@ -259,18 +374,50 @@ export const inventoryService = {
   },
 
   async getImportHistory(businessId: string) {
-    if (typeof businessId !== 'string' || !businessId) return;
     const { data, error } = await supabase
-      .from('inventory_imports')
+      .from('inventory_batches')
       .select(`
         *,
-        products(name, barcode),
+        inventory_imports(
+          *,
+          products(name, barcode)
+        ),
         import_costs(*)
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    
+    // Flatten the structure for backward compatibility
+    const flattenedData = [];
+    for (const batch of data) {
+      for (const importItem of batch.inventory_imports) {
+        flattenedData.push({
+          id: importItem.id,
+          product_id: importItem.product_id,
+          quantity: importItem.quantity,
+          base_unit_cost: importItem.base_unit_cost_per_item,
+          final_unit_cost: importItem.final_unit_cost_per_item,
+          total_cost: importItem.total_cost_for_item,
+          business_id: batch.business_id,
+          imported_by: batch.imported_by,
+          created_at: batch.created_at,
+          purchase_date: batch.purchase_date,
+          arrival_date: batch.arrival_date,
+          status: batch.status,
+          notes: batch.notes,
+          products: importItem.products,
+          import_costs: batch.import_costs,
+          batch_id: batch.id,
+          batch_info: {
+            total_batch_cost: batch.total_batch_cost,
+            item_count: batch.inventory_imports.length
+          }
+        });
+      }
+    }
+    
     return data;
   },
 
