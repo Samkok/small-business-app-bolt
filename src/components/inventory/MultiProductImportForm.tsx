@@ -23,12 +23,12 @@ import { productService } from '@/src/services/products';
 import { batchImportService, BatchImportItem, BatchImportCost } from '@/src/services/batchImport';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
-interface MultiProductImportFormProps {
+interface ImportStockFormProps {
   onComplete: () => void;
   onCancel: () => void;
 }
 
-export default function MultiProductImportForm({ onComplete, onCancel }: MultiProductImportFormProps) {
+export default function ImportStockForm({ onComplete, onCancel }: ImportStockFormProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [selectedItems, setSelectedItems] = useState<BatchImportItem[]>([]);
@@ -202,11 +202,11 @@ export default function MultiProductImportForm({ onComplete, onCancel }: MultiPr
       };
 
       await batchImportService.createBatchImport(batchData);
-      Alert.alert('Success', 'Batch import created successfully');
+      Alert.alert('Success', 'Stock import created successfully');
       onComplete();
     } catch (error) {
-      console.error('Error creating batch import:', error);
-      Alert.alert('Error', 'Failed to create batch import');
+      console.error('Error creating import:', error);
+      Alert.alert('Error', 'Failed to create import');
     } finally {
       setLoading(false);
     }
@@ -305,7 +305,7 @@ export default function MultiProductImportForm({ onComplete, onCancel }: MultiPr
     >
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Batch Import
+          Import Stock
         </Text>
         <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
           <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
@@ -592,10 +592,10 @@ export default function MultiProductImportForm({ onComplete, onCancel }: MultiPr
         {/* Notes */}
         <Card style={styles.section}>
           <Input
-            label="Notes (Optional)"
+            label="Import Notes (Optional)"
             value={notes}
             onChangeText={setNotes}
-            placeholder="Any additional notes about this batch import"
+            placeholder="Any additional notes about this import"
             multiline
             numberOfLines={3}
           />
@@ -610,7 +610,7 @@ export default function MultiProductImportForm({ onComplete, onCancel }: MultiPr
           style={styles.footerButton}
         />
         <Button
-          title="Create Batch Import"
+          title="Create Import"
           onPress={handleImport}
           loading={loading}
           style={styles.footerButton}
