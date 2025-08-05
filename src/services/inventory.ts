@@ -391,7 +391,7 @@ export const inventoryService = {
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
-    console.log(data);
+    console.dir(data, { depth: null });
 
     if (error) throw error;
     
