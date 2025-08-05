@@ -112,15 +112,9 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     }
   };
 
-  const updateItemCost = (productId: string, costStr: string) => {
+  const updateItemCost = (productId: string, cost: number) => {
     setSelectedItems(selectedItems.map(item =>
-      item.product_id === productId
-        ? {
-            ...item,
-            base_unit_cost_input: costStr,
-            base_unit_cost_per_item: costStr === '' ? 0 : parseFloat(costStr) || 0
-          }
-        : item
+      item.product_id === productId ? { ...item, base_unit_cost_per_item: cost } : item
     ));
   };
 
