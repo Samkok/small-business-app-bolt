@@ -112,9 +112,15 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     }
   };
 
-  const updateItemCost = (productId: string, cost: number) => {
+  const updateItemCost = (productId: string, costStr: string) => {
     setSelectedItems(selectedItems.map(item =>
-      item.product_id === productId ? { ...item, base_unit_cost_per_item: cost } : item
+      item.product_id === productId
+        ? {
+            ...item,
+            base_unit_cost_input: costStr,
+            base_unit_cost_per_item: costStr === '' ? 0 : parseFloat(costStr) || 0
+          }
+        : item
     ));
   };
 
@@ -400,11 +406,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item.toString()}
+                        value={item.base_unit_cost_input ?? item.base_unit_cost_per_item.toString()}
                         onChangeText={(value) => {
-                          // Allow empty string, digits, and one decimal point
                           if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                            updateItemCost(item.product_id, value === '' ? 0 : parseFloat(value) || 0);
+                            updateItemCost(item.product_id, value);
                           }
                         }}
                         placeholder="0.00"
