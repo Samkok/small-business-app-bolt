@@ -401,7 +401,7 @@ export const inventoryService = {
           id: importItem.id,
           product_id: importItem.product_id,
           quantity: importItem.quantity,
-           base_unit_cost: importItem.base_unit_cost_per_item,
+          base_unit_cost: importItem.base_unit_cost_per_item,
           final_unit_cost: importItem.final_unit_cost_per_item,
           total_cost: importItem.total_cost_for_item,
           business_id: batch.business_id,
