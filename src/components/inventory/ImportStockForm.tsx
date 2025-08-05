@@ -400,10 +400,15 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item.toString()}
-                        onChangeText={(value) => updateItemCost(item.product_id, parseFloat(value) || 0)}
+                        value={item.base_unit_cost_per_item === 0 ? '' : item.base_unit_cost_per_item.toString()}
+                        onChangeText={(value) => {
+                          // Allow empty string, digits, and one decimal point
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            updateItemCost(item.product_id, value === '' ? 0 : parseFloat(value) || 0);
+                          }
+                        }}
                         placeholder="0.00"
-                        keyboardType="decimal-pad"
+                        keyboardType="numeric"
                       />
                     </View>
                     
@@ -458,10 +463,15 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount.toString()}
-                onChangeText={(value) => updateCost(index, 'amount', parseFloat(value) || 0)}
+                value={cost.amount === 0 ? '' : cost.amount.toString()}
+                onChangeText={(value) => {
+                  // Allow empty string, digits, and one decimal point
+                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                    updateCost(index, 'amount', value === '' ? 0 : parseFloat(value) || 0);
+                  }
+                }}
                 placeholder="0.00"
-                keyboardType="decimal-pad"
+                keyboardType="numeric"
               />
               
               <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
