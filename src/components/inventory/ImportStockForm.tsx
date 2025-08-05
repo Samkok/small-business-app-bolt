@@ -203,7 +203,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
         business_id: currentBusiness.id,
         imported_by: currentBusiness.id,
         purchase_date: purchaseDate,
-        notes: notes.trim() || undefined,
+        notes: notes.trim() || "",
         items: selectedItems,
         costs: additionalCosts
       };
