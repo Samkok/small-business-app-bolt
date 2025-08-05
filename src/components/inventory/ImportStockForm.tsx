@@ -166,7 +166,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
     // Validate that all items have costs
     for (const item of selectedItems) {
-      if (!item.base_unit_cost_per_item || item.base_unit_cost_per_item <= 0) {
+      if (!item.base_unit_cost || item.base_unit_cost <= 0) {
         const product = getProductById(item.product_id);
         Alert.alert('Error', `Please enter a valid base cost for ${product?.name || 'selected product'}`);
         return;
