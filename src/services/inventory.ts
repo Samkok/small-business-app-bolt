@@ -424,7 +424,7 @@ export const inventoryService = {
       }
     }
     
-    return data;
+    return flattenedData;
   },
 
   async getImportsByProductId(productId: string) {
