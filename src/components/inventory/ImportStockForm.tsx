@@ -112,18 +112,11 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     }
   };
 
-  const updateItemCost = (productId: string, costStr: string) => {
-  setSelectedItems(selectedItems.map(item =>
-    item.product_id === productId
-      ? {
-          ...item,
-          base_unit_cost_input: costStr,
-          base_unit_cost_per_item: costStr === '' ? 0 : parseFloat(costStr) || 0
-        }
-      : item
-  ));
-};
-
+  const updateItemCost = (productId: string, cost: number) => {
+    setSelectedItems(selectedItems.map(item =>
+      item.product_id === productId ? { ...item, base_unit_cost_per_item: cost } : item
+    ));
+  };
 
   const removeItem = (productId: string) => {
     setSelectedItems(selectedItems.filter(item => item.product_id !== productId));
@@ -465,7 +458,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount.toString()}
+                value={cost.amount ?? cost.amount.toString()}
                 onChangeText={(value) => updateCost(index, 'amount', parseFloat(value) || 0)}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
