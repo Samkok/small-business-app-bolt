@@ -117,6 +117,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       item.product_id === productId ? { ...item, base_unit_cost_per_item: cost } : item
     ));
   };
+  
 
   const removeItem = (productId: string) => {
     setSelectedItems(selectedItems.filter(item => item.product_id !== productId));
