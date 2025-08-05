@@ -196,6 +196,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       Alert.alert('Error', 'No business found');
       return;
     }
+    console.log(currentBusiness.id);
 
     setLoading(true);
     try {
