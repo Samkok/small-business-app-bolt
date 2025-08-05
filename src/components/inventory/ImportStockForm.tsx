@@ -403,7 +403,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item.toString()}
+                        value={item.base_unit_cost_per_item ?? item.base_unit_cost_per_item.toString()}
                         onChangeText={(value) => updateItemCost(item.product_id, parseFloat(value) || 0)}
                         placeholder="0.00"
                         keyboardType="decimal-pad"
