@@ -89,6 +89,7 @@ export const batchImportService = {
 
     // Create import records for each item
     const importRecords = itemsWithFinalCosts.map(item => ({
+      business_id: item.business_id,
       product_id: item.product_id,
       quantity: item.quantity,
       base_unit_cost_per_item: item.base_unit_cost_per_item,
