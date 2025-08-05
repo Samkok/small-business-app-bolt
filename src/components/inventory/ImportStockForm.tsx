@@ -468,7 +468,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount === 0 ? '' : cost.amount.toString()}
+                value={cost.amount ?? cost.amount.toString()}
                 onChangeText={(value) => {
                   // Allow empty string, digits, and one decimal point
                   if (value === '' || /^\d*\.?\d*$/.test(value)) {
