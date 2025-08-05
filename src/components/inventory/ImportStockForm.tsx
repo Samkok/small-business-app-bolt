@@ -112,11 +112,18 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     }
   };
 
-  const updateItemCost = (productId: string, cost: number) => {
-    setSelectedItems(selectedItems.map(item =>
-      item.product_id === productId ? { ...item, base_unit_cost_per_item: cost } : item
-    ));
-  };
+  const updateItemCost = (productId: string, costStr: string) => {
+  setSelectedItems(selectedItems.map(item =>
+    item.product_id === productId
+      ? {
+          ...item,
+          base_unit_cost_input: costStr,
+          base_unit_cost_per_item: costStr === '' ? 0 : parseFloat(costStr) || 0
+        }
+      : item
+  ));
+};
+
 
   const removeItem = (productId: string) => {
     setSelectedItems(selectedItems.filter(item => item.product_id !== productId));
@@ -166,8 +173,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
     // Validate that all items have costs
     for (const item of selectedItems) {
-      console.log(item);
-      if (!item.base_unit_cost_input || item.base_unit_cost_input <= 0) {
+      if (!item.base_unit_cost_per_item || item.base_unit_cost_per_item <= 0) {
         const product = getProductById(item.product_id);
         Alert.alert('Error', `Please enter a valid base cost for ${product?.name || 'selected product'}`);
         return;
@@ -197,12 +203,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
         business_id: currentBusiness.id,
         imported_by: currentBusiness.id,
         purchase_date: purchaseDate,
-        notes: notes.trim() || "",
+        notes: notes.trim() || undefined,
         items: selectedItems,
         costs: additionalCosts
       };
-
-      console.log(batchData);
 
       await batchImportService.createBatchImport(batchData);
       Alert.alert('Success', 'Stock import created successfully');
@@ -403,12 +407,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_input ?? item.base_unit_cost_per_item.toString()}
-                        onChangeText={(value) => {
-                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                            updateItemCost(item.product_id, value);
-                          }
-                        }}
+                        value={item.base_unit_cost_per_item.toString()}
+                        onChangeText={(value) => updateItemCost(item.product_id, parseFloat(value) || 0)}
                         placeholder="0.00"
                         keyboardType="decimal-pad"
                       />
@@ -465,15 +465,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount ?? cost.amount.toString()}
-                onChangeText={(value) => {
-                  // Allow empty string, digits, and one decimal point
-                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                    updateCost(index, 'amount', value === '' ? 0 : parseFloat(value) || 0);
-                  }
-                }}
+                value={cost.amount.toString()}
+                onChangeText={(value) => updateCost(index, 'amount', parseFloat(value) || 0)}
                 placeholder="0.00"
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
               />
               
               <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
