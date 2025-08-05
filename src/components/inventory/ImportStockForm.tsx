@@ -400,7 +400,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item === 0 ? '' : item.base_unit_cost_per_item.toString()}
+                        value={item.base_unit_cost_per_item.toString()}
                         onChangeText={(value) => {
                           // Allow empty string, digits, and one decimal point
                           if (value === '' || /^\d*\.?\d*$/.test(value)) {
@@ -408,7 +408,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                           }
                         }}
                         placeholder="0.00"
-                        keyboardType="numeric"
+                        keyboardType="decimal-pad"
                       />
                     </View>
                     
