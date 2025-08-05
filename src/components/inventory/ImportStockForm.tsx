@@ -196,7 +196,6 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       Alert.alert('Error', 'No business found');
       return;
     }
-    console.log(currentBusiness.id);
 
     setLoading(true);
     try {
@@ -208,6 +207,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
         items: selectedItems,
         costs: additionalCosts
       };
+
+      console.log(batchData);
 
       await batchImportService.createBatchImport(batchData);
       Alert.alert('Success', 'Stock import created successfully');
