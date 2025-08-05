@@ -154,7 +154,6 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     const totalBaseValue = selectedItems.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
     const totalAdditionalCosts = itemsWithCosts.reduce((sum, item) => sum + (item.allocated_additional_costs || 0), 0);
     const totalBatchCost = itemsWithCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
-    console.log(totalBatchCost);
 
     return { totalBaseValue, totalAdditionalCosts, totalBatchCost, itemsWithCosts };
   };
