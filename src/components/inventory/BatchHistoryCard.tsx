@@ -86,12 +86,6 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
             <Text style={[styles.batchId, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Batch #{batch.id.slice(-8)}
             </Text>
-            <View style={styles.statusBadge}>
-              {getStatusIcon(batch.status)}
-              <Text style={[styles.statusText, { color: getStatusColor(batch.status) }]}>
-                {batch.status === 'completed' ? 'Completed' : 'Pending'}
-              </Text>
-            </View>
           </View>
           
           <View style={styles.metaRow}>
@@ -156,6 +150,16 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
           >
             <Trash2 size={16} color="#dc2626" />
           </TouchableOpacity>
+        </View>
+      </View>
+      
+      {/* Status Widget */}
+      <View style={styles.statusContainer}>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(batch.status) + '20' }]}>
+          {getStatusIcon(batch.status)}
+          <Text style={[styles.statusText, { color: getStatusColor(batch.status) }]}>
+            {batch.status === 'completed' ? 'Completed' : 'Pending'}
+          </Text>
         </View>
       </View>
       
@@ -231,26 +235,29 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   batchId: {
     fontSize: 16,
     fontWeight: 'bold',
   },
-  statusBadge: {
-    flexDirection: 'column',
+  statusContainer: {
     alignItems: 'center',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginTop: 5
+    marginLeft: 6,
+    textTransform: 'uppercase',
   },
   metaRow: {
     flexDirection: 'row',
