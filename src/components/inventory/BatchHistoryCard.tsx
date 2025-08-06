@@ -118,7 +118,257 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
           </Text>
         </View>
         
-        <View style={styles.actions}>
+        <View style={styles.actionAndStatusWrapper}>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={() => onViewDetails(batch)}
+            >
+              <Eye size={16} color="#2563eb" />
+            </TouchableOpacity>
+            
+            {batch.status === 'pending' && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+                onPress={() => onEdit(batch)}
+              >
+                <Edit size={16} color="#2563eb" />
+              </TouchableOpacity>
+            )}
+
+            {batch.status === 'pending' && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+                onPress={() => onMarkAsArrived(batch)}
+              >
+                <CheckCircle size={16} color="#059669" />
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={() => onDelete(batch)}
+            >
+              <Trash2 size={16} color="#dc2626" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Status Widget */}
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(batch.status) + '20' }]}>
+              {getStatusIcon(batch.status)}
+              <Text style={[styles.statusText, { color: getStatusColor(batch.status) }]}>
+                {batch.status === 'completed' ? 'Completed' : 'Pending'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+      
+      <View style={styles.costSection}>
+        <View style={styles.costRow}>
+          <Text style={[styles.costLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Total Batch Cost:
+          </Text>
+          <Text style={[styles.costValue, { color: '#059669' }]}>
+            {formatCurrency(batch.total_batch_cost)}
+          </Text>
+        </View>
+        
+        {batch.import_costs && batch.import_costs.length > 0 && (
+          <View style={styles.additionalCosts}>
+            <Text style={[styles.costsTitle, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              Additional Costs:
+            </Text>
+            {batch.import_costs.slice(0, 2).map((cost, index) => (
+              <View key={index} style={styles.costItem}>
+                <Text style={[styles.costType, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {cost.cost_type} ({cost.calculation_type.replace('_', ' ')})
+                </Text>
+                <Text style={[styles.costAmount, { color: isDark ? '#f9fafb' : '#374151' }]}>
+                  {formatCurrency(cost.amount)}
+                </Text>
+              </View>
+            ))}
+            {batch.import_costs.length > 2 && (
+              <Text style={[styles.moreCosts, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                +{batch.import_costs.length - 2} more costs
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+      
+      {batch.notes && (
+        <View style={styles.notesSection}>
+          <Text style={[styles.notesText, { color: isDark ? '#d1d5db' : '#374151' }]} numberOfLines={2}>
+            {batch.notes}
+          </Text>
+        </View>
+      )}
+
+      <TouchableOpacity 
+        style={styles.viewDetailsButton}
+        onPress={() => onViewDetails(batch)}
+      >
+        <Text style={[styles.viewDetailsText, { color: '#2563eb' }]}>
+          View Details
+        </Text>
+        <ChevronRight size={16} color="#2563eb" />
+      </TouchableOpacity>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    marginBottom: 12,
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  batchInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  batchId: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  actionAndStatusWrapper: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusContainer: {
+    alignItems: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 4,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  productNames: {
+    fontSize: 13,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  costSection: {
+    marginBottom: 12,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  costLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  costValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  additionalCosts: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  costsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  costItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  costType: {
+    fontSize: 11,
+    flex: 1,
+  },
+  costAmount: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  moreCosts: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  notesSection: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    marginBottom: 8,
+  },
+  notesText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#2563eb20',
+    borderRadius: 8,
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+});
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
             onPress={() => onViewDetails(batch)}
