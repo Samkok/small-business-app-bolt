@@ -393,38 +393,8 @@ export const inventoryService = {
 
     if (error) throw error;
     
-    // Flatten the structure for backward compatibility
-    const flattenedData = [];
-    for (const batch of data) {
-      for (const importItem of batch.inventory_imports) {
-        flattenedData.push({
-          id: importItem.id,
-          product_id: importItem.product_id,
-          quantity: importItem.quantity,
-          base_unit_cost: importItem.base_unit_cost_per_item,
-          final_unit_cost: importItem.final_unit_cost_per_item,
-          total_cost: importItem.total_cost_for_item,
-          business_id: batch.business_id,
-          imported_by: batch.imported_by,
-          created_at: batch.created_at,
-          purchase_date: batch.purchase_date,
-          arrival_date: batch.arrival_date,
-          status: batch.status,
-          notes: batch.notes,
-          products: importItem.products,
-          import_costs: batch.import_costs,
-          batch_id: batch.id,
-          batch_info: {
-            total_batch_cost: batch.total_batch_cost,
-            item_count: batch.inventory_imports.length
-          }
-        });
-      }
-    }
-
-    console.log(flattenedData);
-    
-    return flattenedData;
+    // Return batch data directly instead of flattening
+    return data;
   },
 
   async getImportsByProductId(productId: string) {
