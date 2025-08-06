@@ -26,7 +26,7 @@ import { ProductCard } from '@/src/components/products/ProductCard';
 import { BatchHistoryCard } from '@/src/components/inventory/BatchHistoryCard';
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportStockForm from '@/src/components/inventory/ImportStockForm';
-import EditImportForm from '@/src/components/inventory/EditImportForm';
+import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, ShoppingCart } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
@@ -56,6 +56,8 @@ export default function InventoryScreen() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
   const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set());
+  const [showEditBatchForm, setShowEditBatchForm] = useState(false);
+  const [selectedBatchForEdit, setSelectedBatchForEdit] = useState<any>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
@@ -208,6 +210,11 @@ export default function InventoryScreen() {
     if (!selectedProduct) {
       setTotalProducts(prev => prev + 1);
     }
+  };
+
+  const handleEditBatch = (batch: any) => {
+    setSelectedBatchForEdit(batch);
+    setShowEditBatchForm(true);
   };
 
   const handleEditImportComplete = () => {
@@ -763,7 +770,7 @@ export default function InventoryScreen() {
         <View style={[styles.batchCardWrapper, isMultiSelectMode && styles.batchCardWithCheckbox]}>
           <BatchHistoryCard 
             batch={item}
-            onEdit={() => {}} // Remove edit functionality for batches
+            onEdit={handleEditBatch}
             onDelete={handleDeleteBatch}
             onMarkAsArrived={handleMarkAsArrived}
             onViewDetails={handleViewBatchDetails}
@@ -1038,16 +1045,20 @@ export default function InventoryScreen() {
       </Modal>
 
       <Modal
-        visible={showEditImportForm}
+        visible={showEditBatchForm}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <EditImportForm
-          importRecord={selectedImport}
-          onComplete={handleEditImportComplete}
+        <EditBatchForm
+          batch={selectedBatchForEdit}
+          onComplete={() => {
+            setShowEditBatchForm(false);
+            setSelectedBatchForEdit(null);
+            loadData();
+          }}
           onCancel={() => {
-            setShowEditImportForm(false);
-            setSelectedImport(null);
+            setShowEditBatchForm(false);
+            setSelectedBatchForEdit(null);
           }}
         />
       </Modal>
@@ -1060,6 +1071,18 @@ export default function InventoryScreen() {
         <BarcodeScanner
           onBarcodeScan={handleBarcodeScanned}
           onClose={() => setShowBarcodeScanner(false)}
+        />
+      </Modal>
+
+      <Modal
+        visible={showEditBatchForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <EditBatchForm
+          batch={selectedBatchForEdit}
+          onComplete={handleRefresh}
+          onCancel={() => setShowEditBatchForm(false)}
         />
       </Modal>
 

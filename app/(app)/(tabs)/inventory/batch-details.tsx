@@ -15,6 +15,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2 } from 'lucide-react-native';
 import { batchImportService } from '@/src/services/batchImport';
 
@@ -24,6 +25,8 @@ export default function BatchDetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [markingAsArrived, setMarkingAsArrived] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showEditBatchForm, setShowEditBatchForm] = useState(false);
+
   
   const router = useRouter();
   const { batchId } = useLocalSearchParams();
@@ -417,6 +420,17 @@ export default function BatchDetailsScreen() {
         </Card>
       </ScrollView>
 
+      <Modal
+        visible={showEditBatchForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <EditBatchForm
+          batch={batch}
+          onComplete={() => { setShowEditBatchForm(false); loadBatchDetails(); }}
+          onCancel={() => setShowEditBatchForm(false)}
+        />
+      </Modal>
       {/* Action Buttons */}
       <View style={styles.footer}>
         {batch.status === 'pending' && (
@@ -425,6 +439,14 @@ export default function BatchDetailsScreen() {
             onPress={handleMarkAsArrived}
             loading={markingAsArrived}
             style={[styles.footerButton, { backgroundColor: '#059669' }]}
+          />
+        )}
+        
+        {batch.status === 'pending' && (
+          <Button
+            title="Edit Batch"
+            onPress={() => setShowEditBatchForm(true)}
+            style={styles.footerButton}
           />
         )}
         
