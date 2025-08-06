@@ -26,7 +26,7 @@ import { ProductCard } from '@/src/components/products/ProductCard';
 import { BatchHistoryCard } from '@/src/components/inventory/BatchHistoryCard';
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportStockForm from '@/src/components/inventory/ImportStockForm';
-import EditBatchForm from '@/src/components/inventory/EditBatchForm';
+import EditImportForm from '@/src/components/inventory/EditImportForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, ShoppingCart } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
@@ -1045,20 +1045,16 @@ export default function InventoryScreen() {
       </Modal>
 
       <Modal
-        visible={showEditBatchForm}
+        visible={showEditImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <EditBatchForm
-          batch={selectedBatchForEdit}
-          onComplete={() => {
-            setShowEditBatchForm(false);
-            setSelectedBatchForEdit(null);
-            loadData();
-          }}
+        <EditImportForm
+          importRecord={selectedImport}
+          onComplete={handleEditImportComplete}
           onCancel={() => {
-            setShowEditBatchForm(false);
-            setSelectedBatchForEdit(null);
+            setShowEditImportForm(false);
+            setSelectedImport(null);
           }}
         />
       </Modal>
