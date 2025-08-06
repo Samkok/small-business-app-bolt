@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statusBadge: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     paddingVertical: 2,
     paddingHorizontal: 6,
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-    marginLeft: 4,
+    marginTop: 5
   },
   metaRow: {
     flexDirection: 'row',
