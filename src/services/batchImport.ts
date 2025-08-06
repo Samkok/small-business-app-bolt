@@ -99,6 +99,8 @@ export const batchImportService = {
       batch_id: batch.id
     }));
 
+    console.log(importRecords);
+
     const { data: imports, error: importsError } = await supabase
       .from('inventory_imports')
       .insert(importRecords)
