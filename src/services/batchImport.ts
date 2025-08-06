@@ -98,7 +98,6 @@ export const batchImportService = {
       total_cost_for_item: item.total_cost_for_item,
       batch_id: batch.id
     }));
-    
 
     console.log(importRecords);
 
