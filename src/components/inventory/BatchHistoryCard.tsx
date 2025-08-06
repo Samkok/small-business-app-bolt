@@ -153,6 +153,16 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
         </View>
       </View>
       
+      {/* Status Widget */}
+      <View style={styles.statusContainer}>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(batch.status) + '20' }]}>
+          {getStatusIcon(batch.status)}
+          <Text style={[styles.statusText, { color: getStatusColor(batch.status) }]}>
+            {batch.status === 'completed' ? 'Completed' : 'Pending'}
+          </Text>
+        </View>
+      </View>
+      
       <View style={styles.costSection}>
         <View style={styles.costRow}>
           <Text style={[styles.costLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
@@ -204,16 +214,6 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
         </Text>
         <ChevronRight size={16} color="#2563eb" />
       </TouchableOpacity>
-      
-      {/* Status Widget */}
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(batch.status) + '20' }]}>
-          {getStatusIcon(batch.status)}
-          <Text style={[styles.statusText, { color: getStatusColor(batch.status) }]}>
-            {batch.status === 'completed' ? 'Completed' : 'Pending'}
-          </Text>
-        </View>
-      </View>
     </Card>
   );
 }
