@@ -240,15 +240,110 @@ export const batchImportService = {
     return updatedBatch;
   },
 
-  async updateBatchImport(batchId: string, updates: InventoryBatchUpdate) {
+  async updateBatchImport(batchId: string, updates: InventoryBatchUpdate, newItems: BatchImportItem[], newCosts: BatchImportCost[]) {
+    // Fetch the current batch details including its items and costs
+    const { data: currentBatch, error: fetchError } = await supabase
+      .from('inventory_batches')
+      .select(`
+        status,
+        inventory_imports(*),
+        import_costs(*)
+      `)
+      .eq('id', batchId)
+      .select()
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    if (currentBatch.status === 'completed') {
+      throw new Error('Completed batches cannot be edited. Please delete and re-import if changes are necessary.');
+    }
+
+    // Calculate total quantities for cost distribution
+    const totalQuantity = newItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalBaseValue = newItems.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
+
+    // Calculate total additional costs
+    let totalAdditionalCosts = 0;
+    newCosts.forEach(cost => {
+      const amount = parseFloat(cost.amount as any) || 0; // Ensure amount is number
+      if (cost.calculation_type === 'per_unit') {
+        totalAdditionalCosts += amount * totalQuantity;
+      } else {
+        totalAdditionalCosts += amount;
+      }
+    });
+
+    // Calculate final costs for each item
+    const itemsWithFinalCosts = newItems.map(item => {
+      const itemValue = item.quantity * item.base_unit_cost_per_item;
+      const itemProportion = totalBaseValue > 0 ? itemValue / totalBaseValue : (newItems.length > 0 ? 1 / newItems.length : 0);
+      const itemAdditionalCosts = totalAdditionalCosts * itemProportion;
+      
+      const final_unit_cost_per_item = item.base_unit_cost_per_item + (item.quantity > 0 ? itemAdditionalCosts / item.quantity : 0);
+      const total_cost_for_item = final_unit_cost_per_item * item.quantity;
+
+      return {
+        ...item,
+        final_unit_cost_per_item,
+        total_cost_for_item
+      };
+    });
+
+    const newTotalBatchCost = itemsWithFinalCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
+
+    // Update the batch record itself
     const { data, error } = await supabase
       .from('inventory_batches')
-      .update(updates)
+      .update({ ...updates, total_batch_cost: newTotalBatchCost, updated_at: new Date().toISOString() })
       .eq('id', batchId)
       .select()
       .single();
 
     if (error) throw error;
+
+    // --- Update inventory_imports (products) ---
+    const currentImportIds = new Set(currentBatch.inventory_imports.map((item: any) => item.id));
+    const newImportIds = new Set(itemsWithFinalCosts.map((item: any) => item.id));
+
+    // Items to delete
+    const importsToDelete = currentBatch.inventory_imports.filter((item: any) => !newImportIds.has(item.id));
+    if (importsToDelete.length > 0) {
+      await supabase.from('inventory_imports').delete().in('id', importsToDelete.map((item: any) => item.id));
+    }
+
+    // Items to insert or update
+    for (const item of itemsWithFinalCosts) {
+      if (currentImportIds.has(item.id)) {
+        // Update existing item
+        await supabase.from('inventory_imports').update(item).eq('id', item.id);
+      } else {
+        // Insert new item
+        await supabase.from('inventory_imports').insert({ ...item, batch_id: batchId, business_id: updates.business_id, imported_by: updates.imported_by });
+      }
+    }
+
+    // --- Update import_costs ---
+    const currentCostIds = new Set(currentBatch.import_costs.map((cost: any) => cost.id));
+    const newCostIds = new Set(newCosts.map((cost: any) => cost.id));
+
+    // Costs to delete
+    const costsToDelete = currentBatch.import_costs.filter((cost: any) => !newCostIds.has(cost.id));
+    if (costsToDelete.length > 0) {
+      await supabase.from('import_costs').delete().in('id', costsToDelete.map((cost: any) => cost.id));
+    }
+
+    // Costs to insert or update
+    for (const cost of newCosts) {
+      if (currentCostIds.has(cost.id)) {
+        // Update existing cost
+        await supabase.from('import_costs').update(cost).eq('id', cost.id);
+      } else {
+        // Insert new cost
+        await supabase.from('import_costs').insert({ ...cost, batch_id: batchId });
+      }
+    }
+
     return data;
   },
 

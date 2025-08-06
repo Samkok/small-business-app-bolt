@@ -40,6 +40,7 @@ interface BatchHistoryCardProps {
   onDelete: (batch: any) => void;
   onMarkAsArrived: (batch: any) => void;
   onViewDetails: (batch: any) => void;
+  onEdit: (batch: any) => void;
 }
 
 export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onViewDetails }: BatchHistoryCardProps) {
@@ -131,6 +132,15 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
             <Eye size={16} color="#2563eb" />
           </TouchableOpacity>
           
+          {batch.status === 'pending' && (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+              onPress={() => onEdit(batch)}
+            >
+              <Edit size={16} color="#2563eb" />
+            </TouchableOpacity>
+          )}
+
           {batch.status === 'pending' && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
