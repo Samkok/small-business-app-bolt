@@ -305,6 +305,7 @@ export const batchImportService = {
       .single();
 
     if (error) throw error;
+    console.log("currentBatch: ", currentBatch);
 
     // --- Update inventory_imports (products) ---
     const currentImportIds = new Set(currentBatch.inventory_imports.map((item: any) => item.id));
