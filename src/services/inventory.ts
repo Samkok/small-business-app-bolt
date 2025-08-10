@@ -399,7 +399,7 @@ export const inventoryService = {
 
   async getImportsByProductId(productId: string) {
     if (typeof productId !== 'string' || !productId) return;
-    const { data, error } = await supabase
+     const { data, error } = await supabase
       .from('inventory_imports')
       .select(`
         *,
@@ -410,7 +410,6 @@ export const inventoryService = {
       `)
       .eq('product_id', productId)
       .eq('status', 'completed');
-      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return data;
