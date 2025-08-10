@@ -405,11 +405,11 @@ export const inventoryService = {
         *,
         inventory_batches!batch_id(
           *,
-          import_costs(*)
+          import_costs!batch_id(*)
         )
       `)
       .eq('product_id', productId)
-      .eq('status', 'completed')
+      .eq('inventory_batches.status', 'completed');
       .order('created_at', { ascending: false });
 
     if (error) throw error;
