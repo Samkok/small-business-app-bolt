@@ -451,7 +451,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                             color: isDark ? '#f9fafb' : '#111827',
                             opacity: isEditable ? 1 : 0.7
                           }]}
-                          value={item.base_unit_cost_per_item?.toString()}
+                          value={item.base_unit_cost_per_item ?? item.base_unit_cost_per_item?.toString()}
                           onChangeText={(value) => {
                             if (/^\d*\.?\d*$/.test(value) || value === '') {
                               updateItemCost(item.id, parseFloat(value) || 0);
@@ -529,7 +529,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   
                   <Input
                     label="Amount"
-                    value={cost.amount ?? cost.amount.toString()}
+                    value={cost.amount?.toString()}
                     onChangeText={(value) => {
                       if (/^\d*\.?\d*$/.test(value) || value === '') {
                         updateCost(cost.id, 'amount', parseFloat(value) || 0);
