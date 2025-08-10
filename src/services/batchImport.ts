@@ -293,8 +293,6 @@ export const batchImportService = {
         total_cost_for_item
       };
     });
-    
-    console.log("itemsWithFinalCosts: ", itemsWithFinalCosts);
 
     const newTotalBatchCost = itemsWithFinalCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
 
@@ -311,6 +309,8 @@ export const batchImportService = {
     // --- Update inventory_imports (products) ---
     const currentImportIds = new Set(currentBatch.inventory_imports.map((item: any) => item.id));
     const newImportIds = new Set(itemsWithFinalCosts.map((item: any) => item.id));
+
+    console.log("itemsWithFinalCosts: ", itemsWithFinalCosts);
 
     // Items to delete
     const importsToDelete = currentBatch.inventory_imports.filter((item: any) => !newImportIds.has(item.id));
