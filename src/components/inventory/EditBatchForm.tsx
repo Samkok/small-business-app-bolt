@@ -232,6 +232,9 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
         notes: notes.trim() || undefined,
       };
 
+      console.log("Batch Data: ", batchData);
+      console.log("Items: ", selectedItems);
+
       await batchImportService.updateBatchImport(batch.id, batchData, selectedItems, additionalCosts);
       Alert.alert('Success', 'Batch updated successfully');
       onComplete();
