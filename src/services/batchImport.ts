@@ -308,14 +308,14 @@ export const batchImportService = {
     console.log("currentBatch: ", currentBatch);
 
     // --- Update inventory_imports (products) ---
-    const currentImportIds = new Set(currentBatch.inventory_imports.map((item: any) => item.id));
+    const currentImportIds = new Set((currentBatch.inventory_imports || []).map((item: any) => item.id));
     console.log("CurrentImportIds: ", currentImportIds);
     const newImportIds = new Set(itemsWithFinalCosts.map((item: any) => item.id));
     console.log("newImportIds: ", newImportIds);
     
 
     // Items to delete
-    const importsToDelete = currentBatch.inventory_imports.filter((item: any) => !newImportIds.has(item.id));
+    const importsToDelete = (currentBatch.inventory_imports || []).filter((item: any) => !newImportIds.has(item.id));
     if (importsToDelete.length > 0) {
       await supabase.from('inventory_imports').delete().in('id', importsToDelete.map((item: any) => item.id));
     }
@@ -332,11 +332,11 @@ export const batchImportService = {
     }
 
     // --- Update import_costs ---
-    const currentCostIds = new Set(currentBatch.import_costs.map((cost: any) => cost.id));
+    const currentCostIds = new Set((currentBatch.import_costs || []).map((cost: any) => cost.id));
     const newCostIds = new Set(newCosts.map((cost: any) => cost.id));
 
     // Costs to delete
-    const costsToDelete = currentBatch.import_costs.filter((cost: any) => !newCostIds.has(cost.id));
+    const costsToDelete = (currentBatch.import_costs || []).filter((cost: any) => !newCostIds.has(cost.id));
     if (costsToDelete.length > 0) {
       await supabase.from('import_costs').delete().in('id', costsToDelete.map((cost: any) => cost.id));
     }
