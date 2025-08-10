@@ -529,7 +529,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   
                   <Input
                     label="Amount"
-                    value={cost.amount?.toString()}
+                    value={cost.amount ?? cost.amount.toString()}
                     onChangeText={(value) => {
                       if (/^\d*\.?\d*$/.test(value) || value === '') {
                         updateCost(cost.id, 'amount', parseFloat(value) || 0);
