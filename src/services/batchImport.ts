@@ -293,6 +293,8 @@ export const batchImportService = {
         total_cost_for_item
       };
     });
+    
+    console.log("itemsWithFinalCosts: ", itemsWithFinalCosts);
 
     const newTotalBatchCost = itemsWithFinalCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
 
