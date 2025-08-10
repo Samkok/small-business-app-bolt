@@ -403,7 +403,10 @@ export const inventoryService = {
       .from('inventory_imports')
       .select(`
         *,
-        import_costs(*)
+        inventory_batches!batch_id(
+          *,
+          import_costs(*)
+        )
       `)
       .eq('product_id', productId)
       .eq('status', 'completed')
