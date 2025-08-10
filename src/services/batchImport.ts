@@ -308,9 +308,10 @@ export const batchImportService = {
 
     // --- Update inventory_imports (products) ---
     const currentImportIds = new Set(currentBatch.inventory_imports.map((item: any) => item.id));
+    console.log("CurrentImportIds: ", currentImportIds);
     const newImportIds = new Set(itemsWithFinalCosts.map((item: any) => item.id));
-
-    console.log("itemsWithFinalCosts: ", itemsWithFinalCosts);
+    console.log("newImportIds: ", newImportIds);
+    
 
     // Items to delete
     const importsToDelete = currentBatch.inventory_imports.filter((item: any) => !newImportIds.has(item.id));
