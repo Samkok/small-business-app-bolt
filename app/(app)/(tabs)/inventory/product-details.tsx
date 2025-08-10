@@ -93,7 +93,7 @@ export default function ProductDetailsScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return `$${(amount || 0).toFixed(2)}`;
   };
 
   if (loading) {
