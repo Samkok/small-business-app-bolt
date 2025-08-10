@@ -411,6 +411,8 @@ export const inventoryService = {
       .eq('product_id', productId)
       .eq('status', 'completed');
 
+    console.log("Data: ", data);
+
     if (error) throw error;
     return data;
   },
