@@ -40,7 +40,6 @@ export const batchImportService = {
 
     // Calculate total quantities for cost distribution
     const totalQuantity = batchData.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalBaseValue = batchData.items.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
 
     // Calculate total additional costs
     let totalAdditionalCosts = 0;
@@ -52,14 +51,15 @@ export const batchImportService = {
       }
     });
 
+    // Calculate additional cost per unit (distributed evenly)
+    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
+
     // Calculate final costs for each item
     const itemsWithFinalCosts = batchData.items.map(item => {
-      // Distribute additional costs proportionally based on item value
-      const itemValue = item.quantity * item.base_unit_cost_per_item;
-      const itemProportion = totalBaseValue > 0 ? itemValue / totalBaseValue : 1 / batchData.items.length;
-      const itemAdditionalCosts = totalAdditionalCosts * itemProportion;
+      // Distribute additional costs evenly per unit
+      const itemAdditionalCosts = perUnitAdditionalCost * item.quantity;
       
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + (itemAdditionalCosts / item.quantity);
+      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
       const total_cost_for_item = final_unit_cost_per_item * item.quantity;
 
       return {
@@ -262,7 +262,6 @@ export const batchImportService = {
 
     // Calculate total quantities for cost distribution
     const totalQuantity = newItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalBaseValue = newItems.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
 
     // Calculate total additional costs
     let totalAdditionalCosts = 0;
@@ -275,16 +274,18 @@ export const batchImportService = {
       }
     });
 
+    // Calculate additional cost per unit (distributed evenly)
+    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
+
     
     console.log("New items: ", newItems);
 
     // Calculate final costs for each item
     const itemsWithFinalCosts = newItems.map(item => {
-      const itemValue = item.quantity * item.base_unit_cost_per_item;
-      const itemProportion = totalBaseValue > 0 ? itemValue / totalBaseValue : (newItems.length > 0 ? 1 / newItems.length : 0);
-      const itemAdditionalCosts = totalAdditionalCosts * itemProportion;
+      // Distribute additional costs evenly per unit
+      const itemAdditionalCosts = perUnitAdditionalCost * item.quantity;
       
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + (item.quantity > 0 ? itemAdditionalCosts / item.quantity : 0);
+      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
       const total_cost_for_item = final_unit_cost_per_item * item.quantity;
 
       return {
@@ -420,7 +421,6 @@ export const batchImportService = {
 
   calculateItemCosts(items: BatchImportItem[], costs: BatchImportCost[]) {
     const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalBaseValue = items.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
 
     // Calculate total additional costs
     let totalAdditionalCosts = 0;
@@ -432,14 +432,15 @@ export const batchImportService = {
       }
     });
 
+    // Calculate additional cost per unit (distributed evenly)
+    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
+
     // Calculate final costs for each item
     return items.map(item => {
-      // Distribute additional costs proportionally based on item value
-      const itemValue = item.quantity * item.base_unit_cost_per_item;
-      const itemProportion = totalBaseValue > 0 ? itemValue / totalBaseValue : 1 / items.length;
-      const itemAdditionalCosts = totalAdditionalCosts * itemProportion;
+      // Distribute additional costs evenly per unit
+      const itemAdditionalCosts = perUnitAdditionalCost * item.quantity;
       
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + (itemAdditionalCosts / item.quantity);
+      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
       const total_cost_for_item = final_unit_cost_per_item * item.quantity;
 
       return {
