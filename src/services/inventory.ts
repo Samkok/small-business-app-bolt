@@ -409,7 +409,7 @@ export const inventoryService = {
         )
       `)
       .eq('product_id', productId)
-      .eq('inventory_batches.status', 'completed');
+      .eq('status', 'completed');
       .order('created_at', { ascending: false });
 
     if (error) throw error;
