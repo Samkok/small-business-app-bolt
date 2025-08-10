@@ -409,7 +409,7 @@ export const inventoryService = {
         )
       `)
       .eq('product_id', productId)
-      .eq('status', 'completed');
+      .eq('inventory_batches.status', 'completed');
 
     console.log("Data: ", data);
 
