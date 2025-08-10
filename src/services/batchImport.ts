@@ -241,6 +241,9 @@ export const batchImportService = {
   },
 
   async updateBatchImport(batchId: string, updates: InventoryBatchUpdate, newItems: BatchImportItem[], newCosts: BatchImportCost[]) {
+
+  console.log("New items: ", newItems);
+    
     // Fetch the current batch details including its items and costs
     const { data: currentBatch, error: fetchError } = await supabase
       .from('inventory_batches')
