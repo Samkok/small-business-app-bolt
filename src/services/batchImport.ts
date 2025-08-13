@@ -165,7 +165,7 @@ export const batchImportService = {
   },
 
   async markBatchAsArrived(batchId: string, arrivalDate?: string) {
-    // Get the batch and its imports
+    // Get the batch, its imports, and associated costs
     const { data: batch, error: getBatchError } = await supabase
       .from('inventory_batches')
       .select(`
@@ -173,8 +173,9 @@ export const batchImportService = {
         inventory_imports(
           product_id,
           quantity,
-          final_unit_cost_per_item
-        )
+          base_unit_cost_per_item
+        ),
+        import_costs(*)
       `)
       .eq('id', batchId)
       .single();
@@ -184,6 +185,22 @@ export const batchImportService = {
     if (batch.status === 'completed') {
       return batch;
     }
+
+    // Step 1: Recalculate final costs for all items in the batch using the evenly per unit algorithm
+    const batchItems = batch.inventory_imports.map(item => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      base_unit_cost_per_item: item.base_unit_cost_per_item
+    }));
+    
+    const batchCosts = batch.import_costs.map(cost => ({
+      cost_type: cost.cost_type,
+      amount: cost.amount,
+      calculation_type: cost.calculation_type,
+      description: cost.description
+    }));
+    
+    const itemsWithRecalculatedCosts = this.calculateItemCosts(batchItems, batchCosts);
 
     // Update batch status
     const { data: updatedBatch, error: updateError } = await supabase
@@ -198,8 +215,33 @@ export const batchImportService = {
 
     if (updateError) throw updateError;
 
-    // Update product stocks and costs
+    // Step 2: Update inventory_imports records with recalculated costs and then update product stocks
     for (const importItem of batch.inventory_imports) {
+      // Find the recalculated costs for this item
+      const recalculatedItem = itemsWithRecalculatedCosts.find(
+        item => item.product_id === importItem.product_id
+      );
+      
+      if (!recalculatedItem) {
+        console.error(`Could not find recalculated costs for product ${importItem.product_id}`);
+        continue;
+      }
+      
+      // Update the inventory_imports record with recalculated costs
+      const { error: updateImportError } = await supabase
+        .from('inventory_imports')
+        .update({
+          final_unit_cost_per_item: recalculatedItem.final_unit_cost_per_item,
+          total_cost_for_item: recalculatedItem.total_cost_for_item
+        })
+        .eq('product_id', importItem.product_id)
+        .eq('batch_id', batchId);
+      
+      if (updateImportError) {
+        console.error(`Error updating inventory_imports for product ${importItem.product_id}:`, updateImportError);
+        throw updateImportError;
+      }
+      
       try {
         // Get current product data
         const { data: product, error: productError } = await supabase
@@ -215,7 +257,7 @@ export const batchImportService = {
         
         // Calculate new weighted average cost
         const currentTotalValue = (product.current_stock || 0) * (product.cost_per_unit || 0);
-        const importTotalValue = importItem.quantity * importItem.final_unit_cost_per_item;
+        const importTotalValue = importItem.quantity * recalculatedItem.final_unit_cost_per_item;
         const newTotalValue = currentTotalValue + importTotalValue;
         const newTotalQuantity = (product.current_stock || 0) + importItem.quantity;
         const newCostPerUnit = newTotalQuantity > 0 ? newTotalValue / newTotalQuantity : 0;
