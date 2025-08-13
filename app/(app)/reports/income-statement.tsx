@@ -32,15 +32,15 @@ export default function IncomeStatementScreen() {
   const { startDate, endDate } = params;
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
-    if (profile?.id && startDate && endDate) {
+    if (currentBusiness?.id && startDate && endDate) {
       loadIncomeStatement();
     } else {
       setLoading(false);
     }
-  }, [profile?.id, startDate, endDate]);
+  }, [currentBusiness?.id, startDate, endDate]);
 
   const loadIncomeStatement = async () => {
     try {
@@ -48,7 +48,7 @@ export default function IncomeStatementScreen() {
       
       // Get sales data with COGS
       const salesData = await salesService.getSalesWithCOGS(
-        profile!.id, 
+        currentBusiness!.id, 
         startDate as string, 
         endDate as string
       );
@@ -61,7 +61,7 @@ export default function IncomeStatementScreen() {
       
       // Get expense data grouped by category
       const expenseCategories = await expenseService.getExpensesByCategory(
-        profile!.id,
+        currentBusiness!.id,
         startDate as string,
         endDate as string
       );
@@ -101,14 +101,14 @@ export default function IncomeStatementScreen() {
   };
 
   const handleExport = async () => {
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
     try {
       const csvData = await importService.exportIncomeStatementToCsv(
-        profile.id, 
+        currentBusiness.id, 
         startDate as string, 
         endDate as string
       );
