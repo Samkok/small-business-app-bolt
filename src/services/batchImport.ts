@@ -233,7 +233,7 @@ export const batchImportService = {
         .update({
           final_unit_cost_per_item: recalculatedItem.final_unit_cost_per_item,
           total_cost_for_item: recalculatedItem.total_cost_for_item,
-          status: "completed",
+          status: 'completed',
           arrival_date: arrivalDate || new Date().toISOString()
         })
         .eq('product_id', importItem.product_id)
