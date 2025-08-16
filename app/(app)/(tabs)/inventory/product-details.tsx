@@ -373,7 +373,7 @@ export default function ProductDetailsScreen() {
                       Base Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {formatCurrency(importItem.base_unit_cost)}
+                      {formatCurrency(importItem.base_unit_cost_per_item)}
                     </Text>
                   </View>
                   
@@ -382,7 +382,7 @@ export default function ProductDetailsScreen() {
                       Final Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {formatCurrency(importItem.final_unit_cost)}
+                      {formatCurrency(importItem.final_unit_cost_per_item)}
                     </Text>
                   </View>
                   
