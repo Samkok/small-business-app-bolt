@@ -410,7 +410,7 @@ export const inventoryService = {
       `)
       .eq('product_id', productId)
       .eq('inventory_batches.status', 'completed')
-      .order('inventory_imports.arrival_date', { ascending: false });
+      .order('arrival_date', { ascending: false });
 
     console.log("Data: ", data);
 
