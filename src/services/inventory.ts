@@ -389,7 +389,7 @@ export const inventoryService = {
         import_costs(*)
       `)
       .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+      .order('arrival_date', { ascending: false });
 
     if (error) throw error;
     
