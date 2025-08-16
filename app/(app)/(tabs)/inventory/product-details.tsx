@@ -391,7 +391,7 @@ export default function ProductDetailsScreen() {
                       Total Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: '#059669' }]}>
-                      {formatCurrency(importItem.total_cost)}
+                      {formatCurrency(importItem.total_cost_for_item)}
                     </Text>
                   </View>
                 </View>
