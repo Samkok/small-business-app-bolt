@@ -155,57 +155,83 @@ export interface Database {
           new_value?: string;
         };
       };
+      inventory_batches: {
+        Row: {
+          id: string;
+          business_id: string;
+          imported_by: string;
+          purchase_date: string;
+          arrival_date?: string;
+          notes?: string;
+          status: 'pending' | 'completed';
+          total_batch_cost: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          imported_by: string;
+          purchase_date?: string;
+          arrival_date?: string;
+          notes?: string;
+          status?: 'pending' | 'completed';
+          total_batch_cost?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          imported_by?: string;
+          purchase_date?: string;
+          arrival_date?: string;
+          notes?: string;
+          status?: 'pending' | 'completed';
+          total_batch_cost?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       inventory_imports: {
         Row: {
           id: string;
           product_id: string;
           quantity: number;
-          base_unit_cost: number;
-          final_unit_cost: number;
-          total_cost: number;
-          notes?: string;
-          business_id: string;
-          imported_by: string;
+          base_unit_cost_per_item: number;
+          final_unit_cost_per_item: number;
+          total_cost_for_item: number;
+          batch_id: string;
           created_at: string;
-          purchase_date: string;
-          arrival_date?: string;
-          status: 'pending' | 'completed';
+          updated_at: string;
         };
         Insert: {
           id?: string;
           product_id: string;
           quantity: number;
-          base_unit_cost: number;
-          final_unit_cost: number;
-          total_cost: number;
-          notes?: string;
-          business_id: string;
-          imported_by: string;
+          base_unit_cost_per_item: number;
+          final_unit_cost_per_item?: number;
+          total_cost_for_item?: number;
+          batch_id: string;
           created_at?: string;
-          purchase_date?: string;
-          arrival_date?: string;
-          status?: 'pending' | 'completed';
+          updated_at?: string;
         };
         Update: {
           id?: string;
           product_id?: string;
           quantity?: number;
-          base_unit_cost?: number;
-          final_unit_cost?: number;
-          total_cost?: number;
-          notes?: string;
-          business_id?: string;
-          imported_by?: string;
+          base_unit_cost_per_item?: number;
+          final_unit_cost_per_item?: number;
+          total_cost_for_item?: number;
+          batch_id?: string;
           created_at?: string;
-          purchase_date?: string;
-          arrival_date?: string;
-          status?: 'pending' | 'completed';
+          updated_at?: string;
         };
       };
       import_costs: {
         Row: {
           id: string;
-          import_id: string;
+          batch_id: string;
           cost_type: string;
           amount: number;
           calculation_type: 'per_unit' | 'per_total';
@@ -214,7 +240,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          import_id: string;
+          batch_id: string;
           cost_type: string;
           amount: number;
           calculation_type: 'per_unit' | 'per_total';
@@ -223,7 +249,7 @@ export interface Database {
         };
         Update: {
           id?: string;
-          import_id?: string;
+          batch_id?: string;
           cost_type?: string;
           amount?: number;
           calculation_type?: 'per_unit' | 'per_total';

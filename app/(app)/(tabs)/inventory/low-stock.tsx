@@ -19,7 +19,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ProductCard } from '@/src/components/products/ProductCard';
 import ProductForm from '@/src/components/products/ProductForm';
-import ImportForm from '@/src/components/inventory/ImportForm';
+import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
@@ -30,7 +30,7 @@ export default function LowStockScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [showImportForm, setShowImportForm] = useState(false);
+  const [showImportStockForm, setShowImportStockForm] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'out' | 'critical' | 'low'>('all');
   
@@ -125,7 +125,7 @@ export default function LowStockScreen() {
   };
 
   const handleImportComplete = () => {
-    setShowImportForm(false);
+    setShowImportStockForm(false);
     setSelectedProduct(null);
     loadLowStockProducts();
   };
@@ -332,7 +332,7 @@ export default function LowStockScreen() {
           <View style={styles.actionsGrid}>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#2563eb20' }]}
-              onPress={() => setShowImportForm(true)}
+              onPress={() => setShowImportStockForm(true)}
             >
               <TrendingUp size={24} color="#2563eb" />
               <Text style={[styles.actionText, { color: '#2563eb' }]}>
@@ -448,15 +448,14 @@ export default function LowStockScreen() {
       </Modal>
 
       <Modal
-        visible={showImportForm}
+        visible={showImportStockForm}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <ImportForm
-          productId={selectedProduct?.id}
+        <ImportStockForm
           onComplete={handleImportComplete}
           onCancel={() => {
-            setShowImportForm(false);
+            setShowImportStockForm(false);
             setSelectedProduct(null);
           }}
         />

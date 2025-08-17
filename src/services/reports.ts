@@ -522,7 +522,7 @@ export const reportsService = {
       // Get inventory imports for the month
       const { data: inventoryData, error: inventoryError } = await supabase
         .from('inventory_imports')
-        .select('total_cost')
+        .select('total_cost_for_item')
         .eq('business_id', businessId)
         .gte('created_at', startDate)
         .lte('created_at', endDate);
@@ -536,7 +536,7 @@ export const reportsService = {
       const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
       
       // Calculate inventory changes (total cost of imports)
-      const inventoryChanges = inventoryData.reduce((sum, item) => sum + item.total_cost, 0);
+      const inventoryChanges = inventoryData.reduce((sum, item) => sum + item.total_cost_for_item, 0);
       
       // Identify equipment purchases (expenses in equipment category)
       const equipmentPurchases = expensesData

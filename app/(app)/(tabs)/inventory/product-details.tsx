@@ -93,7 +93,7 @@ export default function ProductDetailsScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return `$${(amount || 0).toFixed(2)}`;
   };
 
   if (loading) {
@@ -373,7 +373,7 @@ export default function ProductDetailsScreen() {
                       Base Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {formatCurrency(importItem.base_unit_cost)}
+                      {formatCurrency(importItem.base_unit_cost_per_item)}
                     </Text>
                   </View>
                   
@@ -382,7 +382,7 @@ export default function ProductDetailsScreen() {
                       Final Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {formatCurrency(importItem.final_unit_cost)}
+                      {formatCurrency(importItem.final_unit_cost_per_item)}
                     </Text>
                   </View>
                   
@@ -391,7 +391,7 @@ export default function ProductDetailsScreen() {
                       Total Cost:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: '#059669' }]}>
-                      {formatCurrency(importItem.total_cost)}
+                      {formatCurrency(importItem.total_cost_for_item)}
                     </Text>
                   </View>
                 </View>

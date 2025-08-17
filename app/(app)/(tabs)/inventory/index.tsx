@@ -23,13 +23,15 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ProductCard } from '@/src/components/products/ProductCard';
-import { ImportHistoryCard } from '@/src/components/inventory/ImportHistoryCard';
+import { BatchHistoryCard } from '@/src/components/inventory/BatchHistoryCard';
 import ProductForm from '@/src/components/products/ProductForm';
+import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
+import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, ShoppingCart } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
-import { inventoryService } from '@/src/services/inventory';
+import { batchImportService } from '@/src/services/batchImport';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -37,23 +39,26 @@ export default function InventoryScreen() {
   const [activeTab, setActiveTab] = useState<'products' | 'history'>('products');
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
-  const [importHistory, setImportHistory] = useState<any[]>([]);
-  const [filteredImportHistory, setFilteredImportHistory] = useState<any[]>([]);
+  const [batchHistory, setBatchHistory] = useState<any[]>([]);
+  const [filteredBatchHistory, setFilteredBatchHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const [showEditImportForm, setShowEditImportForm] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedImport, setSelectedImport] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [importSearchQuery, setImportSearchQuery] = useState('');
+  const [batchSearchQuery, setBatchSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isImportSearching, setIsImportSearching] = useState(false);
+  const [isBatchSearching, setIsBatchSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
-  const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
+  const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set());
+  const [showEditBatchForm, setShowEditBatchForm] = useState(false);
+  const [selectedBatchForEdit, setSelectedBatchForEdit] = useState<any>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
@@ -89,8 +94,8 @@ export default function InventoryScreen() {
   }, [searchQuery, products]);
 
   useEffect(() => {
-    filterImportHistory();
-  }, [importHistory, importSearchQuery, sortOrder]);
+    filterBatchHistory();
+  }, [batchHistory, batchSearchQuery, sortOrder]);
 
   const loadData = async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -100,14 +105,14 @@ export default function InventoryScreen() {
     }
     
     try {
-      const [historyData, totalCount, lowStockProducts] = await Promise.all([
-        inventoryService.getImportHistory(currentBusiness.id),
+      const [batchData, totalCount, lowStockProducts] = await Promise.all([
+        batchImportService.getBatchImports(currentBusiness.id),
         productService.getProductsCount(currentBusiness.id),
         productService.getLowStockProducts(currentBusiness.id)
       ]);
       
-      setImportHistory(historyData);
-      setFilteredImportHistory(historyData);
+      setBatchHistory(batchData);
+      setFilteredBatchHistory(batchData);
       setTotalProducts(totalCount);
       setLowStockCount(lowStockProducts.length);
       
@@ -191,8 +196,8 @@ export default function InventoryScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     setSearchQuery('');
-    setImportSearchQuery('');
-    setSelectedImports(new Set());
+    setBatchSearchQuery('');
+    setSelectedBatches(new Set());
     setIsMultiSelectMode(false);
     await loadData(true);
   };
@@ -208,9 +213,19 @@ export default function InventoryScreen() {
     }
   };
 
+  const handleEditBatch = (batch: any) => {
+    setSelectedBatchForEdit(batch);
+    setShowEditBatchForm(true);
+  };
+
   const handleEditImportComplete = () => {
     setShowEditImportForm(false);
     setSelectedImport(null);
+    loadData();
+  };
+
+  const handleMultiImportComplete = () => {
+    setShowImportForm(false);
     loadData();
   };
 
@@ -225,13 +240,13 @@ export default function InventoryScreen() {
 
   const handleMarkAsArrived = async (importRecord: any) => {
     if (importRecord.status === 'completed') {
-      Alert.alert('Already Arrived', 'This import has already been marked as arrived.');
+      Alert.alert('Already Arrived', 'This batch has already been marked as arrived.');
       return;
     }
 
     Alert.alert(
-      'Mark as Arrived',
-      'Are you sure you want to mark this import as arrived? This will update the product stock and cannot be undone.',
+      'Mark Batch as Arrived',
+      'Are you sure you want to mark this batch as arrived? This will update all product stocks in this batch and cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -239,12 +254,12 @@ export default function InventoryScreen() {
           onPress: async () => {
             try {
               setMarkingAsArrived(importRecord.id);
-              await inventoryService.markImportAsArrived(importRecord.id);
-              Alert.alert('Success', 'Import marked as arrived successfully');
+              await batchImportService.markBatchAsArrived(importRecord.id);
+              Alert.alert('Success', 'Batch marked as arrived successfully');
               loadData();
             } catch (error) {
-              console.error('Error marking import as arrived:', error);
-              Alert.alert('Error', 'Failed to mark import as arrived');
+              console.error('Error marking batch as arrived:', error);
+              Alert.alert('Error', 'Failed to mark batch as arrived');
             } finally {
               setMarkingAsArrived(null);
             }
@@ -254,15 +269,14 @@ export default function InventoryScreen() {
     );
   };
 
-  const handleEditImport = (importRecord: any) => {
-    setSelectedImport(importRecord);
-    setShowEditImportForm(true);
+  const handleViewBatchDetails = (batch: any) => {
+    router.push(`/inventory/batch-details?batchId=${batch.id}`);
   };
 
-  const handleDeleteImport = async (importRecord: any) => {
+  const handleDeleteBatch = async (batch: any) => {
     Alert.alert(
-      'Delete Import Record',
-      `Are you sure you want to delete this import record? ${importRecord.status === 'completed' ? 'This will also adjust the product stock.' : ''}`,
+      'Delete Batch',
+      `Are you sure you want to delete this entire batch? ${batch.status === 'completed' ? 'This will also adjust all product stocks in this batch.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -270,13 +284,13 @@ export default function InventoryScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              setDeletingImport(importRecord.id);
-              await inventoryService.deleteImport(importRecord.id);
-              Alert.alert('Success', 'Import record deleted successfully');
+              setDeletingImport(batch.id);
+              await batchImportService.deleteBatchImport(batch.id);
+              Alert.alert('Success', 'Batch deleted successfully');
               loadData();
             } catch (error) {
-              console.error('Error deleting import:', error);
-              Alert.alert('Error', 'Failed to delete import record');
+              console.error('Error deleting batch:', error);
+              Alert.alert('Error', 'Failed to delete batch');
             } finally {
               setDeletingImport(null);
             }
@@ -286,43 +300,43 @@ export default function InventoryScreen() {
     );
   };
 
-  const handleToggleSelectImport = (importId: string) => {
-    const newSelected = new Set(selectedImports);
-    if (newSelected.has(importId)) {
-      newSelected.delete(importId);
+  const handleToggleSelectBatch = (batchId: string) => {
+    const newSelected = new Set(selectedBatches);
+    if (newSelected.has(batchId)) {
+      newSelected.delete(batchId);
     } else {
-      newSelected.add(importId);
+      newSelected.add(batchId);
     }
-    setSelectedImports(newSelected);
+    setSelectedBatches(newSelected);
   };
 
   const handleToggleMultiSelectMode = () => {
     setIsMultiSelectMode(!isMultiSelectMode);
     if (!isMultiSelectMode) {
-      setSelectedImports(new Set());
+      setSelectedBatches(new Set());
     }
   };
 
-  const handleSelectAllImports = () => {
-    if (selectedImports.size === filteredImportHistory.length) {
+  const handleSelectAllBatches = () => {
+    if (selectedBatches.size === filteredBatchHistory.length) {
       // Deselect all
-      setSelectedImports(new Set());
+      setSelectedBatches(new Set());
     } else {
       // Select all
-      const allImportIds = filteredImportHistory.map(item => item.id);
-      setSelectedImports(new Set(allImportIds));
+      const allBatchIds = filteredBatchHistory.map(item => item.id);
+      setSelectedBatches(new Set(allBatchIds));
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedImports.size === 0) {
-      Alert.alert('No Imports Selected', 'Please select at least one import record to delete.');
+    if (selectedBatches.size === 0) {
+      Alert.alert('No Batches Selected', 'Please select at least one batch to delete.');
       return;
     }
 
     Alert.alert(
-      'Delete Selected Imports',
-      `Are you sure you want to delete ${selectedImports.size} import record(s)? This will adjust product stock levels for completed imports.`,
+      'Delete Selected Batches',
+      `Are you sure you want to delete ${selectedBatches.size} batch(es)? This will adjust product stock levels for completed batches.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -331,32 +345,32 @@ export default function InventoryScreen() {
           onPress: async () => {
             setBulkDeleteLoading(true);
             try {
-              const importIds = Array.from(selectedImports);
+              const batchIds = Array.from(selectedBatches);
               let successCount = 0;
               let errorCount = 0;
 
               // Process deletions sequentially to avoid race conditions
-              for (const importId of importIds) {
+              for (const batchId of batchIds) {
                 try {
-                  await inventoryService.deleteImport(importId);
+                  await batchImportService.deleteBatchImport(batchId);
                   successCount++;
                 } catch (error) {
-                  console.error(`Error deleting import ${importId}:`, error);
+                  console.error(`Error deleting batch ${batchId}:`, error);
                   errorCount++;
                 }
               }
 
               if (errorCount === 0) {
-                Alert.alert('Success', `Successfully deleted ${successCount} import record(s).`);
+                Alert.alert('Success', `Successfully deleted ${successCount} batch(es).`);
               } else {
                 Alert.alert(
                   'Partial Success',
-                  `Successfully deleted ${successCount} import record(s), but failed to delete ${errorCount} record(s).`
+                  `Successfully deleted ${successCount} batch(es), but failed to delete ${errorCount} batch(es).`
                 );
               }
 
               // Reset selection and refresh data
-              setSelectedImports(new Set());
+              setSelectedBatches(new Set());
               setIsMultiSelectMode(false);
               loadData();
             } catch (error) {
@@ -396,40 +410,46 @@ export default function InventoryScreen() {
     setFilteredProducts(products);
   };
 
-  const handleImportSearch = () => {
-    filterImportHistory();
+  const handleBatchSearch = () => {
+    filterBatchHistory();
   };
 
-  const handleClearImportSearch = () => {
-    setImportSearchQuery('');
-    setIsImportSearching(false);
-    setFilteredImportHistory(importHistory);
+  const handleClearBatchSearch = () => {
+    setBatchSearchQuery('');
+    setIsBatchSearching(false);
+    setFilteredBatchHistory(batchHistory);
   };
 
-  const filterImportHistory = () => {
-    if (!importHistory.length) return;
+  const filterBatchHistory = () => {
+    if (!batchHistory.length) return;
     
-    let filtered = [...importHistory];
+    let filtered = [...batchHistory];
     
     // Apply search filter if query exists
-    if (importSearchQuery.trim()) {
-      setIsImportSearching(true);
-      filtered = filtered.filter(item => {
-        const productName = item.products?.name?.toLowerCase() || '';
-        const productBarcode = item.products?.barcode?.toLowerCase() || '';
-        const importId = item.id.toLowerCase();
-        const query = importSearchQuery.toLowerCase();
+    if (batchSearchQuery.trim()) {
+      setIsBatchSearching(true);
+      filtered = filtered.filter(batch => {
+        const batchId = batch.id.toLowerCase();
+        const notes = batch.notes?.toLowerCase() || '';
+        const query = batchSearchQuery.toLowerCase();
+        
+        // Search in batch properties
+        const batchMatch = batchId.includes(query) || notes.includes(query);
+        
+        // Search in product names within the batch
+        const productMatch = batch.inventory_imports.some(importItem => {
+          const productName = importItem.products?.name?.toLowerCase() || '';
+          const productBarcode = importItem.products?.barcode?.toLowerCase() || '';
+          return productName.includes(query) || productBarcode.includes(query);
+        });
         
         return (
-          productName.includes(query) || 
-          productBarcode.includes(query) || 
-          importId.includes(query) ||
-          item.quantity.toString().includes(query) ||
-          item.total_cost.toString().includes(query)
+          batchMatch || productMatch ||
+          batch.total_batch_cost.toString().includes(query)
         );
       });
     } else {
-      setIsImportSearching(false);
+      setIsBatchSearching(false);
     }
     
     // Apply sort order
@@ -439,7 +459,7 @@ export default function InventoryScreen() {
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
     
-    setFilteredImportHistory(filtered);
+    setFilteredBatchHistory(filtered);
   };
 
   const toggleSortOrder = () => {
@@ -735,25 +755,26 @@ export default function InventoryScreen() {
     }
 
     const renderHistoryItem = ({ item }: { item: any }) => (
-      <View style={styles.importCardContainer}>
+      <View style={styles.batchCardContainer}>
         {isMultiSelectMode && (
           <TouchableOpacity
             style={styles.selectCheckbox}
-            onPress={() => handleToggleSelectImport(item.id)}
+            onPress={() => handleToggleSelectBatch(item.id)}
           >
-            {selectedImports.has(item.id) ? (
+            {selectedBatches.has(item.id) ? (
               <CheckSquare size={24} color="#2563eb" />
             ) : (
               <Square size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
             )}
           </TouchableOpacity>
         )}
-        <View style={[styles.importCardWrapper, isMultiSelectMode && styles.importCardWithCheckbox]}>
-          <ImportHistoryCard 
-            importRecord={item}
-            onEdit={handleEditImport}
-            onDelete={handleDeleteImport}
+        <View style={[styles.batchCardWrapper, isMultiSelectMode && styles.batchCardWithCheckbox]}>
+          <BatchHistoryCard 
+            batch={item}
+            onEdit={handleEditBatch}
+            onDelete={handleDeleteBatch}
             onMarkAsArrived={handleMarkAsArrived}
+            onViewDetails={handleViewBatchDetails}
           />
         </View>
       </View>
@@ -771,31 +792,32 @@ export default function InventoryScreen() {
               </Text>
             </View>
             <Text style={[styles.importButtonSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Add new inventory with detailed cost tracking
+              Add new inventory with detailed cost tracking. Select one or multiple products as needed.
             </Text>
           </View>
+          
           <Button
-            title="Create New Import"
-            onPress={() => router.push('/inventory/product-selection')}
+            title="Import Stock"
+            onPress={() => setShowImportForm(true)}
             style={styles.importButton}
           />
         </Card>
 
         {/* Search and Filter Bar for Import History */}
-        <View style={styles.importSearchContainer}>
+        <View style={styles.batchSearchContainer}>
           <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff', flex: 1 }]}>
             <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             <TextInput
               style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder="Search imports..."
+              placeholder="Search batches..."
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-              value={importSearchQuery}
-              onChangeText={setImportSearchQuery}
+              value={batchSearchQuery}
+              onChangeText={setBatchSearchQuery}
               returnKeyType="search"
-              onSubmitEditing={handleImportSearch}
+              onSubmitEditing={handleBatchSearch}
             />
-            {importSearchQuery.length > 0 && (
-              <TouchableOpacity onPress={handleClearImportSearch}>
+            {batchSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={handleClearBatchSearch}>
                 <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               </TouchableOpacity>
             )}
@@ -813,20 +835,20 @@ export default function InventoryScreen() {
           </TouchableOpacity>
         </View>
 
-        {isImportSearching && (
+        {isBatchSearching && (
           <View style={styles.searchResultsHeader}>
             <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {filteredImportHistory.length === 0 
-                ? `No imports found for "${importSearchQuery}"` 
-                : `Found ${filteredImportHistory.length} import${filteredImportHistory.length !== 1 ? 's' : ''}`}
+              {filteredBatchHistory.length === 0 
+                ? `No batches found for "${batchSearchQuery}"` 
+                : `Found ${filteredBatchHistory.length} batch${filteredBatchHistory.length !== 1 ? 'es' : ''}`}
             </Text>
-            <TouchableOpacity onPress={handleClearImportSearch}>
+            <TouchableOpacity onPress={handleClearBatchSearch}>
               <Text style={styles.clearSearchText}>Clear</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {filteredImportHistory.length > 0 && (
+        {filteredBatchHistory.length > 0 && (
           <View style={styles.historyActions}>
             <TouchableOpacity 
               style={[
@@ -851,10 +873,10 @@ export default function InventoryScreen() {
                     styles.bulkActionButton, 
                     { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
                   ]}
-                  onPress={handleSelectAllImports}
+                  onPress={handleSelectAllBatches}
                 >
                   <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
-                    {selectedImports.size === filteredImportHistory.length ? 'Deselect All' : 'Select All'}
+                    {selectedBatches.size === filteredBatchHistory.length ? 'Deselect All' : 'Select All'}
                   </Text>
                 </TouchableOpacity>
                 
@@ -862,12 +884,12 @@ export default function InventoryScreen() {
                   style={[
                     styles.bulkActionButton, 
                     { 
-                      backgroundColor: selectedImports.size > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                      opacity: selectedImports.size > 0 ? 1 : 0.5
+                      backgroundColor: selectedBatches.size > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
+                      opacity: selectedBatches.size > 0 ? 1 : 0.5
                     }
                   ]}
                   onPress={handleBulkDelete}
-                  disabled={selectedImports.size === 0 || bulkDeleteLoading}
+                  disabled={selectedBatches.size === 0 || bulkDeleteLoading}
                 >
                   {bulkDeleteLoading ? (
                     <ActivityIndicator size="small" color="#ffffff" />
@@ -875,7 +897,7 @@ export default function InventoryScreen() {
                     <>
                       <Trash2 size={16} color="#ffffff" />
                       <Text style={{ color: '#ffffff', marginLeft: 4 }}>
-                        Delete ({selectedImports.size})
+                        Delete ({selectedBatches.size})
                       </Text>
                     </>
                   )}
@@ -891,24 +913,24 @@ export default function InventoryScreen() {
       <Card style={styles.emptyState}>
         <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
         <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          {isImportSearching ? 'No matching imports found' : 'No Import History'}
+          {isBatchSearching ? 'No matching batches found' : 'No Import History'}
         </Text>
         <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          {isImportSearching 
-            ? `No imports match your search "${importSearchQuery}"`
-            : 'Import history will appear here once you start importing inventory'
+          {isBatchSearching 
+            ? `No batches match your search "${batchSearchQuery}"`
+            : 'Import batches will appear here once you start importing inventory'
           }
         </Text>
-        {isImportSearching ? (
+        {isBatchSearching ? (
           <Button
             title="Clear Search"
-            onPress={handleClearImportSearch}
+            onPress={handleClearBatchSearch}
             style={styles.emptyButton}
           />
         ) : (
           <Button
             title="Create New Import"
-            onPress={() => router.push('/inventory/product-selection')}
+            onPress={() => setShowImportForm(true)}
             style={styles.emptyButton}
           />
         )}
@@ -919,12 +941,12 @@ export default function InventoryScreen() {
       <View style={styles.tabContent}>
         <FlatList
           ref={historyFlatListRef}
-          data={filteredImportHistory}
+          data={filteredBatchHistory}
           renderItem={renderHistoryItem}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHistoryHeader}
           ListEmptyComponent={renderHistoryEmpty}
-          contentContainerStyle={filteredImportHistory.length === 0 ? styles.emptyContainer : styles.historyList}
+          contentContainerStyle={filteredBatchHistory.length === 0 ? styles.emptyContainer : styles.historyList}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1013,6 +1035,17 @@ export default function InventoryScreen() {
       </Modal>
 
       <Modal
+        visible={showImportForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ImportStockForm
+          onComplete={handleMultiImportComplete}
+          onCancel={() => setShowImportForm(false)}
+        />
+      </Modal>
+
+      <Modal
         visible={showEditImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1035,6 +1068,18 @@ export default function InventoryScreen() {
         <BarcodeScanner
           onBarcodeScan={handleBarcodeScanned}
           onClose={() => setShowBarcodeScanner(false)}
+        />
+      </Modal>
+
+      <Modal
+        visible={showEditBatchForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <EditBatchForm
+          batch={selectedBatchForEdit}
+          onComplete={handleRefresh}
+          onCancel={() => setShowEditBatchForm(false)}
         />
       </Modal>
 
@@ -1125,7 +1170,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
-  importSearchContainer: {
+  batchSearchContainer: {
     flexDirection: 'row',
     marginBottom: 16,
     gap: 8,
@@ -1259,7 +1304,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     minWidth: 100,
   },
-  importCardContainer: {
+  batchCardContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
@@ -1267,10 +1312,10 @@ const styles = StyleSheet.create({
   selectCheckbox: {
     marginRight: 12,
   },
-  importCardWrapper: {
+  batchCardWrapper: {
     flex: 1,
   },
-  importCardWithCheckbox: {
+  batchCardWithCheckbox: {
     flex: 1,
   },
   emptyState: {
@@ -1315,12 +1360,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   importButton: {
-    backgroundColor: '#2563eb',
-  },
-  importButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    width: '100%',
   },
   loadingMore: {
     flexDirection: 'row',
