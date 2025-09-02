@@ -124,27 +124,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading]);
 
   // Load saved current business ID from AsyncStorage
-  const loadSavedBusinessId = async (userId: string, businesses: Business[]) => {
+  const determineCurrentBusiness = async (userId: string, businesses: Business[]): Promise<Business | null> => {
     try {
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
       if (savedBusinessId && businesses.length > 0) {
         const business = businesses.find(b => b.id === savedBusinessId);
         if (business) {
-          setCurrentBusiness(business);
-          return;
+          return business;
         }
       }
       
       // If no saved business or saved business not found, use the first one
       if (businesses.length > 0) {
-        setCurrentBusiness(businesses[0]);
+        return businesses[0];
       }
+      
+      return null;
     } catch (error) {
       console.error('Error loading saved business ID:', error);
       // Default to first business if there's an error
       if (businesses.length > 0) {
-        setCurrentBusiness(businesses[0]);
+        return businesses[0];
       }
+      return null;
     }
   };
 
@@ -275,9 +277,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
             setUserBusinesses(businesses);
             
-            // Set current business (either from saved preference or first in list)
-            await loadSavedBusinessId(userId, businesses);
-            setCurrentBusiness(businesses[0] || null);
+            // Determine and set current business (either from saved preference or first in list)
+            const determinedBusiness = await determineCurrentBusiness(userId, businesses);
+            setCurrentBusiness(determinedBusiness);
             
             setLoading(false);
             return; // Exit the function early on success
