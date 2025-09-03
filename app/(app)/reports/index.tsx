@@ -23,7 +23,6 @@ import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as 
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
 import importService from '@/src/services/importService';
-import importService from '@/src/services/importService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
