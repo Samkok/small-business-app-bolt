@@ -20,14 +20,14 @@ export default function AppLayout() {
   useFocusEffect(
     React.useCallback(() => {
       console.log('AppLayout: Focus effect triggered');
-      if (session) {
+      if (session && currentBusiness) {
         console.log('AppLayout: Refreshing carts for user:', session.user.id);
         refreshCarts();
       } else {
-        console.log('AppLayout: Not refreshing carts, no session');
+        console.log('AppLayout: Not refreshing carts, no session or no current business');
       }
       return () => {}; // Cleanup function
-    }, [session, refreshCarts])
+    }, [session, currentBusiness, refreshCarts])
   );
 
   // Show inactivity alert when session expires
