@@ -809,6 +809,103 @@ export default function SalesScreen() {
           {/* Date Filter */}
           {renderDateFilter()}
           
+          {/* Search and Filter */}
+          <View style={styles.searchSection}>
+            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <TextInput
+                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                placeholder="Search sales..."
+                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={handleExportSales}
+              >
+                <Download size={16} color="#059669" />
+                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+              {statusFilters.map((filter) => (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: selectedStatus === filter.value 
+                        ? '#2563eb' 
+                        : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: selectedStatus === filter.value 
+                        ? '#2563eb' 
+                        : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedStatus(filter.value);
+                    setCurrentPage(0);
+                  }}
+                >
+                  <Text style={[
+                    styles.filterButtonText,
+                    { 
+                      color: selectedStatus === filter.value 
+                        ? '#ffffff' 
+                        : (isDark ? '#f9fafb' : '#374151') 
+                    }
+                  ]}>
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+              {paymentMethodFilters.map((filter) => (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: selectedPaymentMethod === filter.value 
+                        ? '#059669' 
+                        : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: selectedPaymentMethod === filter.value 
+                        ? '#059669' 
+                        : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedPaymentMethod(filter.value);
+                    setCurrentPage(0);
+                  }}
+                >
+                  <Text style={[
+                    styles.filterButtonText,
+                    { 
+                      color: selectedPaymentMethod === filter.value 
+                        ? '#ffffff' 
+                        : (isDark ? '#f9fafb' : '#374151') 
+                    }
+                  ]}>
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Collapsible Section */}
           <View style={styles.collapsibleHeader}>
             <View style={styles.collapsibleTitle}>
@@ -836,98 +933,6 @@ export default function SalesScreen() {
             overflow: 'hidden',
             opacity: collapseAnim
           }}>
-            {/* Search and Filter */}
-            <View style={styles.searchSection}>
-              <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-                <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                <TextInput
-                  style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                  placeholder="Search sales..."
-                  placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
-
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={handleExportSales}
-                >
-                  <Download size={16} color="#059669" />
-                  <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-                {statusFilters.map((filter) => (
-                  <TouchableOpacity
-                    key={filter.value}
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor: selectedStatus === filter.value 
-                          ? '#2563eb' 
-                          : (isDark ? '#374151' : '#f3f4f6'),
-                        borderColor: selectedStatus === filter.value 
-                          ? '#2563eb' 
-                          : (isDark ? '#4b5563' : '#d1d5db'),
-                      }
-                    ]}
-                    onPress={() => {
-                      setSelectedStatus(filter.value);
-                      setCurrentPage(0);
-                    }}
-                  >
-                    <Text style={[
-                      styles.filterButtonText,
-                      { 
-                        color: selectedStatus === filter.value 
-                          ? '#ffffff' 
-                          : (isDark ? '#f9fafb' : '#374151') 
-                      }
-                    ]}>
-                      {filter.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-                {paymentMethodFilters.map((filter) => (
-                  <TouchableOpacity
-                    key={filter.value}
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor: selectedPaymentMethod === filter.value 
-                          ? '#059669' 
-                          : (isDark ? '#374151' : '#f3f4f6'),
-                        borderColor: selectedPaymentMethod === filter.value 
-                          ? '#059669' 
-                          : (isDark ? '#4b5563' : '#d1d5db'),
-                      }
-                    ]}
-                    onPress={() => {
-                      setSelectedPaymentMethod(filter.value);
-                      setCurrentPage(0);
-                    }}
-                  >
-                    <Text style={[
-                      styles.filterButtonText,
-                      { 
-                        color: selectedPaymentMethod === filter.value 
-                          ? '#ffffff' 
-                          : (isDark ? '#f9fafb' : '#374151') 
-                      }
-                    ]}>
-                      {filter.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
             {/* Stats Cards */}
             <View style={styles.statsGrid}>
               <Card style={styles.statsCard}>
@@ -1058,7 +1063,7 @@ export default function SalesScreen() {
                   )}
                 />
                 
-                {renderPagination()}
+                {!searchQuery && renderPagination()}
               </>
             )}
           </View>
