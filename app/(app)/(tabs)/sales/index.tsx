@@ -51,8 +51,8 @@ export default function SalesScreen() {
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
+  const [hasMoreSales, setHasMoreSales] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   
   // Date filter states
@@ -157,9 +157,9 @@ export default function SalesScreen() {
   // Only load sales data when tab changes or filter parameters change
   useEffect(() => {
     if (activeTab === 'sales') {
-      loadSalesData();
+      loadSalesData(0, true);
     }
-  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage]);
+  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod]);
 
   // Filter sales when search query changes
   useEffect(() => {
@@ -202,11 +202,13 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
-  const loadSalesData = useCallback(async (isRefresh = false) => {
+  const loadSalesData = useCallback(async (page: number, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
     
-    if (!isRefresh && !loadingMore) {
+    if (refresh) {
       setLoading(true);
+    } else if (page > 0) {
+      setLoadingMore(true);
     }
     
     try {
@@ -227,21 +229,50 @@ export default function SalesScreen() {
       );
       
       setTotalSales(count);
-      setTotalPages(Math.ceil(count / SALES_PER_PAGE));
       
       // Then get the paginated data
       const salesData = await salesService.getSalesPaginated(
         currentBusiness.id,
         start.toISOString(),
         end.toISOString(),
-        currentPage * SALES_PER_PAGE,
+        page * SALES_PER_PAGE,
         SALES_PER_PAGE,
         selectedStatus !== 'all' ? selectedStatus : undefined,
         selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
       );
       
-      setSales(salesData);
-      setFilteredSales(salesData);
+      if (refresh) {
+        setSales(salesData);
+        setFilteredSales(salesData);
+        setCurrentPage(page);
+      } else {
+        // Append new data for infinite scroll
+        setSales(prevSales => {
+          const combined = [...prevSales, ...salesData];
+          // Deduplicate by id
+          const uniqueById = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          return uniqueById;
+        });
+        
+        // Also update filtered sales if not searching
+        if (!searchQuery.trim()) {
+          setFilteredSales(prevFiltered => {
+            const combined = [...prevFiltered, ...salesData];
+            // Deduplicate by id
+            const uniqueById = Array.from(
+              new Map(combined.map(item => [item.id, item])).values()
+            );
+            return uniqueById;
+          });
+        }
+        
+        setCurrentPage(page);
+      }
+      
+      // Update hasMoreSales based on returned data length
+      setHasMoreSales(salesData.length === SALES_PER_PAGE);
     } catch (error) {
       console.error('Error loading sales data:', error);
       Alert.alert(t('common.error'), 'Failed to load sales data');
@@ -249,7 +280,13 @@ export default function SalesScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
+  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, searchQuery, t]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMoreSales || searchQuery.trim()) return;
+    
+    loadSalesData(currentPage + 1, false);
+  }, [currentPage, hasMoreSales, loadingMore, searchQuery, loadSalesData]);
 
   const filterSales = useCallback(() => {
     if (!debouncedSearchQuery.trim()) {
@@ -269,6 +306,7 @@ export default function SalesScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setCurrentPage(0);
+    setHasMoreSales(true);
     
     try {
       await loadData(true);
@@ -420,12 +458,6 @@ export default function SalesScreen() {
     }
   }, [currentPage, totalPages, loadingMore]);
 
-  const handlePageChange = useCallback((page: number) => {
-    if (page >= 0 && page < totalPages) {
-      setCurrentPage(page);
-    }
-  }, [totalPages]);
-
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
@@ -496,75 +528,6 @@ export default function SalesScreen() {
       </View>
     </TouchableOpacity>
   ), [isDark]);
-
-  const renderPagination = useCallback(() => {
-    if (totalPages <= 1) return null;
-    
-    const pageNumbers = [];
-    const maxVisiblePages = 5;
-    
-    // Calculate range of page numbers to show
-    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
-    
-    // Adjust if we're near the end
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(0, endPage - maxVisiblePages + 1);
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-      pageNumbers.push(i);
-    }
-    
-    return (
-      <View style={styles.pagination}>
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            { opacity: currentPage === 0 ? 0.5 : 1 }
-          ]}
-          onPress={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 0}
-        >
-          <ChevronLeft size={16} color={isDark ? '#f9fafb' : '#374151'} />
-        </TouchableOpacity>
-        
-        {pageNumbers.map(page => (
-          <TouchableOpacity
-            key={page}
-            style={[
-              styles.pageButton,
-              {
-                backgroundColor: currentPage === page 
-                  ? '#2563eb' 
-                  : (isDark ? '#374151' : '#f3f4f6')
-              }
-            ]}
-            onPress={() => handlePageChange(page)}
-          >
-            <Text style={{
-              color: currentPage === page 
-                ? '#ffffff' 
-                : (isDark ? '#f9fafb' : '#374151')
-            }}>
-              {page + 1}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            { opacity: currentPage === totalPages - 1 ? 0.5 : 1 }
-          ]}
-          onPress={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages - 1}
-        >
-          <ChevronRight size={16} color={isDark ? '#f9fafb' : '#374151'} />
-        </TouchableOpacity>
-      </View>
-    );
-  }, [currentPage, totalPages, isDark, handlePageChange]);
 
   const renderDateFilter = useCallback(() => (
     <View style={styles.dateFilterContainer}>
@@ -855,6 +818,7 @@ export default function SalesScreen() {
                   onPress={() => {
                     setSelectedStatus(filter.value);
                     setCurrentPage(0);
+                    setHasMoreSales(true);
                   }}
                 >
                   <Text style={[
@@ -889,6 +853,7 @@ export default function SalesScreen() {
                   onPress={() => {
                     setSelectedPaymentMethod(filter.value);
                     setCurrentPage(0);
+                    setHasMoreSales(true);
                   }}
                 >
                   <Text style={[
@@ -905,34 +870,34 @@ export default function SalesScreen() {
               ))}
             </ScrollView>
           </View>
-
-          {/* Collapsible Section */}
-          <View style={styles.collapsibleHeader}>
-            <View style={styles.collapsibleTitle}>
-              <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Sales Statistics
-              </Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.collapseButton}
-              onPress={toggleStatsCollapse}
-            >
-              {statsCollapsed ? (
-                <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              ) : (
-                <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              )}
-            </TouchableOpacity>
-          </View>
           
-          <Animated.View style={{
-            maxHeight: collapseAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 500] // Adjust this value based on your content height
-            }),
-            overflow: 'hidden',
-            opacity: collapseAnim
-          }}>
+          {/* Search and Filter */}
+          <View style={styles.searchSection}>
+            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <TextInput
+                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                placeholder="Search sales..."
+                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={handleExportSales}
+              >
+                <Download size={16} color="#059669" />
+                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
+              </TouchableOpacity>
+            </View>
             {/* Stats Cards */}
             <View style={styles.statsGrid}>
               <Card style={styles.statsCard}>
@@ -1006,66 +971,53 @@ export default function SalesScreen() {
                   <Text style={styles.clearSearchText}>Clear</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Showing {Math.min(currentPage * SALES_PER_PAGE + 1, totalSales)} - {Math.min((currentPage + 1) * SALES_PER_PAGE, totalSales)} of {totalSales} sales
-                </Text>
-              </View>
             )}
 
-            {searchQuery ? (
-              // Show filtered results when searching
-              <FlatList
-                data={filteredSales}
-                renderItem={renderSaleItem}
-                keyExtractor={(item) => item.id}
-                style={styles.salesList}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={handleRefresh}
-                    colors={['#2563eb']}
-                    tintColor="#2563eb"
-                    title="Pull to refresh"
-                    titleColor={isDark ? '#f9fafb' : '#111827'}
-                  />
-                }
-                ListEmptyComponent={renderEmptyComponent}
-                contentContainerStyle={filteredSales.length === 0 ? styles.emptyContainer : undefined}
-              />
-            ) : (
-              // Show paginated results when not searching
-              <>
-                <FlatList
-                  data={sales}
-                  renderItem={renderSaleItem}
-                  keyExtractor={item => item.id}
-                  contentContainerStyle={styles.flatListContent}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={handleRefresh}
-                      colors={['#2563eb']}
-                      tintColor="#2563eb"
-                      title="Pull to refresh"
-                      titleColor={isDark ? '#f9fafb' : '#111827'}
-                    />
-                  }
-                  ListEmptyComponent={renderEmptyComponent}
-                  ListFooterComponent={() => (
-                    <View style={styles.listFooter}>
-                      {loadingMore && (
-                        <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 16 }} />
-                      )}
-                    </View>
-                  )}
+            <FlatList
+              data={filteredSales}
+              renderItem={renderSaleItem}
+              keyExtractor={(item) => item.id}
+              style={styles.salesList}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={['#2563eb']}
+                  tintColor="#2563eb"
+                  title="Pull to refresh"
+                  titleColor={isDark ? '#f9fafb' : '#111827'}
                 />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.1}
+              ListEmptyComponent={renderEmptyComponent}
+              contentContainerStyle={filteredSales.length === 0 ? styles.emptyContainer : undefined}
+              ListFooterComponent={() => {
+                if (loadingMore) {
+                  return (
+                    <View style={styles.loadingMore}>
+                      <ActivityIndicator size="small" color="#2563eb" />
+                      <Text style={[styles.loadingMoreText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                        Loading more sales...
+                      </Text>
+                    </View>
+                  );
+                }
                 
-                {!searchQuery && renderPagination()}
-              </>
-            )}
+                if (!hasMoreSales && filteredSales.length > 0 && !searchQuery.trim()) {
+                  return (
+                    <View style={styles.endOfList}>
+                      <Text style={[styles.endOfListText, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                        You've reached the end of your sales
+                      </Text>
+                    </View>
+                  );
+                }
+                
+                return null;
+              }}
+            />
           </View>
         </View>
       )}
@@ -1345,20 +1297,23 @@ const styles = StyleSheet.create({
   flatListContent: {
     paddingBottom: 16,
   },
-  pagination: {
+  loadingMore: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
-    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
-  pageButton: {
-    minWidth: 36,
-    height: 36,
-    borderRadius: 18,
+  loadingMoreText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  endOfList: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingVertical: 20,
+  },
+  endOfListText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   listFooter: {
     paddingVertical: 8,
