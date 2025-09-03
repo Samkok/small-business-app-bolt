@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { MoveVertical as MoreVertical, User, Calendar, CreditCard, DollarSign, ChevronRight } from 'lucide-react-native';
+import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
 interface SaleCardProps {
@@ -110,7 +110,7 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid }: SaleCardP
                 onVoid(sale);
               }}
             >
-              <MoreVertical size={16} color={isDark ? '#f9fafb' : '#374151'} />
+              <Trash2 size={16} color="#dc2626" />
             </TouchableOpacity>
           )}
         </View>
@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    marginRight: 8,
   },
   statusText: {
     fontSize: 10,
