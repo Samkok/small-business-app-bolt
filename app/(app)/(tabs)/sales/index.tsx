@@ -524,9 +524,6 @@ export default function SalesScreen() {
 
   const renderDateFilter = useCallback(() => (
     <View style={styles.dateFilterContainer}>
-      <Text style={[styles.dateFilterLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-        Date Range:
-      </Text>
       <TouchableOpacity
         style={[
           styles.dateFilterButton,
@@ -539,6 +536,12 @@ export default function SalesScreen() {
           {dateRangeText}
         </Text>
         <ChevronDown size={16} color="#2563eb" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.exportIconButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+        onPress={handleExportSales}
+      >
+        <Download size={20} color="#059669" />
       </TouchableOpacity>
     </View>
   ), [isDark, dateRangeText]);
@@ -782,15 +785,90 @@ export default function SalesScreen() {
                 </TouchableOpacity>
               )}
             </View>
+          </View>
+          
+          {/* Collapsible Header */}
+          <View style={styles.collapsibleHeader}>
+            <View style={styles.collapsibleTitle}>
+              <TrendingUp size={20} color={isDark ? '#f9fafb' : '#111827'} style={{ marginRight: 8 }} />
+              <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Sales Analytics
+              </Text>
+            </View>
+            <TouchableOpacity onPress={toggleStatsCollapse} style={styles.collapseButton}>
+              {statsCollapsed ? (
+                <ChevronDown size={20} color={isDark ? '#f9fafb' : '#111827'} />
+              ) : (
+                <ChevronUp size={20} color={isDark ? '#f9fafb' : '#111827'} />
+              )}
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={handleExportSales}
-              >
-                <Download size={16} color="#059669" />
-                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
-              </TouchableOpacity>
+          <Animated.View style={{
+            maxHeight: collapseAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 800] // Adjust this value based on your content height
+            }),
+            overflow: 'hidden',
+            opacity: collapseAnim
+          }}>
+            {/* Stats Cards */}
+            <View style={styles.statsGrid}>
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <DollarSign size={20} color="#2563eb" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${todayRevenue.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Today's Revenue
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <TrendingUp size={20} color="#059669" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${totalRevenue.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Total Revenue
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <Receipt size={20} color="#8b5cf6" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {todaySales}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Today's Sales
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <ShoppingCart size={20} color="#ea580c" />
+                  <View style={styles.statsText}>
+                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${averageSale.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Average Sale
+                    </Text>
+                  </View>
+                </View>
+              </Card>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
@@ -862,67 +940,8 @@ export default function SalesScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
+          </Animated.View>
           
-          {/* Stats Cards */}
-          <View style={styles.statsGrid}>
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <DollarSign size={20} color="#2563eb" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${todayRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <TrendingUp size={20} color="#059669" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${totalRevenue.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Revenue
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <Receipt size={20} color="#8b5cf6" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {todaySales}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Today's Sales
-                  </Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statsCard}>
-              <View style={styles.statsContent}>
-                <ShoppingCart size={20} color="#ea580c" />
-                <View style={styles.statsText}>
-                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                    ${averageSale.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Average Sale
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          </View>
-
           {/* Sales List */}
           <View style={styles.salesListContainer}>
             {searchQuery ? (
@@ -1077,6 +1096,7 @@ const styles = StyleSheet.create({
   dateFilterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   dateFilterLabel: {
@@ -1095,6 +1115,13 @@ const styles = StyleSheet.create({
   dateFilterText: {
     fontSize: 14,
     marginHorizontal: 8,
+  },
+  exportIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginLeft: 8,
   },
   modalOverlay: {
     flex: 1,
