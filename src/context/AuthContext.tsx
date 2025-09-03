@@ -318,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error in loadAuthData:', error);
-      setUserProfile(null);
+      const determinedBusiness = await determineCurrentBusiness(userId, businesses);
       setUserBusinesses([]);
       setCurrentBusiness(null);
       setLoading(false);

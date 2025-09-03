@@ -56,26 +56,12 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/signin" />;
   }
 
-  // If user has no businesses, redirect to business selection to create one
-  if (session && userBusinesses.length === 0) {
-    console.log('AppLayout: No businesses available, redirecting to business selection');
+  // If user has no businesses OR no current business is set, redirect to business selection
+  if (session && (userBusinesses.length === 0 || !currentBusiness)) {
+    console.log('AppLayout: No businesses or no current business selected, redirecting to business selection');
     return <Redirect href="/business-selection" />;
   }
 
-  // If user has multiple businesses but no current business is selected, redirect to business selection
-  if (session && userBusinesses.length > 1 && !currentBusiness) {
-    console.log('AppLayout: Multiple businesses available but no current business selected, redirecting to business selection');
-    return <Redirect href="/business-selection" />;
-  }
-
-  // If user has exactly one business, set it as current and proceed to dashboard
-  if (session && userBusinesses.length === 1 && !currentBusiness) {
-    console.log('AppLayout: Single business available, setting as current business and proceeding to dashboard');
-    // Set the single business as current business
-    const singleBusiness = userBusinesses[0];
-    // This will be handled by the AuthContext's determineCurrentBusiness logic
-    // Just proceed to tabs since the business will be set automatically
-  }
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
   return (
     <Stack screenOptions={{ headerShown: false }}>
