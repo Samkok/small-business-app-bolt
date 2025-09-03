@@ -949,7 +949,6 @@ export default function SalesScreen() {
                 </View>
               </Card>
             </View>
-          </Animated.View>
 
           {/* Sales List */}
           <View style={styles.salesListContainer}>
