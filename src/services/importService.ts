@@ -12,8 +12,8 @@ export const importService = {
    * @returns Import results
    */
   async importSalesFromCsv(csvContent: string, profileId: string) {
-    
-    if (typeof csvContent !== 'string' || !csvContent) return;
+
+    if (typeof csvContent !== 'string' || !csvContent) return '';
     if (typeof profileId !== 'string' || !profileId) return;
     
     return processSalesImport(csvContent, profileId);
@@ -27,7 +27,7 @@ export const importService = {
    */
   async importSalesFromFile(file: File, profileId: string) {
     
-    if (typeof profileId !== 'string' || !profileId) return;
+    if (typeof profileId !== 'string' || !profileId) return []; // Return empty array for consistency with processSalesImport
     
     return processSalesImportFromFile(file, profileId);
   },
@@ -39,8 +39,8 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromCsv(csvContent: string, profileId: string) {
-    
-    if (typeof csvContent !== 'string' || !csvContent) return;
+
+    if (typeof csvContent !== 'string' || !csvContent) return { totalRecords: 0, successCount: 0, failureCount: 0, results: [] }; // Return empty result object
     if (typeof profileId !== 'string' || !profileId) return;
     
     return processBulkInventoryImport(csvContent, profileId);
@@ -53,8 +53,8 @@ export const importService = {
    * @returns Import results
    */
   async importInventoryFromFile(file: File, profileId: string) {
-    
-    if (typeof profileId !== 'string' || !profileId) return;
+
+    if (typeof profileId !== 'string' || !profileId) return { totalRecords: 0, successCount: 0, failureCount: 0, results: [] }; // Return empty result object
     return processBulkInventoryImportFromFile(file, profileId);
   },
 
@@ -87,9 +87,9 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    */
   async exportSalesToCsv(businessId: string, startDate?: string, endDate?: string) {
     
-    if (typeof businessId !== 'string' || !businessId) return;
-    if (typeof startDate !== 'string' || !startDate) return;
-    if (typeof endDate !== 'string' || !endDate) return;
+    if (typeof businessId !== 'string' || !businessId) return '';
+    if (typeof startDate !== 'string' || !startDate) return '';
+    if (typeof endDate !== 'string' || !endDate) return '';
     let query = supabase
       .from('sales')
       .select(`
@@ -163,9 +163,9 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    */
   async exportIncomeStatementToCsv(businessId: string, startDate: string, endDate: string) {
     
-    if (typeof businessId !== 'string' || !businessId) return;
-    if (typeof startDate !== 'string' || !startDate) return;
-    if (typeof endDate !== 'string' || !endDate) return;
+    if (typeof businessId !== 'string' || !businessId) return '';
+    if (typeof startDate !== 'string' || !startDate) return '';
+    if (typeof endDate !== 'string' || !endDate) return '';
     try {
       // Get sales data with COGS
       const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
@@ -223,9 +223,9 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    */
   async exportCashFlowToCsv(businessId: string, month: number, year: number) {
     
-    if (typeof businessId !== 'string' || !businessId) return;
-    if (typeof month !== 'number' || isNaN(month) || month < 0 || month > 11) return;
-    if (typeof year !== 'number' || isNaN(year)) return;
+    if (typeof businessId !== 'string' || !businessId) return '';
+    if (typeof month !== 'number' || isNaN(month) || month < 0 || month > 11) return '';
+    if (typeof year !== 'number' || isNaN(year)) return '';
 
     try {
       // Get cash flow data
@@ -268,7 +268,7 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
    * @returns CSV string
    */
   async exportProductsToCsv(businessId: string) {
-    if (typeof businessId !== 'string' || !businessId) return;
+    if (typeof businessId !== 'string' || !businessId) return '';
 
     const { data, error } = await supabase
       .from('products')
