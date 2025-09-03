@@ -177,8 +177,8 @@ export default function ReportsScreen() {
     setChartsLoading(true);
     try {
       const { startDate, endDate } = getDateRange();
-      const formattedStartDate = startDate.toISOString();
-      const formattedEndDate = endDate.toISOString();
+      const formattedStartDate = startDate;
+      const formattedEndDate = endDate;
       const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
 
       const salesCsv = await importService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
