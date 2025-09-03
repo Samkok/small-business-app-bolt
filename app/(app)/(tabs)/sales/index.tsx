@@ -31,6 +31,8 @@ import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, R
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const SALES_PER_PAGE = 10;
 
@@ -364,11 +366,6 @@ export default function SalesScreen() {
   }, [router]);
 
   const handleExportSales = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      Alert.alert('Not Supported', 'Export is only available on web platform');
-      return;
-    }
-
     if (!currentBusiness?.id) {
       Alert.alert('Error', 'No business currentBusiness found');
       return;
@@ -388,18 +385,37 @@ export default function SalesScreen() {
         end.toISOString()
       );
       
-      // Create a download link
-      const blob = new Blob([csvData], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
       
-      Alert.alert('Success', 'Sales data exported successfully');
+      if (Platform.OS === 'web') {
+        // Web platform - use browser download
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        Alert.alert('Success', 'Sales data exported successfully');
+      } else {
+        // Mobile platform - use expo-file-system and expo-sharing
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Export Sales Data',
+            UTI: 'public.comma-separated-values-text'
+          });
+          Alert.alert('Success', 'Sales data exported successfully');
+        } else {
+          Alert.alert('Error', 'Sharing is not available on this device');
+        }
+      }
     } catch (error) {
       console.error('Error exporting sales:', error);
       Alert.alert('Error', 'Failed to export sales data');
