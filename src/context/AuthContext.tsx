@@ -395,7 +395,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Call the RPC function to create a new business
       const { data: businessId, error } = await supabase
         .rpc('create_business', {
-          business_name_param: businessName
+          business_name_param: businessName,
+          owner_user_id_param: user.id
         });
 
       if (error) {
