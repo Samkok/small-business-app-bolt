@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { Input } from '@/src/components/ui/Input';
+import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Users, UserPlus, User, Mail, ChevronDown, X, Shield, ShieldAlert } from 'lucide-react-native';
