@@ -451,13 +451,6 @@ export default function SalesScreen() {
     setCurrentPage(0);
   }, []);
 
-  const handleLoadMore = useCallback(() => {
-    if (currentPage < totalPages - 1 && !loadingMore) {
-      setLoadingMore(true);
-      setCurrentPage(prev => prev + 1);
-    }
-  }, [currentPage, totalPages, loadingMore]);
-
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
