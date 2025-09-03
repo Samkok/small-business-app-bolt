@@ -828,9 +828,9 @@ export default function InventoryScreen() {
             onPress={toggleSortOrder}
           >
             {sortOrder === 'newest' ? (
-              <Clock size={20} color="#2563eb" />
+              <ArrowDown size={20} color="#2563eb" />
             ) : (
-              <CalendarDays size={20} color="#2563eb" />
+              <ArrowUp size={20} color="#2563eb" />
             )}
           </TouchableOpacity>
         </View>
