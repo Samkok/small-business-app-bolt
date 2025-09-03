@@ -261,4 +261,40 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
       throw error;
     }
   }
+
+  /**
+   * Export product data to CSV
+   * @param businessId Business ID to export products for
+   * @returns CSV string
+   */
+  async exportProductsToCsv(businessId: string) {
+    if (typeof businessId !== 'string' || !businessId) return;
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        id,
+        name,
+        price,
+        description,
+        barcode,
+        current_stock,
+        min_stock_level,
+        cost_per_unit,
+        created_at,
+        updated_at
+      `)
+      .eq('business_id', businessId)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    let csv = 'ID,Name,Price,Description,Barcode,Current Stock,Min Stock Level,Cost Per Unit,Created At,Updated At\n';
+
+    data.forEach(product => {
+      csv += `${product.id},"${product.name}",${product.price},"${product.description || ''}",${product.barcode || ''},${product.current_stock},${product.min_stock_level},${product.cost_per_unit || ''},${product.created_at},${product.updated_at}\n`;
+    });
+
+    return csv;
+  }
 };
