@@ -82,11 +82,11 @@ export default function ReportsScreen() {
         break;
       case 'custom':
         // Use custom date range
-        startDate = new Date(customStartDate);
+        startDate = customStartDate ? new Date(customStartDate) : startOfMonth(now);
         startDate.setHours(0, 0, 0, 0);
         
         // For custom range, also set the end date
-        const customEnd = endOfDay(new Date(customEndDate));
+        const customEnd = customEndDate ? endOfDay(new Date(customEndDate)) : endOfDay(now);
         return {
           startDate: startDate,
           endDate: customEnd
@@ -94,6 +94,11 @@ export default function ReportsScreen() {
       default:
         // Default to month
         startDate = startOfMonth(now);
+    }
+    
+    // Ensure startDate is always a valid Date object
+    if (!startDate || isNaN(startDate.getTime())) {
+      startDate = startOfMonth(now);
     }
     
     return {
