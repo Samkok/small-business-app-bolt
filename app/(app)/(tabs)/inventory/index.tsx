@@ -29,8 +29,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown as SortAsc, ArrowUp as SortDesc, ShoppingCart } from 'lucide-react-native';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ArrowUp as SortDesc, ShoppingCart, Clock, CalendarDays } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 
