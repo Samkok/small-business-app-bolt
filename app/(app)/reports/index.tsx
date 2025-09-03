@@ -25,6 +25,7 @@ import { reportsService } from '@/src/services/reports';
 import { importService } from '@/src/services/importService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import * as FileSystem from 'expo-file-system';
 
 const screenWidth = Dimensions.get('window').width;
 const EXPORT_FILE_PREFIX = 'BizManage_Report';
