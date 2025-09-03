@@ -25,6 +25,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
+import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
