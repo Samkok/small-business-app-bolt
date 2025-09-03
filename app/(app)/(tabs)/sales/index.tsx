@@ -45,6 +45,10 @@ export default function SalesScreen() {
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const [saleToVoid, setSaleToVoid] = useState<any>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidingInProgress, setVoidingInProgress] = useState(false);
   
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -319,28 +323,9 @@ export default function SalesScreen() {
   }, [loadData, t]);
 
   const handleVoidSale = useCallback(async (sale: any) => {
-    Alert.alert(
-      'Void Sale',
-      `Are you sure you want to void this sale for $${sale.total_amount.toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Void Sale', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!currentBusiness?.id) return;
-              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
-              Alert.alert('Success', 'Sale voided successfully');
-              loadData();
-            } catch (error) {
-              console.error('Error voiding sale:', error);
-              Alert.alert('Error', 'Failed to void sale');
-            }
-          }
-        },
-      ]
-    );
+    setSaleToVoid(sale);
+    setVoidReason('');
+    setShowVoidModal(true);
   }, [currentBusiness?.id, loadData]);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
@@ -450,6 +435,30 @@ export default function SalesScreen() {
     setShowDateRangePicker(false);
     setCurrentPage(0);
   }, []);
+
+  const handleConfirmVoid = useCallback(async () => {
+    if (!voidReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for voiding this sale');
+      return;
+    }
+
+    if (!currentBusiness?.id || !saleToVoid) return;
+
+    setVoidingInProgress(true);
+    try {
+      await salesService.voidSale(saleToVoid.id, voidReason.trim(), currentBusiness.id);
+      Alert.alert('Success', 'Sale voided successfully');
+      setShowVoidModal(false);
+      setSaleToVoid(null);
+      setVoidReason('');
+      loadData();
+    } catch (error) {
+      console.error('Error voiding sale:', error);
+      Alert.alert('Error', 'Failed to void sale');
+    } finally {
+      setVoidingInProgress(false);
+    }
+  }, [voidReason, currentBusiness?.id, saleToVoid, loadData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
@@ -1015,6 +1024,64 @@ export default function SalesScreen() {
 
       {/* Date Range Picker Modal */}
       {renderDateFilterOptions()}
+
+      {/* Void Sale Modal */}
+      <Modal
+        visible={showVoidModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVoidModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.voidModal}>
+            <View style={styles.voidModalHeader}>
+              <Text style={[styles.voidModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Void Sale
+              </Text>
+              <TouchableOpacity onPress={() => setShowVoidModal(false)}>
+                <X size={20} color={isDark ? '#f9fafb' : '#111827'} />
+              </TouchableOpacity>
+            </View>
+            
+            {saleToVoid && (
+              <View style={styles.saleInfoSection}>
+                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Sale #{saleToVoid.id.slice(-8)} - ${saleToVoid.total_amount.toFixed(2)}
+                </Text>
+                <Text style={[styles.customerInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Customer: {saleToVoid.customers?.name || 'Unknown'}
+                </Text>
+              </View>
+            )}
+            
+            <Input
+              label="Reason for Voiding"
+              value={voidReason}
+              onChangeText={setVoidReason}
+              placeholder="Please provide a reason for voiding this sale"
+              multiline
+              numberOfLines={3}
+              required
+            />
+            
+            <View style={styles.voidModalActions}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={() => setShowVoidModal(false)}
+                style={styles.voidModalButton}
+              />
+              <Button
+                title="Void Sale"
+                variant="danger"
+                onPress={handleConfirmVoid}
+                loading={voidingInProgress}
+                style={styles.voidModalButton}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1350,5 +1417,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  voidModal: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  voidModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  voidModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  saleInfoSection: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#dc262610',
+    borderRadius: 8,
+  },
+  saleInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  customerInfoText: {
+    fontSize: 12,
+  },
+  voidModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  voidModalButton: {
+    flex: 1,
   },
 });
