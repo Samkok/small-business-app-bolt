@@ -26,7 +26,7 @@ import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -864,91 +864,64 @@ export default function SalesScreen() {
             </ScrollView>
           </View>
           
-          {/* Search and Filter */}
-          <View style={styles.searchSection}>
-            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <TextInput
-                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                placeholder="Search sales..."
-                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={handleExportSales}
-              >
-                <Download size={16} color="#059669" />
-                <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
-              </TouchableOpacity>
-            </View>
-            {/* Stats Cards */}
-            <View style={styles.statsGrid}>
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <DollarSign size={20} color="#2563eb" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${todayRevenue.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Revenue
-                    </Text>
-                  </View>
+          {/* Stats Cards */}
+          <View style={styles.statsGrid}>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <DollarSign size={20} color="#2563eb" />
+                <View style={styles.statsText}>
+                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                    ${todayRevenue.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Today's Revenue
+                  </Text>
                 </View>
-              </Card>
+              </View>
+            </Card>
 
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <TrendingUp size={20} color="#059669" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${totalRevenue.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Total Revenue
-                    </Text>
-                  </View>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <TrendingUp size={20} color="#059669" />
+                <View style={styles.statsText}>
+                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                    ${totalRevenue.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Total Revenue
+                  </Text>
                 </View>
-              </Card>
+              </View>
+            </Card>
 
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <Receipt size={20} color="#8b5cf6" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {todaySales}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Sales
-                    </Text>
-                  </View>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <Receipt size={20} color="#8b5cf6" />
+                <View style={styles.statsText}>
+                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {todaySales}
+                  </Text>
+                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Today's Sales
+                  </Text>
                 </View>
-              </Card>
+              </View>
+            </Card>
 
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <ShoppingCart size={20} color="#ea580c" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${averageSale.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Average Sale
-                    </Text>
-                  </View>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <ShoppingCart size={20} color="#ea580c" />
+                <View style={styles.statsText}>
+                  <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                    ${averageSale.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Average Sale
+                  </Text>
                 </View>
-              </Card>
-            </View>
+              </View>
+            </Card>
+          </View>
 
           {/* Sales List */}
           <View style={styles.salesListContainer}>
@@ -963,7 +936,7 @@ export default function SalesScreen() {
                   <Text style={styles.clearSearchText}>Clear</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            ) : null}
 
             <FlatList
               data={filteredSales}
