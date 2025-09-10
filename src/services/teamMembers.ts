@@ -58,9 +58,10 @@ export const teamMemberService = {
         .eq('business_id', businessId);
 
       // If user is staff, only show their own profile
-      if (currentUserRole === 'staff') {
-        query = query.eq('user_id', currentUserId);
-      }
+      // if (currentUserRole === 'staff') {
+      //   query = query.eq('user_id', currentUserId);
+      // }
+      
 
       const { data: roles, error: rolesError } = await query;
       
