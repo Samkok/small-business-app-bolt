@@ -63,8 +63,6 @@ export const teamMemberService = {
       }
 
       const { data: roles, error: rolesError } = await query;
-
-      console.log(roles);
       
       if (rolesError) throw rolesError;
 
@@ -89,6 +87,8 @@ export const teamMemberService = {
         created_at: role.created_at,
         updated_at: role.updated_at
       }));
+
+      console.log(members);
 
       return members;
     } catch (error) {
