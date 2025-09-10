@@ -31,6 +31,7 @@ interface TeamMember {
 
 export default function TeamScreen() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'staff' | null>(null);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -43,23 +44,56 @@ export default function TeamScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness, user } = useAuth();
+  const { currentBusiness, user, userBusinesses } = useAuth();
 
   useEffect(() => {
     if (currentBusiness) {
+      determineCurrentUserRole();
       loadTeamMembers();
     } else {
       setLoading(false);
     }
   }, [currentBusiness]);
 
+  const determineCurrentUserRole = () => {
+    if (!currentBusiness || !user) {
+      setCurrentUserRole(null);
+      return;
+    }
+
+    // Check if user is the business owner (always admin)
+    if (currentBusiness.owner_user_id === user.id) {
+      setCurrentUserRole('admin');
+      return;
+    }
+
+    // Find user's role in userBusinesses from AuthContext
+    // Note: We need to get the role from the database since userBusinesses doesn't include roles
+    // We'll determine this in loadTeamMembers function
+  };
+
   const loadTeamMembers = async () => {
     if (!currentBusiness) return;
     
     setLoading(true);
     try {
-      // Get all user roles for this business
-      const { data: roles, error: rolesError } = await supabase
+      // First, get current user's role
+      const { data: currentUserRoleData, error: roleError } = await supabase
+        .from('user_business_roles')
+        .select('role')
+        .eq('business_id', currentBusiness.id)
+        .eq('user_id', user?.id)
+        .single();
+
+      if (roleError) {
+        console.error('Error fetching current user role:', roleError);
+        setCurrentUserRole(null);
+      } else {
+        setCurrentUserRole(currentUserRoleData.role as 'admin' | 'staff');
+      }
+
+      // Get team members based on user role
+      let query = supabase
         .from('user_business_roles')
         .select(`
           user_id,
@@ -70,6 +104,13 @@ export default function TeamScreen() {
           )
         `)
         .eq('business_id', currentBusiness.id);
+
+      // If user is staff, only show their own profile
+      if (currentUserRoleData?.role === 'staff') {
+        query = query.eq('user_id', user?.id);
+      }
+
+      const { data: roles, error: rolesError } = await query;
         
       if (rolesError) throw rolesError;
 
