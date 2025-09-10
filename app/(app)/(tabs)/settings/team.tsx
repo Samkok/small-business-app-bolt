@@ -19,15 +19,8 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Users, UserPlus, User, Mail, ChevronDown, X, Shield, ShieldAlert } from 'lucide-react-native';
-import { supabase } from '@/src/config/supabase';
-
-interface TeamMember {
-  user_id: string;
-  business_id: string;
-  role: 'admin' | 'staff';
-  user_email?: string;
-  user_name?: string;
-}
+import { teamMemberService, TeamMember } from '@/src/services/teamMembers';
+import { ActivityIndicator } from 'react-native';
 
 export default function TeamScreen() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -56,85 +49,20 @@ export default function TeamScreen() {
   }, [currentBusiness]);
 
   const determineCurrentUserRole = () => {
-    if (!currentBusiness || !user) {
-      setCurrentUserRole(null);
-      return;
-    }
-
-    // Check if user is the business owner (always admin)
-    if (currentBusiness.owner_user_id === user.id) {
-      setCurrentUserRole('admin');
-      return;
-    }
-
-    // Find user's role in userBusinesses from AuthContext
-    // Note: We need to get the role from the database since userBusinesses doesn't include roles
-    // We'll determine this in loadTeamMembers function
+    // Role determination is now handled in loadTeamMembers
   };
 
   const loadTeamMembers = async () => {
-    if (!currentBusiness) return;
+    if (!currentBusiness || !user) return;
     
     setLoading(true);
     try {
-      // First, get current user's role
-      const { data: currentUserRoleData, error: roleError } = await supabase
-        .from('user_business_roles')
-        .select('role')
-        .eq('business_id', currentBusiness.id)
-        .eq('user_id', user?.id)
-        .single();
-
-      if (roleError) {
-        console.error('Error fetching current user role:', roleError);
-        setCurrentUserRole(null);
-      } else {
-        setCurrentUserRole(currentUserRoleData.role as 'admin' | 'staff');
-      }
-
-      // Get team members based on user role
-      let query = supabase
-        .from('user_business_roles')
-        .select(`
-          user_id,
-          business_id,
-          role,
-          businesses (
-            business_name
-          )
-        `)
-        .eq('business_id', currentBusiness.id);
-
-      // If user is staff, only show their own profile
-      if (currentUserRoleData?.role === 'staff') {
-        query = query.eq('user_id', user?.id);
-      }
-
-      const { data: roles, error: rolesError } = await query;
-        
-      if (rolesError) throw rolesError;
-
-      // Get user profiles for names and emails
-      const userIds = roles.map(role => role.user_id);
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, full_name, email')
-        .in('user_id', userIds);
-
-      if (profilesError) {
-        console.warn('Could not fetch user information:', profilesError);
-      }
+      // Get current user's role
+      const userRole = await teamMemberService.getCurrentUserRole(currentBusiness.id, user.id);
+      setCurrentUserRole(userRole);
       
-
-      // Combine the data
-      const members: TeamMember[] = roles.map(role => ({
-        user_id: role.user_id,
-        business_id: role.business_id,
-        role: role.role as 'admin' | 'staff',
-        user_name: profiles?.find(p => p.user_id === role.user_id)?.full_name || 'Unnamed User',
-        user_email: profiles?.find(p => p.user_id === role.user_id)?.email || 'No email'
-      }));
-      
+      // Get team members based on role
+      const members = await teamMemberService.getTeamMembers(currentBusiness.id, user.id, userRole || 'staff');
       setTeamMembers(members);
     } catch (error) {
       console.error('Error loading team members:', error);
@@ -150,67 +78,51 @@ export default function TeamScreen() {
       return;
     }
     
-    if (!currentBusiness) {
+    if (!currentBusiness || !teamMemberService.canPerformAdminActions(currentUserRole)) {
       Alert.alert('Error', 'No business selected');
       return;
     }
     
     setInviting(true);
     try {
-      const { data, error } = await supabase.rpc('invite_user_to_business', {
-        business_id_param: currentBusiness.id,
-        user_email_param: inviteEmail.trim(),
-        role_param: inviteRole
-      });
+      await teamMemberService.inviteUser(currentBusiness.id, inviteEmail.trim(), inviteRole);
       
-      if (error) {
-        Alert.alert('Error', error.message || 'Failed to invite user');
-      } else {
-        Alert.alert('Success', 'User invited successfully');
-        setInviteEmail('');
-        setInviteRole('staff');
-        setShowInviteModal(false);
-        loadTeamMembers();
-      }
+      Alert.alert('Success', 'User invited successfully');
+      setInviteEmail('');
+      setInviteRole('staff');
+      setShowInviteModal(false);
+      loadTeamMembers();
     } catch (error) {
       console.error('Error inviting user:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert('Error', error.message || 'Failed to invite user');
     } finally {
       setInviting(false);
     }
   };
 
   const handleChangeRole = async (userId: string, newRole: 'admin' | 'staff') => {
-    if (!currentBusiness) return;
+    if (!currentBusiness || !teamMemberService.canPerformAdminActions(currentUserRole)) return;
     
     setChangingRole(userId);
     try {
-      const { data, error } = await supabase.rpc('change_user_business_role', {
-        business_id_param: currentBusiness.id,
-        user_id_param: userId,
-        new_role_param: newRole
-      });
+      await teamMemberService.changeUserRole(currentBusiness.id, userId, newRole);
       
-      if (error) {
-        Alert.alert('Error', error.message || 'Failed to change user role');
-      } else {
-        // Update local state
-        setTeamMembers(prev => 
-          prev.map(member => 
-            member.user_id === userId ? { ...member, role: newRole } : member
-          )
-        );
-      }
+      // Update local state
+      setTeamMembers(prev => 
+        prev.map(member => 
+          member.user_id === userId ? { ...member, role: newRole } : member
+        )
+      );
     } catch (error) {
       console.error('Error changing user role:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert('Error', error.message || 'Failed to change user role');
     } finally {
       setChangingRole(null);
     }
   };
 
   const handleRemoveUser = async (userId: string) => {
-    if (!currentBusiness) return;
+    if (!currentBusiness || !teamMemberService.canPerformAdminActions(currentUserRole)) return;
     
     // Prevent removing yourself
     if (userId === user?.id) {
@@ -229,20 +141,13 @@ export default function TeamScreen() {
           onPress: async () => {
             setRemovingUser(userId);
             try {
-              const { data, error } = await supabase.rpc('remove_user_from_business', {
-                business_id_param: currentBusiness.id,
-                user_id_param: userId
-              });
+              await teamMemberService.removeUser(currentBusiness.id, userId);
               
-              if (error) {
-                Alert.alert('Error', error.message || 'Failed to remove user');
-              } else {
-                // Update local state
-                setTeamMembers(prev => prev.filter(member => member.user_id !== userId));
-              }
+              // Update local state
+              setTeamMembers(prev => prev.filter(member => member.user_id !== userId));
             } catch (error) {
               console.error('Error removing user:', error);
-              Alert.alert('Error', 'An unexpected error occurred');
+              Alert.alert('Error', error.message || 'Failed to remove user');
             } finally {
               setRemovingUser(null);
             }
@@ -255,6 +160,12 @@ export default function TeamScreen() {
   const renderTeamMember = ({ item }: { item: TeamMember }) => {
     const isCurrentUser = item.user_id === user?.id;
     const isOwner = currentBusiness?.owner_user_id === item.user_id;
+    const canModify = teamMemberService.canModifyMember(
+      currentUserRole,
+      item.user_id,
+      user?.id || '',
+      currentBusiness?.owner_user_id || ''
+    );
     
     return (
       <Card style={styles.memberCard}>
@@ -289,7 +200,7 @@ export default function TeamScreen() {
           </View>
         </View>
         
-        {!isOwner && (
+        {canModify && (
           <View style={styles.memberActions}>
             {changingRole === item.user_id ? (
               <ActivityIndicator size="small" color="#2563eb" />
@@ -301,7 +212,6 @@ export default function TeamScreen() {
                   const newRole = item.role === 'admin' ? 'staff' : 'admin';
                   handleChangeRole(item.user_id, newRole);
                 }}
-                disabled={isOwner || isCurrentUser}
               >
                 <Shield size={16} color="#2563eb" />
               </TouchableOpacity>
@@ -313,7 +223,6 @@ export default function TeamScreen() {
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
                 onPress={() => handleRemoveUser(item.user_id)}
-                disabled={isOwner || isCurrentUser}
               >
                 <X size={16} color="#dc2626" />
               </TouchableOpacity>
@@ -387,21 +296,29 @@ export default function TeamScreen() {
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Team Members
         </Text>
-        <TouchableOpacity
-          style={styles.inviteButton}
-          onPress={() => setShowInviteModal(true)}
-        >
-          <UserPlus size={24} color="#ffffff" />
-        </TouchableOpacity>
+        {teamMemberService.canPerformAdminActions(currentUserRole) && (
+          <TouchableOpacity
+            style={styles.inviteButton}
+            onPress={() => setShowInviteModal(true)}
+          >
+            <UserPlus size={24} color="#ffffff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.businessHeader}>
         <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {currentBusiness.business_name}
         </Text>
-        <Text style={[styles.teamCount, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          {teamMembers.length} {teamMembers.length === 1 ? 'member' : 'members'}
-        </Text>
+        {currentUserRole === 'admin' ? (
+          <Text style={[styles.teamCount, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            {teamMembers.length} {teamMembers.length === 1 ? 'member' : 'members'}
+          </Text>
+        ) : (
+          <Text style={[styles.teamCount, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Your Profile
+          </Text>
+        )}
       </View>
 
       <FlatList
@@ -414,16 +331,21 @@ export default function TeamScreen() {
           <Card style={styles.emptyState}>
             <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
             <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              No Team Members
+              {currentUserRole === 'admin' ? 'No Team Members' : 'Profile Information'}
             </Text>
             <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Invite team members to collaborate on your business
+              {currentUserRole === 'admin' 
+                ? 'Invite team members to collaborate on your business'
+                : 'Your profile information will appear here'
+              }
             </Text>
-            <Button
-              title="Invite Team Member"
-              onPress={() => setShowInviteModal(true)}
-              style={styles.emptyButton}
-            />
+            {currentUserRole === 'admin' && (
+              <Button
+                title="Invite Team Member"
+                onPress={() => setShowInviteModal(true)}
+                style={styles.emptyButton}
+              />
+            )}
           </Card>
         )}
       />
