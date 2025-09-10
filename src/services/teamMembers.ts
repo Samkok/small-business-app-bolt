@@ -27,6 +27,8 @@ export const teamMemberService = {
         .eq('user_id', userId)
         .single();
 
+      console.log(data);
+
       if (error) {
         console.error('Error fetching current user role:', error);
         return null;
