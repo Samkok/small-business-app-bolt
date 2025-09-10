@@ -65,6 +65,8 @@ export const teamMemberService = {
       }
 
       const { data: roles, error: rolesError } = await query;
+
+      console.log(roles);
       
       if (rolesError) throw rolesError;
 
