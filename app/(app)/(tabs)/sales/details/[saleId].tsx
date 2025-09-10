@@ -13,15 +13,18 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
+import ReturnSaleForm from '@/src/components/sales/ReturnSaleForm';
 
 export default function SaleDetailsScreen() {
   const [sale, setSale] = useState<any>(null);
   const [saleDetails, setSaleDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [voidingInProgress, setVoidingInProgress] = useState(false);
+  const [showReturnForm, setShowReturnForm] = useState(false);
   
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
@@ -80,6 +83,15 @@ export default function SaleDetailsScreen() {
     );
   };
 
+  const handleReturnItems = () => {
+    setShowReturnForm(true);
+  };
+
+  const handleReturnComplete = () => {
+    setShowReturnForm(false);
+    loadSaleDetails(); // Refresh sale details to show updated status
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -112,8 +124,131 @@ export default function SaleDetailsScreen() {
     }
   };
 
+  const SaleDetailsSkeleton = () => (
+    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Sale Header Skeleton */}
+      <SkeletonCard style={styles.saleHeader}>
+        <View style={styles.saleIdRow}>
+          <SkeletonLoader height={20} width="40%" />
+          <SkeletonLoader height={24} width={80} borderRadius={12} />
+        </View>
+        
+        <View style={styles.saleInfoRow}>
+          <View style={styles.saleInfoItem}>
+            <SkeletonLoader height={16} width={16} borderRadius={8} style={{ marginRight: 6 }} />
+            <SkeletonLoader height={14} width={120} />
+          </View>
+          
+          <View style={styles.saleInfoItem}>
+            <SkeletonLoader height={16} width={16} borderRadius={8} style={{ marginRight: 6 }} />
+            <SkeletonLoader height={14} width={80} />
+          </View>
+        </View>
+        
+        <View style={styles.amountRow}>
+          <SkeletonLoader height={24} width={24} borderRadius={12} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={24} width={100} />
+        </View>
+      </SkeletonCard>
+
+      {/* Customer Info Skeleton */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="50%" />
+        </View>
+        
+        <View style={styles.customerInfo}>
+          <SkeletonLoader height={18} width="60%" style={{ marginBottom: 8 }} />
+          <SkeletonLoader height={14} width="40%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="50%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="35%" />
+        </View>
+      </SkeletonCard>
+
+      {/* Items Skeleton */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="40%" />
+        </View>
+        
+        <View style={styles.itemsContainer}>
+          {[1, 2, 3].map((index) => (
+            <View key={index} style={styles.itemRow}>
+              <View style={styles.itemInfo}>
+                <SkeletonLoader height={14} width="70%" style={{ marginBottom: 4 }} />
+                <SkeletonLoader height={12} width="50%" style={{ marginBottom: 4 }} />
+                <View style={styles.discountInfo}>
+                  <SkeletonLoader height={12} width={12} borderRadius={6} style={{ marginRight: 4 }} />
+                  <SkeletonLoader height={11} width={80} />
+                </View>
+              </View>
+              
+              <View style={styles.itemTotal}>
+                <SkeletonLoader height={12} width={60} style={{ marginBottom: 2 }} />
+                <SkeletonLoader height={14} width={70} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </SkeletonCard>
+
+      {/* Price Breakdown Skeleton */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="40%" />
+        </View>
+        
+        <View style={styles.priceBreakdown}>
+          {[1, 2, 3, 4, 5].map((index) => (
+            <View key={index} style={styles.priceRow}>
+              <SkeletonLoader height={14} width="60%" />
+              <SkeletonLoader height={14} width="25%" />
+            </View>
+          ))}
+          
+          <View style={[styles.priceRow, styles.totalRow]}>
+            <SkeletonLoader height={16} width="30%" />
+            <SkeletonLoader height={18} width="35%" />
+          </View>
+        </View>
+      </SkeletonCard>
+
+      {/* Additional Information Skeleton */}
+      <SkeletonCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="30%" />
+        </View>
+        
+        <SkeletonLoader height={14} width="100%" style={{ marginBottom: 8 }} />
+        <SkeletonLoader height={14} width="80%" style={{ marginBottom: 8 }} />
+        <SkeletonLoader height={14} width="90%" />
+      </SkeletonCard>
+    </ScrollView>
+  );
+
   if (loading) {
-    return <LoadingSpinner text="Loading sale details..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Sale Details
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+        
+        <SaleDetailsSkeleton />
+      </View>
+    );
   }
 
   if (!sale) {
@@ -421,16 +556,36 @@ export default function SaleDetailsScreen() {
       </ScrollView>
 
       {/* Actions */}
-      {sale.status === 'completed' && (
+      {(sale.status === 'completed' || sale.status === 'partially_returned') && (
         <View style={styles.footer}>
+          <Button
+            title={sale.status === 'completed' ? "Return Items" : "Return More Items"}
+            variant="secondary"
+            onPress={handleReturnItems}
+            style={styles.footerButton}
+          />
           <Button
             title="Void Sale"
             variant="danger"
             onPress={handleVoidSale}
             loading={voidingInProgress}
+            style={styles.footerButton}
           />
         </View>
       )}
+
+      {/* Return Items Modal */}
+      <Modal
+        visible={showReturnForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ReturnSaleForm
+          sale={sale}
+          onComplete={handleReturnComplete}
+          onCancel={() => setShowReturnForm(false)}
+        />
+      </Modal>
     </View>
   );
 }
@@ -652,9 +807,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   footer: {
+    flexDirection: 'row',
     padding: 16,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+  },
+  footerButton: {
+    flex: 1,
   },
   errorContainer: {
     flex: 1,
