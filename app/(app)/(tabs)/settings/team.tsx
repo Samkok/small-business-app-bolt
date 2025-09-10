@@ -18,6 +18,7 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonTeamMemberCard, SkeletonLoader, SkeletonCard, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Users, UserPlus, User, Mail, ChevronDown, X, Shield, ShieldAlert } from 'lucide-react-native';
 import { teamMemberService, TeamMember } from '@/src/services/teamMembers';
 import { ActivityIndicator } from 'react-native';
@@ -276,10 +277,21 @@ export default function TeamScreen() {
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Team Members
           </Text>
-          <View style={styles.headerRight} />
+          <View style={styles.headerRight}>
+            <SkeletonLoader height={44} width={44} borderRadius={22} />
+          </View>
         </View>
         
-        <LoadingSpinner text="Loading team members..." />
+        <View style={styles.businessHeader}>
+          <SkeletonLoader height={18} width="60%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="40%" />
+        </View>
+
+        <SkeletonList 
+          itemComponent={SkeletonTeamMemberCard} 
+          itemCount={3} 
+          style={styles.membersListContent} 
+        />
       </View>
     );
   }
