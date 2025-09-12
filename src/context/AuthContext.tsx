@@ -343,10 +343,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentBusiness(null);
           setLoading(false);
         }
-          setLoading(false);
-        }
-        return;
+        setLoading(false);
       }
+      return;
     } catch (error: any) {
       console.error('Error in loadAuthData:', error);
       if (mounted.current) {
