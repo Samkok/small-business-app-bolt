@@ -25,11 +25,14 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
+import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const SALES_PER_PAGE = 10;
 
@@ -45,14 +48,18 @@ export default function SalesScreen() {
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const [saleToVoid, setSaleToVoid] = useState<any>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidingInProgress, setVoidingInProgress] = useState(false);
   
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
+  const [hasMoreSales, setHasMoreSales] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   
   // Date filter states
@@ -157,9 +164,9 @@ export default function SalesScreen() {
   // Only load sales data when tab changes or filter parameters change
   useEffect(() => {
     if (activeTab === 'sales') {
-      loadSalesData();
+      loadSalesData(0, true);
     }
-  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage]);
+  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod]);
 
   // Filter sales when search query changes
   useEffect(() => {
@@ -202,11 +209,13 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
-  const loadSalesData = useCallback(async (isRefresh = false) => {
+  const loadSalesData = useCallback(async (page: number, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
     
-    if (!isRefresh && !loadingMore) {
+    if (refresh) {
       setLoading(true);
+    } else if (page > 0) {
+      setLoadingMore(true);
     }
     
     try {
@@ -227,21 +236,50 @@ export default function SalesScreen() {
       );
       
       setTotalSales(count);
-      setTotalPages(Math.ceil(count / SALES_PER_PAGE));
       
       // Then get the paginated data
       const salesData = await salesService.getSalesPaginated(
         currentBusiness.id,
         start.toISOString(),
         end.toISOString(),
-        currentPage * SALES_PER_PAGE,
+        page * SALES_PER_PAGE,
         SALES_PER_PAGE,
         selectedStatus !== 'all' ? selectedStatus : undefined,
         selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
       );
       
-      setSales(salesData);
-      setFilteredSales(salesData);
+      if (refresh) {
+        setSales(salesData);
+        setFilteredSales(salesData);
+        setCurrentPage(page);
+      } else {
+        // Append new data for infinite scroll
+        setSales(prevSales => {
+          const combined = [...prevSales, ...salesData];
+          // Deduplicate by id
+          const uniqueById = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          return uniqueById;
+        });
+        
+        // Also update filtered sales if not searching
+        if (!searchQuery.trim()) {
+          setFilteredSales(prevFiltered => {
+            const combined = [...prevFiltered, ...salesData];
+            // Deduplicate by id
+            const uniqueById = Array.from(
+              new Map(combined.map(item => [item.id, item])).values()
+            );
+            return uniqueById;
+          });
+        }
+        
+        setCurrentPage(page);
+      }
+      
+      // Update hasMoreSales based on returned data length
+      setHasMoreSales(salesData.length === SALES_PER_PAGE);
     } catch (error) {
       console.error('Error loading sales data:', error);
       Alert.alert(t('common.error'), 'Failed to load sales data');
@@ -249,7 +287,13 @@ export default function SalesScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, currentPage, t]);
+  }, [currentBusiness?.id, startDate, endDate, selectedStatus, selectedPaymentMethod, searchQuery, t]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMoreSales || searchQuery.trim()) return;
+    
+    loadSalesData(currentPage + 1, false);
+  }, [currentPage, hasMoreSales, loadingMore, searchQuery, loadSalesData]);
 
   const filterSales = useCallback(() => {
     if (!debouncedSearchQuery.trim()) {
@@ -269,6 +313,7 @@ export default function SalesScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setCurrentPage(0);
+    setHasMoreSales(true);
     
     try {
       await loadData(true);
@@ -281,28 +326,9 @@ export default function SalesScreen() {
   }, [loadData, t]);
 
   const handleVoidSale = useCallback(async (sale: any) => {
-    Alert.alert(
-      'Void Sale',
-      `Are you sure you want to void this sale for $${sale.total_amount.toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Void Sale', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!currentBusiness?.id) return;
-              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
-              Alert.alert('Success', 'Sale voided successfully');
-              loadData();
-            } catch (error) {
-              console.error('Error voiding sale:', error);
-              Alert.alert('Error', 'Failed to void sale');
-            }
-          }
-        },
-      ]
-    );
+    setSaleToVoid(sale);
+    setVoidReason('');
+    setShowVoidModal(true);
   }, [currentBusiness?.id, loadData]);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
@@ -340,11 +366,6 @@ export default function SalesScreen() {
   }, [router]);
 
   const handleExportSales = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      Alert.alert('Not Supported', 'Export is only available on web platform');
-      return;
-    }
-
     if (!currentBusiness?.id) {
       Alert.alert('Error', 'No business currentBusiness found');
       return;
@@ -364,18 +385,37 @@ export default function SalesScreen() {
         end.toISOString()
       );
       
-      // Create a download link
-      const blob = new Blob([csvData], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
       
-      Alert.alert('Success', 'Sales data exported successfully');
+      if (Platform.OS === 'web') {
+        // Web platform - use browser download
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        Alert.alert('Success', 'Sales data exported successfully');
+      } else {
+        // Mobile platform - use expo-file-system and expo-sharing
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Export Sales Data',
+            UTI: 'public.comma-separated-values-text'
+          });
+          Alert.alert('Success', 'Sales data exported successfully');
+        } else {
+          Alert.alert('Error', 'Sharing is not available on this device');
+        }
+      }
     } catch (error) {
       console.error('Error exporting sales:', error);
       Alert.alert('Error', 'Failed to export sales data');
@@ -413,18 +453,29 @@ export default function SalesScreen() {
     setCurrentPage(0);
   }, []);
 
-  const handleLoadMore = useCallback(() => {
-    if (currentPage < totalPages - 1 && !loadingMore) {
-      setLoadingMore(true);
-      setCurrentPage(prev => prev + 1);
+  const handleConfirmVoid = useCallback(async () => {
+    if (!voidReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for voiding this sale');
+      return;
     }
-  }, [currentPage, totalPages, loadingMore]);
 
-  const handlePageChange = useCallback((page: number) => {
-    if (page >= 0 && page < totalPages) {
-      setCurrentPage(page);
+    if (!currentBusiness?.id || !saleToVoid) return;
+
+    setVoidingInProgress(true);
+    try {
+      await salesService.voidSale(saleToVoid.id, voidReason.trim(), currentBusiness.id);
+      Alert.alert('Success', 'Sale voided successfully');
+      setShowVoidModal(false);
+      setSaleToVoid(null);
+      setVoidReason('');
+      loadData();
+    } catch (error) {
+      console.error('Error voiding sale:', error);
+      Alert.alert('Error', 'Failed to void sale');
+    } finally {
+      setVoidingInProgress(false);
     }
-  }, [totalPages]);
+  }, [voidReason, currentBusiness?.id, saleToVoid, loadData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
@@ -497,80 +548,8 @@ export default function SalesScreen() {
     </TouchableOpacity>
   ), [isDark]);
 
-  const renderPagination = useCallback(() => {
-    if (totalPages <= 1) return null;
-    
-    const pageNumbers = [];
-    const maxVisiblePages = 5;
-    
-    // Calculate range of page numbers to show
-    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
-    
-    // Adjust if we're near the end
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(0, endPage - maxVisiblePages + 1);
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-      pageNumbers.push(i);
-    }
-    
-    return (
-      <View style={styles.pagination}>
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            { opacity: currentPage === 0 ? 0.5 : 1 }
-          ]}
-          onPress={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 0}
-        >
-          <ChevronLeft size={16} color={isDark ? '#f9fafb' : '#374151'} />
-        </TouchableOpacity>
-        
-        {pageNumbers.map(page => (
-          <TouchableOpacity
-            key={page}
-            style={[
-              styles.pageButton,
-              {
-                backgroundColor: currentPage === page 
-                  ? '#2563eb' 
-                  : (isDark ? '#374151' : '#f3f4f6')
-              }
-            ]}
-            onPress={() => handlePageChange(page)}
-          >
-            <Text style={{
-              color: currentPage === page 
-                ? '#ffffff' 
-                : (isDark ? '#f9fafb' : '#374151')
-            }}>
-              {page + 1}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            { opacity: currentPage === totalPages - 1 ? 0.5 : 1 }
-          ]}
-          onPress={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages - 1}
-        >
-          <ChevronRight size={16} color={isDark ? '#f9fafb' : '#374151'} />
-        </TouchableOpacity>
-      </View>
-    );
-  }, [currentPage, totalPages, isDark, handlePageChange]);
-
   const renderDateFilter = useCallback(() => (
     <View style={styles.dateFilterContainer}>
-      <Text style={[styles.dateFilterLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-        Date Range:
-      </Text>
       <TouchableOpacity
         style={[
           styles.dateFilterButton,
@@ -583,6 +562,12 @@ export default function SalesScreen() {
           {dateRangeText}
         </Text>
         <ChevronDown size={16} color="#2563eb" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.exportIconButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+        onPress={handleExportSales}
+      >
+        <Download size={20} color="#059669" />
       </TouchableOpacity>
     </View>
   ), [isDark, dateRangeText]);
@@ -809,125 +794,50 @@ export default function SalesScreen() {
           {/* Date Filter */}
           {renderDateFilter()}
           
-          {/* Collapsible Section */}
+          {/* Search and Filter */}
+          <View style={styles.searchSection}>
+            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <TextInput
+                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                placeholder="Search sales..."
+                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          
+          {/* Collapsible Header */}
           <View style={styles.collapsibleHeader}>
             <View style={styles.collapsibleTitle}>
+              <TrendingUp size={20} color={isDark ? '#f9fafb' : '#111827'} style={{ marginRight: 8 }} />
               <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Sales Statistics
+                Sales Analytics
               </Text>
             </View>
-            <TouchableOpacity 
-              style={styles.collapseButton}
-              onPress={toggleStatsCollapse}
-            >
+            <TouchableOpacity onPress={toggleStatsCollapse} style={styles.collapseButton}>
               {statsCollapsed ? (
-                <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <ChevronDown size={20} color={isDark ? '#f9fafb' : '#111827'} />
               ) : (
-                <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <ChevronUp size={20} color={isDark ? '#f9fafb' : '#111827'} />
               )}
             </TouchableOpacity>
           </View>
-          
+
           <Animated.View style={{
             maxHeight: collapseAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 500] // Adjust this value based on your content height
+              outputRange: [0, 800] // Adjust this value based on your content height
             }),
             overflow: 'hidden',
             opacity: collapseAnim
           }}>
-            {/* Search and Filter */}
-            <View style={styles.searchSection}>
-              <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-                <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                <TextInput
-                  style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                  placeholder="Search sales..."
-                  placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
-
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={handleExportSales}
-                >
-                  <Download size={16} color="#059669" />
-                  <Text style={[styles.actionButtonText, { color: '#059669' }]}>Export</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-                {statusFilters.map((filter) => (
-                  <TouchableOpacity
-                    key={filter.value}
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor: selectedStatus === filter.value 
-                          ? '#2563eb' 
-                          : (isDark ? '#374151' : '#f3f4f6'),
-                        borderColor: selectedStatus === filter.value 
-                          ? '#2563eb' 
-                          : (isDark ? '#4b5563' : '#d1d5db'),
-                      }
-                    ]}
-                    onPress={() => {
-                      setSelectedStatus(filter.value);
-                      setCurrentPage(0);
-                    }}
-                  >
-                    <Text style={[
-                      styles.filterButtonText,
-                      { 
-                        color: selectedStatus === filter.value 
-                          ? '#ffffff' 
-                          : (isDark ? '#f9fafb' : '#374151') 
-                      }
-                    ]}>
-                      {filter.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-                {paymentMethodFilters.map((filter) => (
-                  <TouchableOpacity
-                    key={filter.value}
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor: selectedPaymentMethod === filter.value 
-                          ? '#059669' 
-                          : (isDark ? '#374151' : '#f3f4f6'),
-                        borderColor: selectedPaymentMethod === filter.value 
-                          ? '#059669' 
-                          : (isDark ? '#4b5563' : '#d1d5db'),
-                      }
-                    ]}
-                    onPress={() => {
-                      setSelectedPaymentMethod(filter.value);
-                      setCurrentPage(0);
-                    }}
-                  >
-                    <Text style={[
-                      styles.filterButtonText,
-                      { 
-                        color: selectedPaymentMethod === filter.value 
-                          ? '#ffffff' 
-                          : (isDark ? '#f9fafb' : '#374151') 
-                      }
-                    ]}>
-                      {filter.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
             {/* Stats Cards */}
             <View style={styles.statsGrid}>
               <Card style={styles.statsCard}>
@@ -986,8 +896,78 @@ export default function SalesScreen() {
                 </View>
               </Card>
             </View>
-          </Animated.View>
 
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+              {statusFilters.map((filter) => (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: selectedStatus === filter.value 
+                        ? '#2563eb' 
+                        : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: selectedStatus === filter.value 
+                        ? '#2563eb' 
+                        : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedStatus(filter.value);
+                    setCurrentPage(0);
+                    setHasMoreSales(true);
+                  }}
+                >
+                  <Text style={[
+                    styles.filterButtonText,
+                    { 
+                      color: selectedStatus === filter.value 
+                        ? '#ffffff' 
+                        : (isDark ? '#f9fafb' : '#374151') 
+                    }
+                  ]}>
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+              {paymentMethodFilters.map((filter) => (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: selectedPaymentMethod === filter.value 
+                        ? '#059669' 
+                        : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: selectedPaymentMethod === filter.value 
+                        ? '#059669' 
+                        : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedPaymentMethod(filter.value);
+                    setCurrentPage(0);
+                    setHasMoreSales(true);
+                  }}
+                >
+                  <Text style={[
+                    styles.filterButtonText,
+                    { 
+                      color: selectedPaymentMethod === filter.value 
+                        ? '#ffffff' 
+                        : (isDark ? '#f9fafb' : '#374151') 
+                    }
+                  ]}>
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+          
           {/* Sales List */}
           <View style={styles.salesListContainer}>
             {searchQuery ? (
@@ -1001,66 +981,53 @@ export default function SalesScreen() {
                   <Text style={styles.clearSearchText}>Clear</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Showing {Math.min(currentPage * SALES_PER_PAGE + 1, totalSales)} - {Math.min((currentPage + 1) * SALES_PER_PAGE, totalSales)} of {totalSales} sales
-                </Text>
-              </View>
-            )}
+            ) : null}
 
-            {searchQuery ? (
-              // Show filtered results when searching
-              <FlatList
-                data={filteredSales}
-                renderItem={renderSaleItem}
-                keyExtractor={(item) => item.id}
-                style={styles.salesList}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={handleRefresh}
-                    colors={['#2563eb']}
-                    tintColor="#2563eb"
-                    title="Pull to refresh"
-                    titleColor={isDark ? '#f9fafb' : '#111827'}
-                  />
-                }
-                ListEmptyComponent={renderEmptyComponent}
-                contentContainerStyle={filteredSales.length === 0 ? styles.emptyContainer : undefined}
-              />
-            ) : (
-              // Show paginated results when not searching
-              <>
-                <FlatList
-                  data={sales}
-                  renderItem={renderSaleItem}
-                  keyExtractor={item => item.id}
-                  contentContainerStyle={styles.flatListContent}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={handleRefresh}
-                      colors={['#2563eb']}
-                      tintColor="#2563eb"
-                      title="Pull to refresh"
-                      titleColor={isDark ? '#f9fafb' : '#111827'}
-                    />
-                  }
-                  ListEmptyComponent={renderEmptyComponent}
-                  ListFooterComponent={() => (
-                    <View style={styles.listFooter}>
-                      {loadingMore && (
-                        <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 16 }} />
-                      )}
-                    </View>
-                  )}
+            <FlatList
+              data={filteredSales}
+              renderItem={renderSaleItem}
+              keyExtractor={(item) => item.id}
+              style={styles.salesList}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={['#2563eb']}
+                  tintColor="#2563eb"
+                  title="Pull to refresh"
+                  titleColor={isDark ? '#f9fafb' : '#111827'}
                 />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.1}
+              ListEmptyComponent={renderEmptyComponent}
+              contentContainerStyle={filteredSales.length === 0 ? styles.emptyContainer : undefined}
+              ListFooterComponent={() => {
+                if (loadingMore) {
+                  return (
+                    <View style={styles.loadingMore}>
+                      <ActivityIndicator size="small" color="#2563eb" />
+                      <Text style={[styles.loadingMoreText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                        Loading more sales...
+                      </Text>
+                    </View>
+                  );
+                }
                 
-                {renderPagination()}
-              </>
-            )}
+                if (!hasMoreSales && filteredSales.length > 0 && !searchQuery.trim()) {
+                  return (
+                    <View style={styles.endOfList}>
+                      <Text style={[styles.endOfListText, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                        You've reached the end of your sales
+                      </Text>
+                    </View>
+                  );
+                }
+                
+                return null;
+              }}
+            />
           </View>
         </View>
       )}
@@ -1074,6 +1041,64 @@ export default function SalesScreen() {
 
       {/* Date Range Picker Modal */}
       {renderDateFilterOptions()}
+
+      {/* Void Sale Modal */}
+      <Modal
+        visible={showVoidModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVoidModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.voidModal}>
+            <View style={styles.voidModalHeader}>
+              <Text style={[styles.voidModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Void Sale
+              </Text>
+              <TouchableOpacity onPress={() => setShowVoidModal(false)}>
+                <X size={20} color={isDark ? '#f9fafb' : '#111827'} />
+              </TouchableOpacity>
+            </View>
+            
+            {saleToVoid && (
+              <View style={styles.saleInfoSection}>
+                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Sale #{saleToVoid.id.slice(-8)} - ${saleToVoid.total_amount.toFixed(2)}
+                </Text>
+                <Text style={[styles.customerInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Customer: {saleToVoid.customers?.name || 'Unknown'}
+                </Text>
+              </View>
+            )}
+            
+            <Input
+              label="Reason for Voiding"
+              value={voidReason}
+              onChangeText={setVoidReason}
+              placeholder="Please provide a reason for voiding this sale"
+              multiline
+              numberOfLines={3}
+              required
+            />
+            
+            <View style={styles.voidModalActions}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={() => setShowVoidModal(false)}
+                style={styles.voidModalButton}
+              />
+              <Button
+                title="Void Sale"
+                variant="danger"
+                onPress={handleConfirmVoid}
+                loading={voidingInProgress}
+                style={styles.voidModalButton}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1155,6 +1180,7 @@ const styles = StyleSheet.create({
   dateFilterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   dateFilterLabel: {
@@ -1173,6 +1199,13 @@ const styles = StyleSheet.create({
   dateFilterText: {
     fontSize: 14,
     marginHorizontal: 8,
+  },
+  exportIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginLeft: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -1340,20 +1373,23 @@ const styles = StyleSheet.create({
   flatListContent: {
     paddingBottom: 16,
   },
-  pagination: {
+  loadingMore: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
-    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
-  pageButton: {
-    minWidth: 36,
-    height: 36,
-    borderRadius: 18,
+  loadingMoreText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  endOfList: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingVertical: 20,
+  },
+  endOfListText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   listFooter: {
     paddingVertical: 8,
@@ -1398,5 +1434,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  voidModal: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  voidModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  voidModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  saleInfoSection: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#dc262610',
+    borderRadius: 8,
+  },
+  saleInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  customerInfoText: {
+    fontSize: 12,
+  },
+  voidModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  voidModalButton: {
+    flex: 1,
   },
 });

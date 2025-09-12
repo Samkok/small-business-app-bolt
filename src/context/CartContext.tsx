@@ -899,6 +899,28 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [carts, calculateCartDiscount]);
 
+  // Helper function to round to 2 decimal places
+  const roundToTwoDecimals = useCallback((value: number): number => {
+    return Math.round(value * 100) / 100;
+  }, []);
+
+  // Update cart total when items change
+  useEffect(() => {
+    carts.forEach(cart => {
+      const cartSummary = getCartSummary(cart.id);
+      const roundedCurrentTotal = roundToTwoDecimals(cart.total_amount);
+      const roundedCalculatedTotal = roundToTwoDecimals(cartSummary.finalTotal);
+      
+      if (roundedCurrentTotal !== roundedCalculatedTotal) {
+        updateCart(cart.id, { 
+          total_amount: roundedCalculatedTotal 
+        }).catch(error => {
+          console.error('Error updating cart total:', error);
+        });
+      }
+    });
+  }, [carts, getCartSummary, updateCart, roundToTwoDecimals]);
+
   const completeSale = useCallback(async (cartId: string, paymentMethod: string): Promise<{ success: boolean; saleId?: string; error?: string }> => {
     if (!currentBusiness?.id) {
       return { success: false, error: 'No business currentBusiness found' };

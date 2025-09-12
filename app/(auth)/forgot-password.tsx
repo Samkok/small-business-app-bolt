@@ -13,7 +13,7 @@ import {
 import { Link, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
-import { Input } from '@/src/components/ui/Input';
+import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { supabase } from '@/src/config/supabase';

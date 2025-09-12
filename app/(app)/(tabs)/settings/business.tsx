@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { Input } from '@/src/components/ui/Input';
+import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ArrowLeft, Building } from 'lucide-react-native';
 

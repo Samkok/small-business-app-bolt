@@ -19,13 +19,17 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown } from 'lucide-react-native';
+import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
+import { importService } from '@/src/services/importService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const screenWidth = Dimensions.get('window').width;
+const EXPORT_FILE_PREFIX = 'BizManage_Report';
 
 export default function ReportsScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
@@ -79,19 +83,24 @@ export default function ReportsScreen() {
         startDate = startOfYear(now);
         break;
       case 'custom':
-        // Use custom date range
-        startDate = new Date(customStartDate);
-        startDate.setHours(0, 0, 0, 0);
+        // Ensure customStartDate is a valid Date object, otherwise default
+        const customStart = (customStartDate instanceof Date && !isNaN(customStartDate.getTime())) ? customStartDate : startOfMonth(now);
+        customStart.setHours(0, 0, 0, 0); // Set to beginning of day
         
-        // For custom range, also set the end date
-        const customEnd = endOfDay(new Date(customEndDate));
+        // Ensure customEndDate is a valid Date object, otherwise default
+        const customEnd = (customEndDate instanceof Date && !isNaN(customEndDate.getTime())) ? customEndDate : endOfDay(now);
         return {
-          startDate: startDate,
+          startDate: customStart,
           endDate: customEnd
         };
       default:
         // Default to month
         startDate = startOfMonth(now);
+    }
+    
+    // Ensure startDate is always a valid Date object
+    if (!startDate || isNaN(startDate.getTime())) {
+      startDate = startOfMonth(now);
     }
     
     return {
@@ -157,6 +166,72 @@ export default function ReportsScreen() {
       }
     } finally {
       setInitialLoading(false);
+      setChartsLoading(false);
+    }
+  };
+
+  const handleDownloadAllReports = async () => {
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business selected');
+      return;
+    }
+
+    setChartsLoading(true);
+    try {
+      const { startDate, endDate } = getDateRange();
+      const formattedStartDate = startDate;
+      const formattedEndDate = endDate;
+      const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
+
+      const salesCsv = await importService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const incomeCsv = await importService.exportIncomeStatementToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const cashFlowCsv = await importService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
+      const productsCsv = await importService.exportProductsToCsv(currentBusiness.id);
+
+      const filesToExport = [
+        { name: `${EXPORT_FILE_PREFIX}_Sales_${dateRangeLabel}.csv`, content: salesCsv },
+        { name: `${EXPORT_FILE_PREFIX}_IncomeStatement_${dateRangeLabel}.csv`, content: incomeCsv },
+        { name: `${EXPORT_FILE_PREFIX}_CashFlow_${format(startDate, 'yyyyMM')}.csv`, content: cashFlowCsv },
+        { name: `${EXPORT_FILE_PREFIX}_Products.csv`, content: productsCsv },
+      ];
+
+      if (Platform.OS === 'web') {
+        // For web, trigger individual downloads
+        filesToExport.forEach(file => {
+          const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+        Alert.alert('Success', 'Reports downloaded successfully. Check your downloads folder.');
+      } else {
+        // For mobile, share each file individually
+        for (const file of filesToExport) {
+          const fileUri = `${FileSystem.documentDirectory}${file.name}`;
+          await FileSystem.writeAsStringAsync(fileUri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
+          
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: `Export ${file.name}`,
+              UTI: 'public.comma-separated-values-text'
+            });
+          } else {
+            Alert.alert('Error', 'Sharing is not available on this device');
+            break; // Stop if sharing is not available
+          }
+        }
+        Alert.alert('Success', 'Reports prepared for sharing.');
+      }
+    } catch (error) {
+      console.error('Error downloading all reports:', error);
+      Alert.alert('Error', 'Failed to download reports.');
+    } finally {
       setChartsLoading(false);
     }
   };
@@ -903,7 +978,12 @@ export default function ReportsScreen() {
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Reports
         </Text>
-        <View style={styles.headerRight} />
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleDownloadAllReports}
+        >
+          <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -1100,6 +1180,9 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   backButton: {
+    padding: 8,
+  },
+  exportButton: {
     padding: 8,
   },
   title: {

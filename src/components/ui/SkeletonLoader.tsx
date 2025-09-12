@@ -312,4 +312,41 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
+  teamMemberCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 12,
+  },
+  teamMemberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  teamMemberDetails: {
+    flex: 1,
+  },
+  teamMemberActions: {
+    flexDirection: 'row',
+  },
 });
+
+export function SkeletonTeamMemberCard() {
+  return (
+    <SkeletonCard style={styles.teamMemberCard}>
+      <View style={styles.teamMemberInfo}>
+        <SkeletonLoader height={48} width={48} borderRadius={24} style={{ marginRight: 12 }} />
+        <View style={styles.teamMemberDetails}>
+          <SkeletonLoader height={16} width="70%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="60%" style={{ marginBottom: 6 }} />
+          <SkeletonLoader height={20} width={60} borderRadius={12} />
+        </View>
+      </View>
+      <View style={styles.teamMemberActions}>
+        <SkeletonLoader height={36} width={36} borderRadius={18} style={{ marginRight: 8 }} />
+        <SkeletonLoader height={36} width={36} borderRadius={18} />
+      </View>
+    </SkeletonCard>
+  );
+}

@@ -29,7 +29,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, Import as SortAsc, Dessert as SortDesc, ShoppingCart } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 
@@ -828,9 +828,9 @@ export default function InventoryScreen() {
             onPress={toggleSortOrder}
           >
             {sortOrder === 'newest' ? (
-              <SortDesc size={20} color="#2563eb" />
+              <ArrowDown size={20} color="#2563eb" />
             ) : (
-              <SortAsc size={20} color="#2563eb" />
+              <ArrowUp size={20} color="#2563eb" />
             )}
           </TouchableOpacity>
         </View>

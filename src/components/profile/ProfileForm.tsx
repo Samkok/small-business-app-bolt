@@ -12,7 +12,7 @@ import {
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { Input } from '@/src/components/ui/Input';
+import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { X, User, Phone, MapPin, Briefcase } from 'lucide-react-native';

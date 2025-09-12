@@ -14,7 +14,7 @@ interface InputProps extends TextInputProps {
   required?: boolean;
 }
 
-export function Input({
+export default function Input({
   label,
   error,
   required = false,

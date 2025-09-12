@@ -12,7 +12,7 @@ import {
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { Input } from '@/src/components/ui/Input';
+import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { X, DollarSign, FileText, Calendar, Tag } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
