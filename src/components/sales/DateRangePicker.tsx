@@ -337,4 +337,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DateRangePicker;
+const DateRangePickerComponent = DateRangePicker;
+export default DateRangePickerComponent;
