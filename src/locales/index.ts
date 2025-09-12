@@ -8,25 +8,6 @@ import en from './en.json';
 import km from './km.json';
 import zh from './zh.json';
 
-// Polyfill for Intl.PluralRules if not available
-if (!Intl.PluralRules) {
-  // Simple polyfill for basic plural rules
-  (global as any).Intl = (global as any).Intl || {};
-  (global as any).Intl.PluralRules = class PluralRules {
-    constructor(locale?: string) {
-      this.locale = locale || 'en';
-    }
-    
-    select(n: number): string {
-      // Simple English-like plural rules
-      if (n === 1) return 'one';
-      return 'other';
-    }
-    
-    private locale: string;
-  };
-}
-
 const resources = {
   en: { translation: en },
   km: { translation: km },

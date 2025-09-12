@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
@@ -35,6 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const mounted = useRef(true);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -43,6 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -54,14 +63,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkSessionActivity(session);
       }
       
-      setSession(session);
-      setUser(session?.user ?? null);
+      if (mounted.current) {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       if (session?.user) {
         console.log('Initial session: Loading auth data for user:', session.user.id);
         loadAuthData(session.user.id);
       } else {
         console.log('Initial session: No user, setting loading to false');
-        setLoading(false);
+        if (mounted.current) {
+          setLoading(false);
+        }
       }
     });
 
@@ -87,8 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Reset the explicit sign out flag
         setIsExplicitSignOut(false);
         
-        setSession(session);
-        setUser(session?.user ?? null);
+       if (mounted.current) {
+         setSession(session);
+         setUser(session?.user ?? null);
+       }
         
         if (session?.user) {
           loadAuthData(session.user.id);
@@ -113,7 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
         console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
-        setLoading(false);
+        if (mounted.current) {
+          setLoading(false);
+        }
       }, MAX_LOADING_TIME);
 
       return () => {
@@ -255,7 +272,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // If we got here, the user profile request succeeded
           if (data) {
             console.log('User profile loaded successfully:', data.user_id);
-            setUserProfile(data);
+            if (mounted.current) {
+              setUserProfile(data);
+            }
             
             // Now fetch the user's businesses
             const { data: businessRoles, error: businessRolesError } = await supabase
@@ -275,20 +294,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            setUserBusinesses(businesses);
+            if (mounted.current) {
+              setUserBusinesses(businesses);
+            }
             
             // Determine and set current business (either from saved preference or first in list)
             const determinedBusiness = await determineCurrentBusiness(userId, businesses);
-            setCurrentBusiness(determinedBusiness);
+            if (mounted.current) {
+              setCurrentBusiness(determinedBusiness);
+            }
             
-            setLoading(false);
+            if (mounted.current) {
+              setLoading(false);
+            }
             return; // Exit the function early on success
           } else {
             console.log('No user profile found for user:', userId);
-            setUserProfile(null);
-            setUserBusinesses([]);
-            setCurrentBusiness(null);
-            setLoading(false);
+            if (mounted.current) {
+              setUserProfile(null);
+              setUserBusinesses([]);
+              setCurrentBusiness(null);
+              setLoading(false);
+            }
             return; // Exit the function early
           }
         } catch (retryError) {
@@ -310,24 +337,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // If we got here, all retries failed
       if (lastError) {
         console.error('All auth data loading attempts failed:', lastError);
-        setUserProfile(null);
-        setUserBusinesses([]);
-        setCurrentBusiness(null);
-        setLoading(false);
+        if (mounted.current) {
+          setUserProfile(null);
+          setUserBusinesses([]);
+          setCurrentBusiness(null);
+          setLoading(false);
+        }
+          setLoading(false);
+        }
         return;
       }
     } catch (error: any) {
       console.error('Error in loadAuthData:', error);
-      const determinedBusiness = await determineCurrentBusiness(userId, businesses);
-      setUserBusinesses([]);
-      setCurrentBusiness(null);
-      setLoading(false);
+      if (mounted.current) {
+        setUserBusinesses([]);
+        setCurrentBusiness(null);
+        setLoading(false);
+      }
       return;
     }
     
     // Always set loading to false when done
     console.log('loadAuthData completed, setting loading to false');
-    setLoading(false);
+    if (mounted.current) {
+      setLoading(false);
+    }
   };
 
   // Original loadProfile function (commented out)

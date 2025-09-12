@@ -78,50 +78,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Load carts from AsyncStorage on mount
   useEffect(() => {
     if (currentBusiness?.id) {
-      loadCarts();
-      console.log('CartContext: Initial loadCarts called with currentBusiness ID:', currentBusiness.id);
+      refreshCarts();
+      console.log('CartContext: Initial refreshCarts called with currentBusiness ID:', currentBusiness.id);
     } else {
-      console.log('CartContext: Waiting for currentBusiness ID before loading carts');
+      console.log('CartContext: Waiting for currentBusiness ID before refreshing carts');
       // Set empty carts when currentBusiness is not available
       setCarts([]);
       setLoading(false);
     }
   }, [currentBusiness?.id]);
-
-  // Load carts from AsyncStorage
-  const loadCarts = async () => {
-    try {
-      console.log('CartContext: loadCarts started');
-      setLoading(true);
-      
-      if (!currentBusiness?.id) {
-        console.log('CartContext: No currentBusiness ID in loadCarts, aborting');
-        setLoading(false);
-        return;
-      }
-      
-      const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-      if (storedCarts) {
-        const parsedCarts = JSON.parse(storedCarts) as Cart[];
-        // Only load carts for the current business
-        if (currentBusiness?.id) {
-          const filteredCarts = parsedCarts.filter(cart => 
-            cart.business_id === currentBusiness.id && cart.status === 'active'
-          );
-          setCarts(filteredCarts);
-          console.log(`CartContext: Loaded ${filteredCarts.length} carts for business ${currentBusiness.id}`);
-        } else {
-          console.log('CartContext: No currentBusiness ID, setting empty carts');
-          setCarts([]);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading carts from storage:', error);
-    } finally {
-      console.log('CartContext: loadCarts completed, setting loading to false');
-      setLoading(false);
-    }
-  };
 
   // Save carts to AsyncStorage whenever they change
   useEffect(() => {
