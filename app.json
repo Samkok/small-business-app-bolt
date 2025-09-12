@@ -8,7 +8,6 @@
     "scheme": "businessmanager",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "jsEngine": "jsc",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.businessmanager.pro",
