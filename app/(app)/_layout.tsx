@@ -22,7 +22,7 @@ export default function AppLayout() {
       console.log('AppLayout: Focus effect triggered');
       console.log('AppLayout: session: ', session);
       console.log('AppLayout: currentBusiness: ', currentBusiness);
-      if (session && currentBusiness) {
+      if (session) {
         console.log('AppLayout: Refreshing carts for user:', session.user.id);
         refreshCarts();
       } else {
