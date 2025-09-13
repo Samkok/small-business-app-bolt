@@ -294,16 +294,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            if (mounted.current) {
-              setUserBusinesses(businesses);
-            }
+            
+            setUserBusinesses(businesses);
             
             // Determine and set current business (either from saved preference or first in list)
             const determinedBusiness = await determineCurrentBusiness(userId, businesses);
             console.log("Determined Business: ", determinedBusiness);
-            if (mounted.current) {
-              setCurrentBusiness(determinedBusiness);
-            }
+            
+            setCurrentBusiness(determinedBusiness);
+            
             console.log('AuthContext: currentBusiness: ', currentBusiness);
             
             if (mounted.current) {
