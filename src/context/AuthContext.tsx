@@ -579,7 +579,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     createBusiness,
     resetPassword,
     updatePassword,
-  const resetInactivitySignOutFlag = useCallback(() => {
+    signedOutDueToInactivity,
     resetInactivitySignOutFlag,
   }), [
     session,
