@@ -29,7 +29,7 @@ export default function AppLayout() {
         console.log('AppLayout: Not refreshing carts, no session or no current business');
       }
       return () => {}; // Cleanup function
-    }, [session, currentBusiness, refreshCarts])
+    }, [session, refreshCarts])
   );
 
   // Show inactivity alert when session expires
