@@ -144,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const determineCurrentBusiness = async (userId: string, businesses: Business[]): Promise<Business | null> => {
     try {
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
-      console.log(savedBusinessId);
       if (savedBusinessId && businesses.length > 0) {
         const business = businesses.find(b => b.id === savedBusinessId);
         if (business) {
@@ -301,6 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // Determine and set current business (either from saved preference or first in list)
             const determinedBusiness = await determineCurrentBusiness(userId, businesses);
+            console.log("Determined Business: ", determinedBusiness);
             if (mounted.current) {
               setCurrentBusiness(determinedBusiness);
             }
