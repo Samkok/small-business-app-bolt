@@ -90,66 +90,125 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
     if (typeof businessId !== 'string' || !businessId) return '';
     if (typeof startDate !== 'string' || !startDate) return '';
     if (typeof endDate !== 'string' || !endDate) return '';
-    let query = supabase
-      .from('sales')
-      .select(`
-        id,
-        total_amount,
-        payment_method,
-        status,
-        sale_date,
-        notes,
-        customers(name, phone),
-        carts(
-          cart_items(
-            quantity,
-            unit_price,
-            subtotal,
-            products(name)
+    try {
+      // Get detailed sales data with cart items and products
+      let salesQuery = supabase
+        .from('sales')
+        .select(`
+          id,
+          total_amount,
+          payment_method,
+          status,
+          sale_date,
+          notes,
+          customers(name, phone),
+          carts(
+            cart_items(
+              quantity,
+              unit_price,
+              subtotal,
+              original_subtotal,
+              item_discount_type,
+              item_discount_value,
+              item_discount_amount,
+              products(name)
+            )
           )
-        )
-      `)
-      .eq('business_id', businessId)
-      .eq('status', 'completed');
-    
-    if (startDate) {
-      query = query.gte('sale_date', startDate);
-    }
-    
-    if (endDate) {
-      query = query.lte('sale_date', endDate);
-    }
-    
-    const { data, error } = await query.order('sale_date', { ascending: false });
-    
-    if (error) throw error;
-    
-    // Create CSV header
-    let csv = 'Sale ID,Date,Customer,Payment Method,Items,Quantity,Total Amount\n';
-    
-    // Add data rows
-    data.forEach(sale => {
-      const saleId = sale.id;
-      const date = new Date(sale.sale_date).toLocaleDateString();
-      const customer = sale.customers?.name || 'Unknown';
-      const paymentMethod = sale.payment_method;
+        `)
+        .eq('business_id', businessId)
+        .eq('status', 'completed');
       
-      // Handle multiple items in a sale
-      if (sale.carts?.cart_items && sale.carts.cart_items.length > 0) {
-        sale.carts.cart_items.forEach((item, index) => {
-          const productName = item.products?.name || 'Unknown Product';
-          const quantity = item.quantity;
-          
-          // Only include total amount for the first item to avoid duplication
-          const totalAmount = index === 0 ? sale.total_amount.toFixed(2) : '';
-          
-          csv += `${saleId},${date},${customer},${paymentMethod},${productName},${quantity},${totalAmount}\n`;
-        });
-      } else {
-        // Handle sales with no items (shouldn't happen but just in case)
-        csv += `${saleId},${date},${customer},${paymentMethod},No items,0,${sale.total_amount.toFixed(2)}\n`;
+      if (startDate) {
+        salesQuery = salesQuery.gte('sale_date', startDate);
       }
-    });
+      
+      if (endDate) {
+        salesQuery = salesQuery.lte('sale_date', endDate);
+      }
+      
+      const { data: salesData, error: salesError } = await salesQuery.order('sale_date', { ascending: false });
+      
+      if (salesError) throw salesError;
+      
+      // Get sales with discount details for cost breakdown
+      let discountQuery = supabase
+        .from('sales_with_discount_details')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('status', 'completed');
+      
+      if (startDate) {
+        discountQuery = discountQuery.gte('sale_date', startDate);
+      }
+      
+      if (endDate) {
+        discountQuery = discountQuery.lte('sale_date', endDate);
+      }
+      
+      const { data: discountData, error: discountError } = await discountQuery;
+      
+      if (discountError) throw discountError;
+      
+      // Create a map of sale ID to discount details for quick lookup
+      const discountMap = new Map();
+      discountData.forEach(sale => {
+        discountMap.set(sale.id, sale);
+      });
+      
+      // Create CSV header with comprehensive cost breakdown
+      let csv = 'Sale ID,Date,Customer,Customer Phone,Payment Method,Products,Total Items,Original Subtotal,Item Discounts,Cart Discount Type,Cart Discount Value,Cart Discount Amount,Delivery Cost,Final Total,Notes\n';
+      
+      // Process each sale as a single row
+      salesData.forEach(sale => {
+        const saleId = sale.id;
+        const date = new Date(sale.sale_date).toLocaleDateString();
+        const customer = sale.customers?.name || 'Unknown';
+        const customerPhone = sale.customers?.phone || '';
+        const paymentMethod = sale.payment_method;
+        const notes = sale.notes || '';
+        
+        // Get discount details for this sale
+        const discountDetails = discountMap.get(sale.id);
+        
+        // Build products string with quantities and prices
+        let productsString = '';
+        let totalItems = 0;
+        
+        if (sale.carts?.cart_items && sale.carts.cart_items.length > 0) {
+          const productStrings = sale.carts.cart_items.map(item => {
+            const productName = item.products?.name || 'Unknown Product';
+            totalItems += item.quantity;
+            return `${productName} (${item.quantity}x$${item.unit_price.toFixed(2)})`;
+          });
+          productsString = productStrings.join('; ');
+        } else {
+          productsString = 'No items';
+        }
+        
+        // Extract cost breakdown from discount details
+        const originalSubtotal = discountDetails?.items_original_total?.toFixed(2) || '0.00';
+        const itemDiscounts = discountDetails?.items_total_discount?.toFixed(2) || '0.00';
+        const cartDiscountType = discountDetails?.cart_discount_type || '';
+        const cartDiscountValue = discountDetails?.cart_discount_value?.toFixed(2) || '';
+        const cartDiscountAmount = discountDetails?.cart_discount_amount?.toFixed(2) || '0.00';
+        const deliveryCost = discountDetails?.delivery_cost?.toFixed(2) || '0.00';
+        const finalTotal = sale.total_amount.toFixed(2);
+        
+        // Escape any commas in text fields by wrapping in quotes
+        const escapedCustomer = customer.includes(',') ? `"${customer}"` : customer;
+        const escapedProducts = productsString.includes(',') ? `"${productsString}"` : productsString;
+        const escapedNotes = notes.includes(',') ? `"${notes}"` : notes;
+        
+        // Add single row for this sale
+        csv += `${saleId},${date},${escapedCustomer},${customerPhone},${paymentMethod},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
+      });
+      
+      return csv;
+    } catch (error) {
+      console.error('Error generating sales CSV:', error);
+      throw error;
+    }
+  },
     
     return csv;
   },
