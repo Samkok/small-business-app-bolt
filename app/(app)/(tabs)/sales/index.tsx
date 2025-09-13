@@ -29,7 +29,7 @@ import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { importService } from '@/src/services/importService';
+import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -379,7 +379,7 @@ export default function SalesScreen() {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      const csvData = await importService.exportSalesToCsv(
+      const csvData = await exportService.exportSalesToCsv(
         currentBusiness.id, 
         start.toISOString(), 
         end.toISOString()

@@ -18,7 +18,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
-import { importService } from '@/src/services/importService';
+import { exportService } from '@/src/services/exportService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -67,7 +67,7 @@ export default function CashFlowScreen() {
     }
 
     try {
-      const csvData = await importService.exportCashFlowToCsv(
+      const csvData = await exportService.exportCashFlowToCsv(
         currentBusiness.id, 
         parseInt(month as string),
         parseInt(year as string)
