@@ -20,6 +20,8 @@ export default function AppLayout() {
   useFocusEffect(
     React.useCallback(() => {
       console.log('AppLayout: Focus effect triggered');
+      console.log('AppLayout: session: ', session);
+      console.log('AppLayout: currentBusiness: ', currentBusiness);
       if (session && currentBusiness) {
         console.log('AppLayout: Refreshing carts for user:', session.user.id);
         refreshCarts();
