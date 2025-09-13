@@ -403,7 +403,7 @@ export default function SalesScreen() {
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.Encoding.UTF8 });
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
