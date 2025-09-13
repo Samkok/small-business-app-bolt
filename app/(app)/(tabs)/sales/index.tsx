@@ -424,6 +424,7 @@ export default function SalesScreen() {
 
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
+    setDateFilter(filter);
     setCurrentPage(0);
     
     if (filter === 'custom') {
