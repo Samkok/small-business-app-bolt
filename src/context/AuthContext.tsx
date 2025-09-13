@@ -304,6 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (mounted.current) {
               setCurrentBusiness(determinedBusiness);
             }
+            console.log('AuthContext: currentBusiness: ', currentBusiness);
             
             if (mounted.current) {
               setLoading(false);
