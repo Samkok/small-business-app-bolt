@@ -74,6 +74,5 @@ export const importService = {
     return `product_id,quantity,base_unit_cost,cost_type_1,amount_1,calculation_type_1,cost_type_2,amount_2,calculation_type_2
 product_id_1,10,5.00,Shipping,2.00,per_total,Tax,0.50,per_unit
 product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
-  },
   }
 };
