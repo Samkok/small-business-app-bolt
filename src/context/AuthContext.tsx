@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
@@ -365,15 +365,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Original loadProfile function (commented out)
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     return { error };
-  };
+  }, []);
 
-  const signUp = async (email: string, password: string, businessName: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, businessName: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -417,9 +417,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error: null };
-  };
+  }, []);
 
-  const createBusiness = async (businessName: string) => {
+  const createBusiness = useCallback(async (businessName: string) => {
     if (!user) {
       return { error: new Error('No authenticated user') };
     }
@@ -463,9 +463,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error in createBusiness:', error);
       return { error };
     }
-  };
+  }, [user, userBusinesses.length]);
 
-  const switchBusiness = async (businessId: string) => {
+  const switchBusiness = useCallback(async (businessId: string) => {
     if (!user) return;
 
     const business = userBusinesses.find(b => b.id === businessId);
@@ -482,9 +482,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error saving business preference:', error);
     }
-  };
+  }, [user, userBusinesses]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
     
@@ -498,9 +498,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Sign out from Supabase
     await supabase.auth.signOut();
-  };
+  }, []);
 
-  const updateUserProfile = async (updates: Partial<UserProfile>) => {
+  const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return { error: new Error('No user') };
 
     const { error } = await supabase
@@ -513,9 +513,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error };
-  };
+  }, [user, userProfile]);
 
-  const updateBusiness = async (businessId: string, updates: Partial<Business>) => {
+  const updateBusiness = useCallback(async (businessId: string, updates: Partial<Business>) => {
     if (!user) return { error: new Error('No user') };
 
     // Check if user has admin access to this business
@@ -547,23 +547,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error };
-  };
+  }, [user, currentBusiness]);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/reset-password',
     });
     return { error };
-  };
+  }, []);
 
-  const updatePassword = async (password: string) => {
+  const updatePassword = useCallback(async (password: string) => {
     const { error } = await supabase.auth.updateUser({
       password,
     });
     return { error };
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
+    session,
+    user,
+    userProfile,
+    userBusinesses,
+    currentBusiness,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    updateUserProfile,
+    updateBusiness,
+    switchBusiness,
+    createBusiness,
+    resetPassword,
+    updatePassword,
+  const resetInactivitySignOutFlag = useCallback(() => {
+    resetInactivitySignOutFlag,
+  }), [
     session,
     user,
     userProfile,
@@ -581,7 +599,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updatePassword,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
-  };
+  ]);
 
   return (
     <AuthContext.Provider value={value}>
