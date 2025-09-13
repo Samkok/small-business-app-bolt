@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import { processSalesImport, processSalesImportFromFile } from '../utils/salesImportProcessor';
 import { processBulkInventoryImport, processBulkInventoryImportFromFile } from '../utils/bulkImportProcessor';
 import { reportsService } from './reports';
-import { salesService } from './sales'
+import { salesService } from './sales';
 
 export const importService = {
   /**
@@ -208,9 +208,6 @@ product_id_2,20,3.50,Handling,1.00,per_total,,0.00,`;
       console.error('Error generating sales CSV:', error);
       throw error;
     }
-  },
-    
-    return csv;
   },
 
   /**
