@@ -77,6 +77,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Load carts from AsyncStorage on mount
   useEffect(() => {
+    console.log('CartContext: Initial');
     if (currentBusiness?.id) {
       refreshCarts();
       console.log('CartContext: Initial refreshCarts called with currentBusiness ID:', currentBusiness.id);
