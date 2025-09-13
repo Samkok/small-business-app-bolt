@@ -31,7 +31,7 @@ import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, R
 import { salesService } from '@/src/services/sales';
 import { importService } from '@/src/services/importService';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const SALES_PER_PAGE = 10;
