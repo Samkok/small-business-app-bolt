@@ -17,20 +17,7 @@ export default function AppLayout() {
               'current business:', currentBusiness ? currentBusiness.id : 'none');
 
   // Refresh carts when the app screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log('AppLayout: Focus effect triggered');
-      console.log('AppLayout: session: ', session);
-      console.log('AppLayout: currentBusiness: ', currentBusiness);
-      if (session) {
-        console.log('AppLayout: Refreshing carts for user:', session.user.id);
-        refreshCarts();
-      } else {
-        console.log('AppLayout: Not refreshing carts, no session or no current business');
-      }
-      return () => {}; // Cleanup function
-    }, [session, refreshCarts])
-  );
+  
 
   // Show inactivity alert when session expires
   useEffect(() => {
