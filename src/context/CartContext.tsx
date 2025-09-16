@@ -104,6 +104,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const calculateCartDiscount = useCallback((subtotalAmount: number, discountType?: 'percentage' | 'fixed', discountValue?: number): number => {
+    if (!discountType || !discountValue) {
+      return 0;
+    }
+    
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+      discountAmount = subtotalAmount * (discountValue / 100);
+    } else if (discountType === 'fixed') {
+      discountAmount = Math.min(discountValue, subtotalAmount);
+    }
+    
+    return Math.max(0, discountAmount);
+  }, []);
+
   const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
     if (!currentBusiness?.id) {
       throw new Error('No business currentBusiness found');
@@ -784,21 +799,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     return updatedItem;
   }, [carts]);
-
-  const calculateCartDiscount = useCallback((subtotalAmount: number, discountType?: 'percentage' | 'fixed', discountValue?: number): number => {
-    if (!discountType || !discountValue) {
-      return 0;
-    }
-    
-    let discountAmount = 0;
-    if (discountType === 'percentage') {
-      discountAmount = subtotalAmount * (discountValue / 100);
-    } else if (discountType === 'fixed') {
-      discountAmount = Math.min(discountValue, subtotalAmount);
-    }
-    
-    return Math.max(0, discountAmount);
-  }, []);
 
   const getCartSummary = useCallback((cartId: string): CartSummary => {
     const cart = carts.find(cart => cart.id === cartId);
