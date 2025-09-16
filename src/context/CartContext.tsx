@@ -104,6 +104,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Helper functions - defined first as they have no dependencies
   const calculateCartDiscount = useCallback((subtotalAmount: number, discountType?: 'percentage' | 'fixed', discountValue?: number): number => {
     if (!discountType || !discountValue) {
       return 0;
@@ -118,6 +119,97 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     return Math.max(0, discountAmount);
   }, []);
+
+  const calculateItemSubtotal = useCallback((quantity: number, unitPrice: number, discountType?: 'percentage' | 'fixed', discountValue?: number): { subtotal: number; discountAmount: number } => {
+    const originalSubtotal = quantity * unitPrice;
+    
+    if (!discountType || !discountValue) {
+      return { subtotal: originalSubtotal, discountAmount: 0 };
+    }
+
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+      discountAmount = originalSubtotal * (discountValue / 100);
+    } else if (discountType === 'fixed') {
+      discountAmount = Math.min(discountValue, originalSubtotal);
+    }
+
+    return { 
+      subtotal: Math.max(0, originalSubtotal - discountAmount),
+      discountAmount
+    };
+  }, []);
+
+  // Helper function to calculate cart summary for a specific cart object
+  const getCartSummaryForCart = useCallback((cart: Cart): CartSummary => {
+    // Calculate item totals
+    const itemsOriginalTotal = cart.items.reduce((sum, item) => sum + item.original_subtotal, 0);
+    const itemsTotalDiscount = cart.items.reduce((sum, item) => sum + (item.item_discount_amount || 0), 0);
+    const itemsSubtotalAfterDiscount = cart.items.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    // Calculate cart-level discount
+    const cartDiscountAmount = calculateCartDiscount(
+      itemsSubtotalAfterDiscount,
+      cart.discount_type,
+      cart.discount_value
+    );
+    
+    // Calculate final total
+    const deliveryCost = cart.delivery_cost || 0;
+    const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount + deliveryCost);
+    
+    return {
+      itemsOriginalTotal,
+      itemsTotalDiscount,
+      itemsSubtotalAfterDiscount,
+      cartDiscountAmount,
+      deliveryCost,
+      finalTotal
+    };
+  }, [calculateCartDiscount]);
+
+  // Helper function to update cart with new items and recalculate total
+  const updateCartWithItems = useCallback(async (cartId: string, newItems: CartItem[]) => {
+    const cartIndex = carts.findIndex(cart => cart.id === cartId);
+    if (cartIndex === -1) {
+      throw new Error('Cart not found');
+    }
+
+    const cart = carts[cartIndex];
+    
+    // Create temporary cart with new items for calculation
+    const tempCart = {
+      ...cart,
+      items: newItems
+    };
+    
+    // Calculate the correct total
+    const cartSummary = getCartSummaryForCart(tempCart);
+    
+    const updatedCart = {
+      ...cart,
+      items: newItems,
+      total_amount: cartSummary.finalTotal,
+      updated_at: new Date().toISOString(),
+      synced: false
+    };
+    
+    // Update state
+    const newCarts = [...carts];
+    newCarts[cartIndex] = updatedCart;
+    setCarts(newCarts);
+    
+    // Update in AsyncStorage
+    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
+    if (storedCarts) {
+      const allCarts = JSON.parse(storedCarts) as Cart[];
+      const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
+      if (storedCartIndex !== -1) {
+        allCarts[storedCartIndex] = updatedCart;
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
+      }
+    }
+  }, [carts, getCartSummaryForCart]);
 
   const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
     if (!currentBusiness?.id) {
@@ -498,34 +590,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [carts]);
 
-  // Helper function to calculate cart summary for a specific cart object
-  const getCartSummaryForCart = useCallback((cart: Cart): CartSummary => {
-    // Calculate item totals
-    const itemsOriginalTotal = cart.items.reduce((sum, item) => sum + item.original_subtotal, 0);
-    const itemsTotalDiscount = cart.items.reduce((sum, item) => sum + (item.item_discount_amount || 0), 0);
-    const itemsSubtotalAfterDiscount = cart.items.reduce((sum, item) => sum + item.subtotal, 0);
-    
-    // Calculate cart-level discount
-    const cartDiscountAmount = calculateCartDiscount(
-      itemsSubtotalAfterDiscount,
-      cart.discount_type,
-      cart.discount_value
-    );
-    
-    // Calculate final total
-    const deliveryCost = cart.delivery_cost || 0;
-    const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount + deliveryCost);
-    
-    return {
-      itemsOriginalTotal,
-      itemsTotalDiscount,
-      itemsSubtotalAfterDiscount,
-      cartDiscountAmount,
-      deliveryCost,
-      finalTotal
-    };
-  }, [calculateCartDiscount]);
-
   const deleteCart = useCallback(async (cartId: string): Promise<void> => {
     // Get the cart from state
     const cart = carts.find(c => c.id === cartId);
@@ -554,26 +618,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedCarts));
     }
   }, [carts]);
-
-  const calculateItemSubtotal = useCallback((quantity: number, unitPrice: number, discountType?: 'percentage' | 'fixed', discountValue?: number): { subtotal: number; discountAmount: number } => {
-    const originalSubtotal = quantity * unitPrice;
-    
-    if (!discountType || !discountValue) {
-      return { subtotal: originalSubtotal, discountAmount: 0 };
-    }
-
-    let discountAmount = 0;
-    if (discountType === 'percentage') {
-      discountAmount = originalSubtotal * (discountValue / 100);
-    } else if (discountType === 'fixed') {
-      discountAmount = Math.min(discountValue, originalSubtotal);
-    }
-
-    return { 
-      subtotal: Math.max(0, originalSubtotal - discountAmount),
-      discountAmount
-    };
-  }, []);
 
   const addItemToCart = useCallback(async (cartId: string, product: any, quantity: number = 1): Promise<CartItem> => {
     const cartIndex = carts.findIndex(cart => cart.id === cartId);
@@ -634,48 +678,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [carts, calculateItemSubtotal]);
 
-  // Helper function to update cart with new items and recalculate total
-  const updateCartWithItems = useCallback(async (cartId: string, newItems: CartItem[]) => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
-
-    const cart = carts[cartIndex];
-    
-    // Create temporary cart with new items for calculation
-    const tempCart = {
-      ...cart,
-      items: newItems
-    };
-    
-    // Calculate the correct total
-    const cartSummary = getCartSummaryForCart(tempCart);
-    
-    const updatedCart = {
-      ...cart,
-      items: newItems,
-      total_amount: cartSummary.finalTotal,
-      updated_at: new Date().toISOString(),
-      synced: false
-    };
-    
-    // Update state
-    const newCarts = [...carts];
-    newCarts[cartIndex] = updatedCart;
-    setCarts(newCarts);
-    
-    // Update in AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (storedCarts) {
-      const allCarts = JSON.parse(storedCarts) as Cart[];
-      const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
-      if (storedCartIndex !== -1) {
-        allCarts[storedCartIndex] = updatedCart;
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-      }
-    }
-  }, [carts, getCartSummaryForCart]);
   const updateCartItem = useCallback(async (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>): Promise<CartItem> => {
     const cartIndex = carts.findIndex(cart => cart.id === cartId);
     if (cartIndex === -1) {
