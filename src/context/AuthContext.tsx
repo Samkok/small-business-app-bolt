@@ -141,19 +141,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading]);
 
   // Load saved current business ID from AsyncStorage
-  const determineCurrentBusiness = async (userId: string, businesses: Business[]): Promise<Business | null> => {
+  const determineCurrentBusiness = async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
     try {
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
       if (savedBusinessId && businesses.length > 0) {
         const business = businesses.find(b => b.id === savedBusinessId);
         if (business) {
+          // If the business ID matches the existing one, return the existing reference to prevent unnecessary re-renders
+          if (existingCurrentBusiness && existingCurrentBusiness.id === business.id) {
+            return existingCurrentBusiness;
+          }
           return business;
         }
       }
       
       // If no saved business or saved business not found, use the first one
       if (businesses.length > 0) {
-        return businesses[0];
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
       }
       
       return null;
@@ -161,7 +170,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error loading saved business ID:', error);
       // Default to first business if there's an error
       if (businesses.length > 0) {
-        return businesses[0];
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
       }
       return null;
     }
@@ -230,6 +244,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
+  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
+    if (arr1.length !== arr2.length) return false;
+    
+    // Sort both arrays by ID and compare
+    const ids1 = arr1.map(b => b.id).sort();
+    const ids2 = arr2.map(b => b.id).sort();
+    
+    return ids1.every((id, index) => id === ids2[index]);
+  };
+
   const loadAuthData = async (userId: string) => {
     console.log('loadAuthData started for user:', userId);
     try {
@@ -294,13 +319,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            if (mounted.current) {
+            
+            // Only update userBusinesses if the business list has actually changed
+            if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
               setUserBusinesses(businesses);
             }
             
             // Determine and set current business (either from saved preference or first in list)
-            const determinedBusiness = await determineCurrentBusiness(userId, businesses);
-            if (mounted.current) {
+            const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
+            
+            // Only update currentBusiness if it has actually changed
+            if (mounted.current && (!currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id)) {
               setCurrentBusiness(determinedBusiness);
             }
             
