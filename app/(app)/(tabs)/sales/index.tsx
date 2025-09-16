@@ -29,9 +29,9 @@ import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { importService } from '@/src/services/importService';
+import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const SALES_PER_PAGE = 10;
@@ -46,7 +46,8 @@ export default function SalesScreen() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
-  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [showDateFilterTypeModal, setShowDateFilterTypeModal] = useState(false);
+  const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
@@ -379,7 +380,7 @@ export default function SalesScreen() {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      const csvData = await importService.exportSalesToCsv(
+      const csvData = await exportService.exportSalesToCsv(
         currentBusiness.id, 
         start.toISOString(), 
         end.toISOString()
@@ -403,7 +404,7 @@ export default function SalesScreen() {
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
@@ -427,13 +428,15 @@ export default function SalesScreen() {
     setCurrentPage(0);
     
     if (filter === 'custom') {
-      setShowDateRangePicker(true);
+      setShowDateFilterTypeModal(false);
+      setShowCustomDateRangePicker(true);
     } else {
       // Calculate and set the dates for non-custom filters
       const { start, end, text } = calculateDatesForFilter(filter);
       setStartDate(start);
       setEndDate(end);
       setDateRangeText(text);
+      setShowDateFilterTypeModal(false);
     }
   }, [calculateDatesForFilter]);
 
@@ -449,7 +452,7 @@ export default function SalesScreen() {
     setStartDate(adjustedStart);
     setEndDate(adjustedEnd);
     setDateRangeText(`${start.toLocaleDateString()} - ${end.toLocaleDateString()}`);
-    setShowDateRangePicker(false);
+    setShowCustomDateRangePicker(false);
     setCurrentPage(0);
   }, []);
 
@@ -555,7 +558,7 @@ export default function SalesScreen() {
           styles.dateFilterButton,
           { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
         ]}
-        onPress={() => setShowDateRangePicker(true)}
+        onPress={() => setShowDateFilterTypeModal(true)}
       >
         <Calendar size={16} color="#2563eb" />
         <Text style={[styles.dateFilterText, { color: isDark ? '#f9fafb' : '#374151' }]}>
@@ -572,17 +575,17 @@ export default function SalesScreen() {
     </View>
   ), [isDark, dateRangeText]);
 
-  const renderDateFilterOptions = useCallback(() => (
+  const renderDateFilterTypeModal = useCallback(() => (
     <Modal
-      visible={showDateRangePicker}
+      visible={showDateFilterTypeModal}
       transparent={true}
       animationType="fade"
-      onRequestClose={() => setShowDateRangePicker(false)}
+      onRequestClose={() => setShowDateFilterTypeModal(false)}
     >
       <TouchableOpacity 
         style={styles.modalOverlay}
         activeOpacity={1}
-        onPress={() => setShowDateRangePicker(false)}
+        onPress={() => setShowDateFilterTypeModal(false)}
       >
         <View 
           style={[
@@ -595,49 +598,69 @@ export default function SalesScreen() {
             Select Date Range
           </Text>
           
-          {dateFilter === 'custom' ? (
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onConfirm={handleDateRangeConfirm}
-              onCancel={() => setShowDateRangePicker(false)}
-            />
-          ) : (
-            <View style={styles.dateFilterOptions}>
-              {dateFilterOptions.map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.dateFilterOption,
-                    {
-                      backgroundColor: dateFilter === option.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#4b5563' : '#f3f4f6')
-                    }
-                  ]}
-                  onPress={() => {
-                    handleDateFilterChange(option.value as any);
-                    if (option.value !== 'custom') {
-                      setShowDateRangePicker(false);
-                    }
-                  }}
-                >
-                  <Text style={{
-                    color: dateFilter === option.value 
-                      ? '#ffffff' 
-                      : (isDark ? '#f9fafb' : '#374151'),
-                    fontWeight: '500'
-                  }}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <View style={styles.dateFilterOptions}>
+            {dateFilterOptions.map(option => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.dateFilterOption,
+                  {
+                    backgroundColor: dateFilter === option.value 
+                      ? '#2563eb' 
+                      : (isDark ? '#4b5563' : '#f3f4f6')
+                  }
+                ]}
+                onPress={() => handleDateFilterChange(option.value as any)}
+              >
+                <Text style={{
+                  color: dateFilter === option.value 
+                    ? '#ffffff' 
+                    : (isDark ? '#f9fafb' : '#374151'),
+                  fontWeight: '500'
+                }}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </TouchableOpacity>
     </Modal>
-  ), [showDateRangePicker, isDark, dateFilter, startDate, endDate, handleDateRangeConfirm, handleDateFilterChange, dateFilterOptions]);
+  ), [showDateFilterTypeModal, isDark, dateFilter, handleDateFilterChange, dateFilterOptions]);
+
+  const renderCustomDateRangePicker = useCallback(() => (
+    <Modal
+      visible={showCustomDateRangePicker}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowCustomDateRangePicker(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCustomDateRangePicker(false)}
+      >
+        <View 
+          style={[
+            styles.dateFilterModal,
+            { backgroundColor: isDark ? '#374151' : '#ffffff' }
+          ]}
+          onStartShouldSetResponder={() => true}
+        >
+          <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Select Custom Date Range
+          </Text>
+          
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onConfirm={handleDateRangeConfirm}
+            onCancel={() => setShowCustomDateRangePicker(false)}
+          />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
   const renderSaleItem = useCallback(({ item }) => (
     <SaleCard
@@ -1040,7 +1063,10 @@ export default function SalesScreen() {
       )}
 
       {/* Date Range Picker Modal */}
-      {renderDateFilterOptions()}
+      {renderDateFilterTypeModal()}
+
+      {/* Custom Date Range Picker Modal */}
+      {renderCustomDateRangePicker()}
 
       {/* Void Sale Modal */}
       <Modal

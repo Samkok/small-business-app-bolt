@@ -22,7 +22,7 @@ import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
-import { importService } from '@/src/services/importService';
+import { exportService } from '@/src/services/exportService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import * as FileSystem from 'expo-file-system';
@@ -183,10 +183,10 @@ export default function ReportsScreen() {
       const formattedEndDate = endDate;
       const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
 
-      const salesCsv = await importService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
-      const incomeCsv = await importService.exportIncomeStatementToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
-      const cashFlowCsv = await importService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
-      const productsCsv = await importService.exportProductsToCsv(currentBusiness.id);
+      const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
+      const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
 
       const filesToExport = [
         { name: `${EXPORT_FILE_PREFIX}_Sales_${dateRangeLabel}.csv`, content: salesCsv },

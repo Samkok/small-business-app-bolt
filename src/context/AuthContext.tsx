@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
@@ -35,6 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const mounted = useRef(true);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -43,6 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -54,14 +63,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkSessionActivity(session);
       }
       
-      setSession(session);
-      setUser(session?.user ?? null);
+      if (mounted.current) {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       if (session?.user) {
         console.log('Initial session: Loading auth data for user:', session.user.id);
         loadAuthData(session.user.id);
       } else {
         console.log('Initial session: No user, setting loading to false');
-        setLoading(false);
+        if (mounted.current) {
+          setLoading(false);
+        }
       }
     });
 
@@ -87,8 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Reset the explicit sign out flag
         setIsExplicitSignOut(false);
         
-        setSession(session);
-        setUser(session?.user ?? null);
+       if (mounted.current) {
+         setSession(session);
+         setUser(session?.user ?? null);
+       }
         
         if (session?.user) {
           loadAuthData(session.user.id);
@@ -113,7 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
         console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
-        setLoading(false);
+        if (mounted.current) {
+          setLoading(false);
+        }
       }, MAX_LOADING_TIME);
 
       return () => {
@@ -124,19 +141,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading]);
 
   // Load saved current business ID from AsyncStorage
-  const determineCurrentBusiness = async (userId: string, businesses: Business[]): Promise<Business | null> => {
+  const determineCurrentBusiness = async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
     try {
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
       if (savedBusinessId && businesses.length > 0) {
         const business = businesses.find(b => b.id === savedBusinessId);
         if (business) {
+          // If the business ID matches the existing one, return the existing reference to prevent unnecessary re-renders
+          if (existingCurrentBusiness && existingCurrentBusiness.id === business.id) {
+            return existingCurrentBusiness;
+          }
           return business;
         }
       }
       
       // If no saved business or saved business not found, use the first one
       if (businesses.length > 0) {
-        return businesses[0];
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
       }
       
       return null;
@@ -144,7 +170,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error loading saved business ID:', error);
       // Default to first business if there's an error
       if (businesses.length > 0) {
-        return businesses[0];
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
       }
       return null;
     }
@@ -213,6 +244,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
+  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
+    if (arr1.length !== arr2.length) return false;
+    
+    // Sort both arrays by ID and compare
+    const ids1 = arr1.map(b => b.id).sort();
+    const ids2 = arr2.map(b => b.id).sort();
+    
+    return ids1.every((id, index) => id === ids2[index]);
+  };
+
   const loadAuthData = async (userId: string) => {
     console.log('loadAuthData started for user:', userId);
     try {
@@ -255,7 +297,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // If we got here, the user profile request succeeded
           if (data) {
             console.log('User profile loaded successfully:', data.user_id);
-            setUserProfile(data);
+            if (mounted.current) {
+              setUserProfile(data);
+            }
             
             // Now fetch the user's businesses
             const { data: businessRoles, error: businessRolesError } = await supabase
@@ -275,20 +319,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            setUserBusinesses(businesses);
+            
+            // Only update userBusinesses if the business list has actually changed
+            if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
+              setUserBusinesses(businesses);
+            }
             
             // Determine and set current business (either from saved preference or first in list)
-            const determinedBusiness = await determineCurrentBusiness(userId, businesses);
-            setCurrentBusiness(determinedBusiness);
+            const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
             
-            setLoading(false);
+            // Only update currentBusiness if it has actually changed
+            if (mounted.current && (!currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id)) {
+              setCurrentBusiness(determinedBusiness);
+            }
+            
+            if (mounted.current) {
+              setLoading(false);
+            }
             return; // Exit the function early on success
           } else {
             console.log('No user profile found for user:', userId);
-            setUserProfile(null);
-            setUserBusinesses([]);
-            setCurrentBusiness(null);
-            setLoading(false);
+            if (mounted.current) {
+              setUserProfile(null);
+              setUserBusinesses([]);
+              setCurrentBusiness(null);
+              setLoading(false);
+            }
             return; // Exit the function early
           }
         } catch (retryError) {
@@ -310,37 +366,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // If we got here, all retries failed
       if (lastError) {
         console.error('All auth data loading attempts failed:', lastError);
-        setUserProfile(null);
+        if (mounted.current) {
+          setUserProfile(null);
+          setUserBusinesses([]);
+          setCurrentBusiness(null);
+          setLoading(false);
+        }
+        setLoading(false);
+      }
+      return;
+    } catch (error: any) {
+      console.error('Error in loadAuthData:', error);
+      if (mounted.current) {
         setUserBusinesses([]);
         setCurrentBusiness(null);
         setLoading(false);
-        return;
       }
-    } catch (error: any) {
-      console.error('Error in loadAuthData:', error);
-      const determinedBusiness = await determineCurrentBusiness(userId, businesses);
-      setUserBusinesses([]);
-      setCurrentBusiness(null);
-      setLoading(false);
       return;
     }
     
     // Always set loading to false when done
     console.log('loadAuthData completed, setting loading to false');
-    setLoading(false);
+    if (mounted.current) {
+      setLoading(false);
+    }
   };
 
   // Original loadProfile function (commented out)
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     return { error };
-  };
+  }, []);
 
-  const signUp = async (email: string, password: string, businessName: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, businessName: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -384,9 +446,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error: null };
-  };
+  }, []);
 
-  const createBusiness = async (businessName: string) => {
+  const createBusiness = useCallback(async (businessName: string) => {
     if (!user) {
       return { error: new Error('No authenticated user') };
     }
@@ -430,9 +492,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error in createBusiness:', error);
       return { error };
     }
-  };
+  }, [user, userBusinesses.length]);
 
-  const switchBusiness = async (businessId: string) => {
+  const switchBusiness = useCallback(async (businessId: string) => {
     if (!user) return;
 
     const business = userBusinesses.find(b => b.id === businessId);
@@ -449,9 +511,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error saving business preference:', error);
     }
-  };
+  }, [user, userBusinesses]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
     
@@ -465,9 +527,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Sign out from Supabase
     await supabase.auth.signOut();
-  };
+  }, []);
 
-  const updateUserProfile = async (updates: Partial<UserProfile>) => {
+  const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return { error: new Error('No user') };
 
     const { error } = await supabase
@@ -480,9 +542,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error };
-  };
+  }, [user, userProfile]);
 
-  const updateBusiness = async (businessId: string, updates: Partial<Business>) => {
+  const updateBusiness = useCallback(async (businessId: string, updates: Partial<Business>) => {
     if (!user) return { error: new Error('No user') };
 
     // Check if user has admin access to this business
@@ -514,23 +576,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error };
-  };
+  }, [user, currentBusiness]);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/reset-password',
     });
     return { error };
-  };
+  }, []);
 
-  const updatePassword = async (password: string) => {
+  const updatePassword = useCallback(async (password: string) => {
     const { error } = await supabase.auth.updateUser({
       password,
     });
     return { error };
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     session,
     user,
     userProfile,
@@ -548,7 +610,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updatePassword,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
-  };
+  }), [
+    session,
+    user,
+    userProfile,
+    userBusinesses,
+    currentBusiness,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    updateUserProfile,
+    updateBusiness,
+    switchBusiness,
+    createBusiness,
+    resetPassword,
+    updatePassword,
+    signedOutDueToInactivity,
+    resetInactivitySignOutFlag,
+  ]);
 
   return (
     <AuthContext.Provider value={value}>

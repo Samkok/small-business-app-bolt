@@ -17,18 +17,7 @@ export default function AppLayout() {
               'current business:', currentBusiness ? currentBusiness.id : 'none');
 
   // Refresh carts when the app screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log('AppLayout: Focus effect triggered');
-      if (session && currentBusiness) {
-        console.log('AppLayout: Refreshing carts for user:', session.user.id);
-        refreshCarts();
-      } else {
-        console.log('AppLayout: Not refreshing carts, no session or no current business');
-      }
-      return () => {}; // Cleanup function
-    }, [session, currentBusiness, refreshCarts])
-  );
+  
 
   // Show inactivity alert when session expires
   useEffect(() => {
@@ -57,10 +46,7 @@ export default function AppLayout() {
   }
 
   // If user has no businesses OR no current business is set, redirect to business selection
-  if (session && (userBusinesses.length === 0 || !currentBusiness)) {
-    console.log('AppLayout: No businesses or no current business selected, redirecting to business selection');
-    return <Redirect href="/business-selection" />;
-  }
+  
 
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
   return (

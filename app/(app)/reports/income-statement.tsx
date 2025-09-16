@@ -19,7 +19,7 @@ import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { expenseService } from '@/src/services/expenses';
-import { importService } from '@/src/services/importService';
+import { exportService } from '@/src/services/exportService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -107,7 +107,7 @@ export default function IncomeStatementScreen() {
     }
 
     try {
-      const csvData = await importService.exportIncomeStatementToCsv(
+      const csvData = await exportService.exportIncomeStatementToCsv(
         currentBusiness.id, 
         startDate as string, 
         endDate as string
