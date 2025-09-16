@@ -46,10 +46,7 @@ export default function AppLayout() {
   }
 
   // If user has no businesses OR no current business is set, redirect to business selection
-  if (session && (userBusinesses.length === 0 || !currentBusiness)) {
-    console.log('AppLayout: No businesses or no current business selected, redirecting to business selection');
-    return <Redirect href="/business-selection" />;
-  }
+  
 
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
   return (
