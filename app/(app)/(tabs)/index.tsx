@@ -222,7 +222,11 @@ export default function DashboardScreen() {
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <View style={styles.topItemRow}>
+    <TouchableOpacity 
+      style={styles.topItemRow}
+      onPress={() => router.push('/top-customer-details')}
+      activeOpacity={0.7}
+    >
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
           {customer.name}
@@ -234,7 +238,7 @@ export default function DashboardScreen() {
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
         ${customer.totalSpent.toFixed(2)}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const SkeletonTopSection = () => (
@@ -466,16 +470,16 @@ export default function DashboardScreen() {
 
           {/* Top Customers Section */}
           {topCustomers.length > 0 && (
-            <Card style={styles.topSection}>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Top Customers This Month
-              </Text>
-              {topCustomers.map((customer, index) => (
-                <TopCustomerCard key={index} customer={customer} />
-              ))}
-            </Card>
-          )}
-        </>
+            <TouchableOpacity onPress={() => router.push('/top-customer-details')}>
+              <Card style={styles.topSection}>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Top Customers This Month
+                </Text>
+                {topCustomers.map((customer, index) => (
+                  <TopCustomerCard key={index} customer={customer} />
+                ))}
+              </Card>
+            </TouchableOpacity>
       )}
 
       {/* Modals */}
