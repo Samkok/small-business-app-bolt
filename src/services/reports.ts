@@ -206,7 +206,7 @@ export const reportsService = {
     const { data, error } = await supabase
       .from('sales')
       .select(`
-        total_amount,
+        current_total_amount,
         customers(id, name, phone)
       `)
       .eq('business_id', businessId)
@@ -234,7 +234,7 @@ export const reportsService = {
         };
       }
       
-      customerSales[customerId].totalSpent += sale.total_amount;
+      customerSales[customerId].totalSpent += sale.current_total_amount || 0;
       customerSales[customerId].orderCount += 1;
     });
 
