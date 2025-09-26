@@ -114,8 +114,8 @@ export default function CustomerOrdersScreen() {
 
         return {
           id: sale.id,
-          total_amount: sale.current_total_amount || sale.total_amount,
-          current_total_amount: sale.current_total_amount || sale.total_amount,
+          total_amount: sale.current_total_amount || sale.total_amount || 0,
+          current_total_amount: sale.current_total_amount || sale.total_amount || 0,
           returned_amount: sale.returned_amount || 0,
           payment_method: sale.payment_method,
           sale_date: sale.sale_date,
@@ -157,7 +157,7 @@ export default function CustomerOrdersScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return `$${(amount || 0).toFixed(2)}`;
   };
 
   const getStatusColor = (status: string) => {
