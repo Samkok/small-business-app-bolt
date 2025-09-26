@@ -157,6 +157,10 @@ export default function DashboardScreen() {
     router.navigate('/(app)/(tabs)/inventory/low-stock');
   };
 
+  const handleCustomerPress = useCallback((customer: any) => {
+    router.push(`/customer-order-details?customerId=${customer.id}&customerName=${encodeURIComponent(customer.name)}`);
+  }, [router]);
+
   const StatCard = ({ 
     title, 
     value, 
@@ -218,11 +222,15 @@ export default function DashboardScreen() {
           Profit: ${product.profit.toFixed(2)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <View style={styles.topItemRow}>
+    <TouchableOpacity 
+      style={styles.topItemRow}
+      onPress={() => handleCustomerPress(customer)}
+      activeOpacity={0.7}
+    >
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
           {customer.name}
