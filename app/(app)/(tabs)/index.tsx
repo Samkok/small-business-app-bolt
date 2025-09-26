@@ -229,7 +229,7 @@ export default function DashboardScreen() {
     <TouchableOpacity 
       style={styles.topItemRow}
       onPress={() => handleCustomerPress(customer)}
-      activeOpacity={0.7}
+      activeOpacity={0.7}>
     >
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
@@ -242,7 +242,7 @@ export default function DashboardScreen() {
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
         ${customer.totalSpent.toFixed(2)}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const SkeletonTopSection = () => (
