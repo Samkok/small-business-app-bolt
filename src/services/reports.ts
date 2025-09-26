@@ -87,13 +87,13 @@ export const reportsService = {
         .select('*', { count: 'exact', head: true })
         .eq('business_id', businessId);
 
-      const { data: totalProductsSoldData } = await supabase.rpc('get_quantity_sold', {
-        business_id_param: businessId,
-        start_date: startOfMonthStr,
-        end_date: endOfMonthStr
-      });
-
-      const totalProductsSold = totalProductsSoldData || 0;
+      // Get total products sold for completed and partially returned sales
+      const totalProductsSold = await salesService.getTotalProductsSoldByStatuses(
+        businessId,
+        startOfMonthStr,
+        endOfMonthStr,
+        ['completed', 'partially_returned']
+      );
 
       const { data: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
         business_id_param: businessId,
@@ -639,6 +639,53 @@ export const reportsService = {
         items: itemDetails
       };
     });
+  },
+
+  async getAllCustomersWithSalesSummary(businessId: string, startDate: Date, endDate: Date) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        total_amount,
+        customer_id,
+        customers(id, name, phone)
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString());
+
+    if (error) throw error;
+
+    // Group by customer and sum amounts
+    const customerSales: Record<string, { 
+      id: string; 
+      name: string; 
+      phone?: string; 
+      totalSpent: number; 
+      orderCount: number 
+    }> = {};
+    
+    data.forEach(sale => {
+      const customerId = sale.customer_id;
+      const customerName = sale.customers?.name || 'Unknown';
+      const customerPhone = sale.customers?.phone;
+      
+      if (!customerSales[customerId]) {
+        customerSales[customerId] = { 
+          id: customerId,
+          name: customerName, 
+          phone: customerPhone,
+          totalSpent: 0, 
+          orderCount: 0 
+        };
+      }
+      
+      customerSales[customerId].totalSpent += sale.total_amount;
+      customerSales[customerId].orderCount += 1;
+    });
+
+    return Object.values(customerSales)
+      .sort((a, b) => b.totalSpent - a.totalSpent);
   },
 
   async getProductFinancialSummary(productId: string, businessId: string, startDate: Date, endDate: Date) {
