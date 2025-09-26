@@ -64,6 +64,8 @@ export default function CustomerOrdersScreen() {
       setLoading(true);
     }
     
+    console.log("Customer: ", customerId);
+    
     try {
       // Get customer information
       const { data: customerData, error: customerError } = await supabase
@@ -76,7 +78,6 @@ export default function CustomerOrdersScreen() {
       if (customerError) throw customerError;
       setCustomer(customerData);
 
-      console.log("Customer: ", customerData);
 
       // Get customer's orders with cart items
       const { data: salesData, error: salesError } = await supabase
