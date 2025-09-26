@@ -166,59 +166,63 @@ export default function TopProductsScreen() {
           </View>
           
           <View style={styles.productMetrics}>
-            <View style={styles.metricItem}>
-              <View style={styles.metricIconContainer}>
-                <ShoppingCart size={16} color="#8b5cf6" />
+            <View style={styles.metricsRow}>
+              <View style={styles.metricItem}>
+                <View style={styles.metricIconContainer}>
+                  <ShoppingCart size={16} color="#8b5cf6" />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={[styles.metricValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {product.quantity}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Units Sold
+                  </Text>
+                </View>
               </View>
-              <View style={styles.metricContent}>
-                <Text style={[styles.metricValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {product.quantity}
-                </Text>
-                <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Units Sold
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.metricItem}>
-              <View style={styles.metricIconContainer}>
-                <DollarSign size={16} color="#059669" />
-              </View>
-              <View style={styles.metricContent}>
-                <Text style={[styles.metricValue, { color: '#059669' }]}>
-                  {formatCurrency(product.revenue)}
-                </Text>
-                <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Revenue
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.metricItem}>
-              <View style={styles.metricIconContainer}>
-                <TrendingUp size={16} color={product.profit >= 0 ? '#059669' : '#dc2626'} />
-              </View>
-              <View style={styles.metricContent}>
-                <Text style={[styles.metricValue, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
-                  {formatCurrency(product.profit)}
-                </Text>
-                <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Profit
-                </Text>
+              
+              <View style={styles.metricItem}>
+                <View style={styles.metricIconContainer}>
+                  <DollarSign size={16} color="#059669" />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={[styles.metricValue, { color: '#059669' }]}>
+                    {formatCurrency(product.revenue)}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Revenue
+                  </Text>
+                </View>
               </View>
             </View>
             
-            <View style={styles.metricItem}>
-              <View style={styles.metricIconContainer}>
-                <Package size={16} color="#ea580c" />
+            <View style={styles.metricsRow}>
+              <View style={styles.metricItem}>
+                <View style={styles.metricIconContainer}>
+                  <TrendingUp size={16} color={product.profit >= 0 ? '#059669' : '#dc2626'} />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={[styles.metricValue, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
+                    {formatCurrency(product.profit)}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Profit
+                  </Text>
+                </View>
               </View>
-              <View style={styles.metricContent}>
-                <Text style={[styles.metricValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {profitMargin.toFixed(1)}%
-                </Text>
-                <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Margin
-                </Text>
+              
+              <View style={styles.metricItem}>
+                <View style={styles.metricIconContainer}>
+                  <Package size={16} color="#ea580c" />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={[styles.metricValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {profitMargin.toFixed(1)}%
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Margin
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -533,14 +537,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   productMetrics: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 12,
   },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   metricItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   metricIconContainer: {
     width: 32,
