@@ -76,6 +76,8 @@ export default function CustomerOrdersScreen() {
       if (customerError) throw customerError;
       setCustomer(customerData);
 
+      console.log("Customer: ", customerData);
+
       // Get customer's orders with cart items
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
