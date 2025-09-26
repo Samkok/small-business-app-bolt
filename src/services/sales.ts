@@ -203,12 +203,21 @@ export const salesService = {
             products(*)
           )
         ),
-        sale_actions(*)
+        sale_actions(*),
+        returned_amount:sale_actions(amount).eq(action_type, 'return')
       `)
       .eq('id', saleId)
       .single();
 
     if (error) throw error;
+    
+    // Calculate total returned amount
+    const returnedAmount = data.sale_actions
+      ?.filter(action => action.action_type === 'return')
+      ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+    
+    // Add returned_amount to the sale data
+    data.returned_amount = returnedAmount;
     
     // If there are sale actions, fetch the performer names separately
     if (data && data.sale_actions && data.sale_actions.length > 0) {

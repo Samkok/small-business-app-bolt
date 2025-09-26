@@ -621,6 +621,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  amountWithReturns: {
+    alignItems: 'flex-end',
+  },
+  originalOrderAmount: {
+    fontSize: 14,
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
+  },
+  currentOrderAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  returnedOrderAmount: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
   orderDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',

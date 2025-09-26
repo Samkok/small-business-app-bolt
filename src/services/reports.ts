@@ -25,26 +25,42 @@ export const reportsService = {
 
     try {
       // Today's revenue
-      const { data: todaySales } = await supabase
+      const { data: todaySalesData } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', todayStr)
         .lt('sale_date', tomorrowStr);
 
-      const todayRevenue = todaySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+      const todayRevenue = todaySalesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
 
       // Monthly revenue
-      const { data: monthlySales } = await supabase
+      const { data: monthlySalesData } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', startOfMonthStr)
         .lte('sale_date', endOfMonthStr);
 
-      const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+      const monthlyRevenue = monthlySalesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
 
       // Monthly COGS (Cost of Goods Sold) - based on actual sold items
       const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
