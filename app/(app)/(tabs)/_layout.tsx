@@ -63,7 +63,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="top-customers"
+        name="topCustomers"
         options={{
           title: t('dashboard.topCustomers'),
           tabBarIcon: ({ size, color }) => (
