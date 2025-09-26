@@ -194,7 +194,7 @@ export const reportsService = {
         customers(id, name, phone)
       `)
       .eq('business_id', businessId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned'])
       .gte('sale_date', startOfMonthStr)
       .lte('sale_date', endOfMonthStr);
 

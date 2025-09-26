@@ -97,6 +97,7 @@ export default function CustomerOrdersScreen() {
         `)
         .eq('customer_id', customerId as string)
         .eq('business_id', currentBusiness.id)
+        .in('status', ['completed', 'partially_returned'])
         .order('sale_date', { ascending: false });
 
       if (salesError) throw salesError;
@@ -121,7 +122,9 @@ export default function CustomerOrdersScreen() {
       setOrders(processedOrders);
 
       // Calculate totals
-      const completedOrders = processedOrders.filter(order => order.status === 'completed');
+      const completedOrders = processedOrders.filter(order => 
+        order.status === 'completed' || order.status === 'partially_returned'
+      );
       const totalSpentAmount = completedOrders.reduce((sum, order) => sum + order.total_amount, 0);
       
       setTotalSpent(totalSpentAmount);
