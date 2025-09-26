@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import TabBarIcon from '@/components/ui/TabBarIcon';
+import TabBarIcon from '@/app/components/TabBarIcon';
 
 export default function TabLayout() {
 
