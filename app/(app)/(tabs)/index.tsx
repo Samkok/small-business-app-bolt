@@ -472,14 +472,16 @@ export default function DashboardScreen() {
           {topCustomers.length > 0 && (
             <Card style={styles.topSection}>
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Top Customers This Month
-              </Text>
-              {topCustomers.map((customer, index) => (
-                <TopCustomerCard key={index} customer={customer} />
-              ))}
-            </Card>
-          )}
-        </>
+        <TouchableOpacity onPress={() => router.push('/top-customer-details')}>
+          <Card style={styles.topSection}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Top Customers This Month
+            </Text>
+            {topCustomers.map((customer, index) => (
+              <TopCustomerCard key={index} customer={customer} onPress={() => {}} />
+            ))}
+          </Card>
+        </TouchableOpacity>
       )}
 
       {/* Modals */}
