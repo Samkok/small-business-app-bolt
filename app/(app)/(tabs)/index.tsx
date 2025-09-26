@@ -222,7 +222,7 @@ export default function DashboardScreen() {
           Profit: ${product.profit.toFixed(2)}
         </Text>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
