@@ -55,7 +55,10 @@ export default function CustomerOrdersScreen() {
   }, [customerId, currentBusiness?.id]);
 
   const loadCustomerOrders = async (isRefresh = false) => {
-    if (!customerId || !currentBusiness?.id) return;
+    if (!customerId || typeof customerId !== 'string' || !currentBusiness?.id) {
+      console.log('Missing required parameters:', { customerId, currentBusinessId: currentBusiness?.id });
+      return;
+    }
     
     if (!isRefresh) {
       setLoading(true);
@@ -66,7 +69,7 @@ export default function CustomerOrdersScreen() {
       const { data: customerData, error: customerError } = await supabase
         .from('customers')
         .select('*')
-        .eq('id', customerId)
+        .eq('id', customerId as string)
         .eq('business_id', currentBusiness.id)
         .single();
 
@@ -89,7 +92,7 @@ export default function CustomerOrdersScreen() {
             )
           )
         `)
-        .eq('customer_id', customerId)
+        .eq('customer_id', customerId as string)
         .eq('business_id', currentBusiness.id)
         .order('sale_date', { ascending: false });
 
