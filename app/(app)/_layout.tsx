@@ -53,7 +53,6 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="business-selection" />
-      <Stack.Screen name="customer-order-details" />
     </Stack>
   );
 }

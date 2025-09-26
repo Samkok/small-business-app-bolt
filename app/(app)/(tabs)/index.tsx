@@ -157,10 +157,6 @@ export default function DashboardScreen() {
     router.navigate('/(app)/(tabs)/inventory/low-stock');
   };
 
-  const handleCustomerPress = useCallback((customer: any) => {
-    router.push(`/customer-order-details?customerId=${customer.id}&customerName=${encodeURIComponent(customer.name)}`);
-  }, [router]);
-
   const StatCard = ({ 
     title, 
     value, 
@@ -226,11 +222,7 @@ export default function DashboardScreen() {
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <TouchableOpacity 
-      style={styles.topItemRow}
-      onPress={() => handleCustomerPress(customer)}
-      activeOpacity={0.7}>
-    >
+    <View style={styles.topItemRow}>
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
           {customer.name}
@@ -242,7 +234,7 @@ export default function DashboardScreen() {
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
         ${customer.totalSpent.toFixed(2)}
       </Text>
-    </TouchableOpacity>
+    </View>
   );
 
   const SkeletonTopSection = () => (
