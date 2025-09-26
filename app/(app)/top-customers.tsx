@@ -67,7 +67,8 @@ export default function TopCustomersScreen() {
   };
 
   const CustomerCard = ({ customer, index }: { customer: TopCustomer; index: number }) => (
-    <Card style={styles.customerCard}>
+    <TouchableOpacity onPress={() => router.push(`/customer-orders/${customer.id}`)}>
+      <Card style={styles.customerCard}>
       <View style={styles.customerHeader}>
         <View style={styles.rankContainer}>
           <Text style={[styles.rank, { color: '#2563eb' }]}>
@@ -123,7 +124,8 @@ export default function TopCustomersScreen() {
           </View>
         </View>
       </View>
-    </Card>
+      </Card>
+    </TouchableOpacity>
   );
 
   const SkeletonCustomerCard = () => (
