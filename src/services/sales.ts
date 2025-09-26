@@ -444,6 +444,41 @@ export const salesService = {
     });
   },
 
+  async getTotalProductsSoldByStatuses(
+    businessId: string, 
+    startDate: string, 
+    endDate: string,
+    statuses: string[] = ['completed', 'partially_returned']
+  ) {
+    if (!businessId || !startDate || !endDate) return 0;
+    
+    const { data, error } = await supabase
+      .from('cart_items')
+      .select(`
+        quantity,
+        carts!inner(
+          sales!inner(
+            business_id,
+            sale_date,
+            status
+          )
+        )
+      `)
+      .eq('carts.sales.business_id', businessId)
+      .gte('carts.sales.sale_date', startDate)
+      .lte('carts.sales.sale_date', endDate)
+      .in('carts.sales.status', statuses);
+
+    if (error) {
+      console.error('Error fetching total products sold:', error);
+      return 0;
+    }
+
+    // Sum up all quantities
+    const totalQuantity = data.reduce((sum, item) => sum + item.quantity, 0);
+    return totalQuantity;
+  },
+
   async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {
     if (!businessId || !startDate || !endDate) return null;
     

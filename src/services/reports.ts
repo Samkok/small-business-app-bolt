@@ -87,13 +87,13 @@ export const reportsService = {
         .select('*', { count: 'exact', head: true })
         .eq('business_id', businessId);
 
-      const { data: totalProductsSoldData } = await supabase.rpc('get_quantity_sold', {
-        business_id_param: businessId,
-        start_date: startOfMonthStr,
-        end_date: endOfMonthStr
-      });
-
-      const totalProductsSold = totalProductsSoldData || 0;
+      // Get total products sold for completed and partially returned sales
+      const totalProductsSold = await salesService.getTotalProductsSoldByStatuses(
+        businessId,
+        startOfMonthStr,
+        endOfMonthStr,
+        ['completed', 'partially_returned']
+      );
 
       const { data: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
         business_id_param: businessId,
