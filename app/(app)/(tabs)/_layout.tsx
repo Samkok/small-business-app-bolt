@@ -1,7 +1,4 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
-import { useTranslation } from '@/src/locales';
-import { useTheme } from '@/src/context/ThemeContext';
 import { 
   LayoutDashboard, 
   Package, 
@@ -15,21 +12,16 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
 
-  const tabBarStyle = {
-    backgroundColor: isDark ? '#374151' : '#ffffff',
-    borderTopColor: isDark ? '#4b5563' : '#e5e7eb',
-  };
-
-  const tabBarActiveTintColor = '#2563eb';
-  const tabBarInactiveTintColor = isDark ? '#9ca3af' : '#6b7280';
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle,
-        tabBarActiveTintColor,
-        tabBarInactiveTintColor,
+        tabBarStyle: {
+          backgroundColor: isDark ? '#374151' : '#ffffff',
+          borderTopColor: isDark ? '#4b5563' : '#e5e7eb',
+        },
+        tabBarActiveTintColor: '#2563eb',
+        tabBarInactiveTintColor: isDark ? '#9ca3af' : '#6b7280',
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
