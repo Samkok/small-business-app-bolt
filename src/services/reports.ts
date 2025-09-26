@@ -191,7 +191,7 @@ export const reportsService = {
       .from('sales')
       .select(`
         total_amount,
-        customers(name, phone)
+        customers(id, name, phone)
       `)
       .eq('business_id', businessId)
       .eq('status', 'completed')
@@ -201,14 +201,16 @@ export const reportsService = {
     if (error) throw error;
 
     // Group by customer and sum amounts
-    const customerSales: Record<string, { name: string; phone?: string; totalSpent: number; orderCount: number }> = {};
+    const customerSales: Record<string, { id: string; name: string; phone?: string; totalSpent: number; orderCount: number }> = {};
     
     data.forEach(sale => {
+      const customerId = sale.customers?.id || 'unknown';
       const customerName = sale.customers?.name || 'Unknown';
       const customerPhone = sale.customers?.phone;
       
-      if (!customerSales[customerName]) {
-        customerSales[customerName] = { 
+      if (!customerSales[customerId]) {
+        customerSales[customerId] = { 
+          id: customerId,
           name: customerName, 
           phone: customerPhone,
           totalSpent: 0, 
@@ -216,8 +218,8 @@ export const reportsService = {
         };
       }
       
-      customerSales[customerName].totalSpent += sale.total_amount;
-      customerSales[customerName].orderCount += 1;
+      customerSales[customerId].totalSpent += sale.total_amount;
+      customerSales[customerId].orderCount += 1;
     });
 
     return Object.values(customerSales)

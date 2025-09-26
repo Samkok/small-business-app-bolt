@@ -18,6 +18,7 @@ import { reportsService } from '@/src/services/reports';
 
 interface TopCustomer {
   name: string;
+  id: string;
   phone?: string;
   totalSpent: number;
   orderCount: number;
