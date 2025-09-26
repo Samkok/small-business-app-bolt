@@ -6,16 +6,25 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  FlatList
+  FlatList,
+  Modal,
+  Dimensions
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
+import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, User, Phone, ShoppingCart, DollarSign, Calendar, Receipt, Package } from 'lucide-react-native';
+import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { ArrowLeft, User, Phone, ShoppingCart, DollarSign, Calendar, Receipt, Package, TrendingUp, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/src/config/supabase';
+import { reportsService } from '@/src/services/reports';
+import { LineChart } from 'react-native-chart-kit';
+import { format, subMonths, eachMonthOfInterval, startOfMonth, endOfMonth } from 'date-fns';
+
+const screenWidth = Dimensions.get('window').width;
 
 interface CustomerOrder {
   id: string;

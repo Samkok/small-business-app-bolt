@@ -715,4 +715,121 @@ export const reportsService = {
       throw error;
     }
   }
+
+  async getCustomerSpendingChart(businessId: string, customerId: string, startDate: Date, endDate: Date) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('current_total_amount, sale_date')
+      .eq('business_id', businessId)
+      .eq('customer_id', customerId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date');
+
+    if (error) throw error;
+
+    // Convert dates to JS Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Determine if we should group by day or month based on date range
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const groupByMonth = dayDiff > 31;
+    
+    let result = [];
+    
+    if (groupByMonth) {
+      // Group by month
+      const months = eachMonthOfInterval({ start, end });
+      
+      result = months.map(month => {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        const monthSales = data.filter(sale => {
+          const saleDate = new Date(sale.sale_date);
+          return isSameMonth(saleDate, month);
+        });
+        
+        const spending = monthSales.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || sale.total_amount), 0);
+        
+        return {
+          date: format(month, 'yyyy-MM-dd'),
+          label: format(month, 'MMM'),
+          spending
+        };
+      });
+    } else {
+      // Group by day
+      const days = eachDayOfInterval({ start, end });
+      
+      result = days.map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        const daySales = data.filter(sale => sale.sale_date.split('T')[0] === dayStr);
+        const spending = daySales.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || sale.total_amount), 0);
+        
+        return {
+          date: dayStr,
+          label: format(day, 'dd/MM'),
+          spending
+        };
+      });
+    }
+    
+    return result;
+  },
+
+  async getCustomerEngagementMetrics(businessId: string, customerId: string, startDate: Date, endDate: Date) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        current_total_amount,
+        sale_date,
+        carts(
+          cart_items(
+            quantity,
+            products(name)
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('customer_id', customerId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date', { ascending: false });
+
+    if (error) throw error;
+
+    const totalSpent = data.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || 0), 0);
+    const totalOrders = data.length;
+    const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+    const lastOrderDate = data.length > 0 ? data[0].sale_date : null;
+    
+    // Calculate total items purchased
+    const totalItems = data.reduce((sum, sale) => {
+      const items = sale.carts?.cart_items || [];
+      return sum + items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+    }, 0);
+    
+    // Get unique products purchased
+    const uniqueProducts = new Set();
+    data.forEach(sale => {
+      const items = sale.carts?.cart_items || [];
+      items.forEach(item => {
+        if (item.products?.name) {
+          uniqueProducts.add(item.products.name);
+        }
+      });
+    });
+
+    return {
+      totalSpent,
+      totalOrders,
+      averageOrderValue,
+      lastOrderDate,
+      totalItems,
+      uniqueProductsPurchased: uniqueProducts.size
+    };
+  }
 };
