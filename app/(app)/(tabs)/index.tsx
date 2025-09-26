@@ -454,7 +454,292 @@ export default function DashboardScreen() {
 
           {/* Top Products Section */}
           {topProducts.length > 0 && (
-            <Card style={styles.topSection}>
+            <TouchableOpacity onPress={() => router.push('/top-products')}>
+              <Card style={styles.topSection}>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Top Products This Month
+                </Text>
+                {topProducts.map((product, index) => (
+                  <TopProductCard key={index} product={product} />
+                ))}
+              </Card>
+            </TouchableOpacity>
+          )}
+
+          {/* Top Customers Section */}
+          {topCustomers.length > 0 && (
+            <TouchableOpacity onPress={() => router.push('/top-customers')}>
+              <Card style={styles.topSection}>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Top Customers This Month
+                </Text>
+                {topCustomers.map((customer, index) => (
+                  <TopCustomerCard key={index} customer={customer} />
+                ))}
+              </Card>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+
+      {/* Modals */}
+      <Modal
+        visible={showProductForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ProductForm
+          onSave={handleProductSave}
+          onCancel={() => setShowProductForm(false)}
+        />
+      </Modal>
+
+      <Modal
+        visible={showCustomerForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <CustomerForm
+          onSave={handleCustomerSave}
+          onCancel={() => setShowCustomerForm(false)}
+        />
+      </Modal>
+
+      <Modal
+        visible={showSalesForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SalesForm
+          onComplete={handleSaleComplete}
+          onCancel={() => setShowSalesForm(false)}
+        />
+      </Modal>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingTop: 60,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  welcomeText: {
+    fontSize: 16,
+  },
+  businessName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorCard: {
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  errorIcon: {
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  statCardContainer: {
+    width: '48%',
+  },
+  statCard: {
+    padding: 12,
+    minHeight: 100,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trendContainer: {
+    padding: 2,
+  },
+  statContent: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 2,
+    lineHeight: 22,
+  },
+  statTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 14,
+  },
+  reportsCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  reportsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reportsText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  reportsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  reportsSubtitle: {
+    fontSize: 14,
+  },
+  alertCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  alertContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  alertText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  alertSubtitle: {
+    fontSize: 14,
+  },
+  topSection: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  topItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  topItemInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  topItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  topItemSubtext: {
+    fontSize: 12,
+  },
+  topItemValues: {
+    alignItems: 'flex-end',
+  },
+  topItemValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  topItemProfit: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  quickActions: {
+    padding: 16,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  actionButton: {
+    alignItems: 'center',
+    padding: 16,
+    flex: 1,
+  },
+  actionIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    margin: 20,
+  },
+});
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Top Products This Month
               </Text>
