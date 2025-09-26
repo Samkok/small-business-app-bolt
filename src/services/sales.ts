@@ -518,7 +518,7 @@ export const salesService = {
     analytics.discountPercentage = analytics.totalOriginalAmount > 0 ? (analytics.totalDiscounts / analytics.totalOriginalAmount) * 100 : 0;
 
     return analytics;
-  }
+  },
 
   async getSalesByCustomer(
     businessId: string,
