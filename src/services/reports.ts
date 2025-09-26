@@ -714,7 +714,7 @@ export const reportsService = {
       console.error('Error getting product financial summary:', error);
       throw error;
     }
-  }
+  },
 
   async getCustomerSpendingChart(businessId: string, customerId: string, startDate: Date, endDate: Date) {
     const { data, error } = await supabase
