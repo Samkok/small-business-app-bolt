@@ -20,6 +20,8 @@ import { supabase } from '@/src/config/supabase';
 interface CustomerOrder {
   id: string;
   total_amount: number;
+  current_total_amount: number;
+  returned_amount: number;
   payment_method: string;
   sale_date: string;
   status: string;
@@ -85,6 +87,8 @@ export default function CustomerOrdersScreen() {
         .select(`
           id,
           total_amount,
+          current_total_amount,
+          returned_amount,
           payment_method,
           sale_date,
           status,
@@ -110,7 +114,9 @@ export default function CustomerOrdersScreen() {
 
         return {
           id: sale.id,
-          total_amount: sale.total_amount,
+          total_amount: sale.current_total_amount || sale.total_amount,
+          current_total_amount: sale.current_total_amount || sale.total_amount,
+          returned_amount: sale.returned_amount || 0,
           payment_method: sale.payment_method,
           sale_date: sale.sale_date,
           status: sale.status,
@@ -125,7 +131,7 @@ export default function CustomerOrdersScreen() {
       const completedOrders = processedOrders.filter(order => 
         order.status === 'completed' || order.status === 'partially_returned'
       );
-      const totalSpentAmount = completedOrders.reduce((sum, order) => sum + order.total_amount, 0);
+      const totalSpentAmount = completedOrders.reduce((sum, order) => sum + order.current_total_amount, 0);
       
       setTotalSpent(totalSpentAmount);
       setTotalOrders(completedOrders.length);
@@ -200,9 +206,25 @@ export default function CustomerOrdersScreen() {
             </View>
           </View>
           
-          <Text style={[styles.orderAmount, { color: '#059669' }]}>
-            {formatCurrency(order.total_amount)}
-          </Text>
+          <View style={styles.amountContainer}>
+            {order.returned_amount > 0 ? (
+              <View style={styles.amountWithReturns}>
+                <Text style={[styles.originalOrderAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                  {formatCurrency(order.total_amount + order.returned_amount)}
+                </Text>
+                <Text style={[styles.currentOrderAmount, { color: '#059669' }]}>
+                  {formatCurrency(order.current_total_amount)}
+                </Text>
+                <Text style={[styles.returnedOrderAmount, { color: '#dc2626' }]}>
+                  (-{formatCurrency(order.returned_amount)} returned)
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.orderAmount, { color: '#059669' }]}>
+                {formatCurrency(order.current_total_amount)}
+              </Text>
+            )}
+          </View>
         </View>
         
         <View style={styles.orderDetails}>
@@ -620,6 +642,26 @@ const styles = StyleSheet.create({
   orderAmount: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  amountWithReturns: {
+    alignItems: 'flex-end',
+  },
+  originalOrderAmount: {
+    fontSize: 14,
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
+  },
+  currentOrderAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  returnedOrderAmount: {
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   amountContainer: {
     alignItems: 'flex-end',
