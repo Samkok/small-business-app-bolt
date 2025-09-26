@@ -224,7 +224,7 @@ export default function DashboardScreen() {
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
     <TouchableOpacity 
       style={styles.topItemRow}
-      onPress={() => router.push(`/(app)/(tabs)/customers/customer-sales-report?customerName=${encodeURIComponent(customer.name)}`)}
+      onPress={() => router.push(`/(app)/(tabs)/top-customers/customer-sales-report?customerName=${encodeURIComponent(customer.name)}`)}
       activeOpacity={0.7}
     >
       <View style={styles.topItemInfo}>

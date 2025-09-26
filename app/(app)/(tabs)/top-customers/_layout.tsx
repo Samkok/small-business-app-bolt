@@ -1,7 +1,7 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 
-export default function CustomersLayout() {
+export default function TopCustomersLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="overview" />

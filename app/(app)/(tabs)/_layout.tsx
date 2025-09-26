@@ -92,9 +92,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="top-customers"
         options={{
-          title: t('navigation.top-customers'),
+          title: "Top Customers",
           tabBarIcon: ({ size, color }) => (
-            <Settings size={size} color={color} />
+            <Users size={size} color={color} />
           ),
         }}
       />
