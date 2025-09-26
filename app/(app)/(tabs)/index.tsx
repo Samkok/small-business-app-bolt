@@ -222,9 +222,8 @@ export default function DashboardScreen() {
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <TouchableOpacity 
+    <View 
       style={styles.topItemRow}
-      activeOpacity={0.7}
     >
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
@@ -237,7 +236,7 @@ export default function DashboardScreen() {
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
         ${customer.totalSpent.toFixed(2)}
       </Text>
-    </TouchableOpacity>
+    </View>
   );
 
   const SkeletonTopSection = () => (
