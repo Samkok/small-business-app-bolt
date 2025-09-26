@@ -480,7 +480,7 @@ export default function DashboardScreen() {
             {topCustomers.map((customer, index) => (
               <TopCustomerCard key={index} customer={customer} onPress={() => {}} />
             ))}
-          </Card>
+          )}
         </TouchableOpacity>
       )}
 
