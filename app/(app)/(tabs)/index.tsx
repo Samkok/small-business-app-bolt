@@ -157,10 +157,6 @@ export default function DashboardScreen() {
     router.navigate('/(app)/(tabs)/inventory/low-stock');
   };
 
-  const handleTopCustomersPress = () => {
-    router.push('/top-customers');
-  };
-
   const StatCard = ({ 
     title, 
     value, 
@@ -462,16 +458,14 @@ export default function DashboardScreen() {
 
           {/* Top Products Section */}
           {topProducts.length > 0 && (
-            <TouchableOpacity onPress={handleTopCustomersPress}>
-              <Card style={styles.topSection}>
-                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  Top Customers This Month
-                </Text>
-                {topCustomers.map((customer, index) => (
-                  <TopCustomerCard key={index} customer={customer} />
-                ))}
-              </Card>
-            </TouchableOpacity>
+            <Card style={styles.topSection}>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Top Products This Month
+              </Text>
+              {topProducts.map((product, index) => (
+                <TopProductCard key={index} product={product} />
+              ))}
+            </Card>
           )}
 
           {/* Top Customers Section */}
