@@ -89,6 +89,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="top-customers"
+        options={{
+          title: t('navigation.top-customers'),
+          tabBarIcon: ({ size, color }) => (
+            <Settings size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
