@@ -41,7 +41,6 @@
     "expo-web-browser": "~15.0.7",
     "i18next": "^23.16.8",
     "lucide-react-native": "^0.475.0",
-    "nativewind": "^4.2.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.48.2",

@@ -222,11 +222,7 @@ export default function DashboardScreen() {
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <TouchableOpacity 
-      style={styles.topItemRow}
-      onPress={() => router.push(`/(app)/(tabs)/top-customers/customer-sales-report?customerName=${encodeURIComponent(customer.name)}`)}
-      activeOpacity={0.7}
-    >
+    <View style={styles.topItemRow}>
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
           {customer.name}
@@ -238,7 +234,7 @@ export default function DashboardScreen() {
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
         ${customer.totalSpent.toFixed(2)}
       </Text>
-    </TouchableOpacity>
+    </View>
   );
 
   const SkeletonTopSection = () => (
