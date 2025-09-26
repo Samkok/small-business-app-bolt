@@ -5,7 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  TextInput
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -13,8 +14,9 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, Users, ShoppingCart, DollarSign, Calendar, User, Phone } from 'lucide-react-native';
+import { ArrowLeft, Users, ShoppingCart, DollarSign, Calendar, User, Phone, Search, X } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 interface TopCustomer {
   name: string;
@@ -29,12 +31,19 @@ export default function TopCustomersScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const [customers, setCustomers] = useState<TopCustomer[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<TopCustomer[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     loadTopCustomers();
   }, []);
+
+  useEffect(() => {
+    filterCustomers();
+  }, [customers, debouncedSearchQuery]);
 
   const loadTopCustomers = async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -47,6 +56,7 @@ export default function TopCustomersScreen() {
       // Get all customers who made purchases this month (no limit)
       const data = await reportsService.getTopCustomers(currentBusiness.id, 100);
       setCustomers(data);
+      setFilteredCustomers(data);
     } catch (error) {
       console.error('Error loading top customers:', error);
     } finally {
@@ -61,6 +71,22 @@ export default function TopCustomersScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadTopCustomers(true);
+  };
+
+  const filterCustomers = () => {
+    if (debouncedSearchQuery.trim() === '') {
+      setFilteredCustomers(customers);
+    } else {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(debouncedSearchQuery))
+      );
+      setFilteredCustomers(filtered);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
   };
 
   const formatCurrency = (amount: number) => {
@@ -231,25 +257,55 @@ export default function TopCustomersScreen() {
             </Text>
           </View>
           <Text style={[styles.summaryText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {customers.length} customers made purchases this month
+            {searchQuery ? `${filteredCustomers.length} of ${customers.length} customers` : `${customers.length} customers made purchases this month`}
           </Text>
         </Card>
 
+        {/* Search Section */}
+        <View style={styles.searchSection}>
+          <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+            <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <TextInput
+              style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+              placeholder="Search customers..."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={handleClearSearch}>
+                <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
         {/* Customers List */}
         <View style={styles.customersList}>
-          {customers.length > 0 ? (
-            customers.map((customer, index) => (
+          {filteredCustomers.length > 0 ? (
+            filteredCustomers.map((customer, index) => (
               <CustomerCard key={index} customer={customer} index={index} />
             ))
           ) : (
             <Card style={styles.emptyState}>
               <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
               <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                No Customer Purchases
+                {searchQuery ? 'No customers found' : 'No Customer Purchases'}
               </Text>
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                No customers have made purchases this month yet
+                {searchQuery 
+                  ? `No customers match "${searchQuery}"`
+                  : 'No customers have made purchases this month yet'
+                }
               </Text>
+              {searchQuery && (
+                <TouchableOpacity
+                  style={styles.clearSearchButton}
+                  onPress={handleClearSearch}
+                >
+                  <Text style={styles.clearSearchText}>Clear Search</Text>
+                </TouchableOpacity>
+              )}
             </Card>
           )}
         </View>
@@ -305,6 +361,24 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     fontSize: 14,
+  },
+  searchSection: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
   },
   customersList: {
     flex: 1,
@@ -396,5 +470,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  clearSearchButton: {
+    marginTop: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#2563eb20',
+    borderRadius: 8,
+  },
+  clearSearchText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
