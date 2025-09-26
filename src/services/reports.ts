@@ -150,7 +150,7 @@ export const reportsService = {
       .from('cart_items')
       .select(`
         quantity,
-        products(name, price, cost_per_unit),
+        products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level),
         carts!inner(
           sales!inner(
             business_id,
@@ -167,16 +167,39 @@ export const reportsService = {
     if (error) throw error;
 
     // Group by product and sum quantities
-    const productSales: Record<string, { name: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
+    const productSales: Record<string, { 
+      id: string; 
+      name: string; 
+      price: number;
+      description?: string;
+      image_url?: string;
+      barcode?: string;
+      current_stock: number;
+      min_stock_level: number;
+      cost_per_unit: number;
+      quantity: number; 
+      revenue: number; 
+      cost: number; 
+      profit: number 
+    }> = {};
     
     data.forEach(item => {
+      const productId = item.products?.id || 'unknown';
       const productName = item.products?.name || 'Unknown';
       const productPrice = item.products?.price || 0;
       const productCost = item.products?.cost_per_unit || 0;
       
-      if (!productSales[productName]) {
-        productSales[productName] = { 
+      if (!productSales[productId]) {
+        productSales[productId] = { 
+          id: productId,
           name: productName, 
+          price: productPrice,
+          description: item.products?.description,
+          image_url: item.products?.image_url,
+          barcode: item.products?.barcode,
+          current_stock: item.products?.current_stock || 0,
+          min_stock_level: item.products?.min_stock_level || 0,
+          cost_per_unit: productCost,
           quantity: 0, 
           revenue: 0,
           cost: 0,
@@ -184,10 +207,10 @@ export const reportsService = {
         };
       }
       
-      productSales[productName].quantity += item.quantity;
-      productSales[productName].revenue += item.quantity * productPrice;
-      productSales[productName].cost += item.quantity * productCost;
-      productSales[productName].profit += item.quantity * (productPrice - productCost);
+      productSales[productId].quantity += item.quantity;
+      productSales[productId].revenue += item.quantity * productPrice;
+      productSales[productId].cost += item.quantity * productCost;
+      productSales[productId].profit += item.quantity * (productPrice - productCost);
     });
 
     return Object.values(productSales)
