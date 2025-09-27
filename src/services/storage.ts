@@ -327,6 +327,7 @@ export const storageService = {
           throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
         }
 
+        console.log("Get url path");
         // Get public URL
         const { data: urlData } = supabase.storage
           .from('business-images')
