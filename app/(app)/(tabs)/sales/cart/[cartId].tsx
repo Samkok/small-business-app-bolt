@@ -47,11 +47,12 @@ export default function CartScreen() {
   const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
   useEffect(() => {
-    if (cart && !isDeliveryCostFocused) {
+    if (cart && !isDeliveryCostFocused && deliveryCost !== (cart.delivery_cost?.toString() || '')) {
       setDeliveryCost(cart.delivery_cost?.toString() || '');
+    }
+    if (cart && notes !== (cart.notes || '')) {
       setNotes(cart.notes || '');
     }
-  }, [cart, isDeliveryCostFocused]);
 
   // Update cart total_amount when cartSummary changes
   useEffect(() => {
