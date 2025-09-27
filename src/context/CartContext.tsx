@@ -60,7 +60,7 @@ interface CartContextType {
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
   completeSale: (cartId: string, paymentMethod: string) => Promise<{ success: boolean; saleId?: string; error?: string }>;
-  refreshCarts: () => Promise<void>;
+  refreshCarts: () => Promise<Cart[]>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -148,8 +148,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [calculateCartDiscount]);
 
-  const refreshCarts = useCallback(async () => {
-    if (!currentBusiness?.id) return;
+  const refreshCarts = useCallback(async (): Promise<Cart[]> => {
+    if (!currentBusiness?.id) return [];
     
     try {
       console.log('CartContext: refreshCarts started for currentBusiness ID:', currentBusiness.id);
@@ -190,8 +190,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       
       // Update state
       setCarts(transformedCarts);
+      return transformedCarts;
     } catch (error) {
       console.error('Error refreshing carts:', error);
+      return [];
     } finally {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
@@ -316,10 +318,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Refresh carts to get updated data
-      await refreshCarts();
+      const updatedCarts = await refreshCarts();
 
       // Find the updated cart and return the added/updated item
-      const updatedCart = carts.find(cart => cart.id === cartId);
+      const updatedCart = updatedCarts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after adding item');
       }
@@ -334,7 +336,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error adding item to cart:', error);
       throw error;
     }
-  }, [refreshCarts, carts]);
 
   const updateCartItem = useCallback(async (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>): Promise<CartItem> => {
     try {
