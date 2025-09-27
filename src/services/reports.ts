@@ -390,7 +390,23 @@ export const reportsService = {
   },
 
   async getProfitChart(businessId: string, startDate: Date, endDate: Date) {
-    // Get sales data with COGS
+    // Get sales data that matches dashboard calculation (including partially returned)
+    const { data: revenueData, error: revenueError } = await supabase
+      .from('sales')
+      .select(`
+        total_amount,
+        sale_date,
+        sale_actions!left(amount, action_type)
+      `)
+      .eq('business_id', businessId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date');
+
+    if (revenueError) throw revenueError;
+
+    // Get sales data with COGS for cost calculations
     const salesData = await salesService.getSalesWithCOGS(businessId, startDate.toISOString(), endDate.toISOString());
     
     // Get expense data
@@ -421,14 +437,27 @@ export const reportsService = {
       result = months.map(month => {
         const monthStr = format(month, 'yyyy-MM');
         
-        // Filter sales for this month
-        const monthSales = salesData.filter(sale => {
+        // Filter revenue data for this month (including partially returned)
+        const monthRevenueSales = revenueData.filter(sale => {
           const saleMonth = sale.date.substring(0, 7); // YYYY-MM
           return saleMonth === monthStr;
         });
         
-        // Calculate revenue, COGS, and profit for this month
-        const revenue = monthSales.reduce((sum, sale) => sum + sale.revenue, 0);
+        // Calculate revenue for this month (subtracting returned amounts)
+        const revenue = monthRevenueSales.reduce((sum, sale) => {
+          const returnedAmount = sale.sale_actions
+            ?.filter(action => action.action_type === 'return')
+            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          return sum + (sale.total_amount - returnedAmount);
+        }, 0);
+        
+        // Filter COGS sales data for this month
+        const monthSales = salesData.filter(sale => {
+          const saleMonth = sale.date.substring(0, 7);
+          return saleMonth === monthStr;
+        });
+        
+        // Calculate COGS and profit for this month
         const cogs = monthSales.reduce((sum, sale) => sum + sale.cogs, 0);
         const profit = revenue - cogs;
         
@@ -461,14 +490,27 @@ export const reportsService = {
       result = days.map(day => {
         const dayStr = format(day, 'yyyy-MM-dd');
         
-        // Filter sales for this day
+        // Filter revenue data for this day (including partially returned)
+        const dayRevenueSales = revenueData.filter(sale => {
+          const saleDate = sale.date.split('T')[0];
+          return saleDate === dayStr;
+        });
+        
+        // Calculate revenue for this day (subtracting returned amounts)
+        const revenue = dayRevenueSales.reduce((sum, sale) => {
+          const returnedAmount = sale.sale_actions
+            ?.filter(action => action.action_type === 'return')
+            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          return sum + (sale.total_amount - returnedAmount);
+        }, 0);
+        
+        // Filter COGS sales data for this day
         const daySales = salesData.filter(sale => {
           const saleDate = sale.date.split('T')[0];
           return saleDate === dayStr;
         });
         
-        // Calculate revenue, COGS, and profit for this day
-        const revenue = daySales.reduce((sum, sale) => sum + sale.revenue, 0);
+        // Calculate COGS and profit for this day
         const cogs = daySales.reduce((sum, sale) => sum + sale.cogs, 0);
         const profit = revenue - cogs;
         
