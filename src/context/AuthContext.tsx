@@ -53,239 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
-  const businessArraysEqual = useCallback((arr1: Business[], arr2: Business[]): boolean => {
-    if (arr1.length !== arr2.length) return false;
-    
-    // Sort both arrays by ID and compare
-    const ids1 = arr1.map(b => b.id).sort();
-    const ids2 = arr2.map(b => b.id).sort();
-    
-    return ids1.every((id, index) => id === ids2[index]);
-  }, []);
-
-  const updateLastActivityTimestamp = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
-    } catch (error) {
-      console.error('Error updating last activity timestamp:', error);
-    }
-  }, []);
-
-  const checkSessionActivity = useCallback(async (currentSession: Session) => {
-    try {
-      console.log('Checking session activity');
-      const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
-      
-      if (lastActivity) {
-        const lastActivityTime = parseInt(lastActivity, 10);
-        const currentTime = Date.now();
-        
-        // If inactive for more than one week, sign out
-        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
-          console.log('Session expired due to inactivity');
-          setSignedOutDueToInactivity(true);
-          await supabase.auth.signOut();
-        } else {
-          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
-        }
-      } else {
-        // If no last activity timestamp exists, create one
-        console.log('No last activity timestamp, creating one');
-        await updateLastActivityTimestamp();
-      }
-    } catch (error) {
-      console.error('Error checking session activity:', error);
-    }
-  }, [updateLastActivityTimestamp]);
-
-  // Load saved current business ID from AsyncStorage
-  const determineCurrentBusiness = useCallback(async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
-    try {
-      const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
-      if (savedBusinessId && businesses.length > 0) {
-        const business = businesses.find(b => b.id === savedBusinessId);
-        if (business) {
-          // If the business ID matches the existing one, return the existing reference to prevent unnecessary re-renders
-          if (existingCurrentBusiness && existingCurrentBusiness.id === business.id) {
-            return existingCurrentBusiness;
-          }
-          return business;
-        }
-      }
-      
-      // If no saved business or saved business not found, use the first one
-      if (businesses.length > 0) {
-        const firstBusiness = businesses[0];
-        // If the first business ID matches the existing one, return the existing reference
-        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
-          return existingCurrentBusiness;
-        }
-        return firstBusiness;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error loading saved business ID:', error);
-      // Default to first business if there's an error
-      if (businesses.length > 0) {
-        const firstBusiness = businesses[0];
-        // If the first business ID matches the existing one, return the existing reference
-        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
-          return existingCurrentBusiness;
-        }
-        return firstBusiness;
-      }
-      return null;
-    }
-  }, []);
-
-  const loadAuthData = useCallback(async (userId: string) => {
-    console.log('loadAuthData started for user:', userId);
-    try {
-      // Retry configuration
-      const MAX_RETRIES = 3;
-      const INITIAL_DELAY_MS = 500;
-      console.log(`Auth data loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
-      let lastError = null;
-      
-      // Try to load user profile with retries
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          // Attempt to fetch the user profile
-          console.log(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
-          const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-          console.log("Data return: ", data);
-            
-          if (error) {
-            // Store the error but don't throw yet (unless it's the last attempt)
-            lastError = error;
-            console.warn(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
-            
-            // If it's not the last attempt, wait with exponential backoff before retrying
-            if (attempt < MAX_RETRIES - 1) {
-              const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-              console.log(`Retrying in ${delayMs}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delayMs));
-              continue;
-            }
-            
-            // On the last attempt, if there's an error, we'll handle it below
-            throw error;
-          }
-          
-          // If we got here, the user profile request succeeded
-          if (data) {
-            console.log('User profile loaded successfully:', data.user_id);
-            if (mounted.current) {
-              setUserProfile(data);
-            }
-            
-            // Now fetch the user's businesses
-            const { data: businessRoles, error: businessRolesError } = await supabase
-              .from('user_business_roles')
-              .select(`
-                business_id,
-                role,
-                businesses:business_id(*)
-              `)
-              .eq('user_id', userId);
-              
-            if (businessRolesError) {
-              console.error('Error loading business roles:', businessRolesError);
-              throw businessRolesError;
-            }
-            
-            // Extract businesses from the nested structure
-            const businesses = businessRoles.map(role => role.businesses) as Business[];
-            console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            
-            // Only update userBusinesses if the business list has actually changed
-            if (mounted.current) {
-              setUserBusinesses(prevBusinesses => {
-                if (!businessArraysEqual(businesses, prevBusinesses)) {
-                  return businesses;
-                }
-                return prevBusinesses;
-              });
-            }
-            
-            // Determine and set current business (either from saved preference or first in list)
-            const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
-            
-            // Only update currentBusiness if it has actually changed
-            if (mounted.current) {
-              setCurrentBusiness(prevBusiness => {
-                if (!prevBusiness || !determinedBusiness || prevBusiness.id !== determinedBusiness.id) {
-                  return determinedBusiness;
-                }
-                return prevBusiness;
-              });
-            }
-            
-            if (mounted.current) {
-              setLoading(false);
-            }
-            return; // Exit the function early on success
-          } else {
-            console.log('No user profile found for user:', userId);
-            if (mounted.current) {
-              setUserProfile(null);
-              setUserBusinesses([]);
-              setCurrentBusiness(null);
-              setLoading(false);
-            }
-            return; // Exit the function early
-          }
-        } catch (retryError) {
-          // Store the error for the final attempt
-          console.log("Retry Error: ", retryError);
-          lastError = retryError;
-          
-          // If this is the last attempt, we'll let it fall through to the error handling below
-          if (attempt === MAX_RETRIES - 1) {
-            break;
-          }
-          
-          // Otherwise, we'll continue to the next iteration (after the delay)
-          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-        }
-      }
-      
-      // If we got here, all retries failed
-      if (lastError) {
-        console.error('All auth data loading attempts failed:', lastError);
-        if (mounted.current) {
-          setUserProfile(null);
-          setUserBusinesses([]);
-          setCurrentBusiness(null);
-          setLoading(false);
-        }
-        setLoading(false);
-      }
-      return;
-    } catch (error: any) {
-      console.error('Error in loadAuthData:', error);
-      if (mounted.current) {
-        setUserBusinesses([]);
-        setCurrentBusiness(null);
-        setLoading(false);
-      }
-      return;
-    }
-    
-    // Always set loading to false when done
-    console.log('loadAuthData completed, setting loading to false');
-    if (mounted.current) {
-      setLoading(false);
-    }
-  }, [businessArraysEqual, currentBusiness, determineCurrentBusiness]);
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -351,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     return () => subscription.unsubscribe();
-  }, [checkSessionActivity, loadAuthData, updateLastActivityTimestamp, isExplicitSignOut]);
+  }, []);
 
     // Add a safety timeout to prevent the app from being stuck in loading state
   useEffect(() => {
@@ -373,14 +140,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loading]);
 
+  // Load saved current business ID from AsyncStorage
+  const determineCurrentBusiness = async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
+    try {
+      const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
+      if (savedBusinessId && businesses.length > 0) {
+        const business = businesses.find(b => b.id === savedBusinessId);
+        if (business) {
+          // If the business ID matches the existing one, return the existing reference to prevent unnecessary re-renders
+          if (existingCurrentBusiness && existingCurrentBusiness.id === business.id) {
+            return existingCurrentBusiness;
+          }
+          return business;
+        }
+      }
+      
+      // If no saved business or saved business not found, use the first one
+      if (businesses.length > 0) {
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error loading saved business ID:', error);
+      // Default to first business if there's an error
+      if (businesses.length > 0) {
+        const firstBusiness = businesses[0];
+        // If the first business ID matches the existing one, return the existing reference
+        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
+          return existingCurrentBusiness;
+        }
+        return firstBusiness;
+      }
+      return null;
+    }
+  };
 
   // Check for session activity whenever the app comes to foreground
   useEffect(() => {
-    const checkActivity = useCallback(async () => {
+    const checkActivity = async () => {
       if (session) {
         checkSessionActivity(session);
       }
-    }, [session, checkSessionActivity]);
+    };
     
     // Add app state change listener for foreground/background transitions
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -396,12 +203,194 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.remove();
     };
-  }, [session, checkSessionActivity, updateLastActivityTimestamp]);
+  }, [session]);
+
+  const checkSessionActivity = async (currentSession: Session) => {
+    try {
+      console.log('Checking session activity');
+      const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
+      
+      if (lastActivity) {
+        const lastActivityTime = parseInt(lastActivity, 10);
+        const currentTime = Date.now();
+        
+        // If inactive for more than one week, sign out
+        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
+          console.log('Session expired due to inactivity');
+          setSignedOutDueToInactivity(true);
+          await supabase.auth.signOut();
+        } else {
+          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
+        }
+      } else {
+        // If no last activity timestamp exists, create one
+        console.log('No last activity timestamp, creating one');
+        await updateLastActivityTimestamp();
+      }
+    } catch (error) {
+      console.error('Error checking session activity:', error);
+    }
+  };
+
+  const updateLastActivityTimestamp = async () => {
+    try {
+      await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
+    } catch (error) {
+      console.error('Error updating last activity timestamp:', error);
+    }
+  };
 
   const resetInactivitySignOutFlag = () => {
     setSignedOutDueToInactivity(false);
   };
 
+  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
+    if (arr1.length !== arr2.length) return false;
+    
+    // Sort both arrays by ID and compare
+    const ids1 = arr1.map(b => b.id).sort();
+    const ids2 = arr2.map(b => b.id).sort();
+    
+    return ids1.every((id, index) => id === ids2[index]);
+  };
+
+  const loadAuthData = async (userId: string) => {
+    console.log('loadAuthData started for user:', userId);
+    try {
+      // Retry configuration
+      const MAX_RETRIES = 3;
+      const INITIAL_DELAY_MS = 500;
+      console.log(`Auth data loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
+      let lastError = null;
+      
+      // Try to load user profile with retries
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          // Attempt to fetch the user profile
+          console.log(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .single();
+
+          console.log("Data return: ", data);
+            
+          if (error) {
+            // Store the error but don't throw yet (unless it's the last attempt)
+            lastError = error;
+            console.warn(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
+            
+            // If it's not the last attempt, wait with exponential backoff before retrying
+            if (attempt < MAX_RETRIES - 1) {
+              const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+              console.log(`Retrying in ${delayMs}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+              continue;
+            }
+            
+            // On the last attempt, if there's an error, we'll handle it below
+            throw error;
+          }
+          
+          // If we got here, the user profile request succeeded
+          if (data) {
+            console.log('User profile loaded successfully:', data.user_id);
+            if (mounted.current) {
+              setUserProfile(data);
+            }
+            
+            // Now fetch the user's businesses
+            const { data: businessRoles, error: businessRolesError } = await supabase
+              .from('user_business_roles')
+              .select(`
+                business_id,
+                role,
+                businesses:business_id(*)
+              `)
+              .eq('user_id', userId);
+              
+            if (businessRolesError) {
+              console.error('Error loading business roles:', businessRolesError);
+              throw businessRolesError;
+            }
+            
+            // Extract businesses from the nested structure
+            const businesses = businessRoles.map(role => role.businesses) as Business[];
+            console.log(`Loaded ${businesses.length} businesses for user:`, userId);
+            
+            // Only update userBusinesses if the business list has actually changed
+            if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
+              setUserBusinesses(businesses);
+            }
+            
+            // Determine and set current business (either from saved preference or first in list)
+            const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
+            
+            // Only update currentBusiness if it has actually changed
+            if (mounted.current && (!currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id)) {
+              setCurrentBusiness(determinedBusiness);
+            }
+            
+            if (mounted.current) {
+              setLoading(false);
+            }
+            return; // Exit the function early on success
+          } else {
+            console.log('No user profile found for user:', userId);
+            if (mounted.current) {
+              setUserProfile(null);
+              setUserBusinesses([]);
+              setCurrentBusiness(null);
+              setLoading(false);
+            }
+            return; // Exit the function early
+          }
+        } catch (retryError) {
+          // Store the error for the final attempt
+          console.log("Retry Error: ", retryError);
+          lastError = retryError;
+          
+          // If this is the last attempt, we'll let it fall through to the error handling below
+          if (attempt === MAX_RETRIES - 1) {
+            break;
+          }
+          
+          // Otherwise, we'll continue to the next iteration (after the delay)
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+      
+      // If we got here, all retries failed
+      if (lastError) {
+        console.error('All auth data loading attempts failed:', lastError);
+        if (mounted.current) {
+          setUserProfile(null);
+          setUserBusinesses([]);
+          setCurrentBusiness(null);
+          setLoading(false);
+        }
+        setLoading(false);
+      }
+      return;
+    } catch (error: any) {
+      console.error('Error in loadAuthData:', error);
+      if (mounted.current) {
+        setUserBusinesses([]);
+        setCurrentBusiness(null);
+        setLoading(false);
+      }
+      return;
+    }
+    
+    // Always set loading to false when done
+    console.log('loadAuthData completed, setting loading to false');
+    if (mounted.current) {
+      setLoading(false);
+    }
+  };
 
   // Original loadProfile function (commented out)
 
