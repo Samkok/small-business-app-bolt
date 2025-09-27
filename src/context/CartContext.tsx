@@ -336,6 +336,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error adding item to cart:', error);
       throw error;
     }
+  }
+  )
 
   const updateCartItem = useCallback(async (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>): Promise<CartItem> => {
     try {
@@ -416,10 +418,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await cartService.removeItemDiscount(itemId);
 
       // Refresh carts to get updated data
-      const updatedCarts = await refreshCarts();
+      await refreshCarts();
 
       // Find and return the updated item
-      const updatedCart = updatedCarts.find(cart => cart.id === cartId);
+      const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after removing discount');
       }
@@ -434,6 +436,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error removing item discount:', error);
       throw error;
     }
+  }, [refreshCarts, carts]);
 
   const getCartSummary = useCallback((cartId: string): CartSummary => {
     const cart = carts.find(cart => cart.id === cartId);
