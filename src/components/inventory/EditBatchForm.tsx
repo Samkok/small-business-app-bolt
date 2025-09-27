@@ -156,9 +156,17 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   };
 
   const updateCost = (costId: string, field: keyof BatchImportCost, value: any) => {
-    const updated = additionalCosts.map(cost => 
-      cost.id === costId ? { ...cost, [field]: value } : cost
-    );
+    const updated = additionalCosts.map(cost => {
+      if (cost.id === costId) {
+        if (field === 'amount') {
+          // Allow decimal input by storing as string temporarily, convert to number when needed
+          const numValue = parseFloat(value);
+          return { ...cost, [field]: isNaN(numValue) ? 0 : numValue };
+        }
+        return { ...cost, [field]: value };
+      }
+      return cost;
+    });
     setAdditionalCosts(updated);
   };
 
@@ -533,11 +541,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   <Input
                     label="Amount"
                     value={cost.amount?.toString()}
-                    onChangeText={(value) => {
-                      if (/^\d*\.?\d*$/.test(value) || value === '') {
-                        updateCost(cost.id, 'amount', parseFloat(value) || 0);
-                      }
-                    }}
+                    onChangeText={(value) => updateCost(cost.id, 'amount', value)}
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     editable={isEditable}
