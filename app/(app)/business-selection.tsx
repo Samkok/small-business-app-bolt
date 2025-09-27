@@ -18,6 +18,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Briefcase, Plus, ChevronRight, LogOut, Building } from 'lucide-react-native';
 
 export default function BusinessSelectionScreen() {
@@ -74,8 +75,19 @@ export default function BusinessSelectionScreen() {
       onPress={() => handleSelectBusiness(item.id)}
     >
       <View style={styles.businessInfo}>
-        <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
-          <Briefcase size={24} color="#2563eb" />
+        <View style={styles.businessIconContainer}>
+          {item.business_image_url ? (
+            <OptimizedImage
+              source={{ uri: item.business_image_url }}
+              style={styles.businessImage}
+              resizeMode="cover"
+              alt={item.business_name}
+            />
+          ) : (
+            <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
+              <Briefcase size={24} color="#2563eb" />
+            </View>
+          )}
         </View>
         <View style={styles.businessDetails}>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -277,6 +289,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   businessDetails: {
     flex: 1,
