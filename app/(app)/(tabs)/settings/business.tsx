@@ -75,14 +75,13 @@ export default function BusinessSettingsScreen() {
       if (imageFile) {
         setImageLoading(true);
         try {
-          // Delete old image if it exists
-          if (currentBusiness.business_image_url) {
-            await storageService.deleteBusinessImage(currentBusiness.business_image_url);
-          }
-          
-          // Upload new image
-          const uploadResult = await storageService.uploadBusinessImage(imageFile, currentBusiness.id);
-          newImageUrl = uploadResult.publicUrl;
+          // Upload new image (this will handle old image deletion)
+          const uploadResult = await storageService.updateBusinessImage(
+            currentBusiness.business_image_url || null,
+            imageFile,
+            currentBusiness.id
+          );
+          newImageUrl = uploadResult.url;
         } catch (imageError) {
           console.error('Error handling image:', imageError);
           Alert.alert('Warning', 'Business updated but image upload failed');
@@ -93,7 +92,7 @@ export default function BusinessSettingsScreen() {
         // Image was removed
         try {
           await storageService.deleteBusinessImage(currentBusiness.business_image_url);
-          newImageUrl = null;
+          newImageUrl = '';
         } catch (imageError) {
           console.error('Error deleting image:', imageError);
         }
