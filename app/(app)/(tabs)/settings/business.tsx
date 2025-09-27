@@ -16,6 +16,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
+import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { ArrowLeft, Building } from 'lucide-react-native';
 
 export default function BusinessSettingsScreen() {
