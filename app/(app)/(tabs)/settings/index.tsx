@@ -102,14 +102,7 @@ export default function SettingsScreen() {
 
       <Card style={styles.profileCard}>
         <View style={styles.profileContent}>
-          {currentBusiness?.business_image_url ? (
-            <OptimizedImage
-              source={{ uri: currentBusiness.business_image_url }}
-              style={styles.avatarImage}
-              resizeMode="cover"
-              alt="Business Logo"
-            />
-          ) : userProfile?.avatar_url ? (
+          {userProfile?.avatar_url ? (
             <OptimizedImage
               source={{ uri: userProfile.avatar_url }}
               style={styles.avatarImage}
@@ -119,16 +112,16 @@ export default function SettingsScreen() {
           ) : (
             <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
               <Text style={styles.avatarText}>
-                {currentBusiness?.business_name?.charAt(0).toUpperCase() || userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
               </Text>
             </View>
           )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {currentBusiness?.business_name || 'No Business Selected'}
+              {userProfile?.full_name || 'User'}
             </Text>
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {userProfile?.full_name || 'User'}
+              {currentBusiness?.business_name || 'No Business Selected'}
             </Text>
             <TouchableOpacity 
               style={styles.switchBusinessButton}
