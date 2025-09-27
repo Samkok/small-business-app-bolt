@@ -351,10 +351,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Refresh carts to get updated data
-      const updatedCarts = await refreshCarts();
+      await refreshCarts();
 
       // Find and return the updated item
-      const updatedCart = updatedCarts.find(cart => cart.id === cartId);
+      const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after updating item');
       }
@@ -369,6 +369,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error updating cart item:', error);
       throw error;
     }
+  }, [refreshCarts, carts]);
 
   const removeCartItem = useCallback(async (cartId: string, itemId: string): Promise<void> => {
     try {
@@ -389,10 +390,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await cartService.applyItemDiscount(itemId, discountType, discountValue);
 
       // Refresh carts to get updated data
-      await refreshCarts();
+      const updatedCarts = await refreshCarts();
 
       // Find and return the updated item
-      const updatedCart = carts.find(cart => cart.id === cartId);
+      const updatedCart = updatedCarts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after applying discount');
       }
@@ -407,7 +408,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error applying item discount:', error);
       throw error;
     }
-  }, [refreshCarts, carts]);
 
   const removeItemDiscount = useCallback(async (cartId: string, itemId: string): Promise<CartItem> => {
     try {
