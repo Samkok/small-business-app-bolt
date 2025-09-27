@@ -51,15 +51,16 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
 
   const handleImageSelect = (uri: string | File) => {
     // Handle file object properly for both web and mobile
-    if (typeof uri === 'string') {
-      // Mobile: uri is a string path
+    if (typeof uri === 'string' || (uri && typeof uri === 'object' && 'uri' in uri)) {
+      // Mobile: uri is a string path or file-like object with uri property
+      const fileUri = typeof uri === 'string' ? uri : (uri as any).uri;
       const file = {
-        uri: uri,
+        uri: fileUri,
         type: 'image/jpeg', // Default type
         name: `profile_${Date.now()}.jpg`
       };
       setAvatarFile(file);
-      setAvatarUrl(uri); // For preview
+      setAvatarUrl(fileUri); // For preview
     } else {
       // Web: uri is actually a File object
       const file = uri as File;
