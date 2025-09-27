@@ -17,10 +17,14 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
+import { storageService } from '@/src/services/storage';
 import { ArrowLeft, Building } from 'lucide-react-native';
 
 export default function BusinessSettingsScreen() {
   const [businessName, setBusinessName] = useState('');
+  const [businessImageUrl, setBusinessImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
@@ -31,8 +35,19 @@ export default function BusinessSettingsScreen() {
   useEffect(() => {
     if (currentBusiness) {
       setBusinessName(currentBusiness.business_name || '');
+      setBusinessImageUrl(currentBusiness.business_image_url || '');
     }
   }, [currentBusiness]);
+
+  const handleImageSelect = (uri: string) => {
+    setImageFile(uri);
+    setBusinessImageUrl(uri); // For preview
+  };
+
+  const handleImageRemove = () => {
+    setImageFile(null);
+    setBusinessImageUrl('');
+  };
 
   const handleSave = async () => {
     if (!businessName.trim()) {
@@ -47,8 +62,39 @@ export default function BusinessSettingsScreen() {
 
     setLoading(true);
     try {
+      let newImageUrl = businessImageUrl;
+      
+      // Handle image upload/removal
+      if (imageFile) {
+        setImageLoading(true);
+        try {
+          // Delete old image if it exists
+          if (currentBusiness.business_image_url) {
+            await storageService.deleteBusinessImage(currentBusiness.business_image_url);
+          }
+          
+          // Upload new image
+          const uploadResult = await storageService.uploadBusinessImage(imageFile, currentBusiness.id);
+          newImageUrl = uploadResult.publicUrl;
+        } catch (imageError) {
+          console.error('Error handling image:', imageError);
+          Alert.alert('Warning', 'Business updated but image upload failed');
+        } finally {
+          setImageLoading(false);
+        }
+      } else if (businessImageUrl === '' && currentBusiness.business_image_url) {
+        // Image was removed
+        try {
+          await storageService.deleteBusinessImage(currentBusiness.business_image_url);
+          newImageUrl = null;
+        } catch (imageError) {
+          console.error('Error deleting image:', imageError);
+        }
+      }
+
       const { error } = await updateBusiness(currentBusiness.id, {
-        business_name: businessName.trim()
+        business_name: businessName.trim(),
+        business_image_url: newImageUrl
       });
 
       if (error) {
