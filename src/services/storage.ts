@@ -332,9 +332,6 @@ export const storageService = {
           .from('business-images')
           .getPublicUrl(filePath);
 
-        
-        console.log("Get url path: ", urlData.publicUrl);
-
         return {
           url: urlData.publicUrl,
           path: filePath
