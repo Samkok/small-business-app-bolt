@@ -238,6 +238,7 @@ const styles = StyleSheet.create({
   },
   businessListContent: {
     paddingHorizontal: 16,
+    paddingRight: 10,
   },
   businessCard: {
     flexDirection: 'row',
