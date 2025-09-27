@@ -149,7 +149,7 @@ export default function IncomeStatementScreen() {
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}income_statement_${startDate}_to_${endDate}.csv`;
-        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {

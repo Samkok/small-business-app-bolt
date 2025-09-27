@@ -213,7 +213,7 @@ export default function ReportsScreen() {
         // For mobile, share each file individually
         for (const file of filesToExport) {
           const fileUri = `${FileSystem.documentDirectory}${file.name}`;
-          await FileSystem.writeAsStringAsync(fileUri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
+          await FileSystem.writeAsStringAsync(fileUri, file.content, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
           
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(fileUri, {
