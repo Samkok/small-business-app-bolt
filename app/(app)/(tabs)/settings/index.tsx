@@ -102,7 +102,14 @@ export default function SettingsScreen() {
 
       <Card style={styles.profileCard}>
         <View style={styles.profileContent}>
-          {userProfile?.avatar_url ? (
+          {currentBusiness?.business_image_url ? (
+            <OptimizedImage
+              source={{ uri: currentBusiness.business_image_url }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+              alt="Business Logo"
+            />
+          ) : userProfile?.avatar_url ? (
             <OptimizedImage
               source={{ uri: userProfile.avatar_url }}
               style={styles.avatarImage}
@@ -112,23 +119,23 @@ export default function SettingsScreen() {
           ) : (
             <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
               <Text style={styles.avatarText}>
-                {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                {currentBusiness?.business_name?.charAt(0).toUpperCase() || userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
               </Text>
             </View>
           )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {userProfile?.full_name || 'User'}
+              {currentBusiness?.business_name || 'No Business Selected'}
             </Text>
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {currentBusiness?.business_name || 'No Business Selected'}
+              {userProfile?.full_name || 'User'}
             </Text>
             <TouchableOpacity 
               style={styles.switchBusinessButton}
               onPress={() => router.push('/business-selection')}
             >
               <Text style={styles.switchBusinessText}>
-                {userBusinesses.length > 1 ? 'Switch Business' : 'Manage Businesses'}
+                Manage Businesses
               </Text>
             </TouchableOpacity>
           </View>

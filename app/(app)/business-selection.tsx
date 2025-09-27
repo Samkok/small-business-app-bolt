@@ -260,13 +260,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: 20,
   },
+  businessIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  businessImage: {
+    width: '100%',
+    height: '100%',
+  },
   businessIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   businessDetails: {
     flex: 1,

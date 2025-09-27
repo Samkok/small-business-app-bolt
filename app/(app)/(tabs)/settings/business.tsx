@@ -114,6 +114,15 @@ export default function BusinessSettingsScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.form}>
+          {/* Business Image Upload */}
+          <ImageUpload
+            value={businessImageUrl}
+            onImageSelect={handleImageSelect}
+            onImageRemove={handleImageRemove}
+            loading={imageLoading}
+            placeholder="Upload business logo"
+          />
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Building size={20} color="#2563eb" />
