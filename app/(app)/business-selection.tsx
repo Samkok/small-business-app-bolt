@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   businessInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 15, 
+    paddingRight: 20,
   },
   businessIcon: {
     width: 48,
