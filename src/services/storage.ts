@@ -333,7 +333,7 @@ export const storageService = {
           .getPublicUrl(filePath);
 
         
-        console.log("Get url path: ", urlData);
+        console.log("Get url path: ", urlData.publicUrl);
 
         return {
           url: urlData.publicUrl,
