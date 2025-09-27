@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { cartService } from '@/src/services/carts';
@@ -36,7 +35,6 @@ export interface Cart {
   created_at: string;
   updated_at: string;
   items: CartItem[];
-  synced: boolean;
 }
 
 interface CartSummary {
@@ -61,21 +59,18 @@ interface CartContextType {
   applyItemDiscount: (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => Promise<CartItem>;
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
-  syncCart: (cartId: string) => Promise<boolean>;
   completeSale: (cartId: string, paymentMethod: string) => Promise<{ success: boolean; saleId?: string; error?: string }>;
   refreshCarts: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'local_carts';
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentBusiness } = useAuth();
 
-  // Load carts from AsyncStorage on mount
+  // Load carts from database on mount
   useEffect(() => {
     console.log('CartContext: Initial');
     if (currentBusiness?.id) {
@@ -88,21 +83,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, [currentBusiness?.id]);
-
-  // Save carts to AsyncStorage whenever they change
-  useEffect(() => {
-    if (carts.length > 0) {
-      saveCarts();
-    }
-  }, [carts]);
-
-  const saveCarts = async () => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(carts));
-    } catch (error) {
-      console.error('Error saving carts to storage:', error);
-    }
-  };
 
   // Helper functions - defined first as they have no dependencies
   const calculateCartDiscount = useCallback((subtotalAmount: number, discountType?: 'percentage' | 'fixed', discountValue?: number): number => {
@@ -168,324 +148,55 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [calculateCartDiscount]);
 
-  // Helper function to update cart with new items and recalculate total
-  const updateCartWithItems = useCallback(async (cartId: string, newItems: CartItem[]) => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
-
-    const cart = carts[cartIndex];
-    
-    // Create temporary cart with new items for calculation
-    const tempCart = {
-      ...cart,
-      items: newItems
-    };
-    
-    // Calculate the correct total
-    const cartSummary = getCartSummaryForCart(tempCart);
-    
-    const updatedCart = {
-      ...cart,
-      items: newItems,
-      total_amount: cartSummary.finalTotal,
-      updated_at: new Date().toISOString(),
-      synced: false
-    };
-    
-    // Update state
-    const newCarts = [...carts];
-    newCarts[cartIndex] = updatedCart;
-    setCarts(newCarts);
-    
-    // Update in AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (storedCarts) {
-      const allCarts = JSON.parse(storedCarts) as Cart[];
-      const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
-      if (storedCartIndex !== -1) {
-        allCarts[storedCartIndex] = updatedCart;
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-      }
-    }
-  }, [carts, getCartSummaryForCart]);
-
-  const syncCart = useCallback(async (cartId: string): Promise<boolean> => {
-    if (!currentBusiness?.id) {
-      throw new Error('No business currentBusiness found');
-    }
-
-    // Get the latest cart data from AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!storedCarts) {
-      throw new Error('No carts found in storage');
-    }
-    
-    const allCarts = JSON.parse(storedCarts) as Cart[];
-    const cartIndex = allCarts.findIndex(c => c.id === cartId);
-    
-    if (cartIndex === -1) {
-      throw new Error('Cart not found in storage');
-    }
-
-    const cart = allCarts[cartIndex];
-    
-    try {
-      let serverCartId = cart.id;
-      
-      // If the cart is not synced, create it on the server
-      if (!cart.synced) {
-        try {
-          // Create cart on server
-          const serverCart = await cartService.createCart({
-            id: cart.id, // Use the same UUID
-            customer_id: cart.customer_id,
-            business_id: cart.business_id,
-            created_by: cart.created_by,
-            status: cart.status,
-            total_amount: cart.total_amount,
-            discount_type: cart.discount_type,
-            discount_value: cart.discount_value,
-            delivery_cost: cart.delivery_cost,
-            notes: cart.notes,
-            created_at: cart.created_at,
-            updated_at: cart.updated_at
-          });
-          
-          serverCartId = serverCart.id;
-        } catch (error) {
-          // Check if this is a duplicate key error (cart already exists on server)
-          if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
-            console.warn('Cart already exists on server, proceeding with sync:', cart.id);
-            // Cart already exists on server, use the existing cart ID
-            serverCartId = cart.id;
-          } else {
-            console.error('Error creating cart on server:', error);
-            throw error;
-          }
-        }
-      }
-      
-      // Sync all cart items
-      for (const item of cart.items) {
-        try {
-          // Check if item exists on server (for synced carts)
-          if (cart.synced) {
-            try {
-              // Try to update the item if it exists
-              await cartService.updateCartItem(item.id, {
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                subtotal: item.subtotal,
-                original_subtotal: item.original_subtotal,
-                item_discount_type: item.item_discount_type,
-                item_discount_value: item.item_discount_value,
-                item_discount_amount: item.item_discount_amount
-              });
-            } catch (error) {
-              // If item doesn't exist, create it
-              await cartService.addItemToCart({
-                id: item.id, // Use the same UUID
-                cart_id: serverCartId,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                subtotal: item.subtotal,
-                original_subtotal: item.original_subtotal,
-                item_discount_type: item.item_discount_type,
-                item_discount_value: item.item_discount_value,
-                item_discount_amount: item.item_discount_amount
-              });
-            }
-          } else {
-            // For new carts, just add all items
-            await cartService.addItemToCart({
-              id: item.id, // Use the same UUID
-              cart_id: serverCartId,
-              product_id: item.product_id,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              subtotal: item.subtotal,
-              original_subtotal: item.original_subtotal,
-              item_discount_type: item.item_discount_type,
-              item_discount_value: item.item_discount_value,
-              item_discount_amount: item.item_discount_amount
-            });
-          }
-        } catch (error) {
-          console.error(`Error syncing cart item ${item.id}:`, error);
-          throw error;
-        }
-      }
-      
-      // Update cart on server with latest values
-      try {
-        await cartService.updateCart(serverCartId, {
-          status: cart.status,
-          total_amount: cart.total_amount,
-          discount_type: cart.discount_type,
-          discount_value: cart.discount_value,
-          delivery_cost: cart.delivery_cost,
-          notes: cart.notes
-        });
-      } catch (error) {
-        console.error('Error updating cart on server:', error);
-        throw error;
-      }
-      
-      // Mark cart as synced in AsyncStorage
-      allCarts[cartIndex] = {
-        ...cart,
-        synced: true
-      };
-      
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-      
-      // Update state if needed
-      setCarts(prevCarts => {
-        const stateCartIndex = prevCarts.findIndex(c => c.id === cartId);
-        if (stateCartIndex !== -1) {
-          const newCarts = [...prevCarts];
-          newCarts[stateCartIndex] = {
-            ...newCarts[stateCartIndex],
-            synced: true
-          };
-          return newCarts;
-        }
-        return prevCarts;
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error syncing cart:', error);
-      return false;
-    }
-  }, [currentBusiness]);
-
   const refreshCarts = useCallback(async () => {
     if (!currentBusiness?.id) return;
     
     try {
       console.log('CartContext: refreshCarts started for currentBusiness ID:', currentBusiness.id);
       setLoading(true);
-            
-      // Get the current carts from storage to ensure we're working with the latest data
-      const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-      let localCarts: Cart[] = [];
-      if (storedCarts) {
-        localCarts = JSON.parse(storedCarts) as Cart[];
-        localCarts = localCarts.filter(cart => 
-          cart.business_id === currentBusiness.id && cart.status === 'active'
-        );
-      }
-      
-      // Try to sync any unsynced local carts
-      for (const cart of localCarts) {
-        if (!cart.synced) {
-          try {
-            await syncCart(cart.id);
-          } catch (error) {
-            console.error(`Error syncing cart ${cart.id}:`, error);
-            // Continue with other carts even if one fails
-          }
-        }
-      }
       
       // Get active carts from the server
       const serverCarts = await cartService.getActiveCarts(currentBusiness.id);
       
-      // Reload local carts after sync attempts
-      const refreshedStoredCarts = await AsyncStorage.getItem(STORAGE_KEY);
-      if (refreshedStoredCarts) {
-        localCarts = JSON.parse(refreshedStoredCarts) as Cart[];
-        localCarts = localCarts.filter(cart => 
-          cart.business_id === currentBusiness.id && cart.status === 'active'
-        );
-      }
-      
-      // Merge server carts with local carts
-      const mergedCarts: Cart[] = [...localCarts];
-      
-      for (const serverCart of serverCarts) {
-        const localCartIndex = localCarts.findIndex(c => c.id === serverCart.id);
-        
-        if (localCartIndex === -1) {
-          // Server cart doesn't exist locally, add it
-          const newCart: Cart = {
-            id: serverCart.id,
-            customer_id: serverCart.customer_id,
-            customer_name: serverCart.customers?.name || 'Unknown Customer',
-            customer_phone: serverCart.customers?.phone,
-            status: serverCart.status as 'active' | 'completed' | 'abandoned',
-            total_amount: serverCart.total_amount,
-            discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
-            discount_value: serverCart.discount_value,
-            delivery_cost: serverCart.delivery_cost,
-            notes: serverCart.notes,
-            business_id: serverCart.business_id,
-            created_by: serverCart.created_by,
-            created_at: serverCart.created_at,
-            updated_at: serverCart.updated_at,
-            items: serverCart.cart_items?.map(item => ({
-              id: item.id,
-              product_id: item.product_id,
-              product_name: item.products?.name || 'Unknown Product',
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              original_subtotal: item.original_subtotal || (item.quantity * item.unit_price),
-              item_discount_type: item.item_discount_type as 'percentage' | 'fixed' | undefined,
-              item_discount_value: item.item_discount_value,
-              item_discount_amount: item.item_discount_amount || 0,
-              subtotal: item.subtotal
-            })) || [],
-            synced: true
-          };
-          
-          mergedCarts.push(newCart);
-        } else {
-          // If the cart exists locally but is synced, update with server data
-          const localCart = localCarts[localCartIndex];
-          if (localCart.synced) {
-            mergedCarts[localCartIndex] = {
-              ...localCart,
-              status: serverCart.status as 'active' | 'completed' | 'abandoned',
-              total_amount: serverCart.total_amount,
-              discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
-              discount_value: serverCart.discount_value,
-              delivery_cost: serverCart.delivery_cost,
-              notes: serverCart.notes,
-              updated_at: serverCart.updated_at,
-              items: serverCart.cart_items?.map(item => ({
-                id: item.id,
-                product_id: item.product_id,
-                product_name: item.products?.name || 'Unknown Product',
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                original_subtotal: item.original_subtotal || (item.quantity * item.unit_price),
-                item_discount_type: item.item_discount_type as 'percentage' | 'fixed' | undefined,
-                item_discount_value: item.item_discount_value,
-                item_discount_amount: item.item_discount_amount || 0,
-                subtotal: item.subtotal
-              })) || [],
-              synced: true
-            };
-          }
-        }
-      }
-      
-      // Save merged carts to AsyncStorage
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mergedCarts));
+      // Transform server carts to local cart format
+      const transformedCarts: Cart[] = serverCarts.map(serverCart => ({
+        id: serverCart.id,
+        customer_id: serverCart.customer_id,
+        customer_name: serverCart.customers?.name || 'Unknown Customer',
+        customer_phone: serverCart.customers?.phone,
+        status: serverCart.status as 'active' | 'completed' | 'abandoned',
+        total_amount: serverCart.total_amount,
+        discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
+        discount_value: serverCart.discount_value,
+        delivery_cost: serverCart.delivery_cost,
+        notes: serverCart.notes,
+        business_id: serverCart.business_id,
+        created_by: serverCart.created_by,
+        created_at: serverCart.created_at,
+        updated_at: serverCart.updated_at,
+        items: serverCart.cart_items?.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          product_name: item.products?.name || 'Unknown Product',
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          original_subtotal: item.original_subtotal || (item.quantity * item.unit_price),
+          item_discount_type: item.item_discount_type as 'percentage' | 'fixed' | undefined,
+          item_discount_value: item.item_discount_value,
+          item_discount_amount: item.item_discount_amount || 0,
+          subtotal: item.subtotal
+        })) || []
+      }));
       
       // Update state
-      setCarts(mergedCarts);
+      setCarts(transformedCarts);
     } catch (error) {
       console.error('Error refreshing carts:', error);
     } finally {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
     }
-  }, [currentBusiness?.id, syncCart]);
+  }, [currentBusiness?.id]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
     if (!currentBusiness || !currentBusiness.id) {
@@ -493,35 +204,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       throw new Error('No business currentBusiness found. Please try again later.');
     }
 
-    const now = new Date().toISOString();
-    const newCart: Cart = {
-      id: uuidv4(),
-      customer_id: customerData.id,
-      customer_name: customerData.name,
-      customer_phone: customerData.phone,
-      status: 'active',
-      total_amount: 0,
-      business_id: currentBusiness.id,
-      created_by: currentBusiness.id,
-      created_at: now,
-      updated_at: now,
-      items: [],
-      synced: false
-    };
+    try {
+      // Create cart directly in database
+      const serverCart = await cartService.createCart({
+        customer_id: customerData.id,
+        business_id: currentBusiness.id,
+        created_by: currentBusiness.id,
+        status: 'active',
+        total_amount: 0
+      });
 
-    // Update state
-    setCarts(prevCarts => [...prevCarts, newCart]);
-    
-    // Save to AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    let allCarts: Cart[] = [];
-    if (storedCarts) {
-      allCarts = JSON.parse(storedCarts);
+      // Transform to local cart format
+      const newCart: Cart = {
+        id: serverCart.id,
+        customer_id: serverCart.customer_id,
+        customer_name: customerData.name,
+        customer_phone: customerData.phone,
+        status: serverCart.status as 'active' | 'completed' | 'abandoned',
+        total_amount: serverCart.total_amount,
+        discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
+        discount_value: serverCart.discount_value,
+        delivery_cost: serverCart.delivery_cost,
+        notes: serverCart.notes,
+        business_id: serverCart.business_id,
+        created_by: serverCart.created_by,
+        created_at: serverCart.created_at,
+        updated_at: serverCart.updated_at,
+        items: []
+      };
+
+      // Update local state
+      setCarts(prevCarts => [...prevCarts, newCart]);
+      
+      return newCart;
+    } catch (error) {
+      console.error('Error creating cart:', error);
+      throw error;
     }
-    allCarts.push(newCart);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
-    
-    return newCart;
   }, [currentBusiness]);
 
   const getCart = useCallback((cartId: string): Cart | undefined => {
@@ -529,68 +248,42 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [carts]);
 
   const updateCart = useCallback(async (cartId: string, updates: Partial<Omit<Cart, 'id' | 'items'>>): Promise<Cart> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
-
-    // Ensure delivery_cost is a valid number or undefined
-    if (updates.delivery_cost !== undefined) {
-      const deliveryCost = parseFloat(updates.delivery_cost as any);
-      updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
-    }
-
-    // Calculate the updated cart with new values
-    const currentCart = carts[cartIndex];
-    const updatedCartData = {
-      ...currentCart,
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-
-    // Recalculate total_amount based on current items and new updates
-    const tempCartForCalculation = {
-      ...updatedCartData,
-      items: currentCart.items // Use current items for calculation
-    };
-    
-    // Calculate the correct total using the cart summary
-    const cartSummary = getCartSummaryForCart(tempCartForCalculation);
-    updatedCartData.total_amount = cartSummary.finalTotal;
-
     try {
-      // Update the cart on the server if it's synced
-      let updatedServerCart;
-      if (currentCart.synced) {
-        updatedServerCart = await cartService.updateCart(cartId, {
-          ...updates,
-          total_amount: updatedCartData.total_amount
-        });
+      // Ensure delivery_cost is a valid number or undefined
+      if (updates.delivery_cost !== undefined) {
+        const deliveryCost = parseFloat(updates.delivery_cost as any);
+        updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
       }
 
-      // Use the calculated cart data
-      const updatedCart = {
-        ...updatedCartData,
-        synced: currentCart.synced
-      };
+      // Update cart in database
+      const updatedServerCart = await cartService.updateCart(cartId, {
+        status: updates.status,
+        total_amount: updates.total_amount,
+        discount_type: updates.discount_type,
+        discount_value: updates.discount_value,
+        delivery_cost: updates.delivery_cost,
+        notes: updates.notes
+      });
 
-      // Update state
-      const newCarts = [...carts];
-      newCarts[cartIndex] = updatedCart;
-      setCarts(newCarts);
-      
-      // Update in AsyncStorage
-      const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-      if (storedCarts) {
-        const allCarts = JSON.parse(storedCarts) as Cart[];
-        const storedCartIndex = allCarts.findIndex(c => c.id === cartId);
-        if (storedCartIndex !== -1) {
-          allCarts[storedCartIndex] = updatedCart;
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allCarts));
+      // Update local state
+      setCarts(prevCarts => prevCarts.map(cart => {
+        if (cart.id === cartId) {
+          return {
+            ...cart,
+            ...updates,
+            updated_at: new Date().toISOString()
+          };
         }
+        return cart;
+      }));
+
+      // Return the updated cart from local state
+      const updatedCart = carts.find(cart => cart.id === cartId);
+      if (!updatedCart) {
+        throw new Error('Cart not found after update');
       }
 
-      return updatedCart;
+      return { ...updatedCart, ...updates };
     } catch (error) {
       console.error('Error updating cart:', error);
       throw error;
@@ -598,216 +291,149 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [carts]);
 
   const deleteCart = useCallback(async (cartId: string): Promise<void> => {
-    // Get the cart from state
-    const cart = carts.find(c => c.id === cartId);
-    if (!cart) {
-      throw new Error('Cart not found');
-    }
-    
-    // If the cart was synced with the server, delete it there too
-    if (cart.synced) {
-      try {
-        await cartService.deleteCart(cartId);
-      } catch (error) {
-        console.error('Error deleting cart from server:', error);
-        // Continue with local deletion even if server deletion fails
-      }
-    }
+    try {
+      // Delete cart from database
+      await cartService.deleteCart(cartId);
 
-    // Update state
-    setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
-    
-    // Update in AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (storedCarts) {
-      const allCarts = JSON.parse(storedCarts) as Cart[];
-      const updatedCarts = allCarts.filter(c => c.id !== cartId);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedCarts));
+      // Update local state
+      setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
+    } catch (error) {
+      console.error('Error deleting cart:', error);
+      throw error;
     }
-  }, [carts]);
+  }, []);
 
   const addItemToCart = useCallback(async (cartId: string, product: any, quantity: number = 1): Promise<CartItem> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
-
-    const cart = carts[cartIndex];
-    
-    // Check if item already exists in cart
-    const existingItemIndex = cart.items.findIndex(item => item.product_id === product.id);
-    
-    if (existingItemIndex !== -1) {
-      // Update existing item
-      const existingItem = cart.items[existingItemIndex];
-      const newQuantity = existingItem.quantity + quantity;
-      
-      const { subtotal, discountAmount } = calculateItemSubtotal(
-        newQuantity,
-        existingItem.unit_price,
-        existingItem.item_discount_type,
-        existingItem.item_discount_value
-      );
-      
-      const updatedItem: CartItem = {
-        ...existingItem,
-        quantity: newQuantity,
-        original_subtotal: newQuantity * existingItem.unit_price,
-        item_discount_amount: discountAmount,
-        subtotal
-      };
-      
-      const updatedItems = [...cart.items];
-      updatedItems[existingItemIndex] = updatedItem;
-      
-      // Update the cart with new items and recalculated total
-      await updateCartWithItems(cartId, updatedItems);
-      
-      return updatedItem;
-    } else {
-      // Add new item
-      const originalSubtotal = quantity * product.price;
-      
-      const newItem: CartItem = {
-        id: uuidv4(),
+    try {
+      // Add item to cart in database
+      await cartService.addItemToCart({
+        cart_id: cartId,
         product_id: product.id,
-        product_name: product.name,
-        quantity,
+        quantity: quantity,
         unit_price: product.price,
-        original_subtotal: originalSubtotal,
-        subtotal: originalSubtotal
-      };
-      
-      // Update the cart with new items and recalculated total
-      await updateCartWithItems(cartId, [...cart.items, newItem]);
-      
-      return newItem;
+        subtotal: quantity * product.price,
+        original_subtotal: quantity * product.price
+      });
+
+      // Refresh carts to get updated data
+      await refreshCarts();
+
+      // Find the updated cart and return the added/updated item
+      const updatedCart = carts.find(cart => cart.id === cartId);
+      if (!updatedCart) {
+        throw new Error('Cart not found after adding item');
+      }
+
+      const addedItem = updatedCart.items.find(item => item.product_id === product.id);
+      if (!addedItem) {
+        throw new Error('Item not found after adding to cart');
+      }
+
+      return addedItem;
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      throw error;
     }
-  }, [carts, calculateItemSubtotal]);
+  }, [refreshCarts, carts]);
 
   const updateCartItem = useCallback(async (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>): Promise<CartItem> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
+    try {
+      // Update cart item in database
+      await cartService.updateCartItem(itemId, {
+        quantity: updates.quantity,
+        unit_price: updates.unit_price,
+        subtotal: updates.subtotal,
+        original_subtotal: updates.original_subtotal,
+        item_discount_type: updates.item_discount_type,
+        item_discount_value: updates.item_discount_value,
+        item_discount_amount: updates.item_discount_amount
+      });
 
-    const cart = carts[cartIndex];
-    const itemIndex = cart.items.findIndex(item => item.id === itemId);
-    if (itemIndex === -1) {
-      throw new Error('Cart item not found');
-    }
+      // Refresh carts to get updated data
+      await refreshCarts();
 
-    const currentItem = cart.items[itemIndex];
-    const updatedItem = { ...currentItem, ...updates };
-    
-    // Recalculate subtotal if quantity or unit_price changed
-    if (updates.quantity !== undefined || updates.unit_price !== undefined) {
-      const quantity = updates.quantity ?? currentItem.quantity;
-      const unitPrice = updates.unit_price ?? currentItem.unit_price;
-      
-      updatedItem.original_subtotal = quantity * unitPrice;
-      
-      const { subtotal, discountAmount } = calculateItemSubtotal(
-        quantity,
-        unitPrice,
-        updatedItem.item_discount_type,
-        updatedItem.item_discount_value
-      );
-      
-      updatedItem.subtotal = subtotal;
-      updatedItem.item_discount_amount = discountAmount;
+      // Find and return the updated item
+      const updatedCart = carts.find(cart => cart.id === cartId);
+      if (!updatedCart) {
+        throw new Error('Cart not found after updating item');
+      }
+
+      const updatedItem = updatedCart.items.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item not found after updating');
+      }
+
+      return updatedItem;
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      throw error;
     }
-    
-    const updatedItems = [...cart.items];
-    updatedItems[itemIndex] = updatedItem;
-    
-    // Update the cart with new items and recalculated total
-    await updateCartWithItems(cartId, updatedItems);
-    
-    return updatedItem;
-  }, [carts, calculateItemSubtotal]);
+  }, [refreshCarts, carts]);
 
   const removeCartItem = useCallback(async (cartId: string, itemId: string): Promise<void> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
+    try {
+      // Remove cart item from database
+      await cartService.removeCartItem(itemId);
 
-    const cart = carts[cartIndex];
-    const updatedItems = cart.items.filter(item => item.id !== itemId);
-    
-    // Update the cart with new items and recalculated total
-    await updateCartWithItems(cartId, updatedItems);
-  }, [carts]);
+      // Refresh carts to get updated data
+      await refreshCarts();
+    } catch (error) {
+      console.error('Error removing cart item:', error);
+      throw error;
+    }
+  }, [refreshCarts]);
 
   const applyItemDiscount = useCallback(async (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number): Promise<CartItem> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
+    try {
+      // Apply item discount in database
+      await cartService.applyItemDiscount(itemId, discountType, discountValue);
 
-    const cart = carts[cartIndex];
-    const itemIndex = cart.items.findIndex(item => item.id === itemId);
-    if (itemIndex === -1) {
-      throw new Error('Cart item not found');
-    }
+      // Refresh carts to get updated data
+      await refreshCarts();
 
-    const item = cart.items[itemIndex];
-    
-    const { subtotal, discountAmount } = calculateItemSubtotal(
-      item.quantity,
-      item.unit_price,
-      discountType,
-      discountValue
-    );
-    
-    const updatedItem: CartItem = {
-      ...item,
-      item_discount_type: discountType,
-      item_discount_value: discountValue,
-      item_discount_amount: discountAmount,
-      subtotal
-    };
-    
-    const updatedItems = [...cart.items];
-    updatedItems[itemIndex] = updatedItem;
-    
-    // Update the cart with new items and recalculated total
-    await updateCartWithItems(cartId, updatedItems);
-    
-    return updatedItem;
-  }, [carts, calculateItemSubtotal]);
+      // Find and return the updated item
+      const updatedCart = carts.find(cart => cart.id === cartId);
+      if (!updatedCart) {
+        throw new Error('Cart not found after applying discount');
+      }
+
+      const updatedItem = updatedCart.items.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item not found after applying discount');
+      }
+
+      return updatedItem;
+    } catch (error) {
+      console.error('Error applying item discount:', error);
+      throw error;
+    }
+  }, [refreshCarts, carts]);
 
   const removeItemDiscount = useCallback(async (cartId: string, itemId: string): Promise<CartItem> => {
-    const cartIndex = carts.findIndex(cart => cart.id === cartId);
-    if (cartIndex === -1) {
-      throw new Error('Cart not found');
-    }
+    try {
+      // Remove item discount from database
+      await cartService.removeItemDiscount(itemId);
 
-    const cart = carts[cartIndex];
-    const itemIndex = cart.items.findIndex(item => item.id === itemId);
-    if (itemIndex === -1) {
-      throw new Error('Cart item not found');
-    }
+      // Refresh carts to get updated data
+      await refreshCarts();
 
-    const item = cart.items[itemIndex];
-    
-    const updatedItem: CartItem = {
-      ...item,
-      item_discount_type: undefined,
-      item_discount_value: undefined,
-      item_discount_amount: 0,
-      subtotal: item.original_subtotal
-    };
-    
-    const updatedItems = [...cart.items];
-    updatedItems[itemIndex] = updatedItem;
-    
-    // Update the cart with new items and recalculated total
-    await updateCartWithItems(cartId, updatedItems);
-    
-    return updatedItem;
-  }, [carts]);
+      // Find and return the updated item
+      const updatedCart = carts.find(cart => cart.id === cartId);
+      if (!updatedCart) {
+        throw new Error('Cart not found after removing discount');
+      }
+
+      const updatedItem = updatedCart.items.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item not found after removing discount');
+      }
+
+      return updatedItem;
+    } catch (error) {
+      console.error('Error removing item discount:', error);
+      throw error;
+    }
+  }, [refreshCarts, carts]);
 
   const getCartSummary = useCallback((cartId: string): CartSummary => {
     const cart = carts.find(cart => cart.id === cartId);
@@ -841,53 +467,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [carts, calculateCartDiscount]);
 
-  // Helper function to round to 2 decimal places
-  const roundToTwoDecimals = useCallback((value: number): number => {
-    return Math.round(value * 100) / 100;
-  }, []);
-
   const completeSale = useCallback(async (cartId: string, paymentMethod: string): Promise<{ success: boolean; saleId?: string; error?: string }> => {
     if (!currentBusiness?.id) {
       return { success: false, error: 'No business currentBusiness found' };
     }
 
-    // Get the latest cart data from AsyncStorage
-    const storedCarts = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!storedCarts) {
-      return { success: false, error: 'No carts found in storage' };
-    }
-    
-    const allCarts = JSON.parse(storedCarts) as Cart[];
-    const cartIndex = allCarts.findIndex(c => c.id === cartId);
-    
-    if (cartIndex === -1) {
-      return { success: false, error: 'Cart not found in storage' };
-    }
-
-    const cart = allCarts[cartIndex];
-    
     try {
-      // First sync the cart to ensure it's up-to-date on the server
-      const syncSuccess = await syncCart(cartId);
-      if (!syncSuccess) {
-        return { success: false, error: 'Failed to sync cart with server' };
-      }
-      
       // Complete the sale on the server
       const sale = await salesService.completeSale({
         cart_id: cartId,
-        customer_id: cart.customer_id,
+        customer_id: carts.find(c => c.id === cartId)?.customer_id || '',
         payment_method: paymentMethod as any,
-        notes: cart.notes,
+        notes: carts.find(c => c.id === cartId)?.notes,
         business_id: currentBusiness.id,
         created_by: currentBusiness.id
       });
       
-      // Remove the cart from local storage
-      const updatedCarts = allCarts.filter(c => c.id !== cartId);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedCarts));
-      
-      // Update state
+      // Update local state to remove the completed cart
       setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
       
       return { success: true, saleId: sale.id };
@@ -895,7 +491,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error completing sale:', error);
       return { success: false, error: 'Failed to complete sale' };
     }
-  }, [currentBusiness, syncCart]);
+  }, [currentBusiness, carts]);
 
   const value = {
     carts,
@@ -910,7 +506,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     applyItemDiscount,
     removeItemDiscount,
     getCartSummary,
-    syncCart,
     completeSale,
     refreshCarts
   };
