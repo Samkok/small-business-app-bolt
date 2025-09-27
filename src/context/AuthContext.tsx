@@ -53,95 +53,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      // Check if session exists and if it's expired due to inactivity
-      console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
-      if (session) {
-        console.log('Initial session user ID:', session.user.id);
-        checkSessionActivity(session);
-      }
-      
-      if (mounted.current) {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-      if (session?.user) {
-        console.log('Initial session: Loading auth data for user:', session.user.id);
-        loadAuthData(session.user.id);
-      } else {
-        console.log('Initial session: No user, setting loading to false');
-        if (mounted.current) {
-          setLoading(false);
-        }
-      }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state change:', event);
-        console.log('AuthContext: Session object on auth state change:', session);
-        
-        if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
-          // If signed out but not explicitly by the user, it was due to inactivity
-          setSignedOutDueToInactivity(true);
-        }
-        
-        if (event === 'SIGNED_IN') {
-          // Reset the inactivity flag when user signs in
-          setSignedOutDueToInactivity(false);
-          
-          // Update last activity timestamp
-          await updateLastActivityTimestamp();
-        }
-        
-        // Reset the explicit sign out flag
-        setIsExplicitSignOut(false);
-        
-       if (mounted.current) {
-         setSession(session);
-         setUser(session?.user ?? null);
-       }
-        
-        if (session?.user) {
-          loadAuthData(session.user.id);
-        } else {
-          console.log("AuthContext: NO SESSION");
-          setUserProfile(null);
-          setUserBusinesses([]);
-          setCurrentBusiness(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  const businessArraysEqual = useCallback((arr1: Business[], arr2: Business[]): boolean => {
+    if (arr1.length !== arr2.length) return false;
+    
+    // Sort both arrays by ID and compare
+    const ids1 = arr1.map(b => b.id).sort();
+    const ids2 = arr2.map(b => b.id).sort();
+    
+    return ids1.every((id, index) => id === ids2[index]);
   }, []);
 
-    // Add a safety timeout to prevent the app from being stuck in loading state
-  useEffect(() => {
-    if (loading) {
-      // Set a maximum loading time of 10 seconds
-      const MAX_LOADING_TIME = 15000; // 10 seconds
-      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
-      const safetyTimeout = setTimeout(() => {
-        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
-        if (mounted.current) {
-          setLoading(false);
-        }
-      }, MAX_LOADING_TIME);
-
-      return () => {
-        clearTimeout(safetyTimeout);
-        console.log('Auth loading safety timeout cleared');
-      };
+  const updateLastActivityTimestamp = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
+    } catch (error) {
+      console.error('Error updating last activity timestamp:', error);
     }
-  }, [loading]);
+  }, []);
+
+  const checkSessionActivity = useCallback(async (currentSession: Session) => {
+    try {
+      console.log('Checking session activity');
+      const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
+      
+      if (lastActivity) {
+        const lastActivityTime = parseInt(lastActivity, 10);
+        const currentTime = Date.now();
+        
+        // If inactive for more than one week, sign out
+        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
+          console.log('Session expired due to inactivity');
+          setSignedOutDueToInactivity(true);
+          await supabase.auth.signOut();
+        } else {
+          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
+        }
+      } else {
+        // If no last activity timestamp exists, create one
+        console.log('No last activity timestamp, creating one');
+        await updateLastActivityTimestamp();
+      }
+    } catch (error) {
+      console.error('Error checking session activity:', error);
+    }
+  }, [updateLastActivityTimestamp]);
 
   // Load saved current business ID from AsyncStorage
-  const determineCurrentBusiness = async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
+  const determineCurrentBusiness = useCallback(async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
     try {
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
       if (savedBusinessId && businesses.length > 0) {
@@ -179,83 +138,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return null;
     }
-  };
+  }, []);
 
-  // Check for session activity whenever the app comes to foreground
-  useEffect(() => {
-    const checkActivity = async () => {
-      if (session) {
-        checkSessionActivity(session);
-      }
-    };
-    
-    // Add app state change listener for foreground/background transitions
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        checkActivity();
-        // Update last activity timestamp when app comes to foreground
-        if (session) {
-          updateLastActivityTimestamp();
-        }
-      }
-    });
-    
-    return () => {
-      subscription.remove();
-    };
-  }, [session]);
-
-  const checkSessionActivity = async (currentSession: Session) => {
-    try {
-      console.log('Checking session activity');
-      const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
-      
-      if (lastActivity) {
-        const lastActivityTime = parseInt(lastActivity, 10);
-        const currentTime = Date.now();
-        
-        // If inactive for more than one week, sign out
-        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
-          console.log('Session expired due to inactivity');
-          setSignedOutDueToInactivity(true);
-          await supabase.auth.signOut();
-        } else {
-          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
-        }
-      } else {
-        // If no last activity timestamp exists, create one
-        console.log('No last activity timestamp, creating one');
-        await updateLastActivityTimestamp();
-      }
-    } catch (error) {
-      console.error('Error checking session activity:', error);
-    }
-  };
-
-  const updateLastActivityTimestamp = async () => {
-    try {
-      await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
-    } catch (error) {
-      console.error('Error updating last activity timestamp:', error);
-    }
-  };
-
-  const resetInactivitySignOutFlag = () => {
-    setSignedOutDueToInactivity(false);
-  };
-
-  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
-  const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
-    if (arr1.length !== arr2.length) return false;
-    
-    // Sort both arrays by ID and compare
-    const ids1 = arr1.map(b => b.id).sort();
-    const ids2 = arr2.map(b => b.id).sort();
-    
-    return ids1.every((id, index) => id === ids2[index]);
-  };
-
-  const loadAuthData = async (userId: string) => {
+  const loadAuthData = useCallback(async (userId: string) => {
     console.log('loadAuthData started for user:', userId);
     try {
       // Retry configuration
@@ -321,16 +206,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
             
             // Only update userBusinesses if the business list has actually changed
-            if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
-              setUserBusinesses(businesses);
+            if (mounted.current) {
+              setUserBusinesses(prevBusinesses => {
+                if (!businessArraysEqual(businesses, prevBusinesses)) {
+                  return businesses;
+                }
+                return prevBusinesses;
+              });
             }
             
             // Determine and set current business (either from saved preference or first in list)
             const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
             
             // Only update currentBusiness if it has actually changed
-            if (mounted.current && (!currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id)) {
-              setCurrentBusiness(determinedBusiness);
+            if (mounted.current) {
+              setCurrentBusiness(prevBusiness => {
+                if (!prevBusiness || !determinedBusiness || prevBusiness.id !== determinedBusiness.id) {
+                  return determinedBusiness;
+                }
+                return prevBusiness;
+              });
             }
             
             if (mounted.current) {
@@ -390,7 +285,123 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (mounted.current) {
       setLoading(false);
     }
+  }, [businessArraysEqual, currentBusiness, determineCurrentBusiness]);
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Check if session exists and if it's expired due to inactivity
+      console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
+      if (session) {
+        console.log('Initial session user ID:', session.user.id);
+        checkSessionActivity(session);
+      }
+      
+      if (mounted.current) {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+      if (session?.user) {
+        console.log('Initial session: Loading auth data for user:', session.user.id);
+        loadAuthData(session.user.id);
+      } else {
+        console.log('Initial session: No user, setting loading to false');
+        if (mounted.current) {
+          setLoading(false);
+        }
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state change:', event);
+        console.log('AuthContext: Session object on auth state change:', session);
+        
+        if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
+          // If signed out but not explicitly by the user, it was due to inactivity
+          setSignedOutDueToInactivity(true);
+        }
+        
+        if (event === 'SIGNED_IN') {
+          // Reset the inactivity flag when user signs in
+          setSignedOutDueToInactivity(false);
+          
+          // Update last activity timestamp
+          await updateLastActivityTimestamp();
+        }
+        
+        // Reset the explicit sign out flag
+        setIsExplicitSignOut(false);
+        
+       if (mounted.current) {
+         setSession(session);
+         setUser(session?.user ?? null);
+       }
+        
+        if (session?.user) {
+          loadAuthData(session.user.id);
+        } else {
+          console.log("AuthContext: NO SESSION");
+          setUserProfile(null);
+          setUserBusinesses([]);
+          setCurrentBusiness(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [checkSessionActivity, loadAuthData, updateLastActivityTimestamp, isExplicitSignOut]);
+
+    // Add a safety timeout to prevent the app from being stuck in loading state
+  useEffect(() => {
+    if (loading) {
+      // Set a maximum loading time of 10 seconds
+      const MAX_LOADING_TIME = 15000; // 10 seconds
+      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
+      const safetyTimeout = setTimeout(() => {
+        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
+        if (mounted.current) {
+          setLoading(false);
+        }
+      }, MAX_LOADING_TIME);
+
+      return () => {
+        clearTimeout(safetyTimeout);
+        console.log('Auth loading safety timeout cleared');
+      };
+    }
+  }, [loading]);
+
+
+  // Check for session activity whenever the app comes to foreground
+  useEffect(() => {
+    const checkActivity = useCallback(async () => {
+      if (session) {
+        checkSessionActivity(session);
+      }
+    }, [session, checkSessionActivity]);
+    
+    // Add app state change listener for foreground/background transitions
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkActivity();
+        // Update last activity timestamp when app comes to foreground
+        if (session) {
+          updateLastActivityTimestamp();
+        }
+      }
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [session, checkSessionActivity, updateLastActivityTimestamp]);
+
+  const resetInactivitySignOutFlag = () => {
+    setSignedOutDueToInactivity(false);
   };
+
 
   // Original loadProfile function (commented out)
 
