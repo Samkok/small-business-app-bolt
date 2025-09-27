@@ -202,18 +202,6 @@ export default function SettingsScreen() {
           style={styles.signOutButton}
         />
       </View>
-
-      <Card style={styles.aboutCard}>
-        <Text style={[styles.aboutTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Business Manager Pro
-        </Text>
-        <Text style={[styles.aboutVersion, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Version 1.0.0
-        </Text>
-        <Text style={[styles.aboutDescription, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Complete business management solution for small businesses
-        </Text>
-      </Card>
     </ScrollView>
   );
 }
