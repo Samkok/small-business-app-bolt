@@ -439,7 +439,7 @@ export const reportsService = {
         
         // Filter revenue data for this month (including partially returned)
         const monthRevenueSales = revenueData.filter(sale => {
-          const saleMonth = sale.date.substring(0, 7); // YYYY-MM
+          const saleMonth = (sale.sale_date || '').substring(0, 7); // YYYY-MM
           return saleMonth === monthStr;
         });
         
@@ -453,7 +453,7 @@ export const reportsService = {
         
         // Filter COGS sales data for this month
         const monthSales = salesData.filter(sale => {
-          const saleMonth = sale.date.substring(0, 7);
+          const saleMonth = (sale.date || '').substring(0, 7);
           return saleMonth === monthStr;
         });
         
@@ -492,7 +492,7 @@ export const reportsService = {
         
         // Filter revenue data for this day (including partially returned)
         const dayRevenueSales = revenueData.filter(sale => {
-          const saleDate = sale.date.split('T')[0];
+          const saleDate = (sale.sale_date || '').split('T')[0];
           return saleDate === dayStr;
         });
         
@@ -506,7 +506,7 @@ export const reportsService = {
         
         // Filter COGS sales data for this day
         const daySales = salesData.filter(sale => {
-          const saleDate = sale.date.split('T')[0];
+          const saleDate = (sale.date || '').split('T')[0];
           return saleDate === dayStr;
         });
         
