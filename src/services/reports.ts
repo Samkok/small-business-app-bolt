@@ -539,17 +539,37 @@ export const reportsService = {
     const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
     
     try {
-      // Get sales data for the month
+      // Get sales data for the month (including partially returned sales)
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', startDate)
         .lte('sale_date', endDate);
 
       if (salesError) throw salesError;
       
+      // Calculate total revenue (subtracting returned amounts)
+      const totalRevenue = salesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
+
+      // Get monthly COGS (Cost of Goods Sold)
+      const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
+        business_id_param: businessId,
+        start_date: startDate,
+        end_date: endDate
+      });
+      
+      const monthlyCOGS = monthlyCOGSData || 0;
+
       // Get expenses data for the month
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
@@ -570,9 +590,6 @@ export const reportsService = {
 
       if (inventoryError) throw inventoryError;
       
-      // Calculate total revenue
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
-      
       // Calculate total expenses
       const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
       
@@ -592,8 +609,9 @@ export const reportsService = {
       const ownerContributions = 0; // Placeholder
       const ownerWithdrawals = 0; // Placeholder
       
-      // Calculate net income (revenue - expenses)
-      const netIncome = totalRevenue - totalExpenses;
+      // Calculate net income (revenue - COGS - expenses) to align with dashboard
+      const grossProfit = totalRevenue - monthlyCOGS;
+      const netIncome = grossProfit - totalExpenses;
       
       // Calculate cash flows
       const operatingCashFlow = netIncome - inventoryChanges;
