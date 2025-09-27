@@ -175,6 +175,7 @@ export default function BusinessSettingsScreen() {
             onImageRemove={handleImageRemove}
             loading={imageLoading}
             placeholder="Upload business logo"
+            label="Business Logo"
           />
 
           <View style={styles.section}>

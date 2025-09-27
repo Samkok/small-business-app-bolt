@@ -155,6 +155,7 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
             onImageRemove={handleImageRemove}
             loading={imageLoading}
             placeholder="Upload profile image"
+            label="Profile Image"
           />
 
           <View style={styles.section}>
