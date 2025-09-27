@@ -40,21 +40,14 @@ export default function BusinessSettingsScreen() {
   }, [currentBusiness]);
 
   const handleImageSelect = (uri: string) => {
-    // Handle file object properly for both web and mobile
-    if (typeof uri === 'string') {
-      // Mobile: uri is a string path
-      const file = {
-        uri: uri,
-        type: 'image/jpeg', // Default type
-        name: `business_${Date.now()}.jpg`
-      };
-      setImageFile(file);
-      setBusinessImageUrl(uri); // For preview
+    if (Platform.OS === 'web') {
+      // Web: fileObject is a File object
+      setImageFile(fileObject);
+      setBusinessImageUrl(URL.createObjectURL(fileObject)); // For preview
     } else {
-      // Web: uri is actually a File object
-      const file = uri as any;
-      setImageFile(file);
-      setBusinessImageUrl(URL.createObjectURL(file)); // For preview
+      // Mobile: fileObject has uri property
+      setImageFile(fileObject);
+      setBusinessImageUrl(fileObject.uri); // Use URI directly for preview
     }
   };
 
