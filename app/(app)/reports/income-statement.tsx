@@ -53,8 +53,29 @@ export default function IncomeStatementScreen() {
         endDate as string
       );
       
+      // Get sales data that matches dashboard calculation (including partially returned)
+      const { data: revenueData, error: revenueError } = await supabase
+        .from('sales')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
+        .eq('business_id', currentBusiness!.id)
+        .in('status', ['completed', 'partially_returned'])
+        .gte('sale_date', startDate as string)
+        .lte('sale_date', endDate as string);
+
+      if (revenueError) throw revenueError;
+
+      // Calculate total revenue (subtracting returned amounts) to match dashboard
+      const totalRevenue = revenueData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
+
       // Calculate totals
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
       const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
       const grossProfit = totalRevenue - totalCOGS;
       const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
