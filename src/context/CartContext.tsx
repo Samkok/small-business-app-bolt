@@ -156,7 +156,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     // Calculate final total
     const deliveryCost = cart.delivery_cost || 0;
-    const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount + deliveryCost);
+    const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount - deliveryCost);
     
     return {
       itemsOriginalTotal,
