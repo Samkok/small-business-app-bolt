@@ -255,8 +255,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           
           serverCartId = serverCart.id;
         } catch (error) {
-          console.error('Error creating cart on server:', error);
-          throw error;
+          // Check if this is a duplicate key error (cart already exists on server)
+          if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+            console.warn('Cart already exists on server, proceeding with sync:', cart.id);
+            // Cart already exists on server, use the existing cart ID
+            serverCartId = cart.id;
+          } else {
+            console.error('Error creating cart on server:', error);
+            throw error;
+          }
         }
       }
       
