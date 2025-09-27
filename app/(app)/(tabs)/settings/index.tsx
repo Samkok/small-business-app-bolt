@@ -123,14 +123,14 @@ export default function SettingsScreen() {
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {currentBusiness?.business_name || 'No Business Selected'}
             </Text>
-            {userBusinesses.length > 1 && (
-              <TouchableOpacity 
-                style={styles.switchBusinessButton}
-                onPress={() => router.push('/business-selection')}
-              >
-                <Text style={styles.switchBusinessText}>Switch Business</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity 
+              style={styles.switchBusinessButton}
+              onPress={() => router.push('/business-selection')}
+            >
+              <Text style={styles.switchBusinessText}>
+                {userBusinesses.length > 1 ? 'Switch Business' : 'Manage Businesses'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Card>
