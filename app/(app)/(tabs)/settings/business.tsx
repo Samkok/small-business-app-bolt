@@ -39,15 +39,15 @@ export default function BusinessSettingsScreen() {
     }
   }, [currentBusiness]);
 
-  const handleImageSelect = (uri: string) => {
+  const handleImageSelect = (file: any) => {
     if (Platform.OS === 'web') {
-      // Web: fileObject is a File object
-      setImageFile(fileObject);
-      setBusinessImageUrl(URL.createObjectURL(fileObject)); // For preview
+      // Web: file is a File object
+      setImageFile(file);
+      setBusinessImageUrl(URL.createObjectURL(file)); // For preview
     } else {
-      // Mobile: fileObject has uri property
-      setImageFile(fileObject);
-      setBusinessImageUrl(fileObject.uri); // Use URI directly for preview
+      // Mobile: file has uri property
+      setImageFile(file);
+      setBusinessImageUrl(file.uri); // Use URI directly for preview
     }
   };
 
