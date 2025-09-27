@@ -53,6 +53,7 @@ export default function CartScreen() {
     if (cart && notes !== (cart.notes || '')) {
       setNotes(cart.notes || '');
     }
+  }, [cart, isDeliveryCostFocused, deliveryCost, notes]);
 
   // Update cart total_amount when cartSummary changes
   useEffect(() => {
@@ -952,11 +953,6 @@ const styles = StyleSheet.create({
   discountAmount: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  removeDiscountButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
   },
   removeDiscountText: {
     fontSize: 12,
