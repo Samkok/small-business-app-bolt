@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { supabase } from '@/src/config/supabase';
 import { salesService } from '@/src/services/sales';
 import { expenseService } from '@/src/services/expenses';
 import { exportService } from '@/src/services/exportService';
