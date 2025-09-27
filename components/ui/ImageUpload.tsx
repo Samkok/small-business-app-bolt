@@ -20,6 +20,7 @@ interface ImageUploadProps {
   loading?: boolean;
   error?: string;
   placeholder?: string;
+  label?: string;
 }
 
 export function ImageUpload({
@@ -28,7 +29,8 @@ export function ImageUpload({
   onImageRemove,
   loading = false,
   error,
-  placeholder = "Upload product image"
+  placeholder = "Upload product image",
+  label = "Product Image"
 }: ImageUploadProps) {
   const { isDark } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +168,7 @@ export function ImageUpload({
   return (
     <View style={styles.container}>
       <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
-        Product Image
+        {label}
       </Text>
 
       <View style={[styles.uploadContainer, containerStyle]}>
