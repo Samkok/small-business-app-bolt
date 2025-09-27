@@ -98,7 +98,9 @@ export default function BusinessSelectionScreen() {
           </Text>
         </View>
       </View>
-      <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+      <View style={styles.businessArrow}>
+        <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+      </View>
     </TouchableOpacity>
   );
 
@@ -254,7 +256,6 @@ const styles = StyleSheet.create({
   businessCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -271,7 +272,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 16,
+  },
+  businessArrow: {
+    padding: 8,
+    marginLeft: 8,
   },
   businessIconContainer: {
     width: 48,
