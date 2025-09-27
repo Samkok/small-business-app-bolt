@@ -310,7 +310,7 @@ export default function CartScreen() {
         </Card>
       </View>
     );
-  };
+  }
 
   const CartDiscountModal = ({ onApply, onCancel }: {
     onApply: (type: 'percentage' | 'fixed', value: number) => void;
@@ -407,7 +407,7 @@ export default function CartScreen() {
         </Card>
       </View>
     );
-  };
+  }
 
   if (!cart || !cartSummary) {
     return (
