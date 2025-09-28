@@ -330,6 +330,85 @@ const styles = StyleSheet.create({
   teamMemberActions: {
     flexDirection: 'row',
   },
+  productDetailsContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  productDetailsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  productDetailsHeader: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  productDetailsInfo: {
+    flex: 1,
+  },
+  productDetailsStock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  productDetailsStockItem: {
+    alignItems: 'center',
+  },
+  productDetailsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productDetailsFinancialGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  productDetailsFinancialItem: {
+    width: '48%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productDetailsProfitMargin: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productDetailsImportItem: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  productDetailsImportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  productDetailsImportDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productDetailsImportDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  productDetailsImportDetail: {
+    width: '50%',
+    marginBottom: 8,
+  },
+  productDetailsFormula: {
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
 });
 
 export function SkeletonTeamMemberCard() {
@@ -348,5 +427,116 @@ export function SkeletonTeamMemberCard() {
         <SkeletonLoader height={36} width={36} borderRadius={18} />
       </View>
     </SkeletonCard>
+  );
+}
+
+export function SkeletonProductDetails() {
+  return (
+    <View style={styles.productDetailsContainer}>
+      {/* Product Overview Card */}
+      <SkeletonCard style={styles.productDetailsCard}>
+        <View style={styles.productDetailsHeader}>
+          <SkeletonLoader height={100} width={100} borderRadius={8} style={{ marginRight: 16 }} />
+          <View style={styles.productDetailsInfo}>
+            <SkeletonLoader height={18} width="80%" style={{ marginBottom: 4 }} />
+            <SkeletonLoader height={18} width="40%" style={{ marginBottom: 8 }} />
+            <SkeletonLoader height={14} width="90%" style={{ marginBottom: 8 }} />
+            <SkeletonLoader height={12} width="60%" />
+          </View>
+        </View>
+        
+        <View style={styles.productDetailsStock}>
+          <View style={styles.productDetailsStockItem}>
+            <SkeletonLoader height={12} width="60%" style={{ marginBottom: 4 }} />
+            <SkeletonLoader height={16} width="30%" />
+          </View>
+          <View style={styles.productDetailsStockItem}>
+            <SkeletonLoader height={12} width="70%" style={{ marginBottom: 4 }} />
+            <SkeletonLoader height={16} width="30%" />
+          </View>
+          <View style={styles.productDetailsStockItem}>
+            <SkeletonLoader height={12} width="60%" style={{ marginBottom: 4 }} />
+            <SkeletonLoader height={16} width="40%" />
+          </View>
+        </View>
+        
+        <SkeletonLoader height={44} width="100%" borderRadius={8} style={{ marginTop: 16 }} />
+      </SkeletonCard>
+
+      {/* Financial Summary Card */}
+      <SkeletonCard style={styles.productDetailsCard}>
+        <View style={styles.productDetailsSectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="50%" />
+        </View>
+        
+        <View style={styles.productDetailsFinancialGrid}>
+          {[1, 2, 3, 4].map((index) => (
+            <View key={index} style={styles.productDetailsFinancialItem}>
+              <SkeletonLoader height={40} width={40} borderRadius={20} style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={18} width="60%" style={{ marginBottom: 4 }} />
+              <SkeletonLoader height={12} width="80%" />
+            </View>
+          ))}
+        </View>
+        
+        <View style={styles.productDetailsProfitMargin}>
+          <SkeletonLoader height={14} width="40%" style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="30%" />
+        </View>
+        
+        <SkeletonLoader height={12} width="60%" style={{ marginTop: 8 }} />
+      </SkeletonCard>
+
+      {/* Import History Card */}
+      <SkeletonCard style={styles.productDetailsCard}>
+        <View style={styles.productDetailsSectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="40%" />
+        </View>
+        
+        {[1, 2, 3].map((index) => (
+          <View key={index} style={styles.productDetailsImportItem}>
+            <View style={styles.productDetailsImportHeader}>
+              <View style={styles.productDetailsImportDate}>
+                <SkeletonLoader height={14} width={14} borderRadius={7} style={{ marginRight: 6 }} />
+                <SkeletonLoader height={12} width="40%" />
+              </View>
+              <SkeletonLoader height={20} width={60} borderRadius={12} />
+            </View>
+            
+            <View style={styles.productDetailsImportDetails}>
+              {[1, 2, 3, 4].map((detailIndex) => (
+                <View key={detailIndex} style={styles.productDetailsImportDetail}>
+                  <SkeletonLoader height={12} width="40%" />
+                  <SkeletonLoader height={14} width="30%" />
+                </View>
+              ))}
+            </View>
+            
+            <SkeletonLoader height={12} width="80%" style={{ marginTop: 8 }} />
+          </View>
+        ))}
+      </SkeletonCard>
+
+      {/* Cost Calculation Card */}
+      <SkeletonCard style={styles.productDetailsCard}>
+        <View style={styles.productDetailsSectionHeader}>
+          <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonLoader height={16} width="60%" />
+        </View>
+        
+        <SkeletonLoader height={14} width="100%" style={{ marginBottom: 16 }} />
+        
+        <View style={styles.productDetailsFormula}>
+          <SkeletonLoader height={14} width="70%" style={{ marginBottom: 8 }} />
+          <SkeletonLoader height={14} width="90%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="60%" style={{ marginBottom: 4 }} />
+          <SkeletonLoader height={14} width="50%" />
+        </View>
+        
+        <SkeletonLoader height={14} width="100%" style={{ marginTop: 16 }} />
+      </SkeletonCard>
+    </View>
   );
 }

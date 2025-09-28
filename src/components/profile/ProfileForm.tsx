@@ -49,8 +49,24 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
     }
   }, [userProfile]);
 
-  const handleImageSelect = (file: any) => {
-    setAvatarFile(file);
+  const handleImageSelect = (uri: string | File) => {
+    // Handle file object properly for both web and mobile
+    if (typeof uri === 'string' || (uri && typeof uri === 'object' && 'uri' in uri)) {
+      // Mobile: uri is a string path or file-like object with uri property
+      const fileUri = typeof uri === 'string' ? uri : (uri as any).uri;
+      const file = {
+        uri: fileUri,
+        type: 'image/jpeg', // Default type
+        name: `profile_${Date.now()}.jpg`
+      };
+      setAvatarFile(file);
+      setAvatarUrl(fileUri); // For preview
+    } else {
+      // Web: uri is actually a File object
+      const file = uri as File;
+      setAvatarFile(file);
+      setAvatarUrl(URL.createObjectURL(file)); // For preview
+    }
   };
 
   const handleImageRemove = () => {
@@ -140,6 +156,7 @@ export default function ProfileForm({ onSave, onCancel }: ProfileFormProps) {
             onImageRemove={handleImageRemove}
             loading={imageLoading}
             placeholder="Upload profile image"
+            label="Profile Image"
           />
 
           <View style={styles.section}>

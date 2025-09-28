@@ -18,6 +18,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Briefcase, Plus, ChevronRight, LogOut, Building } from 'lucide-react-native';
 
 export default function BusinessSelectionScreen() {
@@ -74,8 +75,19 @@ export default function BusinessSelectionScreen() {
       onPress={() => handleSelectBusiness(item.id)}
     >
       <View style={styles.businessInfo}>
-        <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
-          <Briefcase size={24} color="#2563eb" />
+        <View style={styles.businessIconContainer}>
+          {item.business_image_url ? (
+            <OptimizedImage
+              source={{ uri: item.business_image_url }}
+              style={styles.businessImage}
+              resizeMode="cover"
+              alt={item.business_name}
+            />
+          ) : (
+            <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
+              <Briefcase size={24} color="#2563eb" />
+            </View>
+          )}
         </View>
         <View style={styles.businessDetails}>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -86,7 +98,9 @@ export default function BusinessSelectionScreen() {
           </Text>
         </View>
       </View>
-      <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+      <View style={styles.businessArrow}>
+        <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+      </View>
     </TouchableOpacity>
   );
 
@@ -242,7 +256,6 @@ const styles = StyleSheet.create({
   businessCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -258,6 +271,22 @@ const styles = StyleSheet.create({
   businessInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  businessArrow: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  businessIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  businessImage: {
+    width: '100%',
+    height: '100%',
   },
   businessIcon: {
     width: 48,

@@ -52,8 +52,23 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   }, [product]);
 
-  const handleImageSelect = (file: any) => {
-    setImageFile(file);
+  const handleImageSelect = (uri: string | File) => {
+    // Handle file object properly for both web and mobile
+    if (typeof uri === 'string') {
+      // Mobile: uri is a string path
+      const file = {
+        uri: uri,
+        type: 'image/jpeg', // Default type
+        name: `product_${Date.now()}.jpg`
+      };
+      setImageFile(file);
+      setImageUrl(uri); // For preview
+    } else {
+      // Web: uri is actually a File object
+      const file = uri as File;
+      setImageFile(file);
+      setImageUrl(URL.createObjectURL(file)); // For preview
+    }
   };
 
   const handleImageRemove = () => {

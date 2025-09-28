@@ -123,14 +123,14 @@ export default function SettingsScreen() {
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {currentBusiness?.business_name || 'No Business Selected'}
             </Text>
-            {userBusinesses.length > 1 && (
-              <TouchableOpacity 
-                style={styles.switchBusinessButton}
-                onPress={() => router.push('/business-selection')}
-              >
-                <Text style={styles.switchBusinessText}>Switch Business</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity 
+              style={styles.switchBusinessButton}
+              onPress={() => router.push('/business-selection')}
+            >
+              <Text style={styles.switchBusinessText}>
+                Manage Businesses
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Card>
@@ -202,18 +202,6 @@ export default function SettingsScreen() {
           style={styles.signOutButton}
         />
       </View>
-
-      <Card style={styles.aboutCard}>
-        <Text style={[styles.aboutTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Business Manager Pro
-        </Text>
-        <Text style={[styles.aboutVersion, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Version 1.0.0
-        </Text>
-        <Text style={[styles.aboutDescription, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Complete business management solution for small businesses
-        </Text>
-      </Card>
     </ScrollView>
   );
 }

@@ -25,26 +25,42 @@ export const reportsService = {
 
     try {
       // Today's revenue
-      const { data: todaySales } = await supabase
+      const { data: todaySalesData } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', todayStr)
         .lt('sale_date', tomorrowStr);
 
-      const todayRevenue = todaySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+      const todayRevenue = todaySalesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
 
       // Monthly revenue
-      const { data: monthlySales } = await supabase
+      const { data: monthlySalesData } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', startOfMonthStr)
         .lte('sale_date', endOfMonthStr);
 
-      const monthlyRevenue = monthlySales?.reduce((sum, sale) => sum + sale.total_amount, 0) || 0;
+      const monthlyRevenue = monthlySalesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
 
       // Monthly COGS (Cost of Goods Sold) - based on actual sold items
       const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
@@ -87,13 +103,13 @@ export const reportsService = {
         .select('*', { count: 'exact', head: true })
         .eq('business_id', businessId);
 
-      const { data: totalProductsSoldData } = await supabase.rpc('get_quantity_sold', {
-        business_id_param: businessId,
-        start_date: startOfMonthStr,
-        end_date: endOfMonthStr
-      });
-
-      const totalProductsSold = totalProductsSoldData || 0;
+      // Get total products sold for completed and partially returned sales
+      const totalProductsSold = await salesService.getTotalProductsSoldByStatuses(
+        businessId,
+        startOfMonthStr,
+        endOfMonthStr,
+        ['completed', 'partially_returned']
+      );
 
       const { data: customersCountValue } = await supabase.rpc('get_distinct_customer_count_for_sales', {
         business_id_param: businessId,
@@ -134,7 +150,7 @@ export const reportsService = {
       .from('cart_items')
       .select(`
         quantity,
-        products(name, price, cost_per_unit),
+        products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level),
         carts!inner(
           sales!inner(
             business_id,
@@ -151,16 +167,39 @@ export const reportsService = {
     if (error) throw error;
 
     // Group by product and sum quantities
-    const productSales: Record<string, { name: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
+    const productSales: Record<string, { 
+      id: string; 
+      name: string; 
+      price: number;
+      description?: string;
+      image_url?: string;
+      barcode?: string;
+      current_stock: number;
+      min_stock_level: number;
+      cost_per_unit: number;
+      quantity: number; 
+      revenue: number; 
+      cost: number; 
+      profit: number 
+    }> = {};
     
     data.forEach(item => {
+      const productId = item.products?.id || 'unknown';
       const productName = item.products?.name || 'Unknown';
       const productPrice = item.products?.price || 0;
       const productCost = item.products?.cost_per_unit || 0;
       
-      if (!productSales[productName]) {
-        productSales[productName] = { 
+      if (!productSales[productId]) {
+        productSales[productId] = { 
+          id: productId,
           name: productName, 
+          price: productPrice,
+          description: item.products?.description,
+          image_url: item.products?.image_url,
+          barcode: item.products?.barcode,
+          current_stock: item.products?.current_stock || 0,
+          min_stock_level: item.products?.min_stock_level || 0,
+          cost_per_unit: productCost,
           quantity: 0, 
           revenue: 0,
           cost: 0,
@@ -168,10 +207,10 @@ export const reportsService = {
         };
       }
       
-      productSales[productName].quantity += item.quantity;
-      productSales[productName].revenue += item.quantity * productPrice;
-      productSales[productName].cost += item.quantity * productCost;
-      productSales[productName].profit += item.quantity * (productPrice - productCost);
+      productSales[productId].quantity += item.quantity;
+      productSales[productId].revenue += item.quantity * productPrice;
+      productSales[productId].cost += item.quantity * productCost;
+      productSales[productId].profit += item.quantity * (productPrice - productCost);
     });
 
     return Object.values(productSales)
@@ -190,25 +229,27 @@ export const reportsService = {
     const { data, error } = await supabase
       .from('sales')
       .select(`
-        total_amount,
-        customers(name, phone)
+        current_total_amount,
+        customers(id, name, phone)
       `)
       .eq('business_id', businessId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned'])
       .gte('sale_date', startOfMonthStr)
       .lte('sale_date', endOfMonthStr);
 
     if (error) throw error;
 
     // Group by customer and sum amounts
-    const customerSales: Record<string, { name: string; phone?: string; totalSpent: number; orderCount: number }> = {};
+    const customerSales: Record<string, { id: string; name: string; phone?: string; totalSpent: number; orderCount: number }> = {};
     
     data.forEach(sale => {
+      const customerId = sale.customers?.id || 'unknown';
       const customerName = sale.customers?.name || 'Unknown';
       const customerPhone = sale.customers?.phone;
       
-      if (!customerSales[customerName]) {
-        customerSales[customerName] = { 
+      if (!customerSales[customerId]) {
+        customerSales[customerId] = { 
+          id: customerId,
           name: customerName, 
           phone: customerPhone,
           totalSpent: 0, 
@@ -216,8 +257,8 @@ export const reportsService = {
         };
       }
       
-      customerSales[customerName].totalSpent += sale.total_amount;
-      customerSales[customerName].orderCount += 1;
+      customerSales[customerId].totalSpent += sale.current_total_amount || 0;
+      customerSales[customerId].orderCount += 1;
     });
 
     return Object.values(customerSales)
@@ -349,7 +390,23 @@ export const reportsService = {
   },
 
   async getProfitChart(businessId: string, startDate: Date, endDate: Date) {
-    // Get sales data with COGS
+    // Get sales data that matches dashboard calculation (including partially returned)
+    const { data: revenueData, error: revenueError } = await supabase
+      .from('sales')
+      .select(`
+        total_amount,
+        sale_date,
+        sale_actions!left(amount, action_type)
+      `)
+      .eq('business_id', businessId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date');
+
+    if (revenueError) throw revenueError;
+
+    // Get sales data with COGS for cost calculations
     const salesData = await salesService.getSalesWithCOGS(businessId, startDate.toISOString(), endDate.toISOString());
     
     // Get expense data
@@ -380,14 +437,27 @@ export const reportsService = {
       result = months.map(month => {
         const monthStr = format(month, 'yyyy-MM');
         
-        // Filter sales for this month
-        const monthSales = salesData.filter(sale => {
-          const saleMonth = sale.date.substring(0, 7); // YYYY-MM
+        // Filter revenue data for this month (including partially returned)
+        const monthRevenueSales = revenueData.filter(sale => {
+          const saleMonth = (sale.sale_date || '').substring(0, 7); // YYYY-MM
           return saleMonth === monthStr;
         });
         
-        // Calculate revenue, COGS, and profit for this month
-        const revenue = monthSales.reduce((sum, sale) => sum + sale.revenue, 0);
+        // Calculate revenue for this month (subtracting returned amounts)
+        const revenue = monthRevenueSales.reduce((sum, sale) => {
+          const returnedAmount = sale.sale_actions
+            ?.filter(action => action.action_type === 'return')
+            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          return sum + (sale.total_amount - returnedAmount);
+        }, 0);
+        
+        // Filter COGS sales data for this month
+        const monthSales = salesData.filter(sale => {
+          const saleMonth = (sale.date || '').substring(0, 7);
+          return saleMonth === monthStr;
+        });
+        
+        // Calculate COGS and profit for this month
         const cogs = monthSales.reduce((sum, sale) => sum + sale.cogs, 0);
         const profit = revenue - cogs;
         
@@ -420,14 +490,27 @@ export const reportsService = {
       result = days.map(day => {
         const dayStr = format(day, 'yyyy-MM-dd');
         
-        // Filter sales for this day
-        const daySales = salesData.filter(sale => {
-          const saleDate = sale.date.split('T')[0];
+        // Filter revenue data for this day (including partially returned)
+        const dayRevenueSales = revenueData.filter(sale => {
+          const saleDate = (sale.sale_date || '').split('T')[0];
           return saleDate === dayStr;
         });
         
-        // Calculate revenue, COGS, and profit for this day
-        const revenue = daySales.reduce((sum, sale) => sum + sale.revenue, 0);
+        // Calculate revenue for this day (subtracting returned amounts)
+        const revenue = dayRevenueSales.reduce((sum, sale) => {
+          const returnedAmount = sale.sale_actions
+            ?.filter(action => action.action_type === 'return')
+            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          return sum + (sale.total_amount - returnedAmount);
+        }, 0);
+        
+        // Filter COGS sales data for this day
+        const daySales = salesData.filter(sale => {
+          const saleDate = (sale.date || '').split('T')[0];
+          return saleDate === dayStr;
+        });
+        
+        // Calculate COGS and profit for this day
         const cogs = daySales.reduce((sum, sale) => sum + sale.cogs, 0);
         const profit = revenue - cogs;
         
@@ -498,17 +581,37 @@ export const reportsService = {
     const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
     
     try {
-      // Get sales data for the month
+      // Get sales data for the month (including partially returned sales)
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('total_amount')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', startDate)
         .lte('sale_date', endDate);
 
       if (salesError) throw salesError;
       
+      // Calculate total revenue (subtracting returned amounts)
+      const totalRevenue = salesData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
+
+      // Get monthly COGS (Cost of Goods Sold)
+      const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
+        business_id_param: businessId,
+        start_date: startDate,
+        end_date: endDate
+      });
+      
+      const monthlyCOGS = monthlyCOGSData || 0;
+
       // Get expenses data for the month
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
@@ -529,9 +632,6 @@ export const reportsService = {
 
       if (inventoryError) throw inventoryError;
       
-      // Calculate total revenue
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
-      
       // Calculate total expenses
       const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
       
@@ -551,8 +651,9 @@ export const reportsService = {
       const ownerContributions = 0; // Placeholder
       const ownerWithdrawals = 0; // Placeholder
       
-      // Calculate net income (revenue - expenses)
-      const netIncome = totalRevenue - totalExpenses;
+      // Calculate net income (revenue - COGS - expenses) to align with dashboard
+      const grossProfit = totalRevenue - monthlyCOGS;
+      const netIncome = grossProfit - totalExpenses;
       
       // Calculate cash flows
       const operatingCashFlow = netIncome - inventoryChanges;
@@ -696,5 +797,122 @@ export const reportsService = {
       console.error('Error getting product financial summary:', error);
       throw error;
     }
+  },
+
+  async getCustomerSpendingChart(businessId: string, customerId: string, startDate: Date, endDate: Date) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('current_total_amount, sale_date')
+      .eq('business_id', businessId)
+      .eq('customer_id', customerId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date');
+
+    if (error) throw error;
+
+    // Convert dates to JS Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Determine if we should group by day or month based on date range
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const groupByMonth = dayDiff > 31;
+    
+    let result = [];
+    
+    if (groupByMonth) {
+      // Group by month
+      const months = eachMonthOfInterval({ start, end });
+      
+      result = months.map(month => {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        const monthSales = data.filter(sale => {
+          const saleDate = new Date(sale.sale_date);
+          return isSameMonth(saleDate, month);
+        });
+        
+        const spending = monthSales.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || sale.total_amount), 0);
+        
+        return {
+          date: format(month, 'yyyy-MM-dd'),
+          label: format(month, 'MMM'),
+          spending
+        };
+      });
+    } else {
+      // Group by day
+      const days = eachDayOfInterval({ start, end });
+      
+      result = days.map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        const daySales = data.filter(sale => sale.sale_date.split('T')[0] === dayStr);
+        const spending = daySales.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || sale.total_amount), 0);
+        
+        return {
+          date: dayStr,
+          label: format(day, 'dd/MM'),
+          spending
+        };
+      });
+    }
+    
+    return result;
+  },
+
+  async getCustomerEngagementMetrics(businessId: string, customerId: string, startDate: Date, endDate: Date) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        current_total_amount,
+        sale_date,
+        carts(
+          cart_items(
+            quantity,
+            products(name)
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('customer_id', customerId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date', { ascending: false });
+
+    if (error) throw error;
+
+    const totalSpent = data.reduce((sum, sale) => sum + parseFloat(sale.current_total_amount || 0), 0);
+    const totalOrders = data.length;
+    const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+    const lastOrderDate = data.length > 0 ? data[0].sale_date : null;
+    
+    // Calculate total items purchased
+    const totalItems = data.reduce((sum, sale) => {
+      const items = sale.carts?.cart_items || [];
+      return sum + items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+    }, 0);
+    
+    // Get unique products purchased
+    const uniqueProducts = new Set();
+    data.forEach(sale => {
+      const items = sale.carts?.cart_items || [];
+      items.forEach(item => {
+        if (item.products?.name) {
+          uniqueProducts.add(item.products.name);
+        }
+      });
+    });
+
+    return {
+      totalSpent,
+      totalOrders,
+      averageOrderValue,
+      lastOrderDate,
+      totalItems,
+      uniqueProductsPurchased: uniqueProducts.size
+    };
   }
 };

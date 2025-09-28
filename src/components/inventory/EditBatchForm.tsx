@@ -156,9 +156,16 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   };
 
   const updateCost = (costId: string, field: keyof BatchImportCost, value: any) => {
-    const updated = additionalCosts.map(cost => 
-      cost.id === costId ? { ...cost, [field]: value } : cost
-    );
+    const updated = additionalCosts.map(cost => {
+      if (cost.id === costId) {
+        if (field === 'amount') {
+          // Store the raw string value to preserve decimal input
+          return { ...cost, [field]: value };
+        }
+        return { ...cost, [field]: value };
+      }
+      return cost;
+    });
     setAdditionalCosts(updated);
   };
 
@@ -175,7 +182,13 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
       return { totalBaseValue: 0, totalAdditionalCosts: 0, totalBatchCost: 0, itemsWithCosts: [] };
     }
 
-    const itemsWithCosts = batchImportService.calculateItemCosts(selectedItems, additionalCosts);
+    // Convert string amounts to numbers for calculation
+    const costsWithNumbers = additionalCosts.map(cost => ({
+      ...cost,
+      amount: parseFloat(cost.amount as any) || 0
+    }));
+    
+    const itemsWithCosts = batchImportService.calculateItemCosts(selectedItems, costsWithNumbers);
     const totalBaseValue = selectedItems.reduce((sum, item) => sum + (item.quantity * item.base_unit_cost_per_item), 0);
     const totalAdditionalCosts = itemsWithCosts.reduce((sum, item) => sum + (item.allocated_additional_costs || 0), 0);
     const totalBatchCost = itemsWithCosts.reduce((sum, item) => {
@@ -212,7 +225,8 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
         Alert.alert('Error', 'Please enter a cost type for all additional costs');
         return;
       }
-      if (cost.amount === null || cost.amount < 0) {
+      const amount = parseFloat(cost.amount as any);
+      if (isNaN(amount) || amount < 0) {
         Alert.alert('Error', 'Please enter valid amounts for all additional costs');
         return;
       }
@@ -532,12 +546,8 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   
                   <Input
                     label="Amount"
-                    value={cost.amount?.toString()}
-                    onChangeText={(value) => {
-                      if (/^\d*\.?\d*$/.test(value) || value === '') {
-                        updateCost(cost.id, 'amount', parseFloat(value) || 0);
-                      }
-                    }}
+                    value={cost.amount?.toString() || ''}
+                    onChangeText={(value) => updateCost(cost.id, 'amount', value)}
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     editable={isEditable}

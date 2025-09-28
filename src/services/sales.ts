@@ -203,12 +203,21 @@ export const salesService = {
             products(*)
           )
         ),
-        sale_actions(*)
+        sale_actions(*),
+        returned_amount:sale_actions(amount).eq(action_type, 'return')
       `)
       .eq('id', saleId)
       .single();
 
     if (error) throw error;
+    
+    // Calculate total returned amount
+    const returnedAmount = data.sale_actions
+      ?.filter(action => action.action_type === 'return')
+      ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+    
+    // Add returned_amount to the sale data
+    data.returned_amount = returnedAmount;
     
     // If there are sale actions, fetch the performer names separately
     if (data && data.sale_actions && data.sale_actions.length > 0) {
@@ -442,6 +451,41 @@ export const salesService = {
         profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0
       };
     });
+  },
+
+  async getTotalProductsSoldByStatuses(
+    businessId: string, 
+    startDate: string, 
+    endDate: string,
+    statuses: string[] = ['completed', 'partially_returned']
+  ) {
+    if (!businessId || !startDate || !endDate) return 0;
+    
+    const { data, error } = await supabase
+      .from('cart_items')
+      .select(`
+        quantity,
+        carts!inner(
+          sales!inner(
+            business_id,
+            sale_date,
+            status
+          )
+        )
+      `)
+      .eq('carts.sales.business_id', businessId)
+      .gte('carts.sales.sale_date', startDate)
+      .lte('carts.sales.sale_date', endDate)
+      .in('carts.sales.status', statuses);
+
+    if (error) {
+      console.error('Error fetching total products sold:', error);
+      return 0;
+    }
+
+    // Sum up all quantities
+    const totalQuantity = data.reduce((sum, item) => sum + item.quantity, 0);
+    return totalQuantity;
   },
 
   async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {

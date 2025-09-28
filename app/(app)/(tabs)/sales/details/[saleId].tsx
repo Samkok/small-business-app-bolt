@@ -324,9 +324,25 @@ export default function SaleDetailsScreen() {
           
           <View style={styles.amountRow}>
             <DollarSign size={24} color="#059669" />
-            <Text style={[styles.amount, { color: '#059669' }]}>
-              ${sale.total_amount.toFixed(2)}
-            </Text>
+            <View style={styles.amountContainer}>
+              {sale.returned_amount > 0 ? (
+                <>
+                  <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                    ${sale.total_amount.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.currentAmount, { color: '#059669' }]}>
+                    ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
+                  </Text>
+                  <Text style={[styles.returnedAmount, { color: '#dc2626' }]}>
+                    (-${(sale.returned_amount || 0).toFixed(2)} returned)
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.amount, { color: '#059669' }]}>
+                  ${sale.total_amount.toFixed(2)}
+                </Text>
+              )}
+            </View>
           </View>
         </Card>
 
@@ -481,12 +497,34 @@ export default function SaleDetailsScreen() {
             
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Total:
+                {sale.returned_amount > 0 ? 'Current Total:' : 'Total:'}
               </Text>
               <Text style={[styles.totalValue, { color: '#059669' }]}>
-                ${sale.total_amount.toFixed(2)}
+                ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
               </Text>
             </View>
+            
+            {sale.returned_amount > 0 && (
+              <>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Original Total:
+                  </Text>
+                  <Text style={[styles.originalTotalValue, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                    ${sale.total_amount.toFixed(2)}
+                  </Text>
+                </View>
+                
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Returned Amount:
+                  </Text>
+                  <Text style={[styles.returnedAmountValue, { color: '#dc2626' }]}>
+                    -${(sale.returned_amount || 0).toFixed(2)}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         </Card>
 
@@ -661,10 +699,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  amountContainer: {
+    marginLeft: 8,
+  },
   amount: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginLeft: 8,
+  },
+  originalAmount: {
+    fontSize: 16,
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
+  },
+  currentAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  returnedAmount: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   section: {
     padding: 16,
@@ -767,6 +821,15 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  originalTotalValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'line-through',
+  },
+  returnedAmountValue: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   notesText: {
     fontSize: 14,

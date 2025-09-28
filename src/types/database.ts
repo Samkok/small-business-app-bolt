@@ -6,6 +6,7 @@ export interface Database {
           id: string;
           owner_user_id: string;
           business_name: string;
+          business_image_url?: string;
           created_at: string;
           updated_at: string;
         };
@@ -13,6 +14,7 @@ export interface Database {
           id?: string;
           owner_user_id: string;
           business_name: string;
+          business_image_url?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -20,6 +22,7 @@ export interface Database {
           id?: string;
           owner_user_id?: string;
           business_name?: string;
+          business_image_url?: string;
           created_at?: string;
           updated_at?: string;
         };

@@ -16,10 +16,15 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
+import { ImageUpload } from '@/src/components/ui/ImageUpload';
+import { storageService } from '@/src/services/storage';
 import { ArrowLeft, Building } from 'lucide-react-native';
 
 export default function BusinessSettingsScreen() {
   const [businessName, setBusinessName] = useState('');
+  const [businessImageUrl, setBusinessImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
@@ -30,8 +35,27 @@ export default function BusinessSettingsScreen() {
   useEffect(() => {
     if (currentBusiness) {
       setBusinessName(currentBusiness.business_name || '');
+      const imageUrl = currentBusiness.business_image_url || '';
+      setBusinessImageUrl(imageUrl);
     }
   }, [currentBusiness]);
+
+  const handleImageSelect = (file: any) => {
+    if (Platform.OS === 'web') {
+      // Web: file is a File object
+      setImageFile(file);
+      setBusinessImageUrl(URL.createObjectURL(file)); // For preview
+    } else {
+      // Mobile: file has uri property
+      setImageFile(file);
+      setBusinessImageUrl(file.uri); // Use URI directly for preview
+    }
+  };
+
+  const handleImageRemove = () => {
+    setImageFile(null);
+    setBusinessImageUrl('');
+  };
 
   const handleSave = async () => {
     if (!businessName.trim()) {
@@ -46,8 +70,38 @@ export default function BusinessSettingsScreen() {
 
     setLoading(true);
     try {
+      let newImageUrl = businessImageUrl;
+      
+      // Handle image upload/removal
+      if (imageFile) {
+        setImageLoading(true);
+        try {
+          // Upload new image (this will handle old image deletion)
+          const uploadResult = await storageService.updateBusinessImage(
+            currentBusiness.business_image_url || null,
+            imageFile,
+            currentBusiness.id
+          );
+          newImageUrl = uploadResult.url;
+        } catch (imageError) {
+          console.error('Error handling image:', imageError);
+          Alert.alert('Warning', 'Business updated but image upload failed');
+        } finally {
+          setImageLoading(false);
+        }
+      } else if (businessImageUrl === '' && currentBusiness.business_image_url) {
+        // Image was removed
+        try {
+          await storageService.deleteBusinessImage(currentBusiness.business_image_url);
+          newImageUrl = '';
+        } catch (imageError) {
+          console.error('Error deleting image:', imageError);
+        }
+      }
+
       const { error } = await updateBusiness(currentBusiness.id, {
-        business_name: businessName.trim()
+        business_name: businessName.trim(),
+        business_image_url: newImageUrl
       });
 
       if (error) {
@@ -114,6 +168,16 @@ export default function BusinessSettingsScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.form}>
+          {/* Business Image Upload */}
+          <ImageUpload
+            value={businessImageUrl || currentBusiness?.business_image_url || ''}
+            onImageSelect={handleImageSelect}
+            onImageRemove={handleImageRemove}
+            loading={imageLoading}
+            placeholder="Upload business logo"
+            label="Business Logo"
+          />
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Building size={20} color="#2563eb" />

@@ -14,6 +14,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { SkeletonProductDetails } from '@/src/components/ui/SkeletonLoader';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
@@ -97,7 +98,29 @@ export default function ProductDetailsScreen() {
   };
 
   if (loading) {
-    return <LoadingSpinner text="Loading product details..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Product Details
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+
+        <ScrollView 
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonProductDetails />
+        </ScrollView>
+      </View>
+    );
   }
 
   if (!product) {
@@ -414,37 +437,7 @@ export default function ProductDetailsScreen() {
         </Card>
 
         {/* Cost Calculation Explanation */}
-        <Card style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Info size={20} color="#8b5cf6" />
-            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Cost Calculation Method
-            </Text>
-          </View>
-          
-          <Text style={[styles.explanationText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            The cost per unit is calculated using the weighted average method. When new stock is imported, the system calculates a new average cost based on existing inventory and the new imports.
-          </Text>
-          
-          <View style={styles.formulaContainer}>
-            <Text style={[styles.formulaTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Weighted Average Formula:
-            </Text>
-            <Text style={[styles.formula, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              (Current Stock × Current Cost) + (New Stock × New Cost)
-            </Text>
-            <Text style={[styles.formulaDivider, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ───────────────────────────────────
-            </Text>
-            <Text style={[styles.formula, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Total Stock (Current + New)
-            </Text>
-          </View>
-          
-          <Text style={[styles.explanationText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            This method ensures that the cost per unit reflects the actual average cost of all inventory in stock, accounting for price fluctuations over time.
-          </Text>
-        </Card>
+        
       </ScrollView>
     </View>
   );

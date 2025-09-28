@@ -222,7 +222,7 @@ export default function DashboardScreen() {
   );
 
   const TopCustomerCard = ({ customer }: { customer: TopCustomer }) => (
-    <View style={styles.topItemRow}>
+    <View style={styles.topItemRow} >
       <View style={styles.topItemInfo}>
         <Text style={[styles.topItemName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
           {customer.name}
@@ -454,26 +454,30 @@ export default function DashboardScreen() {
 
           {/* Top Products Section */}
           {topProducts.length > 0 && (
-            <Card style={styles.topSection}>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Top Products This Month
-              </Text>
-              {topProducts.map((product, index) => (
-                <TopProductCard key={index} product={product} />
-              ))}
-            </Card>
+            <TouchableOpacity onPress={() => router.push('/top-products')}>
+              <Card style={styles.topSection}>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Top Products This Month
+                </Text>
+                {topProducts.map((product, index) => (
+                  <TopProductCard key={index} product={product} />
+                ))}
+              </Card>
+            </TouchableOpacity>
           )}
 
           {/* Top Customers Section */}
           {topCustomers.length > 0 && (
-            <Card style={styles.topSection}>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Top Customers This Month
-              </Text>
-              {topCustomers.map((customer, index) => (
-                <TopCustomerCard key={index} customer={customer} />
-              ))}
-            </Card>
+            <TouchableOpacity onPress={() => router.push('/top-customers')}>
+              <Card style={styles.topSection}>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Top Customers This Month
+                </Text>
+                {topCustomers.map((customer, index) => (
+                  <TopCustomerCard key={index} customer={customer} />
+                ))}
+              </Card>
+            </TouchableOpacity>
           )}
         </>
       )}

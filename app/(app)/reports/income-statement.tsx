@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { supabase } from '@/src/config/supabase';
 import { salesService } from '@/src/services/sales';
 import { expenseService } from '@/src/services/expenses';
 import { exportService } from '@/src/services/exportService';
@@ -53,8 +54,29 @@ export default function IncomeStatementScreen() {
         endDate as string
       );
       
+      // Get sales data that matches dashboard calculation (including partially returned)
+      const { data: revenueData, error: revenueError } = await supabase
+        .from('sales')
+        .select(`
+          total_amount,
+          sale_actions!left(amount, action_type)
+        `)
+        .eq('business_id', currentBusiness!.id)
+        .in('status', ['completed', 'partially_returned'])
+        .gte('sale_date', startDate as string)
+        .lte('sale_date', endDate as string);
+
+      if (revenueError) throw revenueError;
+
+      // Calculate total revenue (subtracting returned amounts) to match dashboard
+      const totalRevenue = revenueData?.reduce((sum, sale) => {
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
+
       // Calculate totals
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
       const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
       const grossProfit = totalRevenue - totalCOGS;
       const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
@@ -127,7 +149,7 @@ export default function IncomeStatementScreen() {
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}income_statement_${startDate}_to_${endDate}.csv`;
-        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {

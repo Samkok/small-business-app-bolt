@@ -152,7 +152,7 @@ export const exportService = {
       const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
       
       // Get expense data
-      const expenseCategories = await reportsService.getExpensesByCategory(businessId, startDate, endDate);
+      const expenseCategories = await reportsService.getExpensesByCategory(businessId, new Date(startDate), new Date(endDate));
       
       // Calculate totals
       const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
