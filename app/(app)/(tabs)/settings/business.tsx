@@ -35,7 +35,9 @@ export default function BusinessSettingsScreen() {
   useEffect(() => {
     if (currentBusiness) {
       setBusinessName(currentBusiness.business_name || '');
-      setBusinessImageUrl(currentBusiness.business_image_url || '');
+      const imageUrl = currentBusiness.business_image_url || '';
+      setBusinessImageUrl(imageUrl);
+      console.log('Setting business image URL:', imageUrl);
     }
   }, [currentBusiness]);
 
@@ -169,7 +171,7 @@ export default function BusinessSettingsScreen() {
         <Card style={styles.form}>
           {/* Business Image Upload */}
           <ImageUpload
-            value={businessImageUrl}
+            value={businessImageUrl || currentBusiness?.business_image_url || ''}
             onImageSelect={handleImageSelect}
             onImageRemove={handleImageRemove}
             loading={imageLoading}
