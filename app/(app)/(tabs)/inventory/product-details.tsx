@@ -97,7 +97,29 @@ export default function ProductDetailsScreen() {
   };
 
   if (loading) {
-    return <LoadingSpinner text="Loading product details..." />;
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Product Details
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+
+        <ScrollView 
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonProductDetails />
+        </ScrollView>
+      </View>
+    );
   }
 
   if (!product) {

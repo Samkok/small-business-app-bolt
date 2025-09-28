@@ -330,6 +330,85 @@ const styles = StyleSheet.create({
   teamMemberActions: {
     flexDirection: 'row',
   },
+  productDetailsContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  productDetailsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  productDetailsHeader: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  productDetailsInfo: {
+    flex: 1,
+  },
+  productDetailsStock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  productDetailsStockItem: {
+    alignItems: 'center',
+  },
+  productDetailsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productDetailsFinancialGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  productDetailsFinancialItem: {
+    width: '48%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productDetailsProfitMargin: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productDetailsImportItem: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  productDetailsImportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  productDetailsImportDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productDetailsImportDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  productDetailsImportDetail: {
+    width: '50%',
+    marginBottom: 8,
+  },
+  productDetailsFormula: {
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
 });
 
 export function SkeletonTeamMemberCard() {
