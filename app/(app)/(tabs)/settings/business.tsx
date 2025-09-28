@@ -37,7 +37,6 @@ export default function BusinessSettingsScreen() {
       setBusinessName(currentBusiness.business_name || '');
       const imageUrl = currentBusiness.business_image_url || '';
       setBusinessImageUrl(imageUrl);
-      console.log('Setting business image URL:', imageUrl);
     }
   }, [currentBusiness]);
 
