@@ -11,15 +11,17 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { supabase } from '@/src/config/supabase';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonProductDetails } from '@/src/components/ui/SkeletonLoader';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
-import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info } from 'lucide-react-native';
+import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2 } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
+import { productTransactionService } from '@/src/services/productTransactions';
 
 export default function ProductDetailsScreen() {
   const [product, setProduct] = useState<any>(null);
@@ -27,6 +29,7 @@ export default function ProductDetailsScreen() {
   const [financialSummary, setFinancialSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -88,6 +91,57 @@ export default function ProductDetailsScreen() {
   const handleImportStock = useCallback(() => {
     router.push(`/inventory/import-form?productId=${productId}`);
   }, [productId, router]);
+
+  const handleDeleteProduct = useCallback(async () => {
+    if (!product || !currentBusiness?.id) return;
+
+    try {
+      setDeleting(true);
+      const transactionCheck = await productTransactionService.checkProductTransactions(product.id);
+
+      const summary = productTransactionService.getTransactionSummary(transactionCheck);
+
+      const message = transactionCheck.hasTransactions
+        ? `This product has transaction history (${summary}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?`
+        : 'This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?';
+
+      Alert.alert(
+        transactionCheck.hasTransactions ? 'Archive Product?' : 'Delete Product Permanently?',
+        message,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setDeleting(false) },
+          {
+            text: transactionCheck.hasTransactions ? 'Archive' : 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { user } = (await supabase.auth.getUser()).data;
+                if (!user) throw new Error('User not authenticated');
+
+                const result = await productService.deleteProduct(product.id, user.id);
+
+                const successMessage = result.type === 'archived'
+                  ? 'Product archived successfully. It has been hidden from the product list but remains in your records.'
+                  : 'Product deleted permanently.';
+
+                Alert.alert('Success', successMessage);
+                router.back();
+              } catch (error) {
+                console.error('Error deleting product:', error);
+                Alert.alert('Error', 'Failed to delete product. Please try again.');
+              } finally {
+                setDeleting(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error checking product transactions:', error);
+      Alert.alert('Error', 'Failed to check product status. Please try again.');
+      setDeleting(false);
+    }
+  }, [product, currentBusiness, router]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -165,7 +219,13 @@ export default function ProductDetailsScreen() {
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Product Details
         </Text>
-        <View style={styles.headerRight} />
+        <TouchableOpacity
+          style={styles.deleteHeaderButton}
+          onPress={handleDeleteProduct}
+          disabled={deleting}
+        >
+          <Trash2 size={24} color="#dc2626" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
@@ -437,8 +497,14 @@ export default function ProductDetailsScreen() {
         </Card>
 
         {/* Cost Calculation Explanation */}
-        
+
       </ScrollView>
+
+      {deleting && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Processing..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -467,6 +533,9 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 40,
+  },
+  deleteHeaderButton: {
+    padding: 8,
   },
   content: {
     flex: 1,
@@ -702,5 +771,16 @@ const styles = StyleSheet.create({
   },
   errorButton: {
     minWidth: 120,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
 });

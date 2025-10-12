@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { storageService } from './storage';
 import { Database } from '../types/database';
+import { productTransactionService } from './productTransactions';
 
 type Product = Database['public']['Tables']['products']['Row'];
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
@@ -12,6 +13,7 @@ export const productService = {
       .from('products')
       .select('*')
       .eq('business_id', businessId)
+      .eq('is_archived', false)
       .order('name');
 
     if (limit) {
@@ -32,6 +34,7 @@ export const productService = {
       .from('products')
       .select('*')
       .eq('business_id', businessId)
+      .eq('is_archived', false)
       .gt('current_stock', 0)
       .order('name');
 
@@ -52,7 +55,8 @@ export const productService = {
     const { count, error } = await supabase
       .from('products')
       .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
+      .eq('business_id', businessId)
+      .eq('is_archived', false);
 
     if (error) throw error;
     return count || 0;
@@ -137,11 +141,11 @@ export const productService = {
     return data;
   },
 
-  async deleteProduct(id: string) {
-    // Get product to check for image
+  async deleteProduct(id: string, userId: string) {
     const product = await this.getProduct(id);
-    
-    // Delete product image if it exists
+
+    const transactionCheck = await productTransactionService.checkProductTransactions(id);
+
     if (product.image_url) {
       const imagePath = storageService.getImagePath(product.image_url);
       if (imagePath) {
@@ -153,13 +157,36 @@ export const productService = {
       }
     }
 
-    // Delete product record
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+    if (transactionCheck.hasTransactions) {
+      const { error } = await supabase
+        .from('products')
+        .update({
+          is_archived: true,
+          archived_at: new Date().toISOString(),
+          archived_by: userId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) throw error;
+
+      return {
+        type: 'archived' as const,
+        transactionCheck
+      };
+    } else {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      return {
+        type: 'deleted' as const,
+        transactionCheck
+      };
+    }
   },
 
   async searchByBarcode(barcode: string, businessId: string) {
@@ -168,7 +195,8 @@ export const productService = {
       .select('*')
       .eq('barcode', barcode)
       .eq('business_id', businessId)
-      .single();
+      .eq('is_archived', false)
+      .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error;
     return data;
@@ -183,7 +211,8 @@ export const productService = {
       const { data: allProducts, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('business_id', businessId);
+        .eq('business_id', businessId)
+        .eq('is_archived', false);
   
       if (productsError) throw productsError;
   
@@ -234,6 +263,7 @@ export const productService = {
       .from('products')
       .select('*')
       .eq('business_id', businessId)
+      .eq('is_archived', false)
       .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
       .order('name');
 
@@ -254,7 +284,8 @@ export const productService = {
     let query = supabase
       .from('products')
       .select('*')
-      .eq('business_id', businessId);
+      .eq('business_id', businessId)
+      .eq('is_archived', false);
 
     if (category) {
       query = query.eq('category', category);

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X } from 'lucide-react-native';
+import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2 } from 'lucide-react-native';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 
@@ -19,9 +19,10 @@ interface ProductCardProps {
   };
   onEdit: (product: any) => void;
   onViewDetails: (product: any) => void;
+  onDelete: (product: any) => void;
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
@@ -108,13 +109,21 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               <Edit size={16} color="#2563eb" />
               <Text style={[styles.actionText, { color: '#2563eb' }]}>Edit</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
               onPress={handleViewDetails}
             >
               <TrendingUp size={16} color="#059669" />
               <Text style={[styles.actionText, { color: '#059669' }]}>Stock</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? '#7f1d1d' : '#fee2e2' }]}
+              onPress={() => onDelete(product)}
+            >
+              <Trash2 size={16} color="#dc2626" />
+              <Text style={[styles.actionText, { color: '#dc2626' }]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -234,6 +243,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
+  },
+  deleteButton: {
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   actionText: {
     fontSize: 12,

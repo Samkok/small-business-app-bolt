@@ -32,6 +32,8 @@ import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
+import { productTransactionService } from '@/src/services/productTransactions';
+import { supabase } from '@/src/config/supabase';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -56,6 +58,7 @@ export default function InventoryScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
   const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set());
   const [showEditBatchForm, setShowEditBatchForm] = useState(false);
   const [selectedBatchForEdit, setSelectedBatchForEdit] = useState<any>(null);
@@ -236,6 +239,59 @@ export default function InventoryScreen() {
 
   const handleViewDetails = (product: any) => {
     router.push(`/inventory/product-details?productId=${product.id}`);
+  };
+
+  const handleDeleteProduct = async (product: any) => {
+    if (!currentBusiness?.id) return;
+
+    try {
+      setDeletingProduct(product.id);
+      const transactionCheck = await productTransactionService.checkProductTransactions(product.id);
+
+      const summary = productTransactionService.getTransactionSummary(transactionCheck);
+
+      const message = transactionCheck.hasTransactions
+        ? `This product has transaction history (${summary}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?`
+        : 'This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?';
+
+      Alert.alert(
+        transactionCheck.hasTransactions ? 'Archive Product?' : 'Delete Product Permanently?',
+        message,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setDeletingProduct(null) },
+          {
+            text: transactionCheck.hasTransactions ? 'Archive' : 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error('User not authenticated');
+
+                const result = await productService.deleteProduct(product.id, user.id);
+
+                const successMessage = result.type === 'archived'
+                  ? 'Product archived successfully'
+                  : 'Product deleted permanently';
+
+                Alert.alert('Success', successMessage);
+
+                // Refresh product list
+                await loadData(true);
+              } catch (error) {
+                console.error('Error deleting product:', error);
+                Alert.alert('Error', 'Failed to delete product');
+              } finally {
+                setDeletingProduct(null);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error checking product transactions:', error);
+      Alert.alert('Error', 'Failed to check product status');
+      setDeletingProduct(null);
+    }
   };
 
   const handleMarkAsArrived = async (importRecord: any) => {
@@ -539,6 +595,7 @@ export default function InventoryScreen() {
       product={item}
       onEdit={handleEditProduct}
       onViewDetails={handleViewDetails}
+      onDelete={handleDeleteProduct}
     />
   );
 
@@ -1101,6 +1158,13 @@ export default function InventoryScreen() {
       {markingAsArrived && (
         <View style={styles.loadingOverlay}>
           <LoadingSpinner text="Marking import as arrived..." />
+        </View>
+      )}
+
+      {/* Loading overlay for deleting product */}
+      {deletingProduct && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Processing..." />
         </View>
       )}
     </View>
