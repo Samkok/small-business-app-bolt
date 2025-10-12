@@ -68,7 +68,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [loading, setLoading] = useState(true);
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
 
   // Load carts from database on mount
   useEffect(() => {
@@ -211,7 +211,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const serverCart = await cartService.createCart({
         customer_id: customerData.id,
         business_id: currentBusiness.id,
-        created_by: currentBusiness.id,
+        created_by: user.id,
         status: 'active',
         total_amount: 0
       });
@@ -483,7 +483,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         payment_method: paymentMethod as any,
         notes: carts.find(c => c.id === cartId)?.notes,
         business_id: currentBusiness.id,
-        created_by: currentBusiness.id
+        created_by: user.id
       });
       
       // Update local state to remove the completed cart

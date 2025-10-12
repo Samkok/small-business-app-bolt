@@ -42,7 +42,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [searchQuery, setSearchQuery] = useState('');
   
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
 
   useEffect(() => {
     loadProducts();
@@ -197,7 +197,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
     try {
       const batchData = {
         business_id: currentBusiness.id,
-        imported_by: currentBusiness.id,
+        imported_by: user.id,
         purchase_date: purchaseDate,
         notes: notes.trim() || undefined,
         items: selectedItems,
