@@ -367,12 +367,25 @@ export const batchImportService = {
 
     // Items to insert or update
     for (const item of itemsWithFinalCosts) {
+      const itemData = {
+        product_id: item.product_id,
+        quantity: item.quantity,
+        base_unit_cost_per_item: item.base_unit_cost_per_item,
+        final_unit_cost_per_item: item.final_unit_cost_per_item,
+        total_cost_for_item: item.total_cost_for_item
+      };
+
       if (currentImportIds.has(item.id)) {
         // Update existing item
-        await supabase.from('inventory_imports').update(item).eq('id', item.id);
+        await supabase.from('inventory_imports').update(itemData).eq('id', item.id);
       } else {
         // Insert new item
-        await supabase.from('inventory_imports').insert({ ...item, batch_id: batchId, business_id: updates.business_id, imported_by: updates.imported_by });
+        await supabase.from('inventory_imports').insert({
+          ...itemData,
+          batch_id: batchId,
+          business_id: updates.business_id,
+          imported_by: updates.imported_by
+        });
       }
     }
 
@@ -388,12 +401,19 @@ export const batchImportService = {
 
     // Costs to insert or update
     for (const cost of newCosts) {
+      const costData = {
+        cost_type: cost.cost_type,
+        amount: parseFloat(cost.amount as any) || 0,
+        calculation_type: cost.calculation_type,
+        description: cost.description || null
+      };
+
       if (currentCostIds.has(cost.id)) {
         // Update existing cost
-        await supabase.from('import_costs').update(cost).eq('id', cost.id);
+        await supabase.from('import_costs').update(costData).eq('id', cost.id);
       } else {
         // Insert new cost
-        await supabase.from('import_costs').insert({ ...cost, batch_id: batchId });
+        await supabase.from('import_costs').insert({ ...costData, batch_id: batchId });
       }
     }
 
