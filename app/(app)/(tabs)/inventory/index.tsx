@@ -21,6 +21,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { TabButton } from '@/src/components/ui/TabButton';
 import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ProductCard } from '@/src/components/products/ProductCard';
 import { BatchHistoryCard } from '@/src/components/inventory/BatchHistoryCard';
@@ -700,42 +701,6 @@ export default function InventoryScreen() {
     }
   );
 
-  const TabButton = ({ 
-    title, 
-    icon,
-    isActive, 
-    onPress 
-  }: { 
-    title: string; 
-    icon: React.ReactNode;
-    isActive: boolean; 
-    onPress: () => void; 
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.tabButton,
-        {
-          backgroundColor: isActive 
-            ? '#2563eb' 
-            : (isDark ? '#374151' : '#f3f4f6'),
-          borderColor: isActive ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-        }
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.tabButtonContent}>
-        <View style={styles.tabIcon}>
-          {icon}
-        </View>
-        <Text style={[
-          styles.tabButtonText,
-          { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-        ]} numberOfLines={1}>
-          {title}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
 
   const renderProductItem = ({ item }: { item: any }) => (
     <ProductCard
@@ -1238,12 +1203,14 @@ export default function InventoryScreen() {
           icon={<Package size={18} color={activeTab === 'products' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'products'}
           onPress={() => setActiveTab('products')}
+          isDark={isDark}
         />
         <TabButton
           title="Import History"
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
+          isDark={isDark}
         />
       </View>
 
@@ -1399,29 +1366,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
     gap: 8,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  tabButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    minHeight: 48,
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
   },
   content: {
     flex: 1,
