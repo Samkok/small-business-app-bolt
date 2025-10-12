@@ -50,11 +50,8 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
 
   useEffect(() => {
     loadProducts();
-  }, [currentBusiness?.id]);
-
-  useEffect(() => {
-    // Pre-populate selected items and costs from the batch prop only once on mount
-    if (batch && batch.inventory_imports && batch.import_costs) {
+    // Pre-populate selected items and costs from the batch prop
+    if (batch) {
       setSelectedItems(batch.inventory_imports.map((item: any) => ({
         id: item.id, // Keep existing ID for updates
         product_id: item.product_id,
@@ -71,7 +68,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
       setNotes(batch.notes || '');
       setPurchaseDate(batch.purchase_date || new Date().toISOString());
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, [batch]);
 
   useEffect(() => {
     filterProducts();

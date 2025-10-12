@@ -11,14 +11,12 @@ type ImportCost = Database['public']['Tables']['import_costs']['Row'];
 type ImportCostInsert = Database['public']['Tables']['import_costs']['Insert'];
 
 export interface BatchImportItem {
-  id?: string;
   product_id: string;
   quantity: number;
   base_unit_cost_per_item: number;
 }
 
 export interface BatchImportCost {
-  id?: string;
   cost_type: string;
   amount: number;
   calculation_type: 'per_unit' | 'per_total';
@@ -357,14 +355,13 @@ export const batchImportService = {
     // --- Update inventory_imports (products) ---
     const currentImportIds = new Set((currentBatch.inventory_imports || []).map((item: any) => item.id));
     console.log("CurrentImportIds: ", currentImportIds);
-    const newImportIds = new Set(itemsWithFinalCosts.filter((item: any) => item.id && currentImportIds.has(item.id)).map((item: any) => item.id));
+    const newImportIds = new Set(itemsWithFinalCosts.map((item: any) => item.id));
     console.log("newImportIds: ", newImportIds);
-    console.log("All items with costs:", itemsWithFinalCosts.map(i => ({ id: i.id, product_id: i.product_id })));
+    
 
     // Items to delete
     const importsToDelete = (currentBatch.inventory_imports || []).filter((item: any) => !newImportIds.has(item.id));
     if (importsToDelete.length > 0) {
-      console.log("Deleting imports:", importsToDelete.map((item: any) => item.id));
       await supabase.from('inventory_imports').delete().in('id', importsToDelete.map((item: any) => item.id));
     }
 
@@ -378,13 +375,11 @@ export const batchImportService = {
         total_cost_for_item: item.total_cost_for_item
       };
 
-      if (item.id && currentImportIds.has(item.id)) {
+      if (currentImportIds.has(item.id)) {
         // Update existing item
-        console.log("Updating import item:", item.id, itemData);
         await supabase.from('inventory_imports').update(itemData).eq('id', item.id);
       } else {
         // Insert new item
-        console.log("Inserting new import item:", itemData);
         await supabase.from('inventory_imports').insert({
           ...itemData,
           batch_id: batchId,
@@ -396,16 +391,11 @@ export const batchImportService = {
 
     // --- Update import_costs ---
     const currentCostIds = new Set((currentBatch.import_costs || []).map((cost: any) => cost.id));
-    const newCostIds = new Set(newCosts.filter((cost: any) => cost.id).map((cost: any) => cost.id));
-
-    console.log('Current cost IDs:', Array.from(currentCostIds));
-    console.log('New cost IDs:', Array.from(newCostIds));
-    console.log('New costs:', newCosts);
+    const newCostIds = new Set(newCosts.map((cost: any) => cost.id));
 
     // Costs to delete
     const costsToDelete = (currentBatch.import_costs || []).filter((cost: any) => !newCostIds.has(cost.id));
     if (costsToDelete.length > 0) {
-      console.log('Deleting costs:', costsToDelete.map((cost: any) => cost.id));
       await supabase.from('import_costs').delete().in('id', costsToDelete.map((cost: any) => cost.id));
     }
 
@@ -418,13 +408,11 @@ export const batchImportService = {
         description: cost.description || null
       };
 
-      if (cost.id && currentCostIds.has(cost.id)) {
+      if (currentCostIds.has(cost.id)) {
         // Update existing cost
-        console.log('Updating cost:', cost.id, costData);
         await supabase.from('import_costs').update(costData).eq('id', cost.id);
       } else {
         // Insert new cost
-        console.log('Inserting new cost:', costData);
         await supabase.from('import_costs').insert({ ...costData, batch_id: batchId });
       }
     }
