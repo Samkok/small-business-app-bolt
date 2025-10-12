@@ -53,7 +53,8 @@ export default function SalesScreen() {
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
-  
+  const [salesDataLoaded, setSalesDataLoaded] = useState(false);
+
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
   
@@ -159,15 +160,21 @@ export default function SalesScreen() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentBusiness?.id) {
+      refreshCarts();
+    }
+  }, [currentBusiness?.id]);
 
   // Only load sales data when tab changes or filter parameters change
   useEffect(() => {
-    if (activeTab === 'sales') {
-      loadSalesData(0, true);
+    if (activeTab === 'sales' && currentBusiness?.id) {
+      // Only load if filters changed or switching to sales tab for first time
+      if (!salesDataLoaded || dateFilter || startDate || endDate || selectedStatus || selectedPaymentMethod) {
+        loadSalesData(0, true);
+        setSalesDataLoaded(true);
+      }
     }
-  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod]);
+  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentBusiness?.id]);
 
   // Filter sales when search query changes
   useEffect(() => {
@@ -210,75 +217,78 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
-  const loadSalesData = useCallback(async (page: number, refresh: boolean = false) => {
+  const loadSalesData = useCallback(async (page: number = 0, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
-    
+
     if (refresh) {
       setLoading(true);
+      setCurrentPage(0);
+      setHasMoreSales(true);
     } else if (page > 0) {
       setLoadingMore(true);
     }
-    
+
     try {
       // Use the current state values directly
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0); // Set to beginning of day
-      
+      start.setHours(0, 0, 0, 0);
+
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // Set to end of day
-      
-      // First get the total count for pagination
-      const count = await salesService.getSalesCount(
-        currentBusiness.id, 
-        start.toISOString(), 
-        end.toISOString(),
-        selectedStatus !== 'all' ? selectedStatus : undefined,
-        selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
-      );
-      
+      end.setHours(23, 59, 59, 999);
+
+      const statusFilter = selectedStatus !== 'all' ? selectedStatus : undefined;
+      const paymentFilter = selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined;
+
+      // Run both queries in parallel for better performance
+      const [count, salesData] = await Promise.all([
+        salesService.getSalesCount(
+          currentBusiness.id,
+          start.toISOString(),
+          end.toISOString(),
+          statusFilter,
+          paymentFilter
+        ),
+        salesService.getSalesPaginated(
+          currentBusiness.id,
+          start.toISOString(),
+          end.toISOString(),
+          page * SALES_PER_PAGE,
+          SALES_PER_PAGE,
+          statusFilter,
+          paymentFilter
+        )
+      ]);
+
       setTotalSales(count);
-      
-      // Then get the paginated data
-      const salesData = await salesService.getSalesPaginated(
-        currentBusiness.id,
-        start.toISOString(),
-        end.toISOString(),
-        page * SALES_PER_PAGE,
-        SALES_PER_PAGE,
-        selectedStatus !== 'all' ? selectedStatus : undefined,
-        selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
-      );
-      
-      if (refresh) {
+
+      if (refresh || page === 0) {
         setSales(salesData);
         setFilteredSales(salesData);
-        setCurrentPage(page);
+        setCurrentPage(0);
       } else {
         // Append new data for infinite scroll
         setSales(prevSales => {
           const combined = [...prevSales, ...salesData];
-          // Deduplicate by id
           const uniqueById = Array.from(
             new Map(combined.map(item => [item.id, item])).values()
           );
           return uniqueById;
         });
-        
+
         // Also update filtered sales if not searching
         if (!searchQuery.trim()) {
           setFilteredSales(prevFiltered => {
             const combined = [...prevFiltered, ...salesData];
-            // Deduplicate by id
             const uniqueById = Array.from(
               new Map(combined.map(item => [item.id, item])).values()
             );
             return uniqueById;
           });
         }
-        
+
         setCurrentPage(page);
       }
-      
+
       // Update hasMoreSales based on returned data length
       setHasMoreSales(salesData.length === SALES_PER_PAGE);
     } catch (error) {
@@ -313,24 +323,26 @@ export default function SalesScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setCurrentPage(0);
-    setHasMoreSales(true);
-    
+
     try {
-      await loadData(true);
+      if (activeTab === 'carts') {
+        await refreshCarts();
+      } else {
+        await loadSalesData(0, true);
+      }
     } catch (error) {
       console.error('Error refreshing data:', error);
       Alert.alert(t('common.error'), 'Failed to refresh data');
     } finally {
       setRefreshing(false);
     }
-  }, [loadData, t]);
+  }, [activeTab, refreshCarts, loadSalesData, t]);
 
-  const handleVoidSale = useCallback(async (sale: any) => {
+  const handleVoidSale = useCallback((sale: any) => {
     setSaleToVoid(sale);
     setVoidReason('');
     setShowVoidModal(true);
-  }, [currentBusiness?.id, loadData]);
+  }, []);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
     Alert.alert(
@@ -471,14 +483,15 @@ export default function SalesScreen() {
       setShowVoidModal(false);
       setSaleToVoid(null);
       setVoidReason('');
-      loadData();
+      // Refresh sales data after voiding
+      await loadSalesData(0, true);
     } catch (error) {
       console.error('Error voiding sale:', error);
       Alert.alert('Error', 'Failed to void sale');
     } finally {
       setVoidingInProgress(false);
     }
-  }, [voidReason, currentBusiness?.id, saleToVoid, loadData]);
+  }, [voidReason, currentBusiness?.id, saleToVoid, loadSalesData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
