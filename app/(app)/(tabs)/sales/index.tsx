@@ -159,18 +159,27 @@ export default function SalesScreen() {
     return { start, end, text };
   }, []);
 
+  // Initial load on mount
   useEffect(() => {
     if (currentBusiness?.id) {
-      refreshCarts();
+      // Set loading to false initially for carts tab, as CartContext handles its own loading
+      if (activeTab === 'carts') {
+        setLoading(false);
+      } else {
+        loadData();
+      }
     }
   }, [currentBusiness?.id]);
 
-  // Only load sales data when tab changes or filter parameters change
+  // Load sales data when tab changes to sales or filter parameters change
   useEffect(() => {
     if (activeTab === 'sales' && currentBusiness?.id) {
       loadSalesData(0, true);
+    } else if (activeTab === 'carts') {
+      // When switching to carts tab, set loading to false as CartContext manages its own loading
+      setLoading(false);
     }
-  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentBusiness?.id]);
+  }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod]);
 
   // Filter sales when search query changes
   useEffect(() => {
