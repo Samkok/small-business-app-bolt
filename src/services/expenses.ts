@@ -36,7 +36,7 @@ export const expenseService = {
         .select(`
           *,
           expense_categories(name),
-          created_by_business:businesses!expenses_created_by_fkey(business_name)
+          created_by_user:user_profiles!expenses_created_by_fkey(full_name, email)
         `)
         .eq('business_id', businessId)
         .order('expense_date', { ascending: false });
@@ -58,7 +58,7 @@ export const expenseService = {
         .select(`
           *,
           expense_categories(name),
-          created_by_business:businesses!expenses_created_by_fkey(business_name)
+          created_by_user:user_profiles!expenses_created_by_fkey(full_name, email)
         `)
         .single();
 
@@ -76,7 +76,7 @@ export const expenseService = {
       .select(`
         *,
         expense_categories(name),
-        created_by_business:businesses!expenses_created_by_fkey(business_name)
+        created_by_user:user_profiles!expenses_created_by_fkey(full_name, email)
       `)
       .single();
 
