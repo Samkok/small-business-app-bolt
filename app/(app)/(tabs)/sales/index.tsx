@@ -53,7 +53,6 @@ export default function SalesScreen() {
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
-  const [salesDataLoaded, setSalesDataLoaded] = useState(false);
 
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -168,11 +167,7 @@ export default function SalesScreen() {
   // Only load sales data when tab changes or filter parameters change
   useEffect(() => {
     if (activeTab === 'sales' && currentBusiness?.id) {
-      // Only load if filters changed or switching to sales tab for first time
-      if (!salesDataLoaded || dateFilter || startDate || endDate || selectedStatus || selectedPaymentMethod) {
-        loadSalesData(0, true);
-        setSalesDataLoaded(true);
-      }
+      loadSalesData(0, true);
     }
   }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod, currentBusiness?.id]);
 
