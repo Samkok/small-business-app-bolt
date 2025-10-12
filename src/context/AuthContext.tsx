@@ -16,6 +16,9 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   userBusinesses: Business[];
   currentBusiness: Business | null;
+  currentUserRole: 'admin' | 'staff' | null;
+  isAdmin: boolean;
+  isStaff: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
@@ -24,6 +27,8 @@ interface AuthContextType {
   updateBusiness: (businessId: string, updates: Partial<Business>) => Promise<{ error: any }>;
   switchBusiness: (businessId: string) => Promise<void>;
   createBusiness: (businessName: string) => Promise<{ error: any, business?: Business }>;
+  getUserRole: (businessId: string) => 'admin' | 'staff' | null;
+  hasBusinessAccess: (businessId: string) => boolean;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
   signedOutDueToInactivity: boolean;
@@ -42,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userBusinesses, setUserBusinesses] = useState<Business[]>([]);
   const [currentBusiness, setCurrentBusiness] = useState<Business | null>(null);
+  const [userBusinessRoles, setUserBusinessRoles] = useState<Map<string, 'admin' | 'staff'>>(new Map());
   const [loading, setLoading] = useState(true);
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
@@ -319,7 +325,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
             console.log(`Loaded ${businesses.length} businesses for user:`, userId);
-            
+
+            // Store roles in a map for quick lookup
+            const rolesMap = new Map<string, 'admin' | 'staff'>();
+            businessRoles.forEach(role => {
+              rolesMap.set(role.business_id, role.role as 'admin' | 'staff');
+            });
+            if (mounted.current) {
+              setUserBusinessRoles(rolesMap);
+            }
+
             // Only update userBusinesses if the business list has actually changed
             if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
               setUserBusinesses(businesses);
@@ -494,6 +509,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, userBusinesses.length]);
 
+  // Get the current user's role in a specific business
+  const getUserRole = useCallback((businessId: string): 'admin' | 'staff' | null => {
+    return userBusinessRoles.get(businessId) || null;
+  }, [userBusinessRoles]);
+
+  // Check if user has access to a specific business
+  const hasBusinessAccess = useCallback((businessId: string): boolean => {
+    return userBusinessRoles.has(businessId);
+  }, [userBusinessRoles]);
+
+  // Get current user's role in the active business
+  const currentUserRole = useMemo(() => {
+    if (!currentBusiness) return null;
+    return getUserRole(currentBusiness.id);
+  }, [currentBusiness, getUserRole]);
+
+  // Computed properties for role checks
+  const isAdmin = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
+  const isStaff = useMemo(() => currentUserRole === 'staff', [currentUserRole]);
+
   const switchBusiness = useCallback(async (businessId: string) => {
     if (!user) return;
 
@@ -504,7 +539,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCurrentBusiness(business);
-    
+
     // Save preference to AsyncStorage
     try {
       await AsyncStorage.setItem(`currentBusiness_${user.id}`, businessId);
@@ -598,6 +633,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     userBusinesses,
     currentBusiness,
+    currentUserRole,
+    isAdmin,
+    isStaff,
     loading,
     signIn,
     signUp,
@@ -606,6 +644,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateBusiness,
     switchBusiness,
     createBusiness,
+    getUserRole,
+    hasBusinessAccess,
     resetPassword,
     updatePassword,
     signedOutDueToInactivity,
@@ -616,6 +656,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     userBusinesses,
     currentBusiness,
+    currentUserRole,
+    isAdmin,
+    isStaff,
     loading,
     signIn,
     signUp,
@@ -624,6 +667,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateBusiness,
     switchBusiness,
     createBusiness,
+    getUserRole,
+    hasBusinessAccess,
     resetPassword,
     updatePassword,
     signedOutDueToInactivity,
