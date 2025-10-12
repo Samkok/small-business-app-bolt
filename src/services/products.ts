@@ -361,5 +361,77 @@ export const productService = {
     await this.updateCostPerUnit(productId, costPerUnit);
 
     return costPerUnit;
+  },
+
+  async getArchivedProducts(businessId: string, limit?: number, offset?: number) {
+    let query = supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_archived', true)
+      .order('archived_at', { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    if (offset) {
+      query = query.range(offset, offset + (limit || 10) - 1);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getArchivedProductsCount(businessId: string) {
+    const { count, error } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('is_archived', true);
+
+    if (error) throw error;
+    return count || 0;
+  },
+
+  async searchArchivedProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    let dbQuery = supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_archived', true)
+      .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
+      .order('archived_at', { ascending: false });
+
+    if (limit) {
+      dbQuery = dbQuery.limit(limit);
+    }
+
+    if (offset) {
+      dbQuery = dbQuery.range(offset, offset + (limit || 10) - 1);
+    }
+
+    const { data, error } = await dbQuery;
+    if (error) throw error;
+    return data;
+  },
+
+  async unarchiveProduct(id: string, userId: string) {
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        is_archived: false,
+        archived_at: null,
+        archived_by: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return data;
   }
 };

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2 } from 'lucide-react-native';
+import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore } from 'lucide-react-native';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 
@@ -16,13 +16,18 @@ interface ProductCardProps {
     barcode?: string;
     current_stock: number;
     min_stock_level: number;
+    is_archived?: boolean;
+    archived_at?: string;
+    archived_by?: string;
   };
   onEdit: (product: any) => void;
   onViewDetails: (product: any) => void;
   onDelete: (product: any) => void;
+  onUnarchive?: (product: any) => void;
+  isArchived?: boolean;
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
@@ -42,20 +47,25 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
     router.push(`/inventory/product-details?productId=${product.id}`);
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString();
+  };
+
   return (
     <Card style={styles.card}>
       <View style={styles.cardInnerContainer}>
         {/* Image Section */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.imageContainer}
           onPress={() => product.image_url && setShowImageModal(true)}
           disabled={!product.image_url}
         >
           {product.image_url ? (
-            <OptimizedImage 
-              source={{ uri: product.image_url }} 
-              style={styles.image} 
-              resizeMode="contain" 
+            <OptimizedImage
+              source={{ uri: product.image_url }}
+              style={styles.image}
+              resizeMode="contain"
               alt={product.name}
             />
           ) : (
@@ -63,8 +73,14 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               <Package size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
             </View>
           )}
-          
-          {(isLowStock || isOutOfStock) && (
+
+          {isArchived && (
+            <View style={[styles.archivedBadge, { backgroundColor: '#6b7280' }]}>
+              <Text style={styles.archivedBadgeText}>Archived</Text>
+            </View>
+          )}
+
+          {!isArchived && (isLowStock || isOutOfStock) && (
             <View style={[styles.stockAlert, { backgroundColor: stockStatus.color }]}>
               <AlertTriangle size={12} color="#ffffff" />
             </View>
@@ -100,31 +116,49 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               {product.barcode}
             </Text>
           )}
-          
+
+          {isArchived && product.archived_at && (
+            <Text style={[styles.archivedDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Archived: {formatDate(product.archived_at)}
+            </Text>
+          )}
+
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-              onPress={() => onEdit(product)}
-            >
-              <Edit size={16} color="#2563eb" />
-              <Text style={[styles.actionText, { color: '#2563eb' }]}>Edit</Text>
-            </TouchableOpacity>
+            {!isArchived && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+                onPress={() => onEdit(product)}
+              >
+                <Edit size={16} color="#2563eb" />
+                <Text style={[styles.actionText, { color: '#2563eb' }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
               onPress={handleViewDetails}
             >
               <TrendingUp size={16} color="#059669" />
-              <Text style={[styles.actionText, { color: '#059669' }]}>Stock</Text>
+              <Text style={[styles.actionText, { color: '#059669' }]}>Details</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#fee2e2' }]}
-              onPress={() => onDelete(product)}
-            >
-              <Trash2 size={16} color={isDark ? '#f87171' : '#dc2626'} />
-              <Text style={[styles.actionText, { color: isDark ? '#f87171' : '#dc2626' }]}>Delete</Text>
-            </TouchableOpacity>
+            {isArchived && onUnarchive ? (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#dbeafe' }]}
+                onPress={() => onUnarchive(product)}
+              >
+                <ArchiveRestore size={16} color="#2563eb" />
+                <Text style={[styles.actionText, { color: '#2563eb' }]}>Unarchive</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#fee2e2' }]}
+                onPress={() => onDelete(product)}
+              >
+                <Trash2 size={16} color={isDark ? '#f87171' : '#dc2626'} />
+                <Text style={[styles.actionText, { color: isDark ? '#f87171' : '#dc2626' }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -230,6 +264,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     marginBottom: 8,
+  },
+  archivedBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 1,
+  },
+  archivedBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  archivedDate: {
+    fontSize: 11,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   actions: {
     flexDirection: 'row',
