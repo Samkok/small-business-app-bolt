@@ -36,25 +36,25 @@ export default function LowStockScreen() {
   
   const router = useRouter();
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   useEffect(() => {
     loadLowStockProducts();
-  }, []);
+  }, [currentBusiness?.id]);
 
   useEffect(() => {
     filterProductsByStatus();
   }, [lowStockProducts, selectedFilter]);
 
   const loadLowStockProducts = async (isRefresh = false) => {
-    if (!profile?.id) return;
-    
+    if (!currentBusiness?.id) return;
+
     try {
       if (!isRefresh) {
         setLoading(true);
       }
-      
-      const data = await productService.getLowStockProducts(profile.id);
+
+      const data = await productService.getLowStockProducts(currentBusiness.id);
       setLowStockProducts(data);
     } catch (error) {
       console.error('Error loading low stock products:', error);
@@ -382,7 +382,8 @@ export default function LowStockScreen() {
                   <ProductCard
                     product={product}
                     onEdit={handleEditProduct}
-                    onImportStock={handleImportStock}
+                    onViewDetails={(p) => router.push(`/inventory/product-details?productId=${p.id}`)}
+                    onDelete={() => {}}
                   />
                 </View>
               );

@@ -33,7 +33,7 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
   const [loading, setLoading] = useState(false);
   
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
 
   useEffect(() => {
     if (expense) {
@@ -74,7 +74,7 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
         expense_date: expenseDate || new Date().toISOString(),
         notes: notes.trim() || null,
         business_id: currentBusiness.id,
-        created_by: currentBusiness.id,
+        created_by: user.id,
       };
 
       if (expense) {

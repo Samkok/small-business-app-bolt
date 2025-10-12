@@ -44,7 +44,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   const [searchQuery, setSearchQuery] = useState('');
   
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
 
   const isEditable = batch.status === 'pending';
 
@@ -241,7 +241,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     try {
       const batchData = {
         business_id: currentBusiness.id,
-        imported_by: currentBusiness.id, // Assuming the current user's business is the importer
+        imported_by: user.id,
         purchase_date: purchaseDate,
         notes: notes.trim() || undefined,
       };

@@ -21,6 +21,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { TabButton } from '@/src/components/ui/TabButton';
 import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ProductCard } from '@/src/components/products/ProductCard';
 import { BatchHistoryCard } from '@/src/components/inventory/BatchHistoryCard';
@@ -32,6 +33,8 @@ import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
+import { productTransactionService } from '@/src/services/productTransactions';
+import { supabase } from '@/src/config/supabase';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -56,6 +59,7 @@ export default function InventoryScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [deletingImport, setDeletingImport] = useState<string | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
   const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set());
   const [showEditBatchForm, setShowEditBatchForm] = useState(false);
   const [selectedBatchForEdit, setSelectedBatchForEdit] = useState<any>(null);
@@ -63,13 +67,20 @@ export default function InventoryScreen() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalProducts, setTotalProducts] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
+
+  // Archived products states
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedProducts, setArchivedProducts] = useState<any[]>([]);
+  const [filteredArchivedProducts, setFilteredArchivedProducts] = useState<any[]>([]);
+  const [totalArchivedProducts, setTotalArchivedProducts] = useState(0);
+  const [unarchivingProduct, setUnarchivingProduct] = useState<string | null>(null);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -87,11 +98,15 @@ export default function InventoryScreen() {
     if (searchQuery.trim() === '') {
       setIsSearching(false);
       setSearchResults([]);
-      setFilteredProducts(products);
+      if (showArchived) {
+        setFilteredArchivedProducts(archivedProducts);
+      } else {
+        setFilteredProducts(products);
+      }
     } else {
       handleSearch();
     }
-  }, [searchQuery, products]);
+  }, [searchQuery, products, archivedProducts, showArchived]);
 
   useEffect(() => {
     filterBatchHistory();
@@ -99,30 +114,40 @@ export default function InventoryScreen() {
 
   const loadData = async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
-    
+
     if (!isRefresh) {
       setLoading(true);
     }
-    
+
     try {
-      const [batchData, totalCount, lowStockProducts] = await Promise.all([
+      const [batchData, totalCount, lowStockProducts, archivedCount] = await Promise.all([
         batchImportService.getBatchImports(currentBusiness.id),
         productService.getProductsCount(currentBusiness.id),
-        productService.getLowStockProducts(currentBusiness.id)
+        productService.getLowStockProducts(currentBusiness.id),
+        productService.getArchivedProductsCount(currentBusiness.id)
       ]);
-      
+
       setBatchHistory(batchData);
       setFilteredBatchHistory(batchData);
       setTotalProducts(totalCount);
       setLowStockCount(lowStockProducts.length);
-      
+      setTotalArchivedProducts(archivedCount);
+
       // Reset pagination and load first page of products
       if (isRefresh) {
         setCurrentPage(0);
         setHasMoreProducts(true);
-        await loadProducts(0, true);
+        if (showArchived) {
+          await loadArchivedProducts(0, true);
+        } else {
+          await loadProducts(0, true);
+        }
       } else {
-        await loadProducts(0, false);
+        if (showArchived) {
+          await loadArchivedProducts(0, false);
+        } else {
+          await loadProducts(0, false);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -182,16 +207,58 @@ export default function InventoryScreen() {
     }
   };
 
+  const loadArchivedProducts = async (page: number, reset: boolean = false) => {
+    if (!currentBusiness?.id) return;
+
+    try {
+      const offset = page * PRODUCTS_PER_PAGE;
+      const productsData = await productService.getArchivedProducts(currentBusiness.id, PRODUCTS_PER_PAGE, offset);
+
+      if (reset) {
+        setArchivedProducts(productsData);
+        setFilteredArchivedProducts(productsData);
+      } else {
+        setArchivedProducts(prevProducts => {
+          const combined = [...prevProducts, ...productsData];
+          const uniqueById = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          return uniqueById;
+        });
+
+        if (!isSearching) {
+          setFilteredArchivedProducts(prevFiltered => {
+            const combined = [...prevFiltered, ...productsData];
+            const uniqueById = Array.from(
+              new Map(combined.map(item => [item.id, item])).values()
+            );
+            return uniqueById;
+          });
+        }
+      }
+
+      setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
+      setCurrentPage(page);
+    } catch (error) {
+      console.error('Error loading archived products:', error);
+      Alert.alert(t('common.error'), 'Failed to load archived products');
+    }
+  };
+
   const loadMoreProducts = useCallback(async () => {
     if (loadingMore || !hasMoreProducts || isSearching) return;
-    
+
     setLoadingMore(true);
     try {
-      await loadProducts(currentPage + 1);
+      if (showArchived) {
+        await loadArchivedProducts(currentPage + 1);
+      } else {
+        await loadProducts(currentPage + 1);
+      }
     } finally {
       setLoadingMore(false);
     }
-  }, [currentPage, hasMoreProducts, loadingMore, currentBusiness?.id, isSearching]);
+  }, [currentPage, hasMoreProducts, loadingMore, currentBusiness?.id, isSearching, showArchived]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -236,6 +303,59 @@ export default function InventoryScreen() {
 
   const handleViewDetails = (product: any) => {
     router.push(`/inventory/product-details?productId=${product.id}`);
+  };
+
+  const handleDeleteProduct = async (product: any) => {
+    if (!currentBusiness?.id) return;
+
+    try {
+      setDeletingProduct(product.id);
+      const transactionCheck = await productTransactionService.checkProductTransactions(product.id);
+
+      const summary = productTransactionService.getTransactionSummary(transactionCheck);
+
+      const message = transactionCheck.hasTransactions
+        ? `This product has transaction history (${summary}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?`
+        : 'This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?';
+
+      Alert.alert(
+        transactionCheck.hasTransactions ? 'Archive Product?' : 'Delete Product Permanently?',
+        message,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setDeletingProduct(null) },
+          {
+            text: transactionCheck.hasTransactions ? 'Archive' : 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error('User not authenticated');
+
+                const result = await productService.deleteProduct(product.id, user.id);
+
+                const successMessage = result.type === 'archived'
+                  ? 'Product archived successfully'
+                  : 'Product deleted permanently';
+
+                Alert.alert('Success', successMessage);
+
+                // Refresh product list
+                await loadData(true);
+              } catch (error) {
+                console.error('Error deleting product:', error);
+                Alert.alert('Error', 'Failed to delete product');
+              } finally {
+                setDeletingProduct(null);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error checking product transactions:', error);
+      Alert.alert('Error', 'Failed to check product status');
+      setDeletingProduct(null);
+    }
   };
 
   const handleMarkAsArrived = async (importRecord: any) => {
@@ -391,12 +511,20 @@ export default function InventoryScreen() {
 
   const handleSearch = async () => {
     if (!currentBusiness?.id || searchQuery.trim() === '') return;
-    
+
     setIsSearching(true);
     try {
-      const results = await productService.searchProducts(currentBusiness.id, searchQuery);
+      const results = showArchived
+        ? await productService.searchArchivedProducts(currentBusiness.id, searchQuery)
+        : await productService.searchProducts(currentBusiness.id, searchQuery);
+
       setSearchResults(results);
-      setFilteredProducts(results);
+
+      if (showArchived) {
+        setFilteredArchivedProducts(results);
+      } else {
+        setFilteredProducts(results);
+      }
     } catch (error) {
       console.error('Error searching products:', error);
       Alert.alert('Error', 'Failed to search products');
@@ -407,7 +535,83 @@ export default function InventoryScreen() {
     setSearchQuery('');
     setIsSearching(false);
     setSearchResults([]);
-    setFilteredProducts(products);
+    if (showArchived) {
+      setFilteredArchivedProducts(archivedProducts);
+    } else {
+      setFilteredProducts(products);
+    }
+  };
+
+  const handleToggleArchiveFilter = async () => {
+    const newShowArchived = !showArchived;
+    setShowArchived(newShowArchived);
+    setSearchQuery('');
+    setIsSearching(false);
+    setCurrentPage(0);
+    setHasMoreProducts(true);
+
+    if (newShowArchived) {
+      if (archivedProducts.length === 0) {
+        await loadArchivedProducts(0, true);
+      }
+    }
+  };
+
+  const handleShowActive = async () => {
+    if (showArchived) {
+      setShowArchived(false);
+      setSearchQuery('');
+      setIsSearching(false);
+      setCurrentPage(0);
+      setHasMoreProducts(true);
+    }
+  };
+
+  const handleShowArchived = async () => {
+    if (!showArchived) {
+      setShowArchived(true);
+      setSearchQuery('');
+      setIsSearching(false);
+      setCurrentPage(0);
+      setHasMoreProducts(true);
+
+      if (archivedProducts.length === 0) {
+        await loadArchivedProducts(0, true);
+      }
+    }
+  };
+
+  const handleUnarchiveProduct = async (product: any) => {
+    if (!currentBusiness?.id) return;
+
+    Alert.alert(
+      'Unarchive Product',
+      `Are you sure you want to unarchive "${product.name}"? It will be restored to your active products list.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unarchive',
+          onPress: async () => {
+            try {
+              setUnarchivingProduct(product.id);
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) throw new Error('User not authenticated');
+
+              await productService.unarchiveProduct(product.id, user.id);
+
+              Alert.alert('Success', 'Product unarchived successfully');
+
+              await loadData(true);
+            } catch (error) {
+              console.error('Error unarchiving product:', error);
+              Alert.alert('Error', 'Failed to unarchive product');
+            } finally {
+              setUnarchivingProduct(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleBatchSearch = () => {
@@ -497,48 +701,15 @@ export default function InventoryScreen() {
     }
   );
 
-  const TabButton = ({ 
-    title, 
-    icon,
-    isActive, 
-    onPress 
-  }: { 
-    title: string; 
-    icon: React.ReactNode;
-    isActive: boolean; 
-    onPress: () => void; 
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.tabButton,
-        {
-          backgroundColor: isActive 
-            ? '#2563eb' 
-            : (isDark ? '#374151' : '#f3f4f6'),
-          borderColor: isActive ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-        }
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.tabButtonContent}>
-        <View style={styles.tabIcon}>
-          {icon}
-        </View>
-        <Text style={[
-          styles.tabButtonText,
-          { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-        ]} numberOfLines={1}>
-          {title}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
 
   const renderProductItem = ({ item }: { item: any }) => (
     <ProductCard
       product={item}
       onEdit={handleEditProduct}
       onViewDetails={handleViewDetails}
+      onDelete={handleDeleteProduct}
+      onUnarchive={handleUnarchiveProduct}
+      isArchived={showArchived}
     />
   );
 
@@ -573,12 +744,52 @@ export default function InventoryScreen() {
 
     return (
       <View style={styles.tabContent}>
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              {
+                backgroundColor: !showArchived ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: !showArchived ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={handleShowActive}
+          >
+            <Package size={16} color={!showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.filterButtonText,
+              { color: !showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Active ({totalProducts})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              {
+                backgroundColor: showArchived ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: showArchived ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={handleShowArchived}
+          >
+            <Archive size={16} color={showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.filterButtonText,
+              { color: showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Archived ({totalArchivedProducts})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.searchContainer}>
           <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
             <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             <TextInput
               style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder="Search products..."
+              placeholder={`Search ${showArchived ? 'archived ' : ''}products...`}
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -591,50 +802,54 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity 
-            style={[styles.barcodeButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
-            onPress={() => setShowBarcodeScanner(true)}
-          >
-            <Barcode size={20} color="#2563eb" />
-          </TouchableOpacity>
+          {!showArchived && (
+            <TouchableOpacity
+              style={[styles.barcodeButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
+              onPress={() => setShowBarcodeScanner(true)}
+            >
+              <Barcode size={20} color="#2563eb" />
+            </TouchableOpacity>
+          )}
         </View>
 
-        <View style={styles.summaryCards}>
-          <Card style={styles.summaryCard}>
-            <View style={styles.summaryContent}>
-              <Package size={24} color="#2563eb" />
-              <View style={styles.summaryText}>
-                <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {totalProducts}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Total Products
-                </Text>
-              </View>
-            </View>
-          </Card>
-          
-          <TouchableOpacity onPress={handleLowStockPress}>
+        {!showArchived && (
+          <View style={styles.summaryCards}>
             <Card style={styles.summaryCard}>
               <View style={styles.summaryContent}>
-                <AlertTriangle size={24} color="#ea580c" />
+                <Package size={24} color="#2563eb" />
                 <View style={styles.summaryText}>
                   <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {lowStockCount}
+                    {totalProducts}
                   </Text>
                   <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Low Stock
+                    Total Products
                   </Text>
                 </View>
               </View>
-              {lowStockCount > 0 && (
-                <View style={styles.alertIndicator}>
-                  <Text style={styles.alertText}>!</Text>
-                </View>
-              )}
             </Card>
-          </TouchableOpacity>
-        </View>
+
+            <TouchableOpacity onPress={handleLowStockPress}>
+              <Card style={styles.summaryCard}>
+                <View style={styles.summaryContent}>
+                  <AlertTriangle size={24} color="#ea580c" />
+                  <View style={styles.summaryText}>
+                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {lowStockCount}
+                    </Text>
+                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Low Stock
+                    </Text>
+                  </View>
+                </View>
+                {lowStockCount > 0 && (
+                  <View style={styles.alertIndicator}>
+                    <Text style={styles.alertText}>!</Text>
+                  </View>
+                )}
+              </Card>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {isSearching && (
           <View style={styles.searchResultsHeader}>
@@ -653,7 +868,7 @@ export default function InventoryScreen() {
 
         <FlatList
           ref={flatListRef}
-          data={filteredProducts}
+          data={showArchived ? filteredArchivedProducts : filteredProducts}
           renderItem={renderProductItem}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
@@ -682,29 +897,30 @@ export default function InventoryScreen() {
                 </View>
               );
             }
-            
-            if (!hasMoreProducts && filteredProducts.length > 0 && !isSearching) {
+
+            const currentProducts = showArchived ? filteredArchivedProducts : filteredProducts;
+            if (!hasMoreProducts && currentProducts.length > 0 && !isSearching) {
               return (
                 <View style={styles.endOfList}>
                   <Text style={[styles.endOfListText, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    You've reached the end of your products
+                    You've reached the end of {showArchived ? 'archived products' : 'your products'}
                   </Text>
                 </View>
               );
             }
-            
+
             return null;
           }}
           ListEmptyComponent={() => (
             <Card style={styles.emptyState}>
-              <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
+              {showArchived ? <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} /> : <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />}
               <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {isSearching ? 'No products found' : 'No products yet'}
+                {isSearching ? 'No products found' : (showArchived ? 'No archived products' : 'No products yet')}
               </Text>
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {isSearching 
-                  ? `We couldn't find any products matching "${searchQuery}"`
-                  : 'Add your first product to start managing inventory'}
+                {isSearching
+                  ? `We couldn't find any ${showArchived ? 'archived ' : ''}products matching "${searchQuery}"`
+                  : (showArchived ? 'Products that are archived will appear here' : 'Add your first product to start managing inventory')}
               </Text>
               {isSearching ? (
                 <Button
@@ -712,16 +928,16 @@ export default function InventoryScreen() {
                   onPress={handleClearSearch}
                   style={styles.emptyButton}
                 />
-              ) : (
+              ) : !showArchived ? (
                 <Button
                   title="Add Product"
                   onPress={() => setShowProductForm(true)}
                   style={styles.emptyButton}
                 />
-              )}
+              ) : null}
             </Card>
           )}
-          contentContainerStyle={filteredProducts.length === 0 ? styles.emptyContainer : styles.productsList}
+          contentContainerStyle={(showArchived ? filteredArchivedProducts : filteredProducts).length === 0 ? styles.emptyContainer : styles.productsList}
         />
       </View>
     );
@@ -987,12 +1203,14 @@ export default function InventoryScreen() {
           icon={<Package size={18} color={activeTab === 'products' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'products'}
           onPress={() => setActiveTab('products')}
+          isDark={isDark}
         />
         <TabButton
           title="Import History"
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
+          isDark={isDark}
         />
       </View>
 
@@ -1103,6 +1321,20 @@ export default function InventoryScreen() {
           <LoadingSpinner text="Marking import as arrived..." />
         </View>
       )}
+
+      {/* Loading overlay for deleting product */}
+      {deletingProduct && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Processing..." />
+        </View>
+      )}
+
+      {/* Loading overlay for unarchiving product */}
+      {unarchivingProduct && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner text="Unarchiving product..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -1135,35 +1367,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
-  tabButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  tabButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    minHeight: 48,
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
   },
   tabContent: {
     flex: 1,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   searchContainer: {
     flexDirection: 'row',

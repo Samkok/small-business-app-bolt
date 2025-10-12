@@ -10,7 +10,10 @@ import {
   RefreshControl,
   TextInput,
   Animated,
-  FlatList
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  UIManager
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -26,6 +29,11 @@ import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag,
 import { expenseService } from '@/src/services/expenses';
 import { useDebounce } from '@/src/hooks/useDebounce';
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -39,7 +47,7 @@ export default function ExpensesScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [statsCollapsed, setStatsCollapsed] = useState(true);
-  
+
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
   
@@ -193,6 +201,7 @@ export default function ExpensesScreen() {
   }, [loadData]);
 
   const toggleStatsCollapse = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
 
@@ -422,14 +431,16 @@ export default function ExpensesScreen() {
         </TouchableOpacity>
       </View>
 
-      <Animated.View style={{
-        maxHeight: collapseAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 500] // Adjust this value based on your content height
-        }),
-        overflow: 'hidden',
-        opacity: collapseAnim
-      }}>
+      <Animated.View
+        style={{
+          maxHeight: collapseAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 1000]
+          }),
+          opacity: collapseAnim,
+          overflow: 'hidden'
+        }}
+      >
         {/* Category Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {categories.map((category) => (

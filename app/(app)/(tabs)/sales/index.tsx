@@ -22,6 +22,7 @@ import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { TabButton } from '@/src/components/ui/TabButton';
 import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
@@ -53,7 +54,7 @@ export default function SalesScreen() {
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
-  
+
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
   
@@ -158,14 +159,25 @@ export default function SalesScreen() {
     return { start, end, text };
   }, []);
 
+  // Initial load on mount
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentBusiness?.id) {
+      // Set loading to false initially for carts tab, as CartContext handles its own loading
+      if (activeTab === 'carts') {
+        setLoading(false);
+      } else {
+        loadData();
+      }
+    }
+  }, [currentBusiness?.id]);
 
-  // Only load sales data when tab changes or filter parameters change
+  // Load sales data when tab changes to sales or filter parameters change
   useEffect(() => {
-    if (activeTab === 'sales') {
+    if (activeTab === 'sales' && currentBusiness?.id) {
       loadSalesData(0, true);
+    } else if (activeTab === 'carts') {
+      // When switching to carts tab, set loading to false as CartContext manages its own loading
+      setLoading(false);
     }
   }, [activeTab, dateFilter, startDate, endDate, selectedStatus, selectedPaymentMethod]);
 
@@ -210,75 +222,78 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
-  const loadSalesData = useCallback(async (page: number, refresh: boolean = false) => {
+  const loadSalesData = useCallback(async (page: number = 0, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
-    
+
     if (refresh) {
       setLoading(true);
+      setCurrentPage(0);
+      setHasMoreSales(true);
     } else if (page > 0) {
       setLoadingMore(true);
     }
-    
+
     try {
       // Use the current state values directly
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0); // Set to beginning of day
-      
+      start.setHours(0, 0, 0, 0);
+
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // Set to end of day
-      
-      // First get the total count for pagination
-      const count = await salesService.getSalesCount(
-        currentBusiness.id, 
-        start.toISOString(), 
-        end.toISOString(),
-        selectedStatus !== 'all' ? selectedStatus : undefined,
-        selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
-      );
-      
+      end.setHours(23, 59, 59, 999);
+
+      const statusFilter = selectedStatus !== 'all' ? selectedStatus : undefined;
+      const paymentFilter = selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined;
+
+      // Run both queries in parallel for better performance
+      const [count, salesData] = await Promise.all([
+        salesService.getSalesCount(
+          currentBusiness.id,
+          start.toISOString(),
+          end.toISOString(),
+          statusFilter,
+          paymentFilter
+        ),
+        salesService.getSalesPaginated(
+          currentBusiness.id,
+          start.toISOString(),
+          end.toISOString(),
+          page * SALES_PER_PAGE,
+          SALES_PER_PAGE,
+          statusFilter,
+          paymentFilter
+        )
+      ]);
+
       setTotalSales(count);
-      
-      // Then get the paginated data
-      const salesData = await salesService.getSalesPaginated(
-        currentBusiness.id,
-        start.toISOString(),
-        end.toISOString(),
-        page * SALES_PER_PAGE,
-        SALES_PER_PAGE,
-        selectedStatus !== 'all' ? selectedStatus : undefined,
-        selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
-      );
-      
-      if (refresh) {
+
+      if (refresh || page === 0) {
         setSales(salesData);
         setFilteredSales(salesData);
-        setCurrentPage(page);
+        setCurrentPage(0);
       } else {
         // Append new data for infinite scroll
         setSales(prevSales => {
           const combined = [...prevSales, ...salesData];
-          // Deduplicate by id
           const uniqueById = Array.from(
             new Map(combined.map(item => [item.id, item])).values()
           );
           return uniqueById;
         });
-        
+
         // Also update filtered sales if not searching
         if (!searchQuery.trim()) {
           setFilteredSales(prevFiltered => {
             const combined = [...prevFiltered, ...salesData];
-            // Deduplicate by id
             const uniqueById = Array.from(
               new Map(combined.map(item => [item.id, item])).values()
             );
             return uniqueById;
           });
         }
-        
+
         setCurrentPage(page);
       }
-      
+
       // Update hasMoreSales based on returned data length
       setHasMoreSales(salesData.length === SALES_PER_PAGE);
     } catch (error) {
@@ -313,24 +328,26 @@ export default function SalesScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setCurrentPage(0);
-    setHasMoreSales(true);
-    
+
     try {
-      await loadData(true);
+      if (activeTab === 'carts') {
+        await refreshCarts();
+      } else {
+        await loadSalesData(0, true);
+      }
     } catch (error) {
       console.error('Error refreshing data:', error);
       Alert.alert(t('common.error'), 'Failed to refresh data');
     } finally {
       setRefreshing(false);
     }
-  }, [loadData, t]);
+  }, [activeTab, refreshCarts, loadSalesData, t]);
 
-  const handleVoidSale = useCallback(async (sale: any) => {
+  const handleVoidSale = useCallback((sale: any) => {
     setSaleToVoid(sale);
     setVoidReason('');
     setShowVoidModal(true);
-  }, [currentBusiness?.id, loadData]);
+  }, []);
 
   const handleDeleteCartItem = useCallback(async (cartId: string) => {
     Alert.alert(
@@ -471,14 +488,15 @@ export default function SalesScreen() {
       setShowVoidModal(false);
       setSaleToVoid(null);
       setVoidReason('');
-      loadData();
+      // Refresh sales data after voiding
+      await loadSalesData(0, true);
     } catch (error) {
       console.error('Error voiding sale:', error);
       Alert.alert('Error', 'Failed to void sale');
     } finally {
       setVoidingInProgress(false);
     }
-  }, [voidReason, currentBusiness?.id, saleToVoid, loadData]);
+  }, [voidReason, currentBusiness?.id, saleToVoid, loadSalesData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
@@ -505,51 +523,6 @@ export default function SalesScreen() {
     [getSalesStats]
   );
 
-  const TabButton = useCallback(({ 
-    title, 
-    icon,
-    isActive, 
-    onPress,
-    count
-  }: { 
-    title: string; 
-    icon: React.ReactNode;
-    isActive: boolean; 
-    onPress: () => void;
-    count?: number;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.tabButton,
-        {
-          backgroundColor: isActive 
-            ? '#2563eb' 
-            : (isDark ? '#374151' : '#f3f4f6'),
-          borderColor: isActive ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-        }
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.tabButtonContent}>
-        <View style={styles.tabIcon}>
-          {icon}
-        </View>
-        <Text style={[
-          styles.tabButtonText,
-          { color: isActive ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-        ]}>
-          {title}
-        </Text>
-        {count !== undefined && count > 0 && (
-          <View style={[styles.countBadge, { backgroundColor: isActive ? '#ffffff' : '#2563eb' }]}>
-            <Text style={[styles.countText, { color: isActive ? '#2563eb' : '#ffffff' }]}>
-              {count}
-            </Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  ), [isDark]);
 
   const renderDateFilter = useCallback(() => (
     <View style={styles.dateFilterContainer}>
@@ -743,12 +716,14 @@ export default function SalesScreen() {
             icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'carts'}
             onPress={() => setActiveTab('carts')}
+            isDark={isDark}
           />
           <TabButton
             title="Sales History"
             icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'sales'}
             onPress={() => setActiveTab('sales')}
+            isDark={isDark}
           />
         </View>
 
@@ -781,12 +756,14 @@ export default function SalesScreen() {
           isActive={activeTab === 'carts'}
           onPress={() => setActiveTab('carts')}
           count={carts.length}
+          isDark={isDark}
         />
         <TabButton
           title="Sales History"
           icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'sales'}
           onPress={() => setActiveTab('sales')}
+          isDark={isDark}
         />
       </View>
 
@@ -1159,41 +1136,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
     gap: 8,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  tabButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    minHeight: 48,
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
-  countBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  countText: {
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   content: {
     flex: 1,
