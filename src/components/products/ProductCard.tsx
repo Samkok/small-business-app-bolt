@@ -119,11 +119,11 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? '#7f1d1d' : '#fee2e2' }]}
+              style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? '#4b5563' : '#fee2e2' }]}
               onPress={() => onDelete(product)}
             >
-              <Trash2 size={16} color="#dc2626" />
-              <Text style={[styles.actionText, { color: '#dc2626' }]}>Delete</Text>
+              <Trash2 size={16} color={isDark ? '#f87171' : '#dc2626'} />
+              <Text style={[styles.actionText, { color: isDark ? '#f87171' : '#dc2626' }]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: '#374151',
   },
   actionText: {
     fontSize: 12,
