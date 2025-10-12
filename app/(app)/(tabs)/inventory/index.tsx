@@ -556,6 +556,28 @@ export default function InventoryScreen() {
     }
   };
 
+  const handleShowActive = async () => {
+    if (!showArchived) return; // Already showing active
+    setShowArchived(false);
+    setSearchQuery('');
+    setIsSearching(false);
+    setCurrentPage(0);
+    setHasMoreProducts(true);
+  };
+
+  const handleShowArchived = async () => {
+    if (showArchived) return; // Already showing archived
+    setShowArchived(true);
+    setSearchQuery('');
+    setIsSearching(false);
+    setCurrentPage(0);
+    setHasMoreProducts(true);
+
+    if (archivedProducts.length === 0) {
+      await loadArchivedProducts(0, true);
+    }
+  };
+
   const handleUnarchiveProduct = async (product: any) => {
     if (!currentBusiness?.id) return;
 
@@ -760,16 +782,16 @@ export default function InventoryScreen() {
             style={[
               styles.filterButton,
               {
-                backgroundColor: showArchived ? (isDark ? '#374151' : '#f3f4f6') : '#2563eb',
-                borderColor: showArchived ? (isDark ? '#4b5563' : '#d1d5db') : '#2563eb',
+                backgroundColor: !showArchived ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: !showArchived ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
               }
             ]}
-            onPress={handleToggleArchiveFilter}
+            onPress={handleShowActive}
           >
-            <Package size={16} color={showArchived ? (isDark ? '#f9fafb' : '#374151') : '#ffffff'} />
+            <Package size={16} color={!showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
             <Text style={[
               styles.filterButtonText,
-              { color: showArchived ? (isDark ? '#f9fafb' : '#374151') : '#ffffff' }
+              { color: !showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
             ]}>
               Active ({totalProducts})
             </Text>
@@ -783,7 +805,7 @@ export default function InventoryScreen() {
                 borderColor: showArchived ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
               }
             ]}
-            onPress={handleToggleArchiveFilter}
+            onPress={handleShowArchived}
           >
             <Archive size={16} color={showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
             <Text style={[
