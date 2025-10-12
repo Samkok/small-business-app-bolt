@@ -27,7 +27,7 @@ export default function CategoryForm({ onSave, onCancel }: CategoryFormProps) {
   const [loading, setLoading] = useState(false);
   
   const { isDark } = useTheme();
-  const { profile } = useAuth();
+  const { currentBusiness } = useAuth();
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -35,8 +35,8 @@ export default function CategoryForm({ onSave, onCancel }: CategoryFormProps) {
       return;
     }
 
-    if (!profile?.id) {
-      Alert.alert('Error', 'No business profile found');
+    if (!currentBusiness?.id) {
+      Alert.alert('Error', 'No business currentBusiness found');
       return;
     }
 
@@ -45,7 +45,7 @@ export default function CategoryForm({ onSave, onCancel }: CategoryFormProps) {
       const categoryData = {
         name: name.trim(),
         description: description.trim() || null,
-        business_id: profile.id,
+        business_id: currentBusiness.id,
       };
 
       await expenseService.createCategory(categoryData);
