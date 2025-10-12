@@ -27,6 +27,11 @@ export default function CartScreen() {
   const [updatingNotes, setUpdatingNotes] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [isDeliveryCostFocused, setIsDeliveryCostFocused] = useState(false);
+
+  // Refs to track previous values and prevent unnecessary updates
+  const deliveryCostUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevDeliveryCostRef = useRef<string>('');
+  const prevNotesRef = useRef<string>('');
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -46,23 +51,52 @@ export default function CartScreen() {
   const cart = getCart(cartId as string);
   const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
+  // Initialize local state from cart only once or when cart ID changes
   useEffect(() => {
-    if (cart && !isDeliveryCostFocused && deliveryCost !== (cart.delivery_cost?.toString() || '')) {
-      setDeliveryCost(cart.delivery_cost?.toString() || '');
+    if (cart) {
+      const cartDeliveryCost = cart.delivery_cost?.toString() || '';
+      const cartNotes = cart.notes || '';
+
+      // Only update if the cart values are different from our local state
+      // and we're not currently focused on the input
+      if (!isDeliveryCostFocused && prevDeliveryCostRef.current !== cartDeliveryCost) {
+        setDeliveryCost(cartDeliveryCost);
+        prevDeliveryCostRef.current = cartDeliveryCost;
+      }
+
+      if (prevNotesRef.current !== cartNotes) {
+        setNotes(cartNotes);
+        prevNotesRef.current = cartNotes;
+      }
     }
-    if (cart && notes !== (cart.notes || '')) {
-      setNotes(cart.notes || '');
-    }
-  }, [cart, isDeliveryCostFocused, deliveryCost, notes]);
+  }, [cart?.id]); // Only re-run when cart ID changes
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (deliveryCostUpdateTimeoutRef.current) {
+        clearTimeout(deliveryCostUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Update cart total_amount when cartSummary changes
+  // Use ref to prevent infinite loops
+  const prevTotalRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (cart && cartSummary && cart.total_amount !== cartSummary.finalTotal) {
-      updateCart(cart.id, { total_amount: cartSummary.finalTotal }).catch(error => {
-        console.error('Error updating cart total amount:', error);
-      });
+    if (cart && cartSummary) {
+      const newTotal = cartSummary.finalTotal;
+
+      // Only update if the total has actually changed
+      if (prevTotalRef.current !== newTotal && cart.total_amount !== newTotal) {
+        prevTotalRef.current = newTotal;
+        updateCart(cart.id, { total_amount: newTotal }).catch(error => {
+          console.error('Error updating cart total amount:', error);
+        });
+      }
     }
-  }, [cart, cartSummary, updateCart]);
+  }, [cartSummary?.finalTotal]); // Only watch the final total
 
   const handleQuantityChange = useCallback(async (itemId: string, change: number) => {
     if (!cart) return;
@@ -145,43 +179,59 @@ export default function CartScreen() {
     }
   }, [cart, updateCart]);
 
-  const handleDeliveryCostChange = useCallback(async (value: string) => {
+  const handleDeliveryCostChange = useCallback((value: string) => {
     setDeliveryCost(value);
-    
-    // Debounce the update to avoid too many operations
-    if (updatingDelivery || !cart) return;
-    
-    setUpdatingDelivery(true);
-    try {
-      const deliveryAmount = parseFloat(value) || 0;
-      await updateCart(cart.id, {
-        delivery_cost: deliveryAmount
-      });
-    } catch (error) {
-      console.error('Error updating delivery cost:', error);
-      // Don't show alert for every keystroke
-    } finally {
-      setUpdatingDelivery(false);
+
+    // Clear existing timeout
+    if (deliveryCostUpdateTimeoutRef.current) {
+      clearTimeout(deliveryCostUpdateTimeoutRef.current);
     }
-  }, [cart, updatingDelivery, updateCart]);
+
+    // Debounce the database update
+    deliveryCostUpdateTimeoutRef.current = setTimeout(async () => {
+      if (!cart) return;
+
+      setUpdatingDelivery(true);
+      try {
+        const deliveryAmount = parseFloat(value) || 0;
+        prevDeliveryCostRef.current = value;
+        await updateCart(cart.id, {
+          delivery_cost: deliveryAmount
+        });
+      } catch (error) {
+        console.error('Error updating delivery cost:', error);
+      } finally {
+        setUpdatingDelivery(false);
+      }
+    }, 500); // Wait 500ms after user stops typing
+  }, [cart, updateCart]);
 
   const handleDeliveryCostBlur = useCallback(() => {
     setIsDeliveryCostFocused(false);
-    
+
+    // Clear any pending timeout to trigger immediate update
+    if (deliveryCostUpdateTimeoutRef.current) {
+      clearTimeout(deliveryCostUpdateTimeoutRef.current);
+      deliveryCostUpdateTimeoutRef.current = null;
+    }
+
     // Format the delivery cost to show two decimal places
     if (deliveryCost) {
-      // Ensure we have a valid number or default to 0
       const numValue = parseFloat(deliveryCost);
       const formattedValue = isNaN(numValue) ? '0.00' : numValue.toFixed(2);
       setDeliveryCost(formattedValue);
-      
+      prevDeliveryCostRef.current = formattedValue;
+
       // Update the cart with the formatted value
       if (cart) {
         const deliveryAmount = isNaN(numValue) ? 0 : numValue;
+        setUpdatingDelivery(true);
         updateCart(cart.id, {
           delivery_cost: deliveryAmount
         }).catch(error => {
           console.error('Error updating delivery cost on blur:', error);
+        }).finally(() => {
+          setUpdatingDelivery(false);
         });
       }
     }
@@ -193,11 +243,19 @@ export default function CartScreen() {
 
   const handleSaveNotes = useCallback(async () => {
     if (!cart) return;
-    
+
+    const trimmedNotes = notes.trim() || undefined;
+
+    // Only save if notes have actually changed
+    if (prevNotesRef.current === (trimmedNotes || '')) {
+      return;
+    }
+
+    prevNotesRef.current = trimmedNotes || '';
     setUpdatingNotes(true);
     try {
       await updateCart(cart.id, {
-        notes: notes.trim() || undefined
+        notes: trimmedNotes
       });
     } catch (error) {
       console.error('Error updating notes:', error);
