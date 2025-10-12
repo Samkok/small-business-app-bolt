@@ -557,24 +557,26 @@ export default function InventoryScreen() {
   };
 
   const handleShowActive = async () => {
-    if (!showArchived) return; // Already showing active
-    setShowArchived(false);
-    setSearchQuery('');
-    setIsSearching(false);
-    setCurrentPage(0);
-    setHasMoreProducts(true);
+    if (showArchived) {
+      setShowArchived(false);
+      setSearchQuery('');
+      setIsSearching(false);
+      setCurrentPage(0);
+      setHasMoreProducts(true);
+    }
   };
 
   const handleShowArchived = async () => {
-    if (showArchived) return; // Already showing archived
-    setShowArchived(true);
-    setSearchQuery('');
-    setIsSearching(false);
-    setCurrentPage(0);
-    setHasMoreProducts(true);
+    if (!showArchived) {
+      setShowArchived(true);
+      setSearchQuery('');
+      setIsSearching(false);
+      setCurrentPage(0);
+      setHasMoreProducts(true);
 
-    if (archivedProducts.length === 0) {
-      await loadArchivedProducts(0, true);
+      if (archivedProducts.length === 0) {
+        await loadArchivedProducts(0, true);
+      }
     }
   };
 
