@@ -620,9 +620,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let redirectTo: string;
 
     if (Platform.OS === 'web') {
-      redirectTo = typeof window !== 'undefined'
-        ? `${window.location.origin}/reset-password`
-        : `${appUrl}/reset-password`;
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        redirectTo = `${window.location.origin}/reset-password`;
+      } else {
+        redirectTo = `${appUrl}/reset-password`;
+      }
     } else {
       redirectTo = `${appScheme}://reset-password`;
     }
