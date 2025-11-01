@@ -9,7 +9,7 @@ import {
   Keyboard,
   Alert
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import Input from '@/src/components/ui/Input';
@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { supabase } from '@/src/config/supabase';
 import { Lock, CheckCircle } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -27,19 +28,102 @@ export default function ResetPasswordScreen() {
   const { isDark } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   useEffect(() => {
-    checkSession();
+    handleDeepLink();
   }, []);
 
-  const checkSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      setIsValidSession(true);
-    } else {
+  const handleDeepLink = async () => {
+    try {
+      console.log('Handling password reset deep link...');
+      console.log('URL params:', params);
+
+      // Get the initial URL that opened the app
+      const url = await Linking.getInitialURL();
+      console.log('Initial URL:', url);
+
+      // Try to extract access_token and refresh_token from URL
+      let accessToken = params.access_token as string;
+      let refreshToken = params.refresh_token as string;
+      let type = params.type as string;
+
+      // If not in params, try parsing the URL
+      if (!accessToken && url) {
+        const parsedUrl = Linking.parse(url);
+        console.log('Parsed URL:', parsedUrl);
+
+        if (parsedUrl.queryParams) {
+          accessToken = parsedUrl.queryParams.access_token as string;
+          refreshToken = parsedUrl.queryParams.refresh_token as string;
+          type = parsedUrl.queryParams.type as string;
+        }
+      }
+
+      console.log('Tokens found:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken, type });
+
+      // If we have tokens, set the session
+      if (accessToken && refreshToken && type === 'recovery') {
+        console.log('Setting session with recovery tokens...');
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          console.error('Error setting session:', error);
+          throw error;
+        }
+
+        console.log('Session set successfully');
+        setIsValidSession(true);
+      } else {
+        // If no tokens in URL, check if there's an existing session
+        await checkSession();
+      }
+    } catch (error) {
+      console.error('Error handling deep link:', error);
       Alert.alert(
         'Invalid Reset Link',
         'This password reset link is invalid or has expired. Please request a new one.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.push('/(auth)/forgot-password')
+          }
+        ]
+      );
+    }
+  };
+
+  const checkSession = async () => {
+    try {
+      console.log('Checking for existing password reset session...');
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      console.log('Session check result:', { hasSession: !!session, error });
+
+      if (session) {
+        console.log('Valid session found for password reset');
+        setIsValidSession(true);
+      } else {
+        console.log('No valid session found');
+        Alert.alert(
+          'Invalid Reset Link',
+          'This password reset link is invalid or has expired. Please request a new one.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push('/(auth)/forgot-password')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+      Alert.alert(
+        'Error',
+        'Unable to verify reset link. Please try again.',
         [
           {
             text: 'OK',
