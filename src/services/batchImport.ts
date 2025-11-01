@@ -92,7 +92,7 @@ export const batchImportService = {
       product_id: item.product_id,
       quantity: item.quantity,
       business_id: batchData.business_id,
-      imported_by: batchData.business_id,
+      imported_by: batchData.imported_by,
       base_unit_cost_per_item: item.base_unit_cost_per_item,
       final_unit_cost_per_item: item.final_unit_cost_per_item,
       total_cost_for_item: item.total_cost_for_item,
@@ -431,7 +431,7 @@ export const batchImportService = {
 
           // Calculate new stock level (subtract the imported quantity)
           const newStock = Math.max(0, (product.current_stock || 0) - importItem.quantity);
-          
+
           // Update the product stock
           const { error: updateError } = await supabase
             .from('products')
@@ -452,7 +452,24 @@ export const batchImportService = {
       }
     }
 
-    // Delete the batch (cascade will handle related records)
+    // Delete related records first (in correct order to avoid FK constraint violations)
+    // 1. Delete import_costs first
+    const { error: deleteCostsError } = await supabase
+      .from('import_costs')
+      .delete()
+      .eq('batch_id', batchId);
+
+    if (deleteCostsError) throw deleteCostsError;
+
+    // 2. Delete inventory_imports
+    const { error: deleteImportsError } = await supabase
+      .from('inventory_imports')
+      .delete()
+      .eq('batch_id', batchId);
+
+    if (deleteImportsError) throw deleteImportsError;
+
+    // 3. Finally delete the batch
     const { error: deleteError } = await supabase
       .from('inventory_batches')
       .delete()

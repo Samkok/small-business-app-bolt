@@ -614,8 +614,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, currentBusiness]);
 
   const resetPassword = useCallback(async (email: string) => {
+    const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081';
+    const appScheme = process.env.EXPO_PUBLIC_APP_SCHEME || 'businessmanager';
+
+    let redirectTo: string;
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        redirectTo = `${window.location.origin}/reset-password`;
+      } else {
+        redirectTo = `${appUrl}/reset-password`;
+      }
+    } else {
+      redirectTo = `${appScheme}://reset-password`;
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password',
+      redirectTo,
     });
     return { error };
   }, []);

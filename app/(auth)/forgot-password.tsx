@@ -42,20 +42,39 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
+      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081';
+      const appScheme = process.env.EXPO_PUBLIC_APP_SCHEME || 'businessmanager';
+
+      let redirectTo: string;
+
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.location?.origin) {
+          redirectTo = `${window.location.origin}/reset-password`;
+        } else {
+          redirectTo = `${appUrl}/reset-password`;
+        }
+      } else {
+        redirectTo = `${appScheme}://reset-password`;
+      }
+
+      console.log('Password reset redirect URL:', redirectTo);
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo,
       });
 
       if (error) {
-        console.log("Error: ", error);
-        Alert.alert(t('common.error'), error.message);
+        console.error("Password reset error from Supabase:", error);
+        Alert.alert(t('common.error'), error.message || 'Failed to send reset email');
       } else {
-        console.log("Forget password: Successfully sent");
+        console.log("Password reset email sent successfully to:", email);
         setResetSent(true);
       }
-    } catch (error) {
-      console.error('Password reset error:', error);
-      Alert.alert(t('common.error'), 'An unexpected error occurred');
+    } catch (error: any) {
+      console.error('Unexpected password reset error:', error);
+      console.error(error);
+      const errorMessage = error?.message || error?.toString() || 'An unexpected error occurred';
+      Alert.alert(t('common.error'), errorMessage);
     } finally {
       setLoading(false);
     }
