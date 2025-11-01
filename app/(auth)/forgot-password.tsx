@@ -72,6 +72,7 @@ export default function ForgotPasswordScreen() {
       }
     } catch (error: any) {
       console.error('Unexpected password reset error:', error);
+      console.error(error);
       const errorMessage = error?.message || error?.toString() || 'An unexpected error occurred';
       Alert.alert(t('common.error'), errorMessage);
     } finally {
