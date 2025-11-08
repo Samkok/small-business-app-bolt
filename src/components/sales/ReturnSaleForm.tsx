@@ -41,7 +41,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const [loading, setLoading] = useState(false);
   
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, userProfile } = useAuth();
 
   useEffect(() => {
     if (sale?.carts?.cart_items) {
@@ -115,7 +115,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         sale.id,
         returnData,
         reason.trim(),
-        currentBusiness.id
+        userProfile.user_id
       );
 
       Alert.alert(
