@@ -29,7 +29,7 @@ export default function SaleDetailsScreen() {
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, userProfile } = useAuth();
 
   useEffect(() => {
     loadSaleDetails();
@@ -68,7 +68,7 @@ export default function SaleDetailsScreen() {
           onPress: async () => {
             setVoidingInProgress(true);
             try {
-              await salesService.voidSale(sale.id, 'Sale voided by user', currentBusiness.id);
+              await salesService.voidSale(sale.id, 'Sale voided by user', userProfile.user_id);
               Alert.alert('Success', 'Sale voided successfully');
               loadSaleDetails();
             } catch (error) {

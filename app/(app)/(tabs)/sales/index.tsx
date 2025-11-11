@@ -73,7 +73,7 @@ export default function SalesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, userProfile } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -479,11 +479,11 @@ export default function SalesScreen() {
       return;
     }
 
-    if (!currentBusiness?.id || !saleToVoid) return;
+    if (!currentBusiness?.id || !saleToVoid || !userProfile?.user_id) return;
 
     setVoidingInProgress(true);
     try {
-      await salesService.voidSale(saleToVoid.id, voidReason.trim(), currentBusiness.id);
+      await salesService.voidSale(saleToVoid.id, voidReason.trim(), userProfile.user_id);
       Alert.alert('Success', 'Sale voided successfully');
       setShowVoidModal(false);
       setSaleToVoid(null);
