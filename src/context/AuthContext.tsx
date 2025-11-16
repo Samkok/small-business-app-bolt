@@ -4,7 +4,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -21,7 +21,7 @@ interface AuthContextType {
   isStaff: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
   updateBusiness: (businessId: string, updates: Partial<Business>) => Promise<{ error: any }>;
@@ -417,7 +417,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, businessName: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -427,7 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (data.user) {
       try {
-        // Create user profile
+        // Create user profile only
         const { error: profileError } = await supabase
           .from('user_profiles')
           .insert({
@@ -439,18 +439,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profileError) {
           console.error('Error creating user profile:', profileError);
           return { error: profileError };
-        }
-
-        // Create business
-        const { data: businessData, error: businessError } = await supabase
-          .rpc('create_business', {
-            business_name_param: businessName,
-            owner_user_id_param: data.user.id
-          });
-
-        if (businessError) {
-          console.error('Error creating business:', businessError);
-          return { error: businessError };
         }
 
         return { error: null };

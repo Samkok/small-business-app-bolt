@@ -45,13 +45,24 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/signin" />;
   }
 
-  // If user has no businesses OR no current business is set, redirect to business selection
-  
+  // Business validation guard
+  // If user has no businesses, redirect to business onboarding
+  if (userBusinesses.length === 0) {
+    console.log('AppLayout: User has no businesses, redirecting to business onboarding');
+    return <Redirect href="/(app)/business-onboarding" />;
+  }
+
+  // If user has businesses but no current business is set, redirect to business selection
+  if (!currentBusiness) {
+    console.log('AppLayout: No current business set, redirecting to business selection');
+    return <Redirect href="/(app)/business-selection" />;
+  }
 
   console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="business-onboarding" />
       <Stack.Screen name="business-selection" />
       <Stack.Screen name="top-customers" />
       <Stack.Screen name="top-products" />

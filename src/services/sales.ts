@@ -44,13 +44,16 @@ export const salesService = {
   },
 
   async getSalesCount(
-    businessId: string, 
-    startDate?: string, 
+    businessId: string,
+    startDate?: string,
     endDate?: string,
     status?: string,
     paymentMethod?: string
   ) {
-    if (!businessId) return 0;
+    if (!businessId) {
+      console.warn('salesService.getSalesCount called without businessId');
+      return 0;
+    }
     
     let query = supabase
       .from('sales')
@@ -88,7 +91,10 @@ export const salesService = {
     status?: string,
     paymentMethod?: string
   ) {
-    if (!businessId) return [];
+    if (!businessId) {
+      console.warn('salesService.getSalesPaginated called without businessId');
+      return [];
+    }
     
     let query = supabase
       .from('sales')
@@ -134,8 +140,11 @@ export const salesService = {
   },
 
   async getSales(businessId: string, limit?: number) {
-    if (!businessId) return [];
-    
+    if (!businessId) {
+      console.warn('salesService.getSales called without businessId');
+      return [];
+    }
+
     let query = supabase
       .from('sales')
       .select(`

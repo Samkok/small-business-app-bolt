@@ -9,6 +9,11 @@ type ProductUpdate = Database['public']['Tables']['products']['Update'];
 
 export const productService = {
   async getProducts(businessId: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.getProducts called without businessId');
+      return [];
+    }
+
     let query = supabase
       .from('products')
       .select('*')
@@ -30,6 +35,11 @@ export const productService = {
   },
 
   async getInStockProducts(businessId: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.getInStockProducts called without businessId');
+      return [];
+    }
+
     let query = supabase
       .from('products')
       .select('*')
@@ -52,6 +62,11 @@ export const productService = {
   },
 
   async getProductsCount(businessId: string) {
+    if (!businessId) {
+      console.warn('productService.getProductsCount called without businessId');
+      return 0;
+    }
+
     const { count, error } = await supabase
       .from('products')
       .select('*', { count: 'exact', head: true })
@@ -203,6 +218,11 @@ export const productService = {
   },
 
   async getLowStockProducts(businessId: string) {
+    if (!businessId) {
+      console.warn('productService.getLowStockProducts called without businessId');
+      return [];
+    }
+
     const { data, error } = await supabase.rpc('get_low_stock_products', {
       business_id_param: businessId
     });
@@ -259,6 +279,11 @@ export const productService = {
   },
 
   async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.searchProducts called without businessId');
+      return [];
+    }
+
     let dbQuery = supabase
       .from('products')
       .select('*')
