@@ -78,22 +78,57 @@ export default function TeamScreen() {
       Alert.alert('Error', 'Please enter an email address');
       return;
     }
-    
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(inviteEmail.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
     if (!currentBusiness || !teamMemberService.canPerformAdminActions(currentUserRole)) {
       Alert.alert('Error', 'No business selected');
       return;
     }
-    
+
     setInviting(true);
     try {
+      // First check if user exists in the system
+      const userCheck = await teamMemberService.checkUserExists(inviteEmail.trim(), currentBusiness.id);
+
+      if (!userCheck.exists) {
+        Alert.alert(
+          'User Not Found',
+          `No account found for ${inviteEmail.trim()}.\n\nThe user must create an account in Business Manager Pro before they can be invited to your business.`,
+          [{ text: 'OK' }]
+        );
+        setInviting(false);
+        return;
+      }
+
+      // Check if user is already a member
+      if (userCheck.isAlreadyMember) {
+        Alert.alert(
+          'Already a Member',
+          `${userCheck.userName || inviteEmail.trim()} is already a member of this business with the role: ${userCheck.currentRole}.\n\nIf you want to change their role, you can do so from the team member list.`,
+          [{ text: 'OK' }]
+        );
+        setInviting(false);
+        return;
+      }
+
+      // If user exists and is not a member, proceed with invitation
       await teamMemberService.inviteUser(currentBusiness.id, inviteEmail.trim(), inviteRole);
-      
-      Alert.alert('Success', 'User invited successfully');
+
+      Alert.alert(
+        'Success',
+        `${userCheck.userName || inviteEmail.trim()} has been added to your business as ${inviteRole === 'admin' ? 'an Admin' : 'a Staff member'}.`
+      );
       setInviteEmail('');
       setInviteRole('staff');
       setShowInviteModal(false);
       loadTeamMembers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error inviting user:', error);
       Alert.alert('Error', error.message || 'Failed to invite user');
     } finally {
@@ -392,6 +427,9 @@ export default function TeamScreen() {
               autoCapitalize="none"
               required
             />
+            <Text style={[styles.emailHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              The user must have an existing account to be invited
+            </Text>
             
             <Text style={[styles.roleLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
               Role
@@ -719,6 +757,12 @@ const styles = StyleSheet.create({
   roleOptionText: {
     fontSize: 16,
     marginLeft: 8,
+  },
+  emailHint: {
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
   roleDescription: {
     fontSize: 12,
