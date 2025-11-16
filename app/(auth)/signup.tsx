@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { signUpSchema, validatePasswordStrength } from '@/src/lib/validation';
 import {
   View,
   Text,
@@ -22,7 +23,6 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [businessName, setBusinessName] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
@@ -30,29 +30,44 @@ export default function SignUpScreen() {
   const { t } = useTranslation();
 
   const handleSignUp = async () => {
-    if (!email || !password || !confirmPassword || !businessName || !fullName) {
+    if (!email || !password || !confirmPassword || !fullName) {
       Alert.alert(t('common.error'), 'Please fill in all fields');
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert(t('common.error'), t('auth.passwordsDontMatch'));
+    const validation = signUpSchema.safeParse({
+      email,
+      password,
+      confirmPassword,
+      fullName,
+    });
+
+    if (!validation.success) {
+      const errors = validation.error.errors.map(e => e.message).join('\n');
+      Alert.alert(t('common.error'), errors);
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert(t('common.error'), t('auth.passwordTooShort'));
+    const passwordStrength = validatePasswordStrength(password);
+    if (!passwordStrength.isValid) {
+      Alert.alert(
+        'Weak Password',
+        `Your password needs improvement:\n\n${passwordStrength.feedback.join('\n')}\n\nPassword strength: ${passwordStrength.score}/100`
+      );
       return;
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password, businessName, fullName);
+    const { error } = await signUp(validation.data.email, validation.data.password, validation.data.fullName);
     setLoading(false);
 
     if (error) {
       Alert.alert(t('common.error'), error.message);
     } else {
-      Alert.alert(t('common.success'), 'Account created successfully! Please sign in.');
+      Alert.alert(
+        t('common.success'),
+        'Account created successfully! Please sign in to create your business.'
+      );
     }
   };
 
@@ -73,14 +88,6 @@ export default function SignUpScreen() {
           </View>
 
           <Card style={styles.card}>
-            <Input
-              label={t('auth.businessName')}
-              value={businessName}
-              onChangeText={setBusinessName}
-              autoCapitalize="words"
-              required
-            />
-
             <Input
               label={t('auth.fullName')}
               value={fullName}

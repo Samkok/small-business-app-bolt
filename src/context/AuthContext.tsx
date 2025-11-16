@@ -4,7 +4,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -20,8 +20,9 @@ interface AuthContextType {
   isAdmin: boolean;
   isStaff: boolean;
   loading: boolean;
+  initialDataLoaded: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, businessName: string, fullName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
   updateBusiness: (businessId: string, updates: Partial<Business>) => Promise<{ error: any }>;
@@ -49,8 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentBusiness, setCurrentBusiness] = useState<Business | null>(null);
   const [userBusinessRoles, setUserBusinessRoles] = useState<Map<string, 'admin' | 'staff'>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [dataLoadingState, setDataLoadingState] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+
+  // Derived state: initial data is loaded when we're not loading and data has been fetched
+  const initialDataLoaded = dataLoadingState === 'loaded';
 
   useEffect(() => {
     mounted.current = true;
@@ -58,6 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted.current = false;
     };
   }, []);
+
+  // Debug logging for data loading state
+  useEffect(() => {
+    console.log('AuthContext: dataLoadingState changed to:', dataLoadingState,
+                'initialDataLoaded:', initialDataLoaded,
+                'userBusinesses:', userBusinesses.length,
+                'currentBusiness:', currentBusiness?.id || 'none');
+  }, [dataLoadingState, initialDataLoaded, userBusinesses.length, currentBusiness]);
 
   useEffect(() => {
     // Get initial session
@@ -80,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Initial session: No user, setting loading to false');
         if (mounted.current) {
           setLoading(false);
+          setDataLoadingState('loaded');
         }
       }
     });
@@ -119,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserBusinesses([]);
           setCurrentBusiness(null);
           setLoading(false);
+          setDataLoadingState('loaded');
         }
       }
     );
@@ -263,6 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadAuthData = async (userId: string) => {
     console.log('loadAuthData started for user:', userId);
+    setDataLoadingState('loading');
     try {
       // Retry configuration
       const MAX_RETRIES = 3;
@@ -335,21 +351,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserBusinessRoles(rolesMap);
             }
 
-            // Only update userBusinesses if the business list has actually changed
-            if (mounted.current && !businessArraysEqual(businesses, userBusinesses)) {
-              setUserBusinesses(businesses);
-            }
-            
             // Determine and set current business (either from saved preference or first in list)
             const determinedBusiness = await determineCurrentBusiness(userId, businesses, currentBusiness);
-            
-            // Only update currentBusiness if it has actually changed
-            if (mounted.current && (!currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id)) {
-              setCurrentBusiness(determinedBusiness);
-            }
-            
+
+            // Batch all state updates together before setting loading to false
             if (mounted.current) {
+              // Update businesses if changed
+              const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
+              const shouldUpdateCurrentBusiness = !currentBusiness || !determinedBusiness || currentBusiness.id !== determinedBusiness.id;
+
+              if (shouldUpdateBusinesses) {
+                setUserBusinesses(businesses);
+              }
+
+              if (shouldUpdateCurrentBusiness) {
+                setCurrentBusiness(determinedBusiness);
+              }
+
+              // Always set loading to false last, regardless of whether state changed
               setLoading(false);
+              setDataLoadingState('loaded');
             }
             return; // Exit the function early on success
           } else {
@@ -359,6 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserBusinesses([]);
               setCurrentBusiness(null);
               setLoading(false);
+              setDataLoadingState('loaded');
             }
             return; // Exit the function early
           }
@@ -386,8 +408,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserBusinesses([]);
           setCurrentBusiness(null);
           setLoading(false);
+          setDataLoadingState('loaded');
         }
-        setLoading(false);
       }
       return;
     } catch (error: any) {
@@ -396,14 +418,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserBusinesses([]);
         setCurrentBusiness(null);
         setLoading(false);
+        setDataLoadingState('loaded');
       }
       return;
     }
-    
+
     // Always set loading to false when done
     console.log('loadAuthData completed, setting loading to false');
     if (mounted.current) {
       setLoading(false);
+      setDataLoadingState('loaded');
     }
   };
 
@@ -417,7 +441,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, businessName: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -427,7 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (data.user) {
       try {
-        // Create user profile
+        // Create user profile only
         const { error: profileError } = await supabase
           .from('user_profiles')
           .insert({
@@ -439,18 +463,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profileError) {
           console.error('Error creating user profile:', profileError);
           return { error: profileError };
-        }
-
-        // Create business
-        const { data: businessData, error: businessError } = await supabase
-          .rpc('create_business', {
-            business_name_param: businessName,
-            owner_user_id_param: data.user.id
-          });
-
-        if (businessError) {
-          console.error('Error creating business:', businessError);
-          return { error: businessError };
         }
 
         return { error: null };
@@ -551,7 +563,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
-    
+
+    // Reset the data loading state
+    setDataLoadingState('idle');
+
     // Clear any saved credentials
     try {
       await AsyncStorage.removeItem('rememberMe');
@@ -559,7 +574,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error clearing saved credentials:', error);
     }
-    
+
     // Sign out from Supabase
     await supabase.auth.signOut();
   }, []);
@@ -652,6 +667,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin,
     isStaff,
     loading,
+    initialDataLoaded,
     signIn,
     signUp,
     signOut,
@@ -675,6 +691,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin,
     isStaff,
     loading,
+    dataLoadingState,
     signIn,
     signUp,
     signOut,

@@ -15,7 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 

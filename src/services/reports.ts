@@ -5,21 +5,23 @@ import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, endOfDay } from 'date-fns';
 
 export const reportsService = {
-  async getDashboardStats(businessId: string) {
+  async getDashboardStats(businessId: string, year?: number, month?: number) {
     if (!businessId) return null;
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString();
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString();
-    
-    const startOfMonthDate = startOfMonth(today);
+
+    // Use provided year/month or default to current month
+    const targetDate = year && month ? new Date(year, month - 1, 1) : today;
+    const startOfMonthDate = startOfMonth(targetDate);
     const startOfMonthStr = startOfMonthDate.toISOString();
-    
-    const endOfMonthDate = endOfMonth(today);
+
+    const endOfMonthDate = endOfMonth(targetDate);
     endOfMonthDate.setHours(23, 59, 59, 999);
     const endOfMonthStr = endOfMonthDate.toISOString();
 
@@ -138,11 +140,13 @@ export const reportsService = {
     }
   },
 
-  async getTopProducts(businessId: string, limit = 5) {
-    const startOfMonthDate = startOfMonth(new Date());
+  async getTopProducts(businessId: string, limit = 5, year?: number, month?: number) {
+    // Use provided year/month or default to current month
+    const targetDate = year && month ? new Date(year, month - 1, 1) : new Date();
+    const startOfMonthDate = startOfMonth(targetDate);
     const startOfMonthStr = startOfMonthDate.toISOString();
-    
-    const endOfMonthDate = endOfMonth(new Date());
+
+    const endOfMonthDate = endOfMonth(targetDate);
     endOfMonthDate.setHours(23, 59, 59, 999);
     const endOfMonthStr = endOfMonthDate.toISOString();
 
@@ -218,11 +222,13 @@ export const reportsService = {
       .slice(0, limit);
   },
 
-  async getTopCustomers(businessId: string, limit = 5) {
-    const startOfMonthDate = startOfMonth(new Date());
+  async getTopCustomers(businessId: string, limit = 5, year?: number, month?: number) {
+    // Use provided year/month or default to current month
+    const targetDate = year && month ? new Date(year, month - 1, 1) : new Date();
+    const startOfMonthDate = startOfMonth(targetDate);
     const startOfMonthStr = startOfMonthDate.toISOString();
-    
-    const endOfMonthDate = endOfMonth(new Date());
+
+    const endOfMonthDate = endOfMonth(targetDate);
     endOfMonthDate.setHours(23, 59, 59, 999);
     const endOfMonthStr = endOfMonthDate.toISOString();
 

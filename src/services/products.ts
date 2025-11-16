@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { storageService } from './storage';
 import { Database } from '../types/database';
 import { productTransactionService } from './productTransactions';
+import { sanitizeSearchQuery } from '../lib/validation';
 
 type Product = Database['public']['Tables']['products']['Row'];
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
@@ -9,6 +10,11 @@ type ProductUpdate = Database['public']['Tables']['products']['Update'];
 
 export const productService = {
   async getProducts(businessId: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.getProducts called without businessId');
+      return [];
+    }
+
     let query = supabase
       .from('products')
       .select('*')
@@ -30,6 +36,11 @@ export const productService = {
   },
 
   async getInStockProducts(businessId: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.getInStockProducts called without businessId');
+      return [];
+    }
+
     let query = supabase
       .from('products')
       .select('*')
@@ -52,6 +63,11 @@ export const productService = {
   },
 
   async getProductsCount(businessId: string) {
+    if (!businessId) {
+      console.warn('productService.getProductsCount called without businessId');
+      return 0;
+    }
+
     const { count, error } = await supabase
       .from('products')
       .select('*', { count: 'exact', head: true })
@@ -203,6 +219,11 @@ export const productService = {
   },
 
   async getLowStockProducts(businessId: string) {
+    if (!businessId) {
+      console.warn('productService.getLowStockProducts called without businessId');
+      return [];
+    }
+
     const { data, error } = await supabase.rpc('get_low_stock_products', {
       business_id_param: businessId
     });
@@ -259,12 +280,19 @@ export const productService = {
   },
 
   async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.searchProducts called without businessId');
+      return [];
+    }
+
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
     let dbQuery = supabase
       .from('products')
       .select('*')
       .eq('business_id', businessId)
       .eq('is_archived', false)
-      .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
       .order('name');
 
     if (limit) {
@@ -396,12 +424,14 @@ export const productService = {
   },
 
   async searchArchivedProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
     let dbQuery = supabase
       .from('products')
       .select('*')
       .eq('business_id', businessId)
       .eq('is_archived', true)
-      .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
       .order('archived_at', { ascending: false });
 
     if (limit) {

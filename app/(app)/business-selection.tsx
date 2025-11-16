@@ -18,7 +18,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Briefcase, Plus, ChevronRight, LogOut, Building } from 'lucide-react-native';
 
 export default function BusinessSelectionScreen() {

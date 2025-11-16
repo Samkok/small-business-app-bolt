@@ -98,6 +98,72 @@ export const teamMemberService = {
   },
 
   /**
+   * Check if a user exists by email and if they're already a member
+   */
+  async checkUserExists(
+    email: string,
+    businessId?: string
+  ): Promise<{
+    exists: boolean;
+    userId?: string;
+    userName?: string;
+    isAlreadyMember?: boolean;
+    currentRole?: 'admin' | 'staff';
+  }> {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Query user_profiles table to check if user exists (case-insensitive)
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('user_id, full_name, email')
+        .ilike('email', normalizedEmail)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Error checking user existence:', profileError);
+        return { exists: false };
+      }
+
+      if (!profile) {
+        console.log('No profile found for email:', normalizedEmail);
+        return { exists: false };
+      }
+
+      console.log('Found user profile:', profile);
+
+      // If businessId is provided, check if user is already a member
+      let isAlreadyMember = false;
+      let currentRole: 'admin' | 'staff' | undefined;
+
+      if (businessId) {
+        const { data: roleData } = await supabase
+          .from('user_business_roles')
+          .select('role')
+          .eq('user_id', profile.user_id)
+          .eq('business_id', businessId)
+          .maybeSingle();
+
+        if (roleData) {
+          isAlreadyMember = true;
+          currentRole = roleData.role as 'admin' | 'staff';
+        }
+      }
+
+      return {
+        exists: true,
+        userId: profile.user_id,
+        userName: profile.full_name,
+        isAlreadyMember,
+        currentRole
+      };
+    } catch (error) {
+      console.error('Error in checkUserExists:', error);
+      return { exists: false };
+    }
+  },
+
+  /**
    * Invite a user to join the business
    */
   async inviteUser(businessId: string, userEmail: string, role: 'admin' | 'staff'): Promise<boolean> {
@@ -109,11 +175,20 @@ export const teamMemberService = {
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to invite user');
+        // Provide more specific error messages
+        if (error.message.includes('not found')) {
+          throw new Error(`No user found with email: ${userEmail.trim()}. Please make sure the user has created an account first.`);
+        } else if (error.message.includes('already a member')) {
+          throw new Error('This user is already a member of the business.');
+        } else if (error.message.includes('Only business admins')) {
+          throw new Error('You do not have permission to invite users.');
+        } else {
+          throw new Error(error.message || 'Failed to invite user');
+        }
       }
 
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error inviting user:', error);
       throw error;
     }

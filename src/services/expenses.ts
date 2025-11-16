@@ -9,6 +9,11 @@ type ExpenseCategoryInsert = Database['public']['Tables']['expense_categories'][
 
 export const expenseService = {
   async getCategories(businessId: string) {
+    if (!businessId) {
+      console.warn('expenseService.getCategories called without businessId');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('expense_categories')
       .select('*')
@@ -31,6 +36,11 @@ export const expenseService = {
   },
 
   async getExpenses(businessId: string, limit?: number) {
+    if (!businessId) {
+      console.warn('expenseService.getExpenses called without businessId');
+      return [];
+    }
+
     let query = supabase
         .from('expenses')
         .select(`
@@ -95,6 +105,11 @@ export const expenseService = {
   },
 
   async getExpenseReport(businessId: string, startDate: string, endDate: string) {
+    if (!businessId) {
+      console.warn('expenseService.getExpenseReport called without businessId');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('expenses')
       .select(`
@@ -111,6 +126,11 @@ export const expenseService = {
   },
 
   async getExpensesByCategory(businessId: string, startDate: string, endDate: string) {
+    if (!businessId) {
+      console.warn('expenseService.getExpensesByCategory called without businessId');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('expenses')
       .select(`

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Redirect, Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -7,17 +7,24 @@ import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function AppLayout() {
-  const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
+  const { session, loading, initialDataLoaded, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
   const { refreshCarts } = useCart();
   const router = useRouter();
-  
-  console.log('AppLayout rendering with auth loading:', loading, 
+  const segments = useSegments();
+
+  const currentRoute = segments[segments.length - 1];
+  const isInAppGroup = segments.includes('(app)');
+
+  console.log('AppLayout rendering with auth loading:', loading,
+              'initialDataLoaded:', initialDataLoaded,
               'session:', session ? `exists (${session.user.id})` : 'null',
               'businesses:', userBusinesses.length,
-              'current business:', currentBusiness ? currentBusiness.id : 'none');
+              'current business:', currentBusiness ? currentBusiness.id : 'none',
+              'current route:', currentRoute,
+              'segments:', segments);
 
   // Refresh carts when the app screen comes into focus
-  
+
 
   // Show inactivity alert when session expires
   useEffect(() => {
@@ -35,8 +42,45 @@ export default function AppLayout() {
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
 
-  if (loading) {
-    console.log('AppLayout: Showing loading spinner due to auth loading state');
+  // Handle business context navigation
+  useEffect(() => {
+    // Wait until initial data is loaded and we have a session
+    if (loading || !session || !initialDataLoaded) return;
+
+    // Skip navigation if we're not in the app group yet
+    if (!isInAppGroup) return;
+
+    // If user has no businesses and not already on business-onboarding
+    if (userBusinesses.length === 0 && currentRoute !== 'business-onboarding') {
+      console.log('AppLayout: User has no businesses, navigating to business onboarding');
+      router.replace('/(app)/business-onboarding');
+      return;
+    }
+
+    // If user has businesses but no current business is set, and not on business-selection or business-onboarding
+    if (userBusinesses.length > 0 && !currentBusiness &&
+        currentRoute !== 'business-selection' && currentRoute !== 'business-onboarding') {
+      console.log('AppLayout: No current business set, navigating to business selection');
+      router.replace('/(app)/business-selection');
+      return;
+    }
+
+    // If user has businesses and current business is set, ensure they're directed to tabs
+    // Only redirect if they're on onboarding screen or the base (app) route
+    // Allow users to stay on business-selection if they navigated there intentionally
+    if (userBusinesses.length > 0 && currentBusiness) {
+      if (currentRoute === 'business-onboarding' ||
+          currentRoute === '(app)' || !currentRoute) {
+        console.log('AppLayout: User has business context, navigating to main tabs');
+        router.replace('/(app)/(tabs)');
+        return;
+      }
+    }
+  }, [loading, session, initialDataLoaded, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
+
+  // Show loading spinner while auth is loading OR while initial data hasn't been loaded yet
+  if (loading || (session && !initialDataLoaded)) {
+    console.log('AppLayout: Showing loading spinner - loading:', loading, 'initialDataLoaded:', initialDataLoaded);
     return <LoadingSpinner text="Loading your account..." />;
   }
 
@@ -45,13 +89,11 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/signin" />;
   }
 
-  // If user has no businesses OR no current business is set, redirect to business selection
-  
-
-  console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
+  console.log('AppLayout: Rendering stack layout');
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="business-onboarding" />
       <Stack.Screen name="business-selection" />
       <Stack.Screen name="top-customers" />
       <Stack.Screen name="top-products" />

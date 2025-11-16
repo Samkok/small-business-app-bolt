@@ -17,7 +17,9 @@ import { useTheme } from '@/src/context/ThemeContext';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loginRateLimiter, RateLimiter } from '@/src/lib/rateLimiter';
+import { getRememberMeCredentials, setRememberMeCredentials, clearRememberMeCredentials } from '@/src/lib/secureStorage';
+import { signInSchema } from '@/src/lib/validation';
 import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
 
 export default function SignInScreen() {
@@ -29,14 +31,12 @@ export default function SignInScreen() {
   const { isDark } = useTheme();
   const { t } = useTranslation();
 
-  // Load saved credentials if "Remember Me" was checked
   useEffect(() => {
     const loadSavedCredentials = async () => {
       try {
-        const savedEmail = await AsyncStorage.getItem('savedEmail');
-        const savedRememberMe = await AsyncStorage.getItem('rememberMe');
-        
-        if (savedEmail && savedRememberMe === 'true') {
+        const { email: savedEmail, rememberMe: savedRememberMe } = await getRememberMeCredentials();
+
+        if (savedEmail && savedRememberMe) {
           setEmail(savedEmail);
           setRememberMe(true);
         }
@@ -54,22 +54,49 @@ export default function SignInScreen() {
       return;
     }
 
-    setLoading(true);
-    
-    try {
-      // Save or remove credentials based on "Remember Me" checkbox
-      if (rememberMe) {
-        await AsyncStorage.setItem('savedEmail', email);
-        await AsyncStorage.setItem('rememberMe', 'true');
-      } else {
-        await AsyncStorage.removeItem('savedEmail');
-        await AsyncStorage.removeItem('rememberMe');
-      }
+    const validation = signInSchema.safeParse({ email, password });
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      Alert.alert(t('common.error'), firstError.message);
+      return;
+    }
 
-      const { error } = await signIn(email, password);
-      
+    const rateLimitCheck = await loginRateLimiter.checkLimit(email.toLowerCase());
+    if (!rateLimitCheck.allowed) {
+      const blockDuration = rateLimitCheck.blockedUntil
+        ? RateLimiter.formatBlockDuration(rateLimitCheck.blockedUntil - Date.now())
+        : '30 minutes';
+      Alert.alert(
+        'Too Many Attempts',
+        `Account temporarily locked due to multiple failed login attempts. Please try again in ${blockDuration}.`
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await signIn(validation.data.email, validation.data.password);
+
       if (error) {
-        Alert.alert(t('common.error'), error.message);
+        await loginRateLimiter.recordAttempt(email.toLowerCase());
+
+        const remainingCheck = await loginRateLimiter.checkLimit(email.toLowerCase());
+        let errorMessage = error.message;
+
+        if (remainingCheck.remainingAttempts > 0) {
+          errorMessage += `\n\nRemaining attempts: ${remainingCheck.remainingAttempts}`;
+        }
+
+        Alert.alert(t('common.error'), errorMessage);
+      } else {
+        await loginRateLimiter.resetLimit(email.toLowerCase());
+
+        if (rememberMe) {
+          await setRememberMeCredentials(email);
+        } else {
+          await clearRememberMeCredentials();
+        }
       }
     } catch (error) {
       console.error('Sign in error:', error);
