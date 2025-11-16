@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import SingleDatePicker from '@/src/components/sales/SingleDatePicker';
+import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
 
 export default function CheckoutScreen() {

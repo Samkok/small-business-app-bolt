@@ -17,7 +17,7 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { X, DollarSign, FileText, Calendar, Tag } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
-import SingleDatePicker from '@/src/components/sales/SingleDatePicker';
+import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 
 interface ExpenseFormProps {
   expense?: any;
