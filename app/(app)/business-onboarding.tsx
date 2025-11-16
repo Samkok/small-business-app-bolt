@@ -18,7 +18,7 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { storageService } from '@/src/services/storage';
-import { Building2, Briefcase, ArrowRight } from 'lucide-react-native';
+import { Building2, Briefcase, ArrowRight, LogOut, UserPlus } from 'lucide-react-native';
 
 export default function BusinessOnboardingScreen() {
   const [businessName, setBusinessName] = useState('');
@@ -30,7 +30,7 @@ export default function BusinessOnboardingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { createBusiness, userProfile } = useAuth();
+  const { createBusiness, userProfile, signOut } = useAuth();
 
   const handleImageSelect = (file: any) => {
     if (Platform.OS === 'web') {
@@ -90,6 +90,35 @@ export default function BusinessOnboardingScreen() {
       Alert.alert('Error', 'An unexpected error occurred');
       setLoading(false);
     }
+  };
+
+  const handleBackToLogin = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out and return to login?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/(auth)/signin');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleJoinBusiness = () => {
+    Alert.alert(
+      'Coming Soon',
+      'The ability to join an existing business will be available soon. For now, please create a new business or contact your business administrator.',
+      [{ text: 'OK' }]
+    );
   };
 
   return (
@@ -153,6 +182,32 @@ export default function BusinessOnboardingScreen() {
             style={styles.createButton}
             icon={<ArrowRight size={20} color="#ffffff" />}
           />
+
+          <View style={styles.alternativeActions}>
+            <Text style={[styles.orText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              or
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+              onPress={handleJoinBusiness}
+            >
+              <UserPlus size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
+              <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Request to Join a Business
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+              onPress={handleBackToLogin}
+            >
+              <LogOut size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
+              <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Back to Login
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
@@ -230,6 +285,31 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginTop: 8,
+  },
+  alternativeActions: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  orText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 16,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   footer: {
     marginTop: 24,
