@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Redirect, Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -10,14 +10,18 @@ export default function AppLayout() {
   const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
   const { refreshCarts } = useCart();
   const router = useRouter();
-  
-  console.log('AppLayout rendering with auth loading:', loading, 
+  const segments = useSegments();
+
+  const currentRoute = segments[segments.length - 1];
+
+  console.log('AppLayout rendering with auth loading:', loading,
               'session:', session ? `exists (${session.user.id})` : 'null',
               'businesses:', userBusinesses.length,
-              'current business:', currentBusiness ? currentBusiness.id : 'none');
+              'current business:', currentBusiness ? currentBusiness.id : 'none',
+              'current route:', currentRoute);
 
   // Refresh carts when the app screen comes into focus
-  
+
 
   // Show inactivity alert when session expires
   useEffect(() => {
@@ -35,6 +39,26 @@ export default function AppLayout() {
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
 
+  // Handle business context navigation
+  useEffect(() => {
+    if (loading || !session) return;
+
+    // If user has no businesses and not already on business-onboarding
+    if (userBusinesses.length === 0 && currentRoute !== 'business-onboarding') {
+      console.log('AppLayout: User has no businesses, navigating to business onboarding');
+      router.replace('/(app)/business-onboarding');
+      return;
+    }
+
+    // If user has businesses but no current business is set, and not on business-selection or business-onboarding
+    if (userBusinesses.length > 0 && !currentBusiness &&
+        currentRoute !== 'business-selection' && currentRoute !== 'business-onboarding') {
+      console.log('AppLayout: No current business set, navigating to business selection');
+      router.replace('/(app)/business-selection');
+      return;
+    }
+  }, [loading, session, userBusinesses.length, currentBusiness, currentRoute, router]);
+
   if (loading) {
     console.log('AppLayout: Showing loading spinner due to auth loading state');
     return <LoadingSpinner text="Loading your account..." />;
@@ -45,20 +69,7 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/signin" />;
   }
 
-  // Business validation guard
-  // If user has no businesses, redirect to business onboarding
-  if (userBusinesses.length === 0) {
-    console.log('AppLayout: User has no businesses, redirecting to business onboarding');
-    return <Redirect href="/(app)/business-onboarding" />;
-  }
-
-  // If user has businesses but no current business is set, redirect to business selection
-  if (!currentBusiness) {
-    console.log('AppLayout: No current business set, redirecting to business selection');
-    return <Redirect href="/(app)/business-selection" />;
-  }
-
-  console.log('AppLayout: Rendering tabs layout with valid session for user:', session.user.id, 'and business:', currentBusiness?.id);
+  console.log('AppLayout: Rendering stack layout');
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
