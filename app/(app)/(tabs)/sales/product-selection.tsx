@@ -17,10 +17,9 @@ import { useCart } from '@/src/context/CartContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus, Barcode } from 'lucide-react-native';
+import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus, Barcode, Save } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import { useDebouncedCallback } from '@/src/hooks/useDebouncedCallback';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
 export default function ProductSelectionScreen() {
@@ -29,11 +28,9 @@ export default function ProductSelectionScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
-  const [pendingUpdates, setPendingUpdates] = useState<Record<string, number>>({});
-  const [syncingProducts, setSyncingProducts] = useState<Set<string>>(new Set());
+  const [initialProducts, setInitialProducts] = useState<Record<string, number>>({});
+  const [isSaving, setIsSaving] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const pendingUpdatesRef = useRef<Map<string, { quantity: number; timestamp: number }>>(new Map());
-  const updateTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -52,13 +49,13 @@ export default function ProductSelectionScreen() {
 
   const loadData = useCallback(async () => {
     if (!currentBusiness?.id || !cartId) return;
-    
+
     try {
       // Load products
       const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
       setFilteredProducts(productsData);
-      
+
       // Get cart to initialize selected products
       const cart = getCart(cartId as string);
       if (cart) {
@@ -68,6 +65,7 @@ export default function ProductSelectionScreen() {
           selected[item.product_id] = item.quantity;
         });
         setSelectedProducts(selected);
+        setInitialProducts(selected);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -90,58 +88,51 @@ export default function ProductSelectionScreen() {
     }
   }, [products, debouncedSearchQuery]);
 
-  const syncToDatabase = useCallback(async (productId: string, quantity: number) => {
-    if (!cartId) return;
+  const savePendingChanges = useCallback(async () => {
+    if (!cartId || isSaving) return;
 
-    setSyncingProducts(prev => new Set(prev).add(productId));
+    setIsSaving(true);
 
     try {
       const cart = getCart(cartId as string);
       if (!cart) throw new Error('Cart not found');
 
-      const product = products.find(p => p.id === productId);
-      if (!product) throw new Error('Product not found');
+      // Find all changes
+      const changedProducts = Object.keys(selectedProducts).filter(
+        productId => selectedProducts[productId] !== (initialProducts[productId] || 0)
+      );
 
-      const existingItem = cart.items.find(item => item.product_id === productId);
+      // Process all changes in parallel
+      await Promise.all(
+        changedProducts.map(async (productId) => {
+          const quantity = selectedProducts[productId];
+          const product = products.find(p => p.id === productId);
+          if (!product) return;
 
-      if (quantity === 0 && existingItem) {
-        await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
-      } else if (existingItem) {
-        await updateCartItem(cartId as string, existingItem.id, { quantity });
-      } else if (quantity > 0) {
-        await addItemToCart(cartId as string, product, quantity);
-      }
+          const existingItem = cart.items.find(item => item.product_id === productId);
 
-      pendingUpdatesRef.current.delete(productId);
-      setPendingUpdates(prev => {
-        const newPending = { ...prev };
-        delete newPending[productId];
-        return newPending;
-      });
+          if (quantity === 0 && existingItem) {
+            await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
+          } else if (existingItem) {
+            await updateCartItem(cartId as string, existingItem.id, { quantity });
+          } else if (quantity > 0) {
+            await addItemToCart(cartId as string, product, quantity);
+          }
+        })
+      );
+
+      // Update initial products to reflect saved state
+      setInitialProducts({ ...selectedProducts });
     } catch (error) {
-      console.error('Error syncing to database:', error);
-      const pendingUpdate = pendingUpdatesRef.current.get(productId);
-      if (pendingUpdate) {
-        setSelectedProducts(prev => ({
-          ...prev,
-          [productId]: pendingUpdate.quantity
-        }));
-      }
-      Alert.alert('Error', 'Failed to update cart. Please try again.');
+      console.error('Error saving changes:', error);
+      Alert.alert('Error', 'Failed to save changes. Please try again.');
+      throw error;
     } finally {
-      setSyncingProducts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(productId);
-        return newSet;
-      });
+      setIsSaving(false);
     }
-  }, [cartId, products, getCart, updateCartItem, addItemToCart]);
-
-  const debouncedSync = useDebouncedCallback(syncToDatabase, 800);
+  }, [cartId, selectedProducts, initialProducts, products, getCart, updateCartItem, addItemToCart, isSaving]);
 
   const handleQuantityChange = useCallback((productId: string, change: number) => {
-    if (!cartId) return;
-
     const currentQuantity = selectedProducts[productId] || 0;
     const newQuantity = Math.max(0, currentQuantity + change);
 
@@ -157,23 +148,7 @@ export default function ProductSelectionScreen() {
       ...prev,
       [productId]: newQuantity
     }));
-
-    pendingUpdatesRef.current.set(productId, {
-      quantity: newQuantity,
-      timestamp: Date.now()
-    });
-
-    setPendingUpdates(prev => ({
-      ...prev,
-      [productId]: newQuantity
-    }));
-
-    if (updateTimeoutRef.current.has(productId)) {
-      clearTimeout(updateTimeoutRef.current.get(productId)!);
-    }
-
-    debouncedSync(productId, newQuantity);
-  }, [cartId, selectedProducts, products, debouncedSync]);
+  }, [selectedProducts, products]);
 
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
@@ -186,14 +161,62 @@ export default function ProductSelectionScreen() {
     return Object.values(selectedProducts).reduce((sum, quantity) => sum + quantity, 0);
   }, [selectedProducts]);
 
-  const handleContinueToCart = useCallback(() => {
-    router.push(`/sales/cart/${cartId}`);
-  }, [router, cartId]);
+  const getPendingChangesCount = useCallback(() => {
+    return Object.keys(selectedProducts).filter(
+      productId => selectedProducts[productId] !== (initialProducts[productId] || 0)
+    ).length;
+  }, [selectedProducts, initialProducts]);
+
+  const handleContinueToCart = useCallback(async () => {
+    const pendingCount = getPendingChangesCount();
+
+    if (pendingCount > 0) {
+      try {
+        await savePendingChanges();
+        router.push(`/sales/cart/${cartId}`);
+      } catch (error) {
+        // Error already handled in savePendingChanges
+      }
+    } else {
+      router.push(`/sales/cart/${cartId}`);
+    }
+  }, [router, cartId, getPendingChangesCount, savePendingChanges]);
+
+  const handleBack = useCallback(async () => {
+    const pendingCount = getPendingChangesCount();
+
+    if (pendingCount > 0) {
+      Alert.alert(
+        'Unsaved Changes',
+        `You have ${pendingCount} unsaved ${pendingCount === 1 ? 'change' : 'changes'}. Do you want to save before going back?`,
+        [
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => router.back()
+          },
+          {
+            text: 'Save',
+            onPress: async () => {
+              try {
+                await savePendingChanges();
+                router.back();
+              } catch (error) {
+                // Error already handled in savePendingChanges
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      router.back();
+    }
+  }, [router, getPendingChangesCount, savePendingChanges]);
 
   const renderProductItem = useCallback(({ item }) => {
     const quantity = selectedProducts[item.id] || 0;
-    const isSyncing = syncingProducts.has(item.id);
-    const hasPendingUpdate = pendingUpdates[item.id] !== undefined;
+    const initialQuantity = initialProducts[item.id] || 0;
+    const hasChanges = quantity !== initialQuantity;
     const isOutOfStock = item.current_stock <= 0;
     const isMaxStock = quantity >= item.current_stock;
 
@@ -204,8 +227,10 @@ export default function ProductSelectionScreen() {
             <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
               {item.name}
             </Text>
-            {isSyncing && (
-              <ActivityIndicator size="small" color="#2563eb" style={styles.syncIndicator} />
+            {hasChanges && (
+              <View style={styles.changedBadge}>
+                <Text style={styles.changedBadgeText}>•</Text>
+              </View>
             )}
           </View>
           <Text style={[styles.productPrice, { color: '#059669' }]}>
@@ -258,7 +283,7 @@ export default function ProductSelectionScreen() {
         </View>
       </Card>
     );
-  }, [selectedProducts, syncingProducts, pendingUpdates, isDark, handleQuantityChange]);
+  }, [selectedProducts, initialProducts, isDark, handleQuantityChange]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -315,7 +340,7 @@ export default function ProductSelectionScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleBack}
         >
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
@@ -323,7 +348,13 @@ export default function ProductSelectionScreen() {
           Select Products
         </Text>
         <View style={styles.headerRight}>
-          {getTotalItems() > 0 && (
+          {getPendingChangesCount() > 0 && (
+            <View style={styles.pendingBadge}>
+              <Save size={14} color="#ffffff" />
+              <Text style={styles.pendingBadgeText}>{getPendingChangesCount()}</Text>
+            </View>
+          )}
+          {getTotalItems() > 0 && getPendingChangesCount() === 0 && (
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
             </View>
@@ -381,8 +412,10 @@ export default function ProductSelectionScreen() {
       {getTotalItems() > 0 && (
         <View style={styles.footer}>
           <Button
-            title={`Continue to Cart (${getTotalItems()} items)`}
+            title={getPendingChangesCount() > 0 ? `Save & Continue (${getTotalItems()} items)` : `Continue to Cart (${getTotalItems()} items)`}
             onPress={handleContinueToCart}
+            loading={isSaving}
+            disabled={isSaving}
             style={styles.continueButton}
           />
         </View>
@@ -442,6 +475,35 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  pendingBadge: {
+    backgroundColor: '#ea580c',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    gap: 4,
+  },
+  pendingBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  changedBadge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ea580c',
+    marginLeft: 4,
+  },
+  changedBadgeText: {
+    color: '#ea580c',
+    fontSize: 16,
+    fontWeight: 'bold',
+    lineHeight: 8,
   },
   customerInfo: {
     flexDirection: 'row',
