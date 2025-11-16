@@ -246,13 +246,18 @@ export default function CheckoutScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-            <Input
-              label="Sale Date"
-              value={saleDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-              editable={false}
-              placeholder="Select sale date"
-            />
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+          >
+            <View pointerEvents="none">
+              <Input
+                label="Sale Date"
+                value={saleDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                editable={false}
+                placeholder="Select sale date"
+              />
+            </View>
           </TouchableOpacity>
 
           {saleDate.toDateString() !== new Date().toDateString() && (
