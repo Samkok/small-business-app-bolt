@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import SingleDatePicker from '@/src/components/sales/SingleDatePicker';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
 
 export default function CheckoutScreen() {
@@ -348,11 +348,11 @@ export default function CheckoutScreen() {
               Select Sale Date
             </Text>
 
-            <DateRangePicker
-              startDate={saleDate}
-              endDate={saleDate}
-              onConfirm={(start) => {
-                setSaleDate(start);
+            <SingleDatePicker
+              selectedDate={saleDate}
+              maxDate={new Date()}
+              onConfirm={(date) => {
+                setSaleDate(date);
                 setShowDatePicker(false);
               }}
               onCancel={() => setShowDatePicker(false)}
