@@ -111,11 +111,13 @@ export const teamMemberService = {
     currentRole?: 'admin' | 'staff';
   }> {
     try {
-      // Query user_profiles table to check if user exists
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Query user_profiles table to check if user exists (case-insensitive)
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select('user_id, full_name, email')
-        .eq('email', email.trim())
+        .ilike('email', normalizedEmail)
         .maybeSingle();
 
       if (profileError) {
@@ -124,8 +126,11 @@ export const teamMemberService = {
       }
 
       if (!profile) {
+        console.log('No profile found for email:', normalizedEmail);
         return { exists: false };
       }
+
+      console.log('Found user profile:', profile);
 
       // If businessId is provided, check if user is already a member
       let isAlreadyMember = false;
