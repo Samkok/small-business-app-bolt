@@ -382,11 +382,22 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                       >
                         <Minus size={16} color="#ffffff" />
                       </TouchableOpacity>
-                      
-                      <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                        {item.quantity}
-                      </Text>
-                      
+
+                      <TextInput
+                        style={[styles.quantityInput, {
+                          backgroundColor: isDark ? '#374151' : '#f9fafb',
+                          borderColor: isDark ? '#4b5563' : '#d1d5db',
+                          color: isDark ? '#f9fafb' : '#111827'
+                        }]}
+                        value={item.quantity.toString()}
+                        onChangeText={(value) => {
+                          const qty = parseInt(value) || 0;
+                          updateItemQuantity(item.product_id, qty);
+                        }}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                      />
+
                       <TouchableOpacity
                         style={[styles.quantityButton, { backgroundColor: '#2563eb' }]}
                         onPress={() => updateItemQuantity(item.product_id, item.quantity + 1)}
@@ -752,6 +763,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     width: 30,
     textAlign: 'center',
+  },
+  quantityInput: {
+    width: 50,
+    height: 32,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginHorizontal: 8,
   },
   costInput: {
     alignItems: 'center',
