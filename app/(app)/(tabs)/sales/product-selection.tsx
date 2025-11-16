@@ -36,7 +36,7 @@ export default function ProductSelectionScreen() {
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { getCart, addItemToCart, updateCartItem } = useCart();
+  const { getCart, addItemToCart, updateCartItem, refreshCarts } = useCart();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function ProductSelectionScreen() {
     setIsSaving(true);
 
     try {
-      const cart = getCart(cartId as string);
+      let cart = getCart(cartId as string);
       if (!cart) throw new Error('Cart not found');
 
       // Find all changes
@@ -102,24 +102,47 @@ export default function ProductSelectionScreen() {
         productId => selectedProducts[productId] !== (initialProducts[productId] || 0)
       );
 
-      // Process all changes in parallel
-      await Promise.all(
-        changedProducts.map(async (productId) => {
-          const quantity = selectedProducts[productId];
-          const product = products.find(p => p.id === productId);
-          if (!product) return;
+      // Separate changes into updates and new additions
+      const updates: Array<{ itemId: string; quantity: number }> = [];
+      const additions: Array<{ product: any; quantity: number }> = [];
+      const removals: string[] = [];
 
-          const existingItem = cart.items.find(item => item.product_id === productId);
+      for (const productId of changedProducts) {
+        const quantity = selectedProducts[productId];
+        const product = products.find(p => p.id === productId);
+        if (!product) continue;
 
-          if (quantity === 0 && existingItem) {
-            await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
-          } else if (existingItem) {
-            await updateCartItem(cartId as string, existingItem.id, { quantity });
-          } else if (quantity > 0) {
-            await addItemToCart(cartId as string, product, quantity);
-          }
-        })
-      );
+        const existingItem = cart.items.find(item => item.product_id === productId);
+
+        if (quantity === 0 && existingItem) {
+          removals.push(existingItem.id);
+        } else if (existingItem) {
+          updates.push({ itemId: existingItem.id, quantity });
+        } else if (quantity > 0) {
+          additions.push({ product, quantity });
+        }
+      }
+
+      // Process removals first
+      for (const itemId of removals) {
+        await updateCartItem(cartId as string, itemId, { quantity: 0 });
+      }
+
+      // Then process updates
+      for (const { itemId, quantity } of updates) {
+        await updateCartItem(cartId as string, itemId, { quantity });
+      }
+
+      // Finally, add new items sequentially to avoid race conditions
+      for (const { product, quantity } of additions) {
+        await addItemToCart(cartId as string, product, quantity);
+        // Refresh cart after each addition to get updated state
+        await refreshCarts(true);
+        cart = getCart(cartId as string);
+      }
+
+      // Final refresh to ensure we have the latest state
+      await refreshCarts(true);
 
       // Update initial products to reflect saved state
       setInitialProducts({ ...selectedProducts });
@@ -130,7 +153,7 @@ export default function ProductSelectionScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [cartId, selectedProducts, initialProducts, products, getCart, updateCartItem, addItemToCart, isSaving]);
+  }, [cartId, selectedProducts, initialProducts, products, getCart, updateCartItem, addItemToCart, refreshCarts, isSaving]);
 
   const handleQuantityChange = useCallback((productId: string, change: number) => {
     const currentQuantity = selectedProducts[productId] || 0;
