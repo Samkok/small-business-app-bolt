@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -15,12 +16,15 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, CreditCard, DollarSign, Check, FileText } from 'lucide-react-native';
+import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
+import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('cash');
   const [notes, setNotes] = useState('');
+  const [saleDate, setSaleDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -52,7 +56,24 @@ export default function CheckoutScreen() {
 
     setProcessing(true);
     try {
-      const result = await completeSale(cartId as string, paymentMethod);
+      // Generate automatic remark if sale date is in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDate = new Date(saleDate);
+      selectedDate.setHours(0, 0, 0, 0);
+
+      let finalNotes = notes;
+      if (selectedDate < today) {
+        const addedDate = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+        const remarkText = `Added from ${addedDate}`;
+        finalNotes = notes ? `${notes}\n${remarkText}` : remarkText;
+      }
+
+      const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes);
       
       if (result.success) {
         Alert.alert(
@@ -74,7 +95,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [currentBusiness?.id, cartId, cart, paymentMethod, completeSale, router]);
+  }, [currentBusiness?.id, cartId, cart, paymentMethod, saleDate, notes, completeSale, router]);
 
   if (!cart || !cartSummary) {
     return (
@@ -216,6 +237,38 @@ export default function CheckoutScreen() {
           </View>
         </Card>
 
+        {/* Sale Date */}
+        <Card style={styles.dateCard}>
+          <View style={styles.sectionHeader}>
+            <Calendar size={20} color="#8b5cf6" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827', marginBottom: 0 }]}>
+              Sale Date
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+          >
+            <View pointerEvents="none">
+              <Input
+                label="Sale Date"
+                value={saleDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                editable={false}
+                placeholder="Select sale date"
+              />
+            </View>
+          </TouchableOpacity>
+
+          {saleDate.toDateString() !== new Date().toDateString() && (
+            <View style={styles.dateWarning}>
+              <Text style={[styles.dateWarningText, { color: '#d97706' }]}>
+                ⚠️ This sale will be recorded for {saleDate.toLocaleDateString()}
+              </Text>
+            </View>
+          )}
+        </Card>
+
         {/* Payment Method */}
         <Card style={styles.paymentCard}>
           <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -281,6 +334,32 @@ export default function CheckoutScreen() {
           style={styles.completeButton}
         />
       </View>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.datePickerContainer}>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Sale Date
+            </Text>
+
+            <SingleDatePicker
+              selectedDate={saleDate}
+              maxDate={new Date()}
+              onConfirm={(date) => {
+                setSaleDate(date);
+                setShowDatePicker(false);
+              }}
+              onCancel={() => setShowDatePicker(false)}
+            />
+          </Card>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -468,5 +547,45 @@ const styles = StyleSheet.create({
   },
   errorButton: {
     minWidth: 120,
+  },
+  dateCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  dateWarning: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#d97706',
+  },
+  dateWarningText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerContainer: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });

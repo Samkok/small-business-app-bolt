@@ -181,7 +181,6 @@ export const cartService = {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;
   }) {
-    // Check if item already exists in cart
     const { data: existingItem } = await supabase
       .from('cart_items')
       .select('*')
@@ -190,9 +189,8 @@ export const cartService = {
       .single();
 
     if (existingItem) {
-      // Update quantity and recalculate totals
       const newQuantity = existingItem.quantity + cartItem.quantity;
-      
+
       const { data, error } = await supabase
         .from('cart_items')
         .update({
@@ -206,13 +204,13 @@ export const cartService = {
         .single();
 
       if (error) throw error;
-      
-      // Update cart total
-      await this.updateCartTotal(cartItem.cart_id);
-      
+
+      this.updateCartTotal(cartItem.cart_id).catch(err =>
+        console.error('Error updating cart total in background:', err)
+      );
+
       return data;
     } else {
-      // Add new item
       const { data, error } = await supabase
         .from('cart_items')
         .insert(cartItem)
@@ -220,10 +218,11 @@ export const cartService = {
         .single();
 
       if (error) throw error;
-      
-      // Update cart total
-      await this.updateCartTotal(cartItem.cart_id);
-      
+
+      this.updateCartTotal(cartItem.cart_id).catch(err =>
+        console.error('Error updating cart total in background:', err)
+      );
+
       return data;
     }
   },
@@ -232,15 +231,14 @@ export const cartService = {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;
   }) {
-    // Get the cart_id first
     const { data: item } = await supabase
       .from('cart_items')
       .select('cart_id')
       .eq('id', itemId)
       .single();
-      
+
     if (!item) throw new Error('Cart item not found');
-    
+
     const { data, error } = await supabase
       .from('cart_items')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -249,47 +247,48 @@ export const cartService = {
       .single();
 
     if (error) throw error;
-    
-    // Update cart total
-    await this.updateCartTotal(item.cart_id);
-    
+
+    this.updateCartTotal(item.cart_id).catch(err =>
+      console.error('Error updating cart total in background:', err)
+    );
+
     return data;
   },
 
   async removeCartItem(itemId: string) {
     if (typeof itemId !== 'string' || !itemId) return;
-    // Get the cart_id first
+
     const { data: item } = await supabase
       .from('cart_items')
       .select('cart_id')
       .eq('id', itemId)
       .single();
-      
+
     if (!item) throw new Error('Cart item not found');
-    
+
     const { error } = await supabase
       .from('cart_items')
       .delete()
       .eq('id', itemId);
 
     if (error) throw error;
-    
-    // Update cart total
-    await this.updateCartTotal(item.cart_id);
+
+    this.updateCartTotal(item.cart_id).catch(err =>
+      console.error('Error updating cart total in background:', err)
+    );
   },
 
   async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
-    
     if (typeof itemId !== 'string' || !itemId) return;
-    // Get the cart_id first
+
     const { data: item } = await supabase
       .from('cart_items')
       .select('cart_id')
       .eq('id', itemId)
       .single();
-      
+
     if (!item) throw new Error('Cart item not found');
-    
+
     const { data, error } = await supabase
       .from('cart_items')
       .update({
@@ -302,24 +301,25 @@ export const cartService = {
       .single();
 
     if (error) throw error;
-    
-    // Update cart total
-    await this.updateCartTotal(item.cart_id);
-    
+
+    this.updateCartTotal(item.cart_id).catch(err =>
+      console.error('Error updating cart total in background:', err)
+    );
+
     return data;
   },
 
   async removeItemDiscount(itemId: string) {
     if (typeof itemId !== 'string' || !itemId) return;
-    // Get the cart_id first
+
     const { data: item } = await supabase
       .from('cart_items')
       .select('cart_id')
       .eq('id', itemId)
       .single();
-      
+
     if (!item) throw new Error('Cart item not found');
-    
+
     const { data, error } = await supabase
       .from('cart_items')
       .update({
@@ -332,23 +332,24 @@ export const cartService = {
       .single();
 
     if (error) throw error;
-    
-    // Update cart total
-    await this.updateCartTotal(item.cart_id);
-    
+
+    this.updateCartTotal(item.cart_id).catch(err =>
+      console.error('Error updating cart total in background:', err)
+    );
+
     return data;
   },
 
   async updateCartTotal(cartId: string) {
-    
     if (typeof cartId !== 'string' || !cartId) return;
+
     try {
       const summary = await this.getCartSummary(cartId);
       await supabase
         .from('carts')
-        .update({ 
+        .update({
           total_amount: summary.finalTotal,
-          updated_at: new Date().toISOString() 
+          updated_at: new Date().toISOString()
         })
         .eq('id', cartId);
     } catch (error) {
