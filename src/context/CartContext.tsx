@@ -470,18 +470,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [carts, calculateCartDiscount]);
 
-  const completeSale = useCallback(async (cartId: string, paymentMethod: string): Promise<{ success: boolean; saleId?: string; error?: string }> => {
+  const completeSale = useCallback(async (
+    cartId: string,
+    paymentMethod: string,
+    saleDate?: string,
+    customNotes?: string
+  ): Promise<{ success: boolean; saleId?: string; error?: string }> => {
     if (!currentBusiness?.id) {
       return { success: false, error: 'No business currentBusiness found' };
     }
 
     try {
+      const cart = carts.find(c => c.id === cartId);
       // Complete the sale on the server
       const sale = await salesService.completeSale({
         cart_id: cartId,
-        customer_id: carts.find(c => c.id === cartId)?.customer_id || '',
+        customer_id: cart?.customer_id || '',
         payment_method: paymentMethod as any,
-        notes: carts.find(c => c.id === cartId)?.notes,
+        notes: customNotes || cart?.notes,
+        sale_date: saleDate,
         business_id: currentBusiness.id,
         created_by: user.id
       });
