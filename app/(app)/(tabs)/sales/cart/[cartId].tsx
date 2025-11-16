@@ -58,9 +58,8 @@ export default function CartScreen() {
     getCartSummary 
   } = useCart();
 
-  // Get cart and summary
+  // Get cart
   const cart = getCart(cartId as string);
-  const cartSummary = cart ? getCartSummary(cartId as string) : null;
 
   // Initialize local state from cart
   useEffect(() => {
@@ -152,6 +151,60 @@ export default function CartScreen() {
 
     return { hasChanges, changes };
   }, [cart, localItemQuantities, deliveryCost, notes, initialState, localItemDiscounts]);
+
+  // Calculate local cart summary using local state values
+  const getLocalCartSummary = useCallback(() => {
+    if (!cart) return null;
+
+    // Calculate item totals using local quantities
+    let itemsOriginalTotal = 0;
+    let itemsTotalDiscount = 0;
+    let itemsSubtotalAfterDiscount = 0;
+
+    cart.items.forEach(item => {
+      const quantity = localItemQuantities.get(item.id) ?? item.quantity;
+      const originalSubtotal = quantity * item.unit_price;
+      itemsOriginalTotal += originalSubtotal;
+
+      // Calculate item discount
+      let itemDiscountAmount = 0;
+      if (item.item_discount_type && item.item_discount_value) {
+        if (item.item_discount_type === 'percentage') {
+          itemDiscountAmount = originalSubtotal * (item.item_discount_value / 100);
+        } else {
+          itemDiscountAmount = Math.min(item.item_discount_value, originalSubtotal);
+        }
+      }
+
+      itemsTotalDiscount += itemDiscountAmount;
+      itemsSubtotalAfterDiscount += (originalSubtotal - itemDiscountAmount);
+    });
+
+    // Calculate cart-level discount
+    let cartDiscountAmount = 0;
+    if (cart.discount_type && cart.discount_value) {
+      if (cart.discount_type === 'percentage') {
+        cartDiscountAmount = itemsSubtotalAfterDiscount * (cart.discount_value / 100);
+      } else {
+        cartDiscountAmount = Math.min(cart.discount_value, itemsSubtotalAfterDiscount);
+      }
+    }
+
+    // Calculate final total using local delivery cost
+    const localDeliveryCostValue = parseFloat(deliveryCost) || 0;
+    const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount - localDeliveryCostValue);
+
+    return {
+      itemsOriginalTotal,
+      itemsTotalDiscount,
+      itemsSubtotalAfterDiscount,
+      cartDiscountAmount,
+      deliveryCost: localDeliveryCostValue,
+      finalTotal
+    };
+  }, [cart, localItemQuantities, deliveryCost]);
+
+  const cartSummary = getLocalCartSummary();
 
   const savePendingChanges = useCallback(async () => {
     if (!cart || isSaving) return;
