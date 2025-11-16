@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -16,6 +17,7 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { X, DollarSign, FileText, Calendar, Tag } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
+import SingleDatePicker from '@/src/components/sales/SingleDatePicker';
 
 interface ExpenseFormProps {
   expense?: any;
@@ -31,6 +33,7 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
   const [expenseDate, setExpenseDate] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
@@ -44,9 +47,26 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
       setNotes(expense.notes || '');
     } else {
       // Set today's date as default
-      setExpenseDate(new Date().toISOString().split('T')[0]);
+      const today = new Date();
+      setExpenseDate(today.toISOString().split('T')[0]);
     }
   }, [expense]);
+
+  const handleDateConfirm = (date: Date) => {
+    const formattedDate = date.toISOString().split('T')[0];
+    setExpenseDate(formattedDate);
+    setShowDatePicker(false);
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    if (!dateString) return 'Select date';
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
   const handleSave = async () => {
     if (!amount.trim() || !description.trim() || !categoryId) {
@@ -185,13 +205,28 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
                 Date
               </Text>
             </View>
-            
-            <Input
-              label="Expense Date"
-              value={expenseDate}
-              onChangeText={setExpenseDate}
-              placeholder="YYYY-MM-DD"
-            />
+
+            <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              Expense Date
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.datePickerButton,
+                {
+                  backgroundColor: isDark ? '#374151' : '#ffffff',
+                  borderColor: isDark ? '#4b5563' : '#d1d5db'
+                }
+              ]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[
+                styles.datePickerText,
+                { color: isDark ? '#f9fafb' : '#111827' }
+              ]}>
+                {formatDisplayDate(expenseDate)}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
@@ -228,6 +263,27 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
           style={styles.footerButton}
         />
       </View>
+
+      <Modal
+        visible={showDatePicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.datePickerModal,
+            { backgroundColor: isDark ? '#1f2937' : '#ffffff' }
+          ]}>
+            <SingleDatePicker
+              selectedDate={expenseDate ? new Date(expenseDate + 'T00:00:00') : new Date()}
+              onConfirm={handleDateConfirm}
+              onCancel={() => setShowDatePicker(false)}
+              maxDate={new Date()}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -300,5 +356,36 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+  },
+  datePickerText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerModal: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
