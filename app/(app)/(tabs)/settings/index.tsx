@@ -14,14 +14,16 @@ import { Card } from '@/src/components/ui/Card';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  User, 
-  Palette, 
-  Globe, 
-  LogOut, 
+import {
+  User,
+  Palette,
+  Globe,
+  LogOut,
   ChevronRight,
   Building,
-  Users
+  Users,
+  FileText,
+  Shield
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
@@ -195,6 +197,24 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+          Legal
+        </Text>
+        <SettingItem
+          icon={<FileText size={20} color="#dc2626" />}
+          title="Terms and Conditions"
+          subtitle="Read our terms of service"
+          onPress={() => router.push('/settings/terms')}
+        />
+        <SettingItem
+          icon={<Shield size={20} color="#16a34a" />}
+          title="Privacy Policy"
+          subtitle="Learn how we protect your data"
+          onPress={() => router.push('/settings/privacy')}
+        />
+      </View>
+
+      <View style={styles.section}>
         <Button
           title={t('auth.signOut')}
           variant="danger"
@@ -276,6 +296,14 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    marginLeft: 4,
   },
   settingItem: {
     marginBottom: 8,
