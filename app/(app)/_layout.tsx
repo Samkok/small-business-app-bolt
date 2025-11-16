@@ -7,7 +7,7 @@ import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function AppLayout() {
-  const { session, loading, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
+  const { session, loading, initialDataLoaded, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
   const { refreshCarts } = useCart();
   const router = useRouter();
   const segments = useSegments();
@@ -43,7 +43,8 @@ export default function AppLayout() {
 
   // Handle business context navigation
   useEffect(() => {
-    if (loading || !session) return;
+    // Wait until initial data is loaded and we have a session
+    if (loading || !session || !initialDataLoaded) return;
 
     // Skip navigation if we're not in the app group yet
     if (!isInAppGroup) return;
@@ -74,7 +75,7 @@ export default function AppLayout() {
         return;
       }
     }
-  }, [loading, session, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
+  }, [loading, session, initialDataLoaded, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
 
   if (loading) {
     console.log('AppLayout: Showing loading spinner due to auth loading state');
