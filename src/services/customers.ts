@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { logger, ValidationError, DatabaseError } from '../lib';
+import { sanitizeSearchQuery } from '../lib/validation';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 type CustomerInsert = Database['public']['Tables']['customers']['Insert'];
@@ -108,11 +109,13 @@ export const customerService = {
       throw new ValidationError('Search query is required');
     }
 
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
     const { data, error } = await supabase
       .from('customers')
       .select('*')
       .eq('business_id', businessId)
-      .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
+      .or(`name.ilike.%${sanitizedQuery}%,phone.ilike.%${sanitizedQuery}%`)
       .order('name');
 
     if (error) {

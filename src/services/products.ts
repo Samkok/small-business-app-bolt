@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { storageService } from './storage';
 import { Database } from '../types/database';
 import { productTransactionService } from './productTransactions';
+import { sanitizeSearchQuery } from '../lib/validation';
 
 type Product = Database['public']['Tables']['products']['Row'];
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
@@ -284,12 +285,14 @@ export const productService = {
       return [];
     }
 
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
     let dbQuery = supabase
       .from('products')
       .select('*')
       .eq('business_id', businessId)
       .eq('is_archived', false)
-      .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
       .order('name');
 
     if (limit) {
@@ -421,12 +424,14 @@ export const productService = {
   },
 
   async searchArchivedProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
     let dbQuery = supabase
       .from('products')
       .select('*')
       .eq('business_id', businessId)
       .eq('is_archived', true)
-      .or(`name.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
       .order('archived_at', { ascending: false });
 
     if (limit) {
