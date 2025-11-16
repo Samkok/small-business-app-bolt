@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {

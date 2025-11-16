@@ -15,7 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2 } from 'lucide-react-native';
 import { batchImportService } from '@/src/services/batchImport';

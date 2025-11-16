@@ -15,7 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { ArrowLeft, Package, ShoppingCart, DollarSign, Calendar, Search, X, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { useDebounce } from '@/src/hooks/useDebounce';
