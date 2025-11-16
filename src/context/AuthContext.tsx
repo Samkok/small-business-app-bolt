@@ -281,14 +281,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Retry configuration
       const MAX_RETRIES = 3;
       const INITIAL_DELAY_MS = 500;
-      console.log(`Auth data loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
       let lastError = null;
       
       // Try to load user profile with retries
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           // Attempt to fetch the user profile
-          console.log(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
           const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
@@ -300,12 +298,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
-            console.warn(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
             
             // If it's not the last attempt, wait with exponential backoff before retrying
             if (attempt < MAX_RETRIES - 1) {
               const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-              console.log(`Retrying in ${delayMs}ms...`);
               await new Promise(resolve => setTimeout(resolve, delayMs));
               continue;
             }
@@ -316,7 +312,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If we got here, the user profile request succeeded
           if (data) {
-            console.log('User profile loaded successfully:', data.user_id);
             if (mounted.current) {
               setUserProfile(data);
             }
@@ -338,7 +333,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
-            console.log(`Loaded ${businesses.length} businesses for user:`, userId);
 
             // Store roles in a map for quick lookup
             const rolesMap = new Map<string, 'admin' | 'staff'>();
