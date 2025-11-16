@@ -16,6 +16,7 @@ export default function AppLayout() {
   const isInAppGroup = segments.includes('(app)');
 
   console.log('AppLayout rendering with auth loading:', loading,
+              'initialDataLoaded:', initialDataLoaded,
               'session:', session ? `exists (${session.user.id})` : 'null',
               'businesses:', userBusinesses.length,
               'current business:', currentBusiness ? currentBusiness.id : 'none',
@@ -77,8 +78,9 @@ export default function AppLayout() {
     }
   }, [loading, session, initialDataLoaded, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
 
-  if (loading) {
-    console.log('AppLayout: Showing loading spinner due to auth loading state');
+  // Show loading spinner while auth is loading OR while initial data hasn't been loaded yet
+  if (loading || (session && !initialDataLoaded)) {
+    console.log('AppLayout: Showing loading spinner - loading:', loading, 'initialDataLoaded:', initialDataLoaded);
     return <LoadingSpinner text="Loading your account..." />;
   }
 

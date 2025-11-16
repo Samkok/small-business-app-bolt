@@ -50,9 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentBusiness, setCurrentBusiness] = useState<Business | null>(null);
   const [userBusinessRoles, setUserBusinessRoles] = useState<Map<string, 'admin' | 'staff'>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [dataLoadingState, setDataLoadingState] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+
+  // Derived state: initial data is loaded when we're not loading and data has been fetched
+  const initialDataLoaded = dataLoadingState === 'loaded';
 
   useEffect(() => {
     mounted.current = true;
@@ -60,6 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted.current = false;
     };
   }, []);
+
+  // Debug logging for data loading state
+  useEffect(() => {
+    console.log('AuthContext: dataLoadingState changed to:', dataLoadingState,
+                'initialDataLoaded:', initialDataLoaded,
+                'userBusinesses:', userBusinesses.length,
+                'currentBusiness:', currentBusiness?.id || 'none');
+  }, [dataLoadingState, initialDataLoaded, userBusinesses.length, currentBusiness]);
 
   useEffect(() => {
     // Get initial session
@@ -82,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Initial session: No user, setting loading to false');
         if (mounted.current) {
           setLoading(false);
-          setInitialDataLoaded(true);
+          setDataLoadingState('loaded');
         }
       }
     });
@@ -122,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserBusinesses([]);
           setCurrentBusiness(null);
           setLoading(false);
-          setInitialDataLoaded(true);
+          setDataLoadingState('loaded');
         }
       }
     );
@@ -267,6 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadAuthData = async (userId: string) => {
     console.log('loadAuthData started for user:', userId);
+    setDataLoadingState('loading');
     try {
       // Retry configuration
       const MAX_RETRIES = 3;
@@ -358,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               // Always set loading to false last, regardless of whether state changed
               setLoading(false);
-              setInitialDataLoaded(true);
+              setDataLoadingState('loaded');
             }
             return; // Exit the function early on success
           } else {
@@ -368,7 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserBusinesses([]);
               setCurrentBusiness(null);
               setLoading(false);
-              setInitialDataLoaded(true);
+              setDataLoadingState('loaded');
             }
             return; // Exit the function early
           }
@@ -396,7 +408,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserBusinesses([]);
           setCurrentBusiness(null);
           setLoading(false);
-          setInitialDataLoaded(true);
+          setDataLoadingState('loaded');
         }
       }
       return;
@@ -406,7 +418,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserBusinesses([]);
         setCurrentBusiness(null);
         setLoading(false);
-        setInitialDataLoaded(true);
+        setDataLoadingState('loaded');
       }
       return;
     }
@@ -415,7 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('loadAuthData completed, setting loading to false');
     if (mounted.current) {
       setLoading(false);
-      setInitialDataLoaded(true);
+      setDataLoadingState('loaded');
     }
   };
 
@@ -552,8 +564,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
 
-    // Reset the initial data loaded flag
-    setInitialDataLoaded(false);
+    // Reset the data loading state
+    setDataLoadingState('idle');
 
     // Clear any saved credentials
     try {
@@ -679,7 +691,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin,
     isStaff,
     loading,
-    initialDataLoaded,
+    dataLoadingState,
     signIn,
     signUp,
     signOut,
