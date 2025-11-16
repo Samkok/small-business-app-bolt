@@ -22,6 +22,7 @@ import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
 import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
+import MonthPicker from '@/src/components/ui/MonthPicker';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -62,6 +63,7 @@ export default function DashboardScreen() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
@@ -70,7 +72,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [currentBusiness]);
+  }, [currentBusiness, selectedMonth]);
 
   const handleNewSale = useCallback(() => {
     // Use router.navigate instead of router.push to properly handle tab navigation
@@ -100,10 +102,13 @@ export default function DashboardScreen() {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
 
+      const year = selectedMonth.getFullYear();
+      const month = selectedMonth.getMonth() + 1;
+
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(currentBusiness.id),
-        reportsService.getTopProducts(currentBusiness.id, 3),
-        reportsService.getTopCustomers(currentBusiness.id, 3)
+        reportsService.getDashboardStats(currentBusiness.id, year, month),
+        reportsService.getTopProducts(currentBusiness.id, 3, year, month),
+        reportsService.getTopCustomers(currentBusiness.id, 3, year, month)
       ]);
       
       setStats(dashboardStats);
@@ -337,12 +342,21 @@ export default function DashboardScreen() {
       }
     >
       <View style={styles.header}>
-        <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Welcome back,
-        </Text>
-        <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-          {currentBusiness?.business_name || 'Business Owner'}
-        </Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {currentBusiness?.business_name || 'Business Owner'}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <MonthPicker
+            selectedMonth={selectedMonth}
+            onMonthChange={setSelectedMonth}
+            maxDate={new Date()}
+          />
+        </View>
       </View>
 
       {loading ? (
@@ -528,7 +542,17 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 24,
+    gap: 12,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    paddingTop: 4,
   },
   welcomeText: {
     fontSize: 16,
