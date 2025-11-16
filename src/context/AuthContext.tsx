@@ -146,9 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) {
       // Set a maximum loading time of 10 seconds
       const MAX_LOADING_TIME = 15000; // 10 seconds
-      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
-        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
         if (mounted.current) {
           setLoading(false);
         }
