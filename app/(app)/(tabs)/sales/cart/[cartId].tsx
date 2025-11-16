@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check } from 'lucide-react-native';
+import { useDebouncedCallback } from '@/src/hooks/useDebouncedCallback';
 
 export default function CartScreen() {
   const [showDiscountModal, setShowDiscountModal] = useState<string | null>(null);
@@ -27,11 +28,15 @@ export default function CartScreen() {
   const [updatingNotes, setUpdatingNotes] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [isDeliveryCostFocused, setIsDeliveryCostFocused] = useState(false);
+  const [pendingItemUpdates, setPendingItemUpdates] = useState<Set<string>>(new Set());
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Refs to track previous values and prevent unnecessary updates
   const deliveryCostUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevDeliveryCostRef = useRef<string>('');
   const prevNotesRef = useRef<string>('');
+  const notesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const itemUpdateQueueRef = useRef<Map<string, { quantity?: number; timestamp: number }>>(new Map());
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -71,11 +76,14 @@ export default function CartScreen() {
     }
   }, [cart?.id]); // Only re-run when cart ID changes
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (deliveryCostUpdateTimeoutRef.current) {
         clearTimeout(deliveryCostUpdateTimeoutRef.current);
+      }
+      if (notesTimeoutRef.current) {
+        clearTimeout(notesTimeoutRef.current);
       }
     };
   }, []);
@@ -98,28 +106,52 @@ export default function CartScreen() {
     }
   }, [cartSummary?.finalTotal]); // Only watch the final total
 
-  const handleQuantityChange = useCallback(async (itemId: string, change: number) => {
+  const processItemUpdate = useCallback(async (itemId: string, newQuantity: number) => {
     if (!cart) return;
 
-    const item = cart.items.find((i) => i.id === itemId);
-    if (!item) return;
+    setPendingItemUpdates(prev => {
+      const newSet = new Set(prev);
+      newSet.add(itemId);
+      return newSet;
+    });
 
-    const newQuantity = Math.max(0, item.quantity + change);
-    
-    setUpdating(itemId);
     try {
       if (newQuantity === 0) {
         await removeCartItem(cart.id, itemId);
       } else {
         await updateCartItem(cart.id, itemId, { quantity: newQuantity });
       }
+
+      itemUpdateQueueRef.current.delete(itemId);
     } catch (error) {
       console.error('Error updating quantity:', error);
       Alert.alert('Error', 'Failed to update quantity');
     } finally {
-      setUpdating(null);
+      setPendingItemUpdates(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
     }
   }, [cart, updateCartItem, removeCartItem]);
+
+  const debouncedItemUpdate = useDebouncedCallback(processItemUpdate, 600);
+
+  const handleQuantityChange = useCallback((itemId: string, change: number) => {
+    if (!cart) return;
+
+    const item = cart.items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const newQuantity = Math.max(0, item.quantity + change);
+
+    itemUpdateQueueRef.current.set(itemId, {
+      quantity: newQuantity,
+      timestamp: Date.now()
+    });
+
+    debouncedItemUpdate(itemId, newQuantity);
+  }, [cart, debouncedItemUpdate]);
 
   const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => {
     if (!cart) return;
@@ -179,32 +211,30 @@ export default function CartScreen() {
     }
   }, [cart, updateCart]);
 
+  const saveDeliveryCost = useCallback(async (value: string) => {
+    if (!cart) return;
+
+    setUpdatingDelivery(true);
+    try {
+      const deliveryAmount = parseFloat(value) || 0;
+      prevDeliveryCostRef.current = value;
+      await updateCart(cart.id, {
+        delivery_cost: deliveryAmount
+      });
+    } catch (error) {
+      console.error('Error updating delivery cost:', error);
+      Alert.alert('Error', 'Failed to update delivery cost');
+    } finally {
+      setUpdatingDelivery(false);
+    }
+  }, [cart, updateCart]);
+
+  const debouncedSaveDeliveryCost = useDebouncedCallback(saveDeliveryCost, 1000);
+
   const handleDeliveryCostChange = useCallback((value: string) => {
     setDeliveryCost(value);
-
-    // Clear existing timeout
-    if (deliveryCostUpdateTimeoutRef.current) {
-      clearTimeout(deliveryCostUpdateTimeoutRef.current);
-    }
-
-    // Debounce the database update
-    deliveryCostUpdateTimeoutRef.current = setTimeout(async () => {
-      if (!cart) return;
-
-      setUpdatingDelivery(true);
-      try {
-        const deliveryAmount = parseFloat(value) || 0;
-        prevDeliveryCostRef.current = value;
-        await updateCart(cart.id, {
-          delivery_cost: deliveryAmount
-        });
-      } catch (error) {
-        console.error('Error updating delivery cost:', error);
-      } finally {
-        setUpdatingDelivery(false);
-      }
-    }, 500); // Wait 500ms after user stops typing
-  }, [cart, updateCart]);
+    debouncedSaveDeliveryCost(value);
+  }, [debouncedSaveDeliveryCost]);
 
   const handleDeliveryCostBlur = useCallback(() => {
     setIsDeliveryCostFocused(false);
@@ -237,33 +267,56 @@ export default function CartScreen() {
     }
   }, [deliveryCost, cart, updateCart]);
 
-  const handleNotesChange = useCallback((value: string) => {
-    setNotes(value);
-  }, []);
-
-  const handleSaveNotes = useCallback(async () => {
+  const saveNotesDebounced = useCallback(async (value: string) => {
     if (!cart) return;
 
-    const trimmedNotes = notes.trim() || undefined;
+    const trimmedNotes = value.trim() || undefined;
 
-    // Only save if notes have actually changed
     if (prevNotesRef.current === (trimmedNotes || '')) {
       return;
     }
 
     prevNotesRef.current = trimmedNotes || '';
     setUpdatingNotes(true);
+    setSaveStatus('saving');
+
     try {
       await updateCart(cart.id, {
         notes: trimmedNotes
       });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
       console.error('Error updating notes:', error);
-      Alert.alert('Error', 'Failed to update notes');
+      setSaveStatus('idle');
     } finally {
       setUpdatingNotes(false);
     }
-  }, [cart, notes, updateCart]);
+  }, [cart, updateCart]);
+
+  const debouncedSaveNotes = useDebouncedCallback(saveNotesDebounced, 2000);
+
+  const handleNotesChange = useCallback((value: string) => {
+    setNotes(value);
+    debouncedSaveNotes(value);
+  }, [debouncedSaveNotes]);
+
+  const handleSaveNotes = useCallback(async () => {
+    if (!cart) return;
+
+    const trimmedNotes = notes.trim() || undefined;
+
+    if (prevNotesRef.current === (trimmedNotes || '')) {
+      return;
+    }
+
+    if (notesTimeoutRef.current) {
+      clearTimeout(notesTimeoutRef.current);
+      notesTimeoutRef.current = null;
+    }
+
+    await saveNotesDebounced(notes);
+  }, [cart, notes, saveNotesDebounced]);
 
   const handleCheckout = useCallback(() => {
     if (!cart) return;
@@ -538,76 +591,89 @@ export default function CartScreen() {
             </TouchableOpacity>
           </View>
 
-          {cart.items?.map((item) => (
-            <View key={item.id} style={styles.cartItem}>
-              <View style={styles.itemInfo}>
-                <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {item.product_name}
-                </Text>
-                <Text style={[styles.itemPrice, { color: '#059669' }]}>
-                  ${item.unit_price.toFixed(2)} each
-                </Text>
-                {item.item_discount_type && (
-                  <View style={styles.itemDiscountInfo}>
-                    <Text style={[styles.itemDiscountText, { color: '#dc2626' }]}>
-                      {item.item_discount_type === 'percentage' 
-                        ? `${item.item_discount_value}% off` 
-                        : `$${item.item_discount_value} off`
-                      }
+          {cart.items?.map((item) => {
+            const isPending = pendingItemUpdates.has(item.id);
+            const queuedUpdate = itemUpdateQueueRef.current.get(item.id);
+            const displayQuantity = queuedUpdate?.quantity ?? item.quantity;
+
+            return (
+              <View key={item.id} style={styles.cartItem}>
+                <View style={styles.itemInfo}>
+                  <View style={styles.itemNameRow}>
+                    <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {item.product_name}
                     </Text>
+                    {isPending && (
+                      <View style={styles.syncBadge}>
+                        <Text style={styles.syncBadgeText}>Syncing...</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.itemPrice, { color: '#059669' }]}>
+                    ${item.unit_price.toFixed(2)} each
+                  </Text>
+                  {item.item_discount_type && (
+                    <View style={styles.itemDiscountInfo}>
+                      <Text style={[styles.itemDiscountText, { color: '#dc2626' }]}>
+                        {item.item_discount_type === 'percentage'
+                          ? `${item.item_discount_value}% off`
+                          : `$${item.item_discount_value} off`
+                        }
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveItemDiscount(item.id)}
+                        style={styles.removeDiscountButton}
+                      >
+                        <Trash2 size={12} color="#dc2626" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.itemControls}>
+                  <View style={styles.quantityControls}>
                     <TouchableOpacity
-                      onPress={() => handleRemoveItemDiscount(item.id)}
-                      style={styles.removeDiscountButton}
+                      style={[styles.quantityButton, { backgroundColor: '#dc2626' }]}
+                      onPress={() => handleQuantityChange(item.id, -1)}
+                      disabled={updating === item.id}
                     >
-                      <Trash2 size={12} color="#dc2626" />
+                      <Minus size={16} color="#ffffff" />
+                    </TouchableOpacity>
+
+                    <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {displayQuantity}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={[styles.quantityButton, { backgroundColor: '#2563eb' }]}
+                      onPress={() => handleQuantityChange(item.id, 1)}
+                      disabled={updating === item.id}
+                    >
+                      <Plus size={16} color="#ffffff" />
                     </TouchableOpacity>
                   </View>
-                )}
-              </View>
 
-              <View style={styles.itemControls}>
-                <View style={styles.quantityControls}>
                   <TouchableOpacity
-                    style={[styles.quantityButton, { backgroundColor: '#dc2626' }]}
-                    onPress={() => handleQuantityChange(item.id, -1)}
-                    disabled={updating === item.id}
+                    style={styles.discountButton}
+                    onPress={() => setShowDiscountModal(item.id)}
                   >
-                    <Minus size={16} color="#ffffff" />
-                  </TouchableOpacity>
-                  
-                  <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {item.quantity}
-                  </Text>
-                  
-                  <TouchableOpacity
-                    style={[styles.quantityButton, { backgroundColor: '#2563eb' }]}
-                    onPress={() => handleQuantityChange(item.id, 1)}
-                    disabled={updating === item.id}
-                  >
-                    <Plus size={16} color="#ffffff" />
+                    <Percent size={14} color="#8b5cf6" />
                   </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.discountButton}
-                  onPress={() => setShowDiscountModal(item.id)}
-                >
-                  <Percent size={14} color="#8b5cf6" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.itemTotal}>
-                {item.original_subtotal > item.subtotal && (
-                  <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    ${item.original_subtotal.toFixed(2)}
+                <View style={styles.itemTotal}>
+                  {item.original_subtotal > item.subtotal && (
+                    <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                      ${item.original_subtotal.toFixed(2)}
+                    </Text>
+                  )}
+                  <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
+                    ${item.subtotal.toFixed(2)}
                   </Text>
-                )}
-                <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-                  ${item.subtotal.toFixed(2)}
-                </Text>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </Card>
 
         {/* Cart Discount */}
@@ -698,11 +764,22 @@ export default function CartScreen() {
           </View>
 
           <View style={styles.notesContainer}>
-            <Text style={[styles.deliveryLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
-              Notes
-            </Text>
+            <View style={styles.notesHeader}>
+              <Text style={[styles.deliveryLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
+                Notes
+              </Text>
+              {saveStatus === 'saving' && (
+                <Text style={[styles.saveStatusText, { color: '#9ca3af' }]}>Saving...</Text>
+              )}
+              {saveStatus === 'saved' && (
+                <View style={styles.savedIndicator}>
+                  <Check size={14} color="#059669" />
+                  <Text style={[styles.saveStatusText, { color: '#059669' }]}>Saved</Text>
+                </View>
+              )}
+            </View>
             <TextInput
-              style={[styles.notesInput, { 
+              style={[styles.notesInput, {
                 backgroundColor: isDark ? '#374151' : '#f9fafb',
                 borderColor: isDark ? '#4b5563' : '#d1d5db',
                 color: isDark ? '#f9fafb' : '#111827'
@@ -716,9 +793,6 @@ export default function CartScreen() {
               textAlignVertical="top"
               onBlur={handleSaveNotes}
             />
-            {updatingNotes && (
-              <View style={styles.updatingNotesIndicator} />
-            )}
           </View>
         </Card>
 
@@ -902,6 +976,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  syncBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  syncBadgeText: {
+    fontSize: 9,
+    color: '#2563eb',
+    fontWeight: '500',
+  },
   itemName: {
     fontSize: 14,
     fontWeight: '500',
@@ -1065,7 +1156,21 @@ const styles = StyleSheet.create({
   },
   notesContainer: {
     marginBottom: 8,
-    position: 'relative',
+  },
+  notesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  saveStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  savedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   notesInput: {
     borderWidth: 1,
@@ -1074,15 +1179,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     minHeight: 100,
-  },
-  updatingNotesIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
-    position: 'absolute',
-    top: 8,
-    right: 12,
   },
   summaryCard: {
     padding: 16,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   Alert,
   TextInput,
   FlatList,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -19,6 +20,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus, Barcode } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { useDebouncedCallback } from '@/src/hooks/useDebouncedCallback';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
 export default function ProductSelectionScreen() {
@@ -27,8 +29,11 @@ export default function ProductSelectionScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
-  const [addingToCart, setAddingToCart] = useState<string | null>(null);
+  const [pendingUpdates, setPendingUpdates] = useState<Record<string, number>>({});
+  const [syncingProducts, setSyncingProducts] = useState<Set<string>>(new Set());
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const pendingUpdatesRef = useRef<Map<string, { quantity: number; timestamp: number }>>(new Map());
+  const updateTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -85,52 +90,90 @@ export default function ProductSelectionScreen() {
     }
   }, [products, debouncedSearchQuery]);
 
-  const handleQuantityChange = useCallback(async (productId: string, change: number) => {
+  const syncToDatabase = useCallback(async (productId: string, quantity: number) => {
     if (!cartId) return;
-    
+
+    setSyncingProducts(prev => new Set(prev).add(productId));
+
+    try {
+      const cart = getCart(cartId as string);
+      if (!cart) throw new Error('Cart not found');
+
+      const product = products.find(p => p.id === productId);
+      if (!product) throw new Error('Product not found');
+
+      const existingItem = cart.items.find(item => item.product_id === productId);
+
+      if (quantity === 0 && existingItem) {
+        await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
+      } else if (existingItem) {
+        await updateCartItem(cartId as string, existingItem.id, { quantity });
+      } else if (quantity > 0) {
+        await addItemToCart(cartId as string, product, quantity);
+      }
+
+      pendingUpdatesRef.current.delete(productId);
+      setPendingUpdates(prev => {
+        const newPending = { ...prev };
+        delete newPending[productId];
+        return newPending;
+      });
+    } catch (error) {
+      console.error('Error syncing to database:', error);
+      const pendingUpdate = pendingUpdatesRef.current.get(productId);
+      if (pendingUpdate) {
+        setSelectedProducts(prev => ({
+          ...prev,
+          [productId]: pendingUpdate.quantity
+        }));
+      }
+      Alert.alert('Error', 'Failed to update cart. Please try again.');
+    } finally {
+      setSyncingProducts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+    }
+  }, [cartId, products, getCart, updateCartItem, addItemToCart]);
+
+  const debouncedSync = useDebouncedCallback(syncToDatabase, 800);
+
+  const handleQuantityChange = useCallback((productId: string, change: number) => {
+    if (!cartId) return;
+
     const currentQuantity = selectedProducts[productId] || 0;
     const newQuantity = Math.max(0, currentQuantity + change);
-    
-    // Update local state immediately for better UX
+
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    if (newQuantity > product.current_stock) {
+      Alert.alert('Stock Limit', `Only ${product.current_stock} items available in stock.`);
+      return;
+    }
+
     setSelectedProducts(prev => ({
       ...prev,
       [productId]: newQuantity
     }));
 
-    // Update cart in real-time
-    setAddingToCart(productId);
-    try {
-      const cart = getCart(cartId as string);
-      if (!cart) throw new Error('Cart not found');
-      
-      const product = products.find(p => p.id === productId);
-      if (!product) throw new Error('Product not found');
-      
-      // Find if this product is already in the cart
-      const existingItem = cart.items.find(item => item.product_id === productId);
-      
-      if (newQuantity === 0 && existingItem) {
-        // Remove item from cart
-        await updateCartItem(cartId as string, existingItem.id, { quantity: 0 });
-      } else if (existingItem) {
-        // Update existing item
-        await updateCartItem(cartId as string, existingItem.id, { quantity: newQuantity });
-      } else if (newQuantity > 0) {
-        // Add new item
-        await addItemToCart(cartId as string, product, newQuantity);
-      }
-    } catch (error) {
-      console.error('Error updating cart:', error);
-      // Revert the change in local state
-      setSelectedProducts(prev => ({
-        ...prev,
-        [productId]: currentQuantity
-      }));
-      Alert.alert('Error', 'Failed to update cart');
-    } finally {
-      setAddingToCart(null);
+    pendingUpdatesRef.current.set(productId, {
+      quantity: newQuantity,
+      timestamp: Date.now()
+    });
+
+    setPendingUpdates(prev => ({
+      ...prev,
+      [productId]: newQuantity
+    }));
+
+    if (updateTimeoutRef.current.has(productId)) {
+      clearTimeout(updateTimeoutRef.current.get(productId)!);
     }
-  }, [cartId, selectedProducts, products, getCart, updateCartItem, addItemToCart]);
+
+    debouncedSync(productId, newQuantity);
+  }, [cartId, selectedProducts, products, debouncedSync]);
 
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
@@ -149,67 +192,73 @@ export default function ProductSelectionScreen() {
 
   const renderProductItem = useCallback(({ item }) => {
     const quantity = selectedProducts[item.id] || 0;
-    const isUpdating = addingToCart === item.id;
+    const isSyncing = syncingProducts.has(item.id);
+    const hasPendingUpdate = pendingUpdates[item.id] !== undefined;
     const isOutOfStock = item.current_stock <= 0;
     const isMaxStock = quantity >= item.current_stock;
 
     return (
       <Card style={styles.productCard}>
         <View style={styles.productInfo}>
-          <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
-            {item.name}
-          </Text>
+          <View style={styles.productHeader}>
+            <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
+              {item.name}
+            </Text>
+            {isSyncing && (
+              <ActivityIndicator size="small" color="#2563eb" style={styles.syncIndicator} />
+            )}
+          </View>
           <Text style={[styles.productPrice, { color: '#059669' }]}>
             ${item.price.toFixed(2)}
           </Text>
           <Text style={[
-            styles.productStock, 
-            { 
-              color: isOutOfStock 
-                ? '#dc2626' 
-                : (item.current_stock <= item.min_stock_level ? '#ea580c' : (isDark ? '#d1d5db' : '#6b7280')) 
+            styles.productStock,
+            {
+              color: isOutOfStock
+                ? '#dc2626'
+                : (item.current_stock <= item.min_stock_level ? '#ea580c' : (isDark ? '#d1d5db' : '#6b7280'))
             }
           ]}>
             Stock: {item.current_stock}
           </Text>
         </View>
-        
+
         <View style={styles.quantityControls}>
           <TouchableOpacity
             style={[
               styles.quantityButton,
-              { 
+              {
                 backgroundColor: quantity > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                opacity: isUpdating || quantity === 0 ? 0.5 : 1
+                opacity: quantity === 0 ? 0.5 : 1
               }
             ]}
             onPress={() => handleQuantityChange(item.id, -1)}
-            disabled={quantity === 0 || isUpdating}
+            disabled={quantity === 0}
           >
             <Minus size={16} color={quantity > 0 ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} />
           </TouchableOpacity>
-          
+
           <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {quantity}
           </Text>
-          
+
           <TouchableOpacity
             style={[
               styles.quantityButton,
-              { 
+              {
                 backgroundColor: '#2563eb',
-                opacity: isUpdating || isOutOfStock || isMaxStock ? 0.5 : 1
+                opacity: isOutOfStock || isMaxStock ? 0.5 : 1
               }
             ]}
             onPress={() => handleQuantityChange(item.id, 1)}
-            disabled={isOutOfStock || isMaxStock || isUpdating}
+            disabled={isOutOfStock || isMaxStock}
           >
             <Plus size={16} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </Card>
     );
-  }, [selectedProducts, addingToCart, isDark, handleQuantityChange]);
+  }, [selectedProducts, syncingProducts, pendingUpdates, isDark, handleQuantityChange]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -470,6 +519,15 @@ const styles = StyleSheet.create({
   },
   productStock: {
     fontSize: 12,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  syncIndicator: {
+    marginLeft: 8,
   },
   quantityControls: {
     flexDirection: 'row',

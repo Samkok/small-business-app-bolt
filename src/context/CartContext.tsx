@@ -69,6 +69,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentBusiness, user } = useAuth();
+  const cartsCache = useRef<Map<string, { cart: Cart; timestamp: number }>>(new Map());
+  const CACHE_TTL = 5000;
 
   // Load carts from database on mount
   useEffect(() => {
@@ -148,17 +150,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
   }, [calculateCartDiscount]);
 
-  const refreshCarts = useCallback(async (): Promise<Cart[]> => {
+  const refreshCarts = useCallback(async (skipCache: boolean = false): Promise<Cart[]> => {
     if (!currentBusiness?.id) return [];
-    
+
+    const cacheKey = `business_${currentBusiness.id}`;
+    const cached = cartsCache.current.get(cacheKey);
+    const now = Date.now();
+
+    if (!skipCache && cached && (now - cached.timestamp) < CACHE_TTL) {
+      console.log('CartContext: Using cached carts');
+      return cached.cart ? [cached.cart] : [];
+    }
+
     try {
       console.log('CartContext: refreshCarts started for currentBusiness ID:', currentBusiness.id);
       setLoading(true);
-      
-      // Get active carts from the server
+
       const serverCarts = await cartService.getActiveCarts(currentBusiness.id);
-      
-      // Transform server carts to local cart format
+
       const transformedCarts: Cart[] = serverCarts.map(serverCart => ({
         id: serverCart.id,
         customer_id: serverCart.customer_id,
@@ -187,8 +196,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           subtotal: item.subtotal
         })) || []
       }));
-      
-      // Update state
+
+      transformedCarts.forEach(cart => {
+        cartsCache.current.set(`cart_${cart.id}`, { cart, timestamp: now });
+      });
+
       setCarts(transformedCarts);
       return transformedCarts;
     } catch (error) {
@@ -198,7 +210,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.log('CartContext: refreshCarts completed');
       setLoading(false);
     }
-  }, [currentBusiness?.id]);
+  }, [currentBusiness?.id, CACHE_TTL]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
     if (!currentBusiness || !currentBusiness.id) {
@@ -251,14 +263,28 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateCart = useCallback(async (cartId: string, updates: Partial<Omit<Cart, 'id' | 'items'>>): Promise<Cart> => {
     try {
-      // Ensure delivery_cost is a valid number or undefined
       if (updates.delivery_cost !== undefined) {
         const deliveryCost = parseFloat(updates.delivery_cost as any);
         updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
       }
 
-      // Update cart in database
-      const updatedServerCart = await cartService.updateCart(cartId, {
+      setCarts(prevCarts => prevCarts.map(cart => {
+        if (cart.id === cartId) {
+          const updatedCart = {
+            ...cart,
+            ...updates,
+            updated_at: new Date().toISOString()
+          };
+          cartsCache.current.set(`cart_${cartId}`, {
+            cart: updatedCart,
+            timestamp: Date.now()
+          });
+          return updatedCart;
+        }
+        return cart;
+      }));
+
+      await cartService.updateCart(cartId, {
         status: updates.status,
         total_amount: updates.total_amount,
         discount_type: updates.discount_type,
@@ -267,19 +293,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         notes: updates.notes
       });
 
-      // Update local state
-      setCarts(prevCarts => prevCarts.map(cart => {
-        if (cart.id === cartId) {
-          return {
-            ...cart,
-            ...updates,
-            updated_at: new Date().toISOString()
-          };
-        }
-        return cart;
-      }));
-
-      // Return the updated cart from local state
       const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after update');
@@ -307,7 +320,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItemToCart = useCallback(async (cartId: string, product: any, quantity: number = 1): Promise<CartItem> => {
     try {
-      // Add item to cart in database
       await cartService.addItemToCart({
         cart_id: cartId,
         product_id: product.id,
@@ -317,10 +329,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         original_subtotal: quantity * product.price
       });
 
-      // Refresh carts to get updated data
-      const updatedCarts = await refreshCarts();
+      const updatedCarts = await refreshCarts(true);
 
-      // Find the updated cart and return the added/updated item
       const updatedCart = updatedCarts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after adding item');
@@ -336,12 +346,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error('Error adding item to cart:', error);
       throw error;
     }
-  }
-  )
+  }, [refreshCarts]);
 
   const updateCartItem = useCallback(async (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>): Promise<CartItem> => {
     try {
-      // Update cart item in database
       await cartService.updateCartItem(itemId, {
         quantity: updates.quantity,
         unit_price: updates.unit_price,
@@ -352,10 +360,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         item_discount_amount: updates.item_discount_amount
       });
 
-      // Refresh carts to get updated data
-      await refreshCarts();
+      await refreshCarts(true);
 
-      // Find and return the updated item
       const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after updating item');
@@ -375,11 +381,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeCartItem = useCallback(async (cartId: string, itemId: string): Promise<void> => {
     try {
-      // Remove cart item from database
       await cartService.removeCartItem(itemId);
-
-      // Refresh carts to get updated data
-      await refreshCarts();
+      await refreshCarts(true);
     } catch (error) {
       console.error('Error removing cart item:', error);
       throw error;
@@ -388,13 +391,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const applyItemDiscount = useCallback(async (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number): Promise<CartItem> => {
     try {
-      // Apply item discount in database
       await cartService.applyItemDiscount(itemId, discountType, discountValue);
+      await refreshCarts(true);
 
-      // Refresh carts to get updated data
-      await refreshCarts();
-
-      // Find and return the updated item
       const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after applying discount');
@@ -414,13 +413,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeItemDiscount = useCallback(async (cartId: string, itemId: string): Promise<CartItem> => {
     try {
-      // Remove item discount from database
       await cartService.removeItemDiscount(itemId);
+      await refreshCarts(true);
 
-      // Refresh carts to get updated data
-      await refreshCarts();
-
-      // Find and return the updated item
       const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
         throw new Error('Cart not found after removing discount');
