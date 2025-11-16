@@ -64,9 +64,10 @@ export default function AppLayout() {
     }
 
     // If user has businesses and current business is set, ensure they're directed to tabs
-    // Only redirect if they're on onboarding/selection screens or the base (app) route
+    // Only redirect if they're on onboarding screen or the base (app) route
+    // Allow users to stay on business-selection if they navigated there intentionally
     if (userBusinesses.length > 0 && currentBusiness) {
-      if (currentRoute === 'business-onboarding' || currentRoute === 'business-selection' ||
+      if (currentRoute === 'business-onboarding' ||
           currentRoute === '(app)' || !currentRoute) {
         console.log('AppLayout: User has business context, navigating to main tabs');
         router.replace('/(app)/(tabs)');
