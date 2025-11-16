@@ -13,12 +13,14 @@ export default function AppLayout() {
   const segments = useSegments();
 
   const currentRoute = segments[segments.length - 1];
+  const isInAppGroup = segments.includes('(app)');
 
   console.log('AppLayout rendering with auth loading:', loading,
               'session:', session ? `exists (${session.user.id})` : 'null',
               'businesses:', userBusinesses.length,
               'current business:', currentBusiness ? currentBusiness.id : 'none',
-              'current route:', currentRoute);
+              'current route:', currentRoute,
+              'segments:', segments);
 
   // Refresh carts when the app screen comes into focus
 
@@ -43,6 +45,9 @@ export default function AppLayout() {
   useEffect(() => {
     if (loading || !session) return;
 
+    // Skip navigation if we're not in the app group yet
+    if (!isInAppGroup) return;
+
     // If user has no businesses and not already on business-onboarding
     if (userBusinesses.length === 0 && currentRoute !== 'business-onboarding') {
       console.log('AppLayout: User has no businesses, navigating to business onboarding');
@@ -57,7 +62,18 @@ export default function AppLayout() {
       router.replace('/(app)/business-selection');
       return;
     }
-  }, [loading, session, userBusinesses.length, currentBusiness, currentRoute, router]);
+
+    // If user has businesses and current business is set, ensure they're directed to tabs
+    // Only redirect if they're on onboarding/selection screens or the base (app) route
+    if (userBusinesses.length > 0 && currentBusiness) {
+      if (currentRoute === 'business-onboarding' || currentRoute === 'business-selection' ||
+          currentRoute === '(app)' || !currentRoute) {
+        console.log('AppLayout: User has business context, navigating to main tabs');
+        router.replace('/(app)/(tabs)');
+        return;
+      }
+    }
+  }, [loading, session, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
 
   if (loading) {
     console.log('AppLayout: Showing loading spinner due to auth loading state');
