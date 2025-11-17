@@ -5,6 +5,7 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
+import { clearRememberMeCredentials } from '../lib/secureStorage';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -103,37 +104,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         console.log('Auth state change:', event);
         console.log('AuthContext: Session object on auth state change:', session);
-        
+
         if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
           // If signed out but not explicitly by the user, it was due to inactivity
           setSignedOutDueToInactivity(true);
         }
-        
+
         if (event === 'SIGNED_IN') {
           // Reset the inactivity flag when user signs in
           setSignedOutDueToInactivity(false);
-          
+
           // Update last activity timestamp
           await updateLastActivityTimestamp();
         }
-        
+
         // Reset the explicit sign out flag
         setIsExplicitSignOut(false);
-        
+
        if (mounted.current) {
          setSession(session);
          setUser(session?.user ?? null);
        }
-        
+
         if (session?.user) {
           loadAuthData(session.user.id);
         } else {
-          console.log("AuthContext: NO SESSION");
-          setUserProfile(null);
-          setUserBusinesses([]);
-          setCurrentBusiness(null);
-          setLoading(false);
-          setDataLoadingState('loaded');
+          console.log("AuthContext: NO SESSION - user signed out");
+          if (mounted.current) {
+            setUserProfile(null);
+            setUserBusinesses([]);
+            setCurrentBusiness(null);
+            setLoading(false);
+            setDataLoadingState('loaded');
+          }
         }
       }
     );
@@ -553,22 +556,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, userBusinesses]);
 
   const signOut = useCallback(async () => {
+    console.log('SignOut: Starting sign out process');
+
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
 
-    // Reset the data loading state
-    setDataLoadingState('idle');
-
     // Clear any saved credentials
     try {
-      await AsyncStorage.removeItem('rememberMe');
-      // Don't remove savedEmail here to allow it to persist if user wants to sign in again
+      await clearRememberMeCredentials();
+      await AsyncStorage.removeItem('lastActivityTimestamp');
     } catch (error) {
       console.error('Error clearing saved credentials:', error);
     }
 
+    // Clear state immediately before signing out
+    if (mounted.current) {
+      setUserProfile(null);
+      setUserBusinesses([]);
+      setCurrentBusiness(null);
+      setDataLoadingState('idle');
+    }
+
     // Sign out from Supabase
-    await supabase.auth.signOut();
+    console.log('SignOut: Calling supabase.auth.signOut()');
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error('SignOut: Error during sign out:', error);
+    } else {
+      console.log('SignOut: Sign out complete');
+    }
   }, []);
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
