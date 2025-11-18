@@ -36,6 +36,10 @@ export function ImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
 
+  React.useEffect(() => {
+    setPreviewUrl(value || null);
+  }, [value]);
+
   const handleFileSelect = () => {
     if (Platform.OS === 'web') {
       fileInputRef.current?.click();
