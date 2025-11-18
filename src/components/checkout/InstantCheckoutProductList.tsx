@@ -1,19 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
-import { Minus, Plus, Trash2, AlertCircle } from 'lucide-react-native';
+import { Minus, Plus, Trash2, AlertCircle, Tag, X as XIcon } from 'lucide-react-native';
 import { InstantCheckoutItem } from '@/src/context/InstantCheckoutContext';
 
 interface InstantCheckoutProductListProps {
   items: InstantCheckoutItem[];
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
+  onApplyDiscount?: (productId: string) => void;
+  onRemoveDiscount?: (productId: string) => void;
 }
 
 export function InstantCheckoutProductList({
   items,
   onUpdateQuantity,
   onRemoveItem,
+  onApplyDiscount,
+  onRemoveDiscount,
 }: InstantCheckoutProductListProps) {
   const { isDark } = useTheme();
 
@@ -64,9 +68,19 @@ export function InstantCheckoutProductList({
             )}
 
             {item.item_discount_amount && item.item_discount_amount > 0 && (
-              <Text style={styles.discountText}>
-                Discount: -${item.item_discount_amount.toFixed(2)}
-              </Text>
+              <View style={styles.discountRow}>
+                <Text style={styles.discountText}>
+                  Discount: -${item.item_discount_amount.toFixed(2)}
+                </Text>
+                {onRemoveDiscount && (
+                  <TouchableOpacity
+                    onPress={() => onRemoveDiscount(item.product_id)}
+                    style={styles.removeDiscountButton}
+                  >
+                    <XIcon size={14} color="#6b7280" />
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             <View style={styles.quantityRow}>
@@ -106,9 +120,22 @@ export function InstantCheckoutProductList({
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${item.subtotal.toFixed(2)}
-              </Text>
+              <View style={styles.priceActions}>
+                {onApplyDiscount && (
+                  <TouchableOpacity
+                    style={[
+                      styles.discountButton,
+                      { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+                    ]}
+                    onPress={() => onApplyDiscount(item.product_id)}
+                  >
+                    <Tag size={14} color={isDark ? '#f9fafb' : '#111827'} />
+                  </TouchableOpacity>
+                )}
+                <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  ${item.subtotal.toFixed(2)}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -172,10 +199,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ef4444',
   },
+  discountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   discountText: {
     fontSize: 12,
     color: '#10b981',
-    marginBottom: 4,
+  },
+  removeDiscountButton: {
+    padding: 2,
   },
   quantityRow: {
     flexDirection: 'row',
@@ -200,6 +235,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 30,
     textAlign: 'center',
+  },
+  priceActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  discountButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   subtotal: {
     fontSize: 16,
