@@ -16,13 +16,14 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { instantCheckoutService } from '@/src/services/instantCheckout';
 import { useRouter } from 'expo-router';
-import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check } from 'lucide-react-native';
+import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import Input from '@/src/components/ui/Input';
 import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
+import BarcodeScanner from '../inventory/BarcodeScanner';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -67,6 +68,7 @@ export function InstantCheckoutModal() {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   useEffect(() => {
     if (session?.delivery_cost) {
@@ -98,6 +100,28 @@ export function InstantCheckoutModal() {
   const handleAddProduct = (product: any) => {
     addProduct(product, 1);
     setShowProductSelector(false);
+  };
+
+  const handleBarcodeScanned = async (barcode: string) => {
+    try {
+      const product = products.find(p => p.barcode === barcode);
+
+      if (product) {
+        if (product.current_stock <= 0) {
+          Alert.alert('Out of Stock', `${product.name} is currently out of stock.`);
+          return;
+        }
+
+        addProduct(product, 1);
+        setShowBarcodeScanner(false);
+        Alert.alert('Success', `Added ${product.name} to checkout`);
+      } else {
+        Alert.alert('Not Found', 'Product with this barcode was not found.');
+      }
+    } catch (error) {
+      console.error('Error processing barcode:', error);
+      Alert.alert('Error', 'Failed to process barcode scan');
+    }
   };
 
   const handleApplyItemDiscount = () => {
@@ -466,9 +490,17 @@ export function InstantCheckoutModal() {
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Select Product
             </Text>
-            <TouchableOpacity onPress={() => setShowProductSelector(false)}>
-              <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={() => setShowBarcodeScanner(true)}
+                style={styles.headerButton}
+              >
+                <Barcode size={24} color={isDark ? '#f9fafb' : '#111827'} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowProductSelector(false)}>
+                <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+              </TouchableOpacity>
+            </View>
           </View>
           <TextInput
             style={[styles.searchInput, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6', color: isDark ? '#f9fafb' : '#111827' }]}
@@ -710,6 +742,19 @@ export function InstantCheckoutModal() {
           </View>
         </View>
       </Modal>
+
+      {/* Barcode Scanner Modal */}
+      <Modal
+        visible={showBarcodeScanner}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowBarcodeScanner(false)}
+      >
+        <BarcodeScanner
+          onBarcodeScan={handleBarcodeScanned}
+          onClose={() => setShowBarcodeScanner(false)}
+        />
+      </Modal>
     </Modal>
   );
 }
@@ -822,6 +867,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerButton: {
+    padding: 4,
   },
   searchInput: {
     margin: 16,

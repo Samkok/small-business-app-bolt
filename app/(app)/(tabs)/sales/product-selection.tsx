@@ -13,16 +13,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
-import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Package, Search, Plus, Minus, Barcode, Save, Zap } from 'lucide-react-native';
+import { ArrowLeft, Package, Search, Plus, Minus, Barcode, Save } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
-import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -39,7 +36,6 @@ export default function ProductSelectionScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { getCart, addItemToCart, updateCartItem, refreshCarts } = useCart();
-  const { addProduct: addToInstantCheckout } = useInstantCheckout();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -183,11 +179,6 @@ export default function ProductSelectionScreen() {
     setSearchQuery(barcode);
   };
 
-  const handleQuickCheckout = useCallback((product: any) => {
-    // Add product to instant checkout session
-    addToInstantCheckout(product, 1);
-  }, [addToInstantCheckout]);
-
   const getTotalItems = useCallback(() => {
     return Object.values(selectedProducts).reduce((sum, quantity) => sum + quantity, 0);
   }, [selectedProducts]);
@@ -313,24 +304,10 @@ export default function ProductSelectionScreen() {
               <Plus size={16} color="#ffffff" />
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[
-              styles.quickCheckoutButton,
-              {
-                backgroundColor: '#f59e0b',
-                opacity: isOutOfStock ? 0.5 : 1
-              }
-            ]}
-            onPress={() => handleQuickCheckout(item)}
-            disabled={isOutOfStock}
-          >
-            <Zap size={16} color="#ffffff" />
-          </TouchableOpacity>
         </View>
       </Card>
     );
-  }, [selectedProducts, initialProducts, isDark, handleQuantityChange, handleQuickCheckout]);
+  }, [selectedProducts, initialProducts, isDark, handleQuantityChange]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -479,12 +456,6 @@ export default function ProductSelectionScreen() {
           onClose={() => setShowBarcodeScanner(false)}
         />
       </Modal>
-
-      {/* Instant Checkout Widget */}
-      <InstantCheckoutWidget />
-
-      {/* Instant Checkout Modal */}
-      <InstantCheckoutModal />
     </View>
   );
 }
@@ -668,13 +639,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 30,
     textAlign: 'center',
-  },
-  quickCheckoutButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyContainer: {
     flexGrow: 1,
