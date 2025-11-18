@@ -126,6 +126,11 @@ export function InstantCheckoutModal() {
 
         addProduct(product, 1);
         setShowBarcodeScanner(false);
+
+        setTimeout(() => {
+          setShowProductSelector(true);
+        }, 300);
+
         Alert.alert('Success', `Added ${product.name} to checkout`);
       } else {
         console.log('Product not found for barcode:', barcode);
@@ -507,7 +512,10 @@ export function InstantCheckoutModal() {
               <TouchableOpacity
                 onPress={() => {
                   console.log('Barcode button pressed');
-                  setShowBarcodeScanner(true);
+                  setShowProductSelector(false);
+                  setTimeout(() => {
+                    setShowBarcodeScanner(true);
+                  }, 300);
                 }}
                 style={styles.headerButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -557,6 +565,29 @@ export function InstantCheckoutModal() {
             }
           />
         </View>
+      </Modal>
+
+      {/* Barcode Scanner Modal */}
+      <Modal
+        visible={showBarcodeScanner}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          setShowBarcodeScanner(false);
+          setTimeout(() => {
+            setShowProductSelector(true);
+          }, 300);
+        }}
+      >
+        <BarcodeScanner
+          onBarcodeScan={handleBarcodeScanned}
+          onClose={() => {
+            setShowBarcodeScanner(false);
+            setTimeout(() => {
+              setShowProductSelector(true);
+            }, 300);
+          }}
+        />
       </Modal>
 
       {/* Item Discount Modal */}
@@ -758,19 +789,6 @@ export function InstantCheckoutModal() {
             </View>
           </View>
         </View>
-      </Modal>
-
-      {/* Barcode Scanner Modal */}
-      <Modal
-        visible={showBarcodeScanner}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setShowBarcodeScanner(false)}
-      >
-        <BarcodeScanner
-          onBarcodeScan={handleBarcodeScanned}
-          onClose={() => setShowBarcodeScanner(false)}
-        />
       </Modal>
     </Modal>
   );
