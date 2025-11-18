@@ -45,9 +45,9 @@ export function InstantCheckoutProductList({
             },
           ]}
         >
-          {item.product_image && (
+          {item.product_image ? (
             <Image source={{ uri: item.product_image }} style={styles.productImage} />
-          )}
+          ) : null}
 
           <View style={styles.itemDetails}>
             <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -67,21 +67,21 @@ export function InstantCheckoutProductList({
               </View>
             )}
 
-            {item.item_discount_amount && item.item_discount_amount > 0 && (
+            {(item.item_discount_amount ?? 0) > 0 ? (
               <View style={styles.discountRow}>
                 <Text style={styles.discountText}>
                   Discount: -${item.item_discount_amount.toFixed(2)}
                 </Text>
-                {onRemoveDiscount && (
+                {onRemoveDiscount ? (
                   <TouchableOpacity
                     onPress={() => onRemoveDiscount(item.product_id)}
                     style={styles.removeDiscountButton}
                   >
                     <XIcon size={14} color="#6b7280" />
                   </TouchableOpacity>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
 
             <View style={styles.quantityRow}>
               <View style={styles.quantityControls}>
@@ -121,7 +121,7 @@ export function InstantCheckoutProductList({
               </View>
 
               <View style={styles.priceActions}>
-                {onApplyDiscount && (
+                {onApplyDiscount ? (
                   <TouchableOpacity
                     style={[
                       styles.discountButton,
@@ -131,7 +131,7 @@ export function InstantCheckoutProductList({
                   >
                     <Tag size={14} color={isDark ? '#f9fafb' : '#111827'} />
                   </TouchableOpacity>
-                )}
+                ) : null}
                 <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
                   ${item.subtotal.toFixed(2)}
                 </Text>
