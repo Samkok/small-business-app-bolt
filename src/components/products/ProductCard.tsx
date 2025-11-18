@@ -136,7 +136,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               onPress={handleBuyNow}
             >
               <Zap size={16} color="#ffffff" />
-              <Text style={styles.buyNowText}>Buy Now</Text>
+              <Text style={styles.buyNowText}>Go to checkout</Text>
             </TouchableOpacity>
           )}
 
