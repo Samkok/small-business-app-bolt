@@ -406,6 +406,7 @@ export interface Database {
           sale_discount_value?: number;
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
+          delivery_cost?: number;
         };
         Insert: {
           id?: string;
@@ -423,6 +424,7 @@ export interface Database {
           sale_discount_value?: number;
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
+          delivery_cost?: number;
         };
         Update: {
           id?: string;
@@ -440,6 +442,7 @@ export interface Database {
           sale_discount_value?: number;
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
+          delivery_cost?: number;
         };
       };
       sale_actions: {
