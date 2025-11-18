@@ -193,7 +193,7 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="9. Intellectual Property Rights">
         <Paragraph>
-          8.1. Application Ownership: The Application, including its design, functionality, and code, is owned by Business Manager Pro and protected by copyright and intellectual property laws.
+          8.1. Application Ownership: The Application, including its design, functionality, and code, is owned by BizManage and protected by copyright and intellectual property laws.
         </Paragraph>
         <Paragraph>
           8.2. License Grant: We grant you a limited, non-exclusive, non-transferable license to use the Application for your business purposes.
@@ -299,13 +299,13 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="19. Acknowledgment">
         <Paragraph>
-          By using Business Manager Pro, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
+          By using BizManage, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
         </Paragraph>
       </Section>
 
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Business Manager Pro - Empowering small businesses with professional-grade management tools.
+          BizManage - Empowering small businesses with professional-grade management tools.
         </Text>
       </View>
     </ScrollView>
