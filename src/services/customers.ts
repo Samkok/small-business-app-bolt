@@ -253,4 +253,34 @@ export const customerService = {
 
     return data;
   },
+
+  async getGuestCustomer(businessId: string): Promise<Customer> {
+    if (!businessId) {
+      throw new ValidationError('Business ID is required');
+    }
+
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_system_customer', true)
+      .maybeSingle();
+
+    if (error) {
+      logger.error('Failed to fetch guest customer', error, { businessId });
+      throw new DatabaseError('Failed to fetch guest customer');
+    }
+
+    if (!data) {
+      logger.error('Guest customer not found for business', { businessId });
+      throw new DatabaseError('Guest customer not found. Please contact support.');
+    }
+
+    return data;
+  },
+
+  isGuestCustomer(customerId: string | null | undefined, guestCustomerId: string): boolean {
+    if (!customerId) return false;
+    return customerId === guestCustomerId;
+  },
 };

@@ -35,6 +35,8 @@ import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
 import { supabase } from '@/src/config/supabase';
+import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
+import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -1335,6 +1337,9 @@ export default function InventoryScreen() {
           <LoadingSpinner text="Unarchiving product..." />
         </View>
       )}
+
+      <InstantCheckoutModal />
+      <InstantCheckoutWidget />
     </View>
   );
 }
