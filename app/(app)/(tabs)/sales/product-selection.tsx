@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,22 @@ import {
   Alert,
   TextInput,
   FlatList,
-  Modal,
-  ActivityIndicator
+  Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
+import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Package, Search, ShoppingCart, Plus, Minus, Barcode, Save } from 'lucide-react-native';
+import { ArrowLeft, Package, Search, Plus, Minus, Barcode, Save, Zap } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
+import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
+import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -37,6 +39,7 @@ export default function ProductSelectionScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { getCart, addItemToCart, updateCartItem, refreshCarts } = useCart();
+  const { addProduct: addToInstantCheckout } = useInstantCheckout();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -137,12 +140,12 @@ export default function ProductSelectionScreen() {
       for (const { product, quantity } of additions) {
         await addItemToCart(cartId as string, product, quantity);
         // Refresh cart after each addition to get updated state
-        await refreshCarts(true);
+        await refreshCarts();
         cart = getCart(cartId as string);
       }
 
       // Final refresh to ensure we have the latest state
-      await refreshCarts(true);
+      await refreshCarts();
 
       // Update initial products to reflect saved state
       setInitialProducts({ ...selectedProducts });
@@ -175,10 +178,15 @@ export default function ProductSelectionScreen() {
 
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
-    
+
     // Simply set the search query to the scanned barcode
     setSearchQuery(barcode);
   };
+
+  const handleQuickCheckout = useCallback((product: any) => {
+    // Add product to instant checkout session
+    addToInstantCheckout(product, 1);
+  }, [addToInstantCheckout]);
 
   const getTotalItems = useCallback(() => {
     return Object.values(selectedProducts).reduce((sum, quantity) => sum + quantity, 0);
@@ -236,7 +244,7 @@ export default function ProductSelectionScreen() {
     }
   }, [router, getPendingChangesCount, savePendingChanges]);
 
-  const renderProductItem = useCallback(({ item }) => {
+  const renderProductItem = useCallback(({ item }: { item: any }) => {
     const quantity = selectedProducts[item.id] || 0;
     const initialQuantity = initialProducts[item.id] || 0;
     const hasChanges = quantity !== initialQuantity;
@@ -271,42 +279,58 @@ export default function ProductSelectionScreen() {
           </Text>
         </View>
 
-        <View style={styles.quantityControls}>
+        <View style={styles.productActions}>
+          <View style={styles.quantityControls}>
+            <TouchableOpacity
+              style={[
+                styles.quantityButton,
+                {
+                  backgroundColor: quantity > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
+                  opacity: quantity === 0 ? 0.5 : 1
+                }
+              ]}
+              onPress={() => handleQuantityChange(item.id, -1)}
+              disabled={quantity === 0}
+            >
+              <Minus size={16} color={quantity > 0 ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} />
+            </TouchableOpacity>
+
+            <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {quantity}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.quantityButton,
+                {
+                  backgroundColor: '#2563eb',
+                  opacity: isOutOfStock || isMaxStock ? 0.5 : 1
+                }
+              ]}
+              onPress={() => handleQuantityChange(item.id, 1)}
+              disabled={isOutOfStock || isMaxStock}
+            >
+              <Plus size={16} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={[
-              styles.quantityButton,
+              styles.quickCheckoutButton,
               {
-                backgroundColor: quantity > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                opacity: quantity === 0 ? 0.5 : 1
+                backgroundColor: '#f59e0b',
+                opacity: isOutOfStock ? 0.5 : 1
               }
             ]}
-            onPress={() => handleQuantityChange(item.id, -1)}
-            disabled={quantity === 0}
+            onPress={() => handleQuickCheckout(item)}
+            disabled={isOutOfStock}
           >
-            <Minus size={16} color={quantity > 0 ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} />
-          </TouchableOpacity>
-
-          <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {quantity}
-          </Text>
-
-          <TouchableOpacity
-            style={[
-              styles.quantityButton,
-              {
-                backgroundColor: '#2563eb',
-                opacity: isOutOfStock || isMaxStock ? 0.5 : 1
-              }
-            ]}
-            onPress={() => handleQuantityChange(item.id, 1)}
-            disabled={isOutOfStock || isMaxStock}
-          >
-            <Plus size={16} color="#ffffff" />
+            <Zap size={16} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </Card>
     );
-  }, [selectedProducts, initialProducts, isDark, handleQuantityChange]);
+  }, [selectedProducts, initialProducts, isDark, handleQuantityChange, handleQuickCheckout]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -455,6 +479,12 @@ export default function ProductSelectionScreen() {
           onClose={() => setShowBarcodeScanner(false)}
         />
       </Modal>
+
+      {/* Instant Checkout Widget */}
+      <InstantCheckoutWidget />
+
+      {/* Instant Checkout Modal */}
+      <InstantCheckoutModal />
     </View>
   );
 }
@@ -614,9 +644,16 @@ const styles = StyleSheet.create({
   syncIndicator: {
     marginLeft: 8,
   },
+  productActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
     justifyContent: 'space-between',
   },
   quantityButton: {
@@ -631,6 +668,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 30,
     textAlign: 'center',
+  },
+  quickCheckoutButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyContainer: {
     flexGrow: 1,
