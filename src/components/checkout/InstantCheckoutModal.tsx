@@ -82,6 +82,13 @@ export function InstantCheckoutModal() {
     }
   }, [showProductSelector, currentBusiness?.id]);
 
+  useEffect(() => {
+    console.log('Barcode scanner visibility changed:', showBarcodeScanner);
+    if (showBarcodeScanner && currentBusiness?.id && products.length === 0) {
+      loadProducts();
+    }
+  }, [showBarcodeScanner, currentBusiness?.id]);
+
   const loadProducts = async () => {
     if (!currentBusiness?.id) return;
 
@@ -104,9 +111,14 @@ export function InstantCheckoutModal() {
 
   const handleBarcodeScanned = async (barcode: string) => {
     try {
+      console.log('Barcode scanned:', barcode);
+      console.log('Available products:', products.length);
+
       const product = products.find(p => p.barcode === barcode);
 
       if (product) {
+        console.log('Product found:', product.name);
+
         if (product.current_stock <= 0) {
           Alert.alert('Out of Stock', `${product.name} is currently out of stock.`);
           return;
@@ -116,6 +128,7 @@ export function InstantCheckoutModal() {
         setShowBarcodeScanner(false);
         Alert.alert('Success', `Added ${product.name} to checkout`);
       } else {
+        console.log('Product not found for barcode:', barcode);
         Alert.alert('Not Found', 'Product with this barcode was not found.');
       }
     } catch (error) {
@@ -492,8 +505,12 @@ export function InstantCheckoutModal() {
             </Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
-                onPress={() => setShowBarcodeScanner(true)}
+                onPress={() => {
+                  console.log('Barcode button pressed');
+                  setShowBarcodeScanner(true);
+                }}
                 style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Barcode size={24} color={isDark ? '#f9fafb' : '#111827'} />
               </TouchableOpacity>
@@ -874,7 +891,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   headerButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 8,
   },
   searchInput: {
     margin: 16,
