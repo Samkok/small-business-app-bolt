@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -15,9 +16,10 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
-import { X, Package, DollarSign, FileText, ChartBar as BarChart3 } from 'lucide-react-native';
+import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { storageService } from '@/src/services/storage';
+import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
 interface ProductFormProps {
   product?: any;
@@ -36,8 +38,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
-  
-  const { isDark } = useTheme(); 
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+
+  const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
 
   useEffect(() => {
@@ -77,6 +80,11 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const handleImageRemove = () => {
     setImageFile(null);
     setImageUrl('');
+  };
+
+  const handleBarcodeScanned = (scannedBarcode: string) => {
+    setBarcode(scannedBarcode);
+    setShowBarcodeScanner(false);
   };
 
   const handleSave = async () => {
@@ -125,11 +133,11 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       const productData = {
         name: name.trim(),
         price: priceValue,
-        description: description.trim() || null,
-        barcode: barcode.trim() || null,
+        description: description.trim() || undefined,
+        barcode: barcode.trim() || undefined,
         current_stock: stockValue,
         min_stock_level: minStockValue,
-        image_url: finalImageUrl || null,
+        image_url: finalImageUrl || undefined,
         business_id: currentBusiness.id,
       };
 
@@ -191,12 +199,23 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               required
             />
             
-            <Input
-              label="Barcode"
-              value={barcode}
-              onChangeText={setBarcode}
-              placeholder="Scan or enter barcode"
-            />
+            <View>
+              <Input
+                label="Barcode"
+                value={barcode}
+                onChangeText={setBarcode}
+                placeholder="Scan or enter barcode"
+              />
+              <TouchableOpacity
+                style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={() => setShowBarcodeScanner(true)}
+              >
+                <Barcode size={20} color="#2563eb" />
+                <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
+                  Scan Barcode
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -276,6 +295,18 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           style={styles.footerButton}
         />
       </View>
+
+      {/* Barcode Scanner Modal */}
+      <Modal
+        visible={showBarcodeScanner}
+        animationType="slide"
+        onRequestClose={() => setShowBarcodeScanner(false)}
+      >
+        <BarcodeScanner
+          onBarcodeScan={handleBarcodeScanned}
+          onClose={() => setShowBarcodeScanner(false)}
+        />
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -326,5 +357,19 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  scanButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
