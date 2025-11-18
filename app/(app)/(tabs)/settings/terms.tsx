@@ -59,7 +59,7 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="2. Description of Service">
         <Paragraph>
-          Business Manager Pro is a comprehensive business management application that provides:
+          BizManage is a comprehensive business management application that provides:
         </Paragraph>
         <BulletPoint>Inventory management and tracking</BulletPoint>
         <BulletPoint>Customer relationship management</BulletPoint>
