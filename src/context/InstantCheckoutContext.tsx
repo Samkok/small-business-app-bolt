@@ -390,7 +390,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
       session.cart_discount_value
     );
     const deliveryCost = session.delivery_cost || 0;
-    const finalTotal = itemsSubtotalAfterDiscount - cartDiscountAmount + deliveryCost;
+    const finalTotal = itemsSubtotalAfterDiscount - cartDiscountAmount - deliveryCost;
 
     return {
       itemsOriginalTotal,

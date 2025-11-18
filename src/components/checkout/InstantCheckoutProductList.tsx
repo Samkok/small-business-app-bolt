@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Minus, Plus, Trash2, AlertCircle, Tag, X as XIcon } from 'lucide-react-native';
 import { InstantCheckoutItem } from '@/src/context/InstantCheckoutContext';
@@ -10,6 +10,124 @@ interface InstantCheckoutProductListProps {
   onRemoveItem: (productId: string) => void;
   onApplyDiscount?: (productId: string) => void;
   onRemoveDiscount?: (productId: string) => void;
+}
+
+function QuantityInput({
+  item,
+  onUpdateQuantity,
+  isDark,
+}: {
+  item: InstantCheckoutItem;
+  onUpdateQuantity: (productId: string, quantity: number) => void;
+  isDark: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState(item.quantity.toString());
+
+  useEffect(() => {
+    if (!isEditing) {
+      setInputValue(item.quantity.toString());
+    }
+  }, [item.quantity, isEditing]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    const newQuantity = parseInt(inputValue, 10);
+
+    if (isNaN(newQuantity) || newQuantity < 1) {
+      Alert.alert('Invalid Quantity', 'Please enter a valid quantity (minimum 1)');
+      setInputValue(item.quantity.toString());
+      return;
+    }
+
+    if (newQuantity > item.available_stock) {
+      Alert.alert(
+        'Insufficient Stock',
+        `Only ${item.available_stock} units available in stock. Quantity adjusted.`
+      );
+      setInputValue(item.available_stock.toString());
+      onUpdateQuantity(item.product_id, item.available_stock);
+      return;
+    }
+
+    if (newQuantity !== item.quantity) {
+      onUpdateQuantity(item.product_id, newQuantity);
+    }
+  };
+
+  const handleIncrement = () => {
+    if (item.quantity < item.available_stock) {
+      onUpdateQuantity(item.product_id, item.quantity + 1);
+    }
+  };
+
+  const handleDecrement = () => {
+    if (item.quantity > 1) {
+      onUpdateQuantity(item.product_id, item.quantity - 1);
+    }
+  };
+
+  return (
+    <View style={styles.quantityControls}>
+      <TouchableOpacity
+        style={[
+          styles.quantityButton,
+          { backgroundColor: isDark ? '#374151' : '#f3f4f6' },
+        ]}
+        onPress={handleDecrement}
+        disabled={item.quantity <= 1}
+      >
+        <Minus
+          size={16}
+          color={item.quantity <= 1 ? '#9ca3af' : isDark ? '#f9fafb' : '#111827'}
+        />
+      </TouchableOpacity>
+
+      {isEditing ? (
+        <TextInput
+          style={[
+            styles.quantityInput,
+            {
+              color: isDark ? '#f9fafb' : '#111827',
+              backgroundColor: isDark ? '#374151' : '#f3f4f6',
+            },
+          ]}
+          value={inputValue}
+          onChangeText={setInputValue}
+          onBlur={handleBlur}
+          keyboardType="number-pad"
+          autoFocus
+          selectTextOnFocus
+        />
+      ) : (
+        <TouchableOpacity onPress={() => setIsEditing(true)}>
+          <Text style={[styles.quantity, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {item.quantity}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        style={[
+          styles.quantityButton,
+          { backgroundColor: isDark ? '#374151' : '#f3f4f6' },
+        ]}
+        onPress={handleIncrement}
+        disabled={item.quantity >= item.available_stock}
+      >
+        <Plus
+          size={16}
+          color={
+            item.quantity >= item.available_stock
+              ? '#9ca3af'
+              : isDark
+              ? '#f9fafb'
+              : '#111827'
+          }
+        />
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export function InstantCheckoutProductList({
@@ -70,7 +188,7 @@ export function InstantCheckoutProductList({
             {(item.item_discount_amount ?? 0) > 0 ? (
               <View style={styles.discountRow}>
                 <Text style={styles.discountText}>
-                  Discount: -${item.item_discount_amount.toFixed(2)}
+                  Discount: -${(item.item_discount_amount ?? 0).toFixed(2)}
                 </Text>
                 {onRemoveDiscount ? (
                   <TouchableOpacity
@@ -84,41 +202,7 @@ export function InstantCheckoutProductList({
             ) : null}
 
             <View style={styles.quantityRow}>
-              <View style={styles.quantityControls}>
-                <TouchableOpacity
-                  style={[
-                    styles.quantityButton,
-                    { backgroundColor: isDark ? '#374151' : '#f3f4f6' },
-                  ]}
-                  onPress={() => onUpdateQuantity(item.product_id, item.quantity - 1)}
-                >
-                  <Minus size={16} color={isDark ? '#f9fafb' : '#111827'} />
-                </TouchableOpacity>
-
-                <Text style={[styles.quantity, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {item.quantity}
-                </Text>
-
-                <TouchableOpacity
-                  style={[
-                    styles.quantityButton,
-                    { backgroundColor: isDark ? '#374151' : '#f3f4f6' },
-                  ]}
-                  onPress={() => onUpdateQuantity(item.product_id, item.quantity + 1)}
-                  disabled={item.quantity >= item.available_stock}
-                >
-                  <Plus
-                    size={16}
-                    color={
-                      item.quantity >= item.available_stock
-                        ? '#9ca3af'
-                        : isDark
-                        ? '#f9fafb'
-                        : '#111827'
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
+              <QuantityInput item={item} onUpdateQuantity={onUpdateQuantity} isDark={isDark} />
 
               <View style={styles.priceActions}>
                 {onApplyDiscount ? (
@@ -235,6 +319,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 30,
     textAlign: 'center',
+  },
+  quantityInput: {
+    fontSize: 16,
+    fontWeight: '600',
+    minWidth: 50,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    textAlign: 'center',
+    borderRadius: 4,
   },
   priceActions: {
     flexDirection: 'row',

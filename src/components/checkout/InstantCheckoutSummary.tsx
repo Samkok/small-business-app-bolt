@@ -45,11 +45,11 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
 
       {summary.deliveryCost > 0 && (
         <View style={styles.row}>
-          <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Delivery
+          <Text style={[styles.label, { color: '#10b981' }]}>
+            Delivery Fee Discount
           </Text>
-          <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            ${summary.deliveryCost.toFixed(2)}
+          <Text style={[styles.value, { color: '#10b981' }]}>
+            -${summary.deliveryCost.toFixed(2)}
           </Text>
         </View>
       )}
