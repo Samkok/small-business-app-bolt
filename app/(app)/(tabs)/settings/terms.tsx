@@ -53,7 +53,7 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="1. Acceptance of Terms">
         <Paragraph>
-          By accessing and using Business Manager Pro (the "Application"), you accept and agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use the Application.
+          By accessing and using BizManage (the "Application"), you accept and agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use the Application.
         </Paragraph>
       </Section>
 
