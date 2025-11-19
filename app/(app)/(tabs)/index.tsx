@@ -20,9 +20,11 @@ import { SkeletonDashboardStats, SkeletonCard, SkeletonLoader } from '@/src/comp
 import ProductForm from '@/src/components/products/ProductForm';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
-import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart } from 'lucide-react-native';
+import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart, Bell } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import MonthPicker from '@/src/components/ui/MonthPicker';
+import NotificationModal from '@/src/components/notifications/NotificationModal';
+import { useNotifications } from '@/src/context/NotificationContext';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -64,9 +66,11 @@ export default function DashboardScreen() {
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [showNotifications, setShowNotifications] = useState(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { unreadCount } = useNotifications();
   console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
   const router = useRouter();
 
@@ -351,6 +355,19 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => setShowNotifications(true)}
+          >
+            <Bell size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <MonthPicker
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
@@ -529,6 +546,11 @@ export default function DashboardScreen() {
           onCancel={() => setShowSalesForm(false)}
         />
       </Modal>
+
+      <NotificationModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </ScrollView>
   );
 }
@@ -552,7 +574,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingTop: 4,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#dc2626',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   welcomeText: {
     fontSize: 16,
