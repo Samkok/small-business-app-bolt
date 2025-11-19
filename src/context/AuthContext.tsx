@@ -571,10 +571,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Clear state immediately before signing out
     if (mounted.current) {
+      console.log('SignOut: Clearing all auth state');
+      setSession(null);
+      setUser(null);
       setUserProfile(null);
       setUserBusinesses([]);
       setCurrentBusiness(null);
       setDataLoadingState('idle');
+      setLoading(false);
+      console.log('SignOut: Auth state cleared');
     }
 
     // Sign out from Supabase
