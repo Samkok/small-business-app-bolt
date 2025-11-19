@@ -168,11 +168,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Already on the assigned business');
       }
 
-      console.log('Navigating to team page...');
-      router.push('/(app)/(tabs)/settings/team');
+      console.log('Navigating to dashboard...');
+      router.push('/(app)/(tabs)/');
     } catch (error) {
       console.error('Error handling role_assigned notification:', error);
-      router.push('/(app)/(tabs)/settings/team');
+      router.push('/(app)/(tabs)/');
     }
   }, [auth, router]);
 

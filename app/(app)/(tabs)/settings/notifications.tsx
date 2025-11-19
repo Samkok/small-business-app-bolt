@@ -148,10 +148,10 @@ export default function NotificationsScreen() {
         console.log('Already on the assigned business');
       }
 
-      router.push('/(app)/(tabs)/settings/team');
+      router.push('/(app)/(tabs)/');
     } catch (error) {
       console.error('Error handling role_assigned notification:', error);
-      router.push('/(app)/(tabs)/settings/team');
+      router.push('/(app)/(tabs)/');
     }
   };
 
