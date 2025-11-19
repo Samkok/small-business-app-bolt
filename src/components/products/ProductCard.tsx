@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore } from 'lucide-react-native';
+import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore, Zap } from 'lucide-react-native';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
+import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 
 interface ProductCardProps {
   product: {
@@ -31,6 +32,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
+  const { addProduct, openModal } = useInstantCheckout();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
   const isOutOfStock = product.current_stock === 0;
@@ -50,6 +52,11 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const handleBuyNow = () => {
+    addProduct(product);
+    openModal();
   };
 
   return (
@@ -121,6 +128,16 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             <Text style={[styles.archivedDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
               Archived: {formatDate(product.archived_at)}
             </Text>
+          )}
+
+          {!isArchived && !isOutOfStock && (
+            <TouchableOpacity
+              style={[styles.buyNowButton, { backgroundColor: '#2563eb' }]}
+              onPress={handleBuyNow}
+            >
+              <Zap size={16} color="#ffffff" />
+              <Text style={styles.buyNowText}>Go to checkout</Text>
+            </TouchableOpacity>
           )}
 
           <View style={styles.actions}>
@@ -283,6 +300,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  buyNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  buyNowText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',

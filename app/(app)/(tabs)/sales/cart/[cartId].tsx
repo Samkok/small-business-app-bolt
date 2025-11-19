@@ -17,6 +17,8 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save } from 'lucide-react-native';
+import { CartItem } from '@/src/components/sales/CartItem';
+import { productService } from '@/src/services/products';
 
 export default function CartScreen() {
   const [showDiscountModal, setShowDiscountModal] = useState<string | null>(null);
@@ -25,6 +27,8 @@ export default function CartScreen() {
   const [notes, setNotes] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [productStockMap, setProductStockMap] = useState<Map<string, number>>(new Map());
+  const [loadingStock, setLoadingStock] = useState(false);
 
   // Track initial state and local changes
   const [initialState, setInitialState] = useState<{
@@ -43,23 +47,62 @@ export default function CartScreen() {
 
   const [localItemQuantities, setLocalItemQuantities] = useState<Map<string, number>>(new Map());
   const [localItemDiscounts, setLocalItemDiscounts] = useState<Map<string, { type: 'percentage' | 'fixed'; value: number }>>(new Map());
-  
+
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { 
-    getCart, 
-    updateCart, 
-    updateCartItem, 
-    removeCartItem, 
-    applyItemDiscount, 
-    removeItemDiscount, 
-    getCartSummary 
+  const {
+    getCart,
+    updateCart,
+    updateCartItem,
+    removeCartItem,
+    applyItemDiscount,
+    removeItemDiscount,
+    getCartSummary
   } = useCart();
 
   // Get cart
   const cart = getCart(cartId as string);
+
+  // Memoized stock lookup map for O(1) access
+  const stockLookup = useMemo(() => {
+    return productStockMap;
+  }, [productStockMap]);
+
+  // Load product stock data
+  useEffect(() => {
+    const loadStockData = async () => {
+      if (!cart || !currentBusiness?.id) return;
+
+      setLoadingStock(true);
+      try {
+        const productIds = cart.items.map(item => item.product_id);
+
+        if (productIds.length === 0) {
+          setLoadingStock(false);
+          return;
+        }
+
+        const products = await productService.getProducts(currentBusiness.id);
+
+        const stockMap = new Map<string, number>();
+        products.forEach(product => {
+          if (productIds.includes(product.id)) {
+            stockMap.set(product.id, product.current_stock || 0);
+          }
+        });
+
+        setProductStockMap(stockMap);
+      } catch (error) {
+        console.error('Error loading stock data:', error);
+      } finally {
+        setLoadingStock(false);
+      }
+    };
+
+    loadStockData();
+  }, [cart?.id, currentBusiness?.id]);
 
   // Initialize local state from cart
   useEffect(() => {
@@ -260,16 +303,13 @@ export default function CartScreen() {
     }
   }, [cart, isSaving, getPendingChanges, localItemQuantities, deliveryCost, notes, localItemDiscounts, initialState, updateCart, updateCartItem, removeCartItem]);
 
-  const handleQuantityChange = useCallback((itemId: string, change: number) => {
-    const currentQuantity = localItemQuantities.get(itemId) || 0;
-    const newQuantity = Math.max(0, currentQuantity + change);
-
+  const handleQuantityChange = useCallback((itemId: string, newQuantity: number) => {
     setLocalItemQuantities(prev => {
       const updated = new Map(prev);
       updated.set(itemId, newQuantity);
       return updated;
     });
-  }, [localItemQuantities]);
+  }, []);
 
   const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => {
     if (!cart) return;
@@ -666,84 +706,27 @@ export default function CartScreen() {
           {cart.items?.map((item) => {
             const displayQuantity = localItemQuantities.get(item.id) ?? item.quantity;
             const initialQuantity = initialState.items.get(item.id) || 0;
-            const hasQuantityChange = displayQuantity !== initialQuantity;
+            const availableStock = stockLookup.get(item.product_id) || 0;
 
             return (
-              <View key={item.id} style={styles.cartItem}>
-                <View style={styles.itemInfo}>
-                  <View style={styles.itemNameRow}>
-                    <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {item.product_name}
-                    </Text>
-                    {hasQuantityChange && (
-                      <View style={styles.changedBadge}>
-                        <Text style={styles.changedBadgeText}>•</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.itemPrice, { color: '#059669' }]}>
-                    ${item.unit_price.toFixed(2)} each
-                  </Text>
-                  {item.item_discount_type && (
-                    <View style={styles.itemDiscountInfo}>
-                      <Text style={[styles.itemDiscountText, { color: '#dc2626' }]}>
-                        {item.item_discount_type === 'percentage'
-                          ? `${item.item_discount_value}% off`
-                          : `$${item.item_discount_value} off`
-                        }
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => handleRemoveItemDiscount(item.id)}
-                        style={styles.removeDiscountButton}
-                      >
-                        <Trash2 size={12} color="#dc2626" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.itemControls}>
-                  <View style={styles.quantityControls}>
-                    <TouchableOpacity
-                      style={[styles.quantityButton, { backgroundColor: '#dc2626' }]}
-                      onPress={() => handleQuantityChange(item.id, -1)}
-                      disabled={updating === item.id}
-                    >
-                      <Minus size={16} color="#ffffff" />
-                    </TouchableOpacity>
-
-                    <Text style={[styles.quantityText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {displayQuantity}
-                    </Text>
-
-                    <TouchableOpacity
-                      style={[styles.quantityButton, { backgroundColor: '#2563eb' }]}
-                      onPress={() => handleQuantityChange(item.id, 1)}
-                      disabled={updating === item.id}
-                    >
-                      <Plus size={16} color="#ffffff" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.discountButton}
-                    onPress={() => setShowDiscountModal(item.id)}
-                  >
-                    <Percent size={14} color="#8b5cf6" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.itemTotal}>
-                  {item.original_subtotal > item.subtotal && (
-                    <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                      ${item.original_subtotal.toFixed(2)}
-                    </Text>
-                  )}
-                  <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-                    ${item.subtotal.toFixed(2)}
-                  </Text>
-                </View>
-              </View>
+              <CartItem
+                key={item.id}
+                itemId={item.id}
+                productId={item.product_id}
+                productName={item.product_name}
+                unitPrice={item.unit_price}
+                quantity={displayQuantity}
+                originalSubtotal={displayQuantity * item.unit_price}
+                subtotal={displayQuantity * item.unit_price - (item.item_discount_amount || 0)}
+                itemDiscountType={item.item_discount_type}
+                itemDiscountValue={item.item_discount_value}
+                initialQuantity={initialQuantity}
+                availableStock={availableStock}
+                onQuantityChange={handleQuantityChange}
+                onShowDiscount={setShowDiscountModal}
+                onRemoveDiscount={handleRemoveItemDiscount}
+                isUpdating={updating === item.id}
+              />
             );
           })}
         </Card>
@@ -1042,100 +1025,6 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontWeight: '500',
     marginLeft: 4,
-  },
-  cartItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  itemInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  itemNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  syncBadge: {
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  syncBadgeText: {
-    fontSize: 9,
-    color: '#2563eb',
-    fontWeight: '500',
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  itemPrice: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  itemDiscountInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  itemDiscountText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  removeDiscountButton: {
-    marginLeft: 6,
-    padding: 2,
-  },
-  itemControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  quantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quantityText: {
-    fontSize: 14,
-    fontWeight: '500',
-    width: 30,
-    textAlign: 'center',
-  },
-  discountButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#8b5cf620',
-  },
-  itemTotal: {
-    alignItems: 'flex-end',
-    minWidth: 70,
-  },
-  originalPrice: {
-    fontSize: 12,
-    textDecorationLine: 'line-through',
-    marginBottom: 2,
-  },
-  itemSubtotal: {
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   discountCard: {
     padding: 16,

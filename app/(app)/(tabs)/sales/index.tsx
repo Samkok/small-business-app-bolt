@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
+import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -28,12 +29,14 @@ import { SaleCard } from '@/src/components/sales/SaleCard';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Zap } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
+import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 
 const SALES_PER_PAGE = 10;
 
@@ -75,6 +78,7 @@ export default function SalesScreen() {
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
+  const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const statusFilters = [
@@ -702,6 +706,12 @@ export default function SalesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
+              onPress={openInstantCheckoutModal}
+            >
+              <Zap size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
               onPress={handleNewSale}
             >
@@ -739,6 +749,12 @@ export default function SalesScreen() {
           {t('sales.title')}
         </Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
+            onPress={openInstantCheckoutModal}
+          >
+            <Zap size={24} color="#ffffff" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
             onPress={handleNewSale}
@@ -1102,6 +1118,12 @@ export default function SalesScreen() {
           </Card>
         </View>
       </Modal>
+
+      {/* Instant Checkout Widget */}
+      <InstantCheckoutWidget />
+
+      {/* Instant Checkout Modal */}
+      <InstantCheckoutModal />
     </View>
   );
 }

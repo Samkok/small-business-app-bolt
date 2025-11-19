@@ -5,6 +5,7 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
+import { clearRememberMeCredentials } from '../lib/secureStorage';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -103,37 +104,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         console.log('Auth state change:', event);
         console.log('AuthContext: Session object on auth state change:', session);
-        
+
         if (event === 'SIGNED_OUT' && !isExplicitSignOut) {
           // If signed out but not explicitly by the user, it was due to inactivity
           setSignedOutDueToInactivity(true);
         }
-        
+
         if (event === 'SIGNED_IN') {
           // Reset the inactivity flag when user signs in
           setSignedOutDueToInactivity(false);
-          
+
           // Update last activity timestamp
           await updateLastActivityTimestamp();
         }
-        
+
         // Reset the explicit sign out flag
         setIsExplicitSignOut(false);
-        
+
        if (mounted.current) {
          setSession(session);
          setUser(session?.user ?? null);
        }
-        
+
         if (session?.user) {
           loadAuthData(session.user.id);
         } else {
-          console.log("AuthContext: NO SESSION");
-          setUserProfile(null);
-          setUserBusinesses([]);
-          setCurrentBusiness(null);
-          setLoading(false);
-          setDataLoadingState('loaded');
+          console.log("AuthContext: NO SESSION - user signed out");
+          if (mounted.current) {
+            setUserProfile(null);
+            setUserBusinesses([]);
+            setCurrentBusiness(null);
+            setLoading(false);
+            setDataLoadingState('loaded');
+          }
         }
       }
     );
@@ -146,9 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) {
       // Set a maximum loading time of 10 seconds
       const MAX_LOADING_TIME = 15000; // 10 seconds
-      console.log('Setting safety timeout for auth loading state:', MAX_LOADING_TIME, 'ms');
       const safetyTimeout = setTimeout(() => {
-        console.log('Auth loading safety timeout reached after', MAX_LOADING_TIME, 'ms');
         if (mounted.current) {
           setLoading(false);
         }
@@ -283,14 +284,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Retry configuration
       const MAX_RETRIES = 3;
       const INITIAL_DELAY_MS = 500;
-      console.log(`Auth data loading config: ${MAX_RETRIES} retries with initial delay of ${INITIAL_DELAY_MS}ms`);
       let lastError = null;
       
       // Try to load user profile with retries
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           // Attempt to fetch the user profile
-          console.log(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} for user ${userId}`);
           const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
@@ -302,12 +301,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
-            console.warn(`User profile loading attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
             
             // If it's not the last attempt, wait with exponential backoff before retrying
             if (attempt < MAX_RETRIES - 1) {
               const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-              console.log(`Retrying in ${delayMs}ms...`);
               await new Promise(resolve => setTimeout(resolve, delayMs));
               continue;
             }
@@ -318,7 +315,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If we got here, the user profile request succeeded
           if (data) {
-            console.log('User profile loaded successfully:', data.user_id);
             if (mounted.current) {
               setUserProfile(data);
             }
@@ -340,7 +336,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // Extract businesses from the nested structure
             const businesses = businessRoles.map(role => role.businesses) as Business[];
-            console.log(`Loaded ${businesses.length} businesses for user:`, userId);
 
             // Store roles in a map for quick lookup
             const rolesMap = new Map<string, 'admin' | 'staff'>();
@@ -561,22 +556,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, userBusinesses]);
 
   const signOut = useCallback(async () => {
+    console.log('SignOut: Starting sign out process');
+
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
 
-    // Reset the data loading state
-    setDataLoadingState('idle');
-
     // Clear any saved credentials
     try {
-      await AsyncStorage.removeItem('rememberMe');
-      // Don't remove savedEmail here to allow it to persist if user wants to sign in again
+      await clearRememberMeCredentials();
+      await AsyncStorage.removeItem('lastActivityTimestamp');
     } catch (error) {
       console.error('Error clearing saved credentials:', error);
     }
 
+    // Clear state immediately before signing out
+    if (mounted.current) {
+      setUserProfile(null);
+      setUserBusinesses([]);
+      setCurrentBusiness(null);
+      setDataLoadingState('idle');
+    }
+
     // Sign out from Supabase
-    await supabase.auth.signOut();
+    console.log('SignOut: Calling supabase.auth.signOut()');
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error('SignOut: Error during sign out:', error);
+    } else {
+      console.log('SignOut: Sign out complete');
+    }
   }, []);
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
