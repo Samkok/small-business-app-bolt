@@ -31,6 +31,14 @@ export default function SaleDetailsScreen() {
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
 
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(app)/(tabs)/sales');
+    }
+  };
+
   useEffect(() => {
     loadSaleDetails();
   }, []);
@@ -236,7 +244,7 @@ export default function SaleDetailsScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={handleGoBack}
           >
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
@@ -245,7 +253,7 @@ export default function SaleDetailsScreen() {
           </Text>
           <View style={styles.headerRight} />
         </View>
-        
+
         <SaleDetailsSkeleton />
       </View>
     );
@@ -257,7 +265,7 @@ export default function SaleDetailsScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={handleGoBack}
           >
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
@@ -266,7 +274,7 @@ export default function SaleDetailsScreen() {
           </Text>
           <View style={styles.headerRight} />
         </View>
-        
+
         <View style={styles.errorContainer}>
           <AlertTriangle size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
           <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -282,7 +290,7 @@ export default function SaleDetailsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleGoBack}
         >
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
