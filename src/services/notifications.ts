@@ -46,7 +46,7 @@ export const notificationService = {
   async markAsRead(notificationId: string) {
     const { error } = await supabase
       .from('notifications')
-      .update({ is_read: true })
+      .update({ is_read: true } as NotificationUpdate)
       .eq('id', notificationId);
 
     if (error) throw error;
@@ -55,7 +55,7 @@ export const notificationService = {
   async markAllAsRead(userId: string, businessId?: string) {
     let query = supabase
       .from('notifications')
-      .update({ is_read: true })
+      .update({ is_read: true } as NotificationUpdate)
       .eq('user_id', userId)
       .eq('is_read', false);
 
@@ -89,13 +89,15 @@ export const notificationService = {
   },
 
   async updatePreferences(userId: string, preferences: NotificationPreferencesUpdate) {
+    const updateData: any = {
+      user_id: userId,
+      ...preferences,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from('notification_preferences')
-      .upsert({
-        user_id: userId,
-        ...preferences,
-        updated_at: new Date().toISOString(),
-      })
+      .upsert(updateData)
       .select()
       .single();
 
@@ -103,7 +105,7 @@ export const notificationService = {
     return data;
   },
 
-  async subscribeToNotifications(
+  subscribeToNotifications(
     userId: string,
     callback: (notification: Notification) => void
   ) {
@@ -126,9 +128,13 @@ export const notificationService = {
     return channel;
   },
 
-  unsubscribeFromNotifications(channel: any) {
+  async unsubscribeFromNotifications(channel: any) {
     if (channel) {
-      supabase.removeChannel(channel);
+      try {
+        await channel.unsubscribe();
+      } catch (error) {
+        console.error('Error unsubscribing from notifications:', error);
+      }
     }
   },
 };
