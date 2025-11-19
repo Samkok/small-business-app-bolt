@@ -260,6 +260,67 @@ export interface Database {
           created_at?: string;
         };
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          business_id: string;
+          type: 'sale_created' | 'sale_voided' | 'role_assigned';
+          title: string;
+          message: string;
+          data: Record<string, any>;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          business_id: string;
+          type: 'sale_created' | 'sale_voided' | 'role_assigned';
+          title: string;
+          message: string;
+          data?: Record<string, any>;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          business_id?: string;
+          type?: 'sale_created' | 'sale_voided' | 'role_assigned';
+          title?: string;
+          message?: string;
+          data?: Record<string, any>;
+          is_read?: boolean;
+          created_at?: string;
+        };
+      };
+      notification_preferences: {
+        Row: {
+          user_id: string;
+          sales_created_enabled: boolean;
+          sales_voided_enabled: boolean;
+          role_assigned_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          sales_created_enabled?: boolean;
+          sales_voided_enabled?: boolean;
+          role_assigned_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          sales_created_enabled?: boolean;
+          sales_voided_enabled?: boolean;
+          role_assigned_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       customers: {
         Row: {
           id: string;

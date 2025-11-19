@@ -23,14 +23,17 @@ import {
   Building,
   Users,
   FileText,
-  Shield
+  Shield,
+  Bell
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useNotifications } from '@/src/context/NotificationContext';
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
   const { signOut, userProfile, currentBusiness, userBusinesses } = useAuth();
+  const { unreadCount } = useNotifications();
   const router = useRouter();
 
   const handleLanguageChange = async (language: string) => {
@@ -138,6 +141,20 @@ export default function SettingsScreen() {
       </Card>
 
       <View style={styles.section}>
+        <View style={styles.notificationItemWrapper}>
+          <SettingItem
+            icon={<Bell size={20} color="#f59e0b" />}
+            title="Notifications"
+            subtitle="Manage your notification preferences"
+            onPress={() => router.push('/settings/notifications')}
+          />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </View>
+
         <SettingItem
           icon={<User size={20} color="#2563eb" />}
           title={t('settings.profile')}
@@ -359,5 +376,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  notificationItemWrapper: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: 12,
+    right: 40,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });

@@ -8,6 +8,7 @@ import { AuthProvider } from '@/src/context/AuthContext';
 import { ThemeProvider } from '@/src/context/ThemeContext';
 import { CartProvider } from '@/src/context/CartContext';
 import { InstantCheckoutProvider } from '@/src/context/InstantCheckoutContext';
+import { NotificationProvider } from '@/src/context/NotificationContext';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -17,16 +18,18 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <CartProvider>
-          <InstantCheckoutProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(app)" />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="auto" />
-          </InstantCheckoutProvider>
-        </CartProvider>
+        <NotificationProvider>
+          <CartProvider>
+            <InstantCheckoutProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(app)" />
+                <Stack.Screen name="+not-found" />
+              </Stack>
+              <StatusBar style="auto" />
+            </InstantCheckoutProvider>
+          </CartProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );
