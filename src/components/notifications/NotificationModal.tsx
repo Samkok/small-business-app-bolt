@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { pushNotificationService } from '@/src/services/pushNotifications';
 import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 
@@ -23,6 +24,12 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   const { isDark } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      pushNotificationService.dismissAllNotifications();
+    }
+  }, [visible]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {

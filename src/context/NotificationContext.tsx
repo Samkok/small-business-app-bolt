@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { notificationService } from '../services/notifications';
+import { pushNotificationService } from '../services/pushNotifications';
+import { BadgeSync } from '../utils/badgeSync';
 import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
+import { useRouter } from 'expo-router';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -34,11 +40,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const { userProfile, currentBusiness } = useAuth();
+  const router = useRouter();
+  const notificationListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<Notifications.Subscription>();
+  const appState = useRef(AppState.currentState);
 
   const loadNotifications = useCallback(async () => {
     if (!userProfile?.user_id) {
       setNotifications([]);
       setUnreadCount(0);
+      await BadgeSync.clearBadge();
       setLoading(false);
       return;
     }
@@ -53,6 +64,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications(notifs);
       setUnreadCount(count);
       setPreferences(prefs);
+
+      await BadgeSync.updateBadge(count);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -69,16 +82,98 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const channel = notificationService.subscribeToNotifications(
       userProfile.user_id,
-      (notification) => {
+      async (notification) => {
         setNotifications((prev) => [notification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+        setUnreadCount((prev) => {
+          const newCount = prev + 1;
+          BadgeSync.updateBadge(newCount);
+          return newCount;
+        });
+
+        if (preferences?.enable_notifications !== false) {
+          const priority = pushNotificationService.getNotificationPriority(notification.type);
+          await pushNotificationService.scheduleLocalNotification(
+            {
+              id: notification.id,
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              data: notification.data,
+            },
+            priority
+          );
+
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        }
       }
     );
 
     return () => {
       notificationService.unsubscribeFromNotifications(channel);
     };
-  }, [userProfile?.user_id]);
+  }, [userProfile?.user_id, preferences]);
+
+  useEffect(() => {
+    const setupPushNotifications = async () => {
+      await pushNotificationService.setupNotificationChannels();
+      await pushNotificationService.requestPermissions();
+    };
+
+    setupPushNotifications();
+
+    notificationListener.current = pushNotificationService.addNotificationReceivedListener(
+      (notification) => {
+        console.log('Notification received in foreground:', notification);
+      }
+    );
+
+    responseListener.current = pushNotificationService.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data;
+        console.log('Notification tapped:', data);
+
+        if (data.type === 'sale_created' || data.type === 'sale_voided') {
+          if (data.sale_id) {
+            router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
+          }
+        } else if (data.type === 'low_stock_alert') {
+          router.push('/(app)/(tabs)/inventory/low-stock');
+        } else if (data.type === 'role_assigned') {
+          router.push('/(app)/(tabs)/settings/team');
+        }
+      }
+    );
+
+    return () => {
+      if (notificationListener.current) {
+        pushNotificationService.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        pushNotificationService.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [router]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('App has come to the foreground');
+        await loadNotifications();
+        await pushNotificationService.dismissAllNotifications();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    BadgeSync.updateBadge(unreadCount);
+  }, [unreadCount]);
 
   const refreshNotifications = useCallback(async () => {
     await loadNotifications();
@@ -90,7 +185,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications((prev) =>
         prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
       );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setUnreadCount((prev) => {
+        const newCount = Math.max(0, prev - 1);
+        BadgeSync.updateBadge(newCount);
+        return newCount;
+      });
     } catch (error) {
       console.error('Error marking notification as read:', error);
       throw error;
@@ -104,6 +203,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       await notificationService.markAllAsRead(userProfile.user_id, currentBusiness?.id);
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      await BadgeSync.clearBadge();
+      await pushNotificationService.dismissAllNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
       throw error;
@@ -117,7 +218,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       const deletedNotification = notifications.find((n) => n.id === notificationId);
       if (deletedNotification && !deletedNotification.is_read) {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        setUnreadCount((prev) => {
+          const newCount = Math.max(0, prev - 1);
+          BadgeSync.updateBadge(newCount);
+          return newCount;
+        });
       }
     } catch (error) {
       console.error('Error deleting notification:', error);

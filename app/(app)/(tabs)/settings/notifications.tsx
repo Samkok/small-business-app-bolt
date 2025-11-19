@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { pushNotificationService } from '@/src/services/pushNotifications';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -40,6 +42,12 @@ export default function NotificationsScreen() {
   } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      pushNotificationService.dismissAllNotifications();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
