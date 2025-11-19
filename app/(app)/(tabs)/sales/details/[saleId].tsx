@@ -15,7 +15,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, X, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 import ReturnSaleForm from '@/src/components/sales/ReturnSaleForm';
@@ -33,7 +33,13 @@ export default function SaleDetailsScreen() {
   const { currentBusiness, userProfile } = useAuth();
 
   const handleGoBack = () => {
-    router.navigate('/(app)/(tabs)/sales');
+    // Always go back to sales index, handling both modal and stack navigation
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // If no back navigation available, navigate to sales tab
+      router.push('/(app)/(tabs)/sales');
+    }
   };
 
   useEffect(() => {
@@ -297,11 +303,7 @@ export default function SaleDetailsScreen() {
           style={styles.backButton}
           onPress={handleGoBack}
         >
-          {Platform.OS === 'web' ? (
-            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
-          ) : (
-            <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-          )}
+          <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Sale Details
