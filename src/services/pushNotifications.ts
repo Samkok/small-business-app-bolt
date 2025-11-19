@@ -44,7 +44,6 @@ export const pushNotificationService = {
         projectId: Constants.expoConfig?.extra?.eas?.projectId,
       });
 
-      console.log('Expo Push Token:', tokenData.data);
       return tokenData.data;
     } catch (error) {
       console.error('Error registering for push notifications:', error);
