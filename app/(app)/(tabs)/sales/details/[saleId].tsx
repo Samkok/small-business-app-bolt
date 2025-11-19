@@ -15,7 +15,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, X, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, Truck, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 import ReturnSaleForm from '@/src/components/sales/ReturnSaleForm';
@@ -33,11 +33,14 @@ export default function SaleDetailsScreen() {
   const { currentBusiness, userProfile } = useAuth();
 
   const handleGoBack = () => {
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      router.dismiss();
-    } else if (router.canGoBack()) {
-      router.back();
-    } else {
+    try {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(app)/(tabs)/sales');
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
       router.replace('/(app)/(tabs)/sales');
     }
   };
@@ -249,7 +252,11 @@ export default function SaleDetailsScreen() {
             style={styles.backButton}
             onPress={handleGoBack}
           >
-            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            {Platform.OS === 'web' ? (
+              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            ) : (
+              <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            )}
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Sale Details
@@ -270,7 +277,11 @@ export default function SaleDetailsScreen() {
             style={styles.backButton}
             onPress={handleGoBack}
           >
-            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            {Platform.OS === 'web' ? (
+              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            ) : (
+              <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            )}
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Sale Details
@@ -295,7 +306,11 @@ export default function SaleDetailsScreen() {
           style={styles.backButton}
           onPress={handleGoBack}
         >
-          <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          {Platform.OS === 'web' ? (
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          ) : (
+            <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          )}
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Sale Details
