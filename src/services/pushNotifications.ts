@@ -40,13 +40,32 @@ export const pushNotificationService = {
         return null;
       }
 
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
-      });
+      // Try to get projectId from multiple sources with fallbacks
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        Constants.easConfig?.projectId ||
+        Constants.manifest2?.extra?.eas?.projectId ||
+        process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
+      // If projectId is available, use it; otherwise proceed without it
+      // This allows development and testing without EAS project setup
+      const tokenOptions = projectId ? { projectId } : undefined;
+
+      const tokenData = await Notifications.getExpoPushTokenAsync(tokenOptions);
+
+      console.log('Expo Push Token:', tokenData.data);
       return tokenData.data;
     } catch (error) {
       console.error('Error registering for push notifications:', error);
+
+      // Provide helpful error message for common issues
+      if (error instanceof Error && error.message.includes('projectId')) {
+        console.log(
+          'Tip: For production use, configure EAS projectId in app.json under extra.eas.projectId ' +
+          'or set EXPO_PUBLIC_EAS_PROJECT_ID environment variable'
+        );
+      }
+
       return null;
     }
   },
