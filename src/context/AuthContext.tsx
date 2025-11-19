@@ -579,12 +579,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Sign out from Supabase
     console.log('SignOut: Calling supabase.auth.signOut()');
-    const { error } = await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
 
-    if (error) {
-      console.error('SignOut: Error during sign out:', error);
-    } else {
-      console.log('SignOut: Sign out complete');
+      if (error) {
+        if (error.message?.includes('Auth session missing')) {
+          console.log('SignOut: Session already cleared, continuing with local cleanup');
+        } else {
+          console.error('SignOut: Error during sign out:', error);
+        }
+      } else {
+        console.log('SignOut: Sign out complete');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Auth session missing')) {
+        console.log('SignOut: Session already cleared, continuing with local cleanup');
+      } else {
+        console.error('SignOut: Unexpected error during sign out:', error);
+      }
     }
   }, []);
 
