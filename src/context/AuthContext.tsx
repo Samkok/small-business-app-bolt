@@ -120,7 +120,7 @@ interface AuthContextType {
   hasBusinessAccess: (businessId: string) => boolean;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
-  refreshUserBusinesses: () => Promise<void>;
+  refreshUserBusinesses: () => Promise<Business[]>;
   signedOutDueToInactivity: boolean;
   resetInactivitySignOutFlag: () => void;
 }
@@ -357,21 +357,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (payload.eventType === 'DELETE') {
             // User removed from a business
             const businessId = (payload.old as any).business_id;
-            console.log('User removed from business:', businessId);
+            console.log('Real-time: User removed from business', {
+              businessId,
+              isCurrentBusiness: currentBusiness?.id === businessId,
+              currentBusinessesCount: userBusinesses.length,
+            });
 
             if (mounted.current) {
               // Remove from businesses list
-              setUserBusinesses(prev => prev.filter(b => b.id !== businessId));
+              setUserBusinesses(prev => {
+                const filtered = prev.filter(b => b.id !== businessId);
+                console.log('Updated userBusinesses after removal:', {
+                  removedBusinessId: businessId,
+                  newCount: filtered.length,
+                  remainingIds: filtered.map(b => b.id),
+                });
+                return filtered;
+              });
 
               // Remove from roles map
               setUserBusinessRoles(prev => {
                 const newMap = new Map(prev);
                 newMap.delete(businessId);
+                console.log('Updated userBusinessRoles after removal:', {
+                  removedBusinessId: businessId,
+                  remainingRolesCount: newMap.size,
+                });
                 return newMap;
               });
 
               // If removed from current business, clear it
               if (currentBusiness?.id === businessId) {
+                console.log('Clearing current business as user was removed from it');
                 setCurrentBusiness(null);
               }
             }
@@ -724,7 +741,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      console.log('Refreshing user businesses...');
+      console.log('refreshUserBusinesses: Starting refresh for user:', user.id);
 
       // Fetch the user's businesses
       const { data: businessRoles, error: businessRolesError } = await supabase
@@ -737,16 +754,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id);
 
       if (businessRolesError) {
-        console.error('Error refreshing business roles:', businessRolesError);
+        console.error('refreshUserBusinesses: Error fetching business roles:', businessRolesError);
         throw businessRolesError;
       }
 
       if (!businessRoles) {
+        console.log('refreshUserBusinesses: No business roles found, returning empty array');
         return [];
       }
 
       // Extract businesses from the nested structure
       const businesses = businessRoles.map((role: any) => role.businesses) as Business[];
+
+      console.log('refreshUserBusinesses: Fetched businesses:', {
+        count: businesses.length,
+        businessIds: businesses.map(b => b.id),
+        businessNames: businesses.map(b => b.business_name),
+      });
 
       // Store roles in a map for quick lookup
       const rolesMap = new Map<string, 'admin' | 'staff'>();
@@ -759,20 +783,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
         if (shouldUpdateBusinesses) {
           setUserBusinesses(businesses);
-          console.log('User businesses refreshed:', businesses.length);
+          console.log('refreshUserBusinesses: Updated state with new businesses');
+        } else {
+          console.log('refreshUserBusinesses: Businesses unchanged, skipping state update');
         }
 
         setUserBusinessRoles(rolesMap);
 
         // If current business was removed, clear it
         if (currentBusiness && !businesses.some(b => b.id === currentBusiness.id)) {
+          console.log('refreshUserBusinesses: Current business no longer accessible, clearing it');
           setCurrentBusiness(null);
         }
       }
 
+      console.log('refreshUserBusinesses: Returning businesses array with', businesses.length, 'items');
       return businesses;
     } catch (error) {
-      console.error('Error in refreshUserBusinesses:', error);
+      console.error('refreshUserBusinesses: Exception occurred:', error);
       return [];
     }
   }, [user?.id, userBusinesses, currentBusiness]);

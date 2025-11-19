@@ -24,8 +24,21 @@ export function extractBusinessContext(notification: Notification): Notification
   const businessId = data?.business_id || notification.business_id;
   const businessName = data?.business_name;
 
+  console.log('extractBusinessContext:', {
+    notificationId: notification.id,
+    notificationType: notification.type,
+    businessId,
+    businessName,
+    dataBusinessId: data?.business_id,
+    notificationBusinessId: notification.business_id,
+  });
+
   if (!businessId) {
-    console.warn('Notification missing business_id:', notification.id);
+    console.warn('Notification missing business_id:', {
+      notificationId: notification.id,
+      type: notification.type,
+      data: data,
+    });
     return null;
   }
 
@@ -39,7 +52,17 @@ export function validateBusinessAccess(
   businessId: string,
   userBusinesses: Business[]
 ): boolean {
-  return userBusinesses.some(b => b.id === businessId);
+  const hasAccess = userBusinesses.some(b => b.id === businessId);
+
+  if (!hasAccess) {
+    console.log('validateBusinessAccess: Access denied', {
+      searchingFor: businessId,
+      availableBusinesses: userBusinesses.map(b => ({ id: b.id, name: b.business_name })),
+      totalCount: userBusinesses.length,
+    });
+  }
+
+  return hasAccess;
 }
 
 export function getBusinessById(
@@ -79,16 +102,27 @@ export async function handleBusinessSwitch(
 
   let hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
 
+  console.log('Initial access check:', {
+    businessId: context.businessId,
+    businessName: context.businessName,
+    hasAccess,
+    userBusinessesCount: userBusinesses.length,
+    userBusinessIds: userBusinesses.map(b => b.id),
+  });
+
   if (!hasAccess) {
     console.log('Business not found in current list, refreshing...');
     try {
       const updatedBusinesses = await refreshUserBusinesses();
 
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       hasAccess = validateBusinessAccess(context.businessId, updatedBusinesses);
 
-      console.log('After refresh - hasAccess:', hasAccess, 'businesses count:', updatedBusinesses.length);
+      console.log('After refresh - access validation:', {
+        hasAccess,
+        businessesCount: updatedBusinesses.length,
+        businessIds: updatedBusinesses.map(b => b.id),
+        targetBusinessId: context.businessId,
+      });
     } catch (error) {
       console.error('Error refreshing businesses:', error);
       return {
@@ -103,7 +137,10 @@ export async function handleBusinessSwitch(
   }
 
   if (!hasAccess) {
-    console.warn('User does not have access to business:', context.businessId);
+    console.warn('User does not have access to business:', {
+      businessId: context.businessId,
+      businessName: context.businessName,
+    });
     return {
       success: false,
       switched: false,
