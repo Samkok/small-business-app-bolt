@@ -663,7 +663,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
 
-    // Clear state immediately FIRST
+    // Sign out from Supabase FIRST (while session is still in storage)
+    console.log('SignOut: Calling supabase.auth.signOut() with scope: local');
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+      if (error) {
+        console.error('SignOut: Error during sign out:', error);
+      } else {
+        console.log('SignOut: API sign out complete');
+      }
+    } catch (error: any) {
+      console.error('SignOut: Exception during sign out:', error);
+    }
+
+    // Clear state after API call
     if (mounted.current) {
       console.log('SignOut: Clearing all auth state');
       setSession(null);
@@ -676,8 +690,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('SignOut: Auth state cleared');
     }
 
-    // Clear all storage BEFORE calling signOut API
-    console.log('SignOut: Clearing storage BEFORE API call');
+    // Clear all storage after API call
+    console.log('SignOut: Clearing storage');
     await clearAuthStorage();
 
     // Clear any saved credentials
@@ -692,24 +706,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error clearing saved credentials:', error);
     }
-
-    // Sign out from Supabase
-    console.log('SignOut: Calling supabase.auth.signOut() with scope: local');
-    try {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-
-      if (error) {
-        console.error('SignOut: Error during sign out:', error);
-      } else {
-        console.log('SignOut: API sign out complete');
-      }
-    } catch (error: any) {
-      console.error('SignOut: Exception during sign out:', error);
-    }
-
-    // Clear storage AGAIN after API call to be absolutely sure
-    console.log('SignOut: Clearing storage AFTER API call');
-    await clearAuthStorage();
 
     console.log('SignOut: Complete');
   }, [user]);
