@@ -8,6 +8,7 @@ import { BadgeSync } from '../utils/badgeSync';
 import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
+import { supabase } from '../config/supabase';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -118,10 +119,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const setupPushNotifications = async () => {
       await pushNotificationService.setupNotificationChannels();
-      await pushNotificationService.requestPermissions();
+
+      const pushToken = await pushNotificationService.registerForPushNotifications();
+
+      if (pushToken && userProfile?.user_id) {
+        try {
+          const { error } = await supabase
+            .from('user_profiles')
+            .update({ expo_push_token: pushToken })
+            .eq('user_id', userProfile.user_id);
+
+          if (error) {
+            console.error('Error saving push token:', error);
+          } else {
+            console.log('Push token saved successfully');
+          }
+        } catch (error) {
+          console.error('Error updating push token:', error);
+        }
+      }
     };
 
-    setupPushNotifications();
+    if (userProfile?.user_id) {
+      setupPushNotifications();
+    }
 
     notificationListener.current = pushNotificationService.addNotificationReceivedListener(
       (notification) => {
@@ -154,7 +175,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         pushNotificationService.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [router]);
+  }, [router, userProfile?.user_id]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {

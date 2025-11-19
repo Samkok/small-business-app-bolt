@@ -20,6 +20,38 @@ Notifications.setNotificationHandler({
 });
 
 export const pushNotificationService = {
+  async registerForPushNotifications(): Promise<string | null> {
+    if (!Device.isDevice) {
+      console.log('Push notifications only work on physical devices');
+      return null;
+    }
+
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push notification permissions');
+        return null;
+      }
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: Constants.expoConfig?.extra?.eas?.projectId,
+      });
+
+      console.log('Expo Push Token:', tokenData.data);
+      return tokenData.data;
+    } catch (error) {
+      console.error('Error registering for push notifications:', error);
+      return null;
+    }
+  },
+
   async requestPermissions(): Promise<boolean> {
     if (!Device.isDevice) {
       console.log('Notifications only work on physical devices');
