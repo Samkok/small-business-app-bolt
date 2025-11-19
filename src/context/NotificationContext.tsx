@@ -40,14 +40,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [unreadCount, setUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
-  const { userProfile, currentBusiness, switchBusiness, refreshUserBusinesses, userBusinesses } = useAuth();
+  const auth = useAuth();
   const router = useRouter();
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
   const appState = useRef(AppState.currentState);
 
   const loadNotifications = useCallback(async () => {
-    if (!userProfile?.user_id) {
+    if (!auth.userProfile?.user_id) {
       setNotifications([]);
       setUnreadCount(0);
       await BadgeSync.clearBadge();
@@ -57,9 +57,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       const [notifs, count, prefs] = await Promise.all([
-        notificationService.getNotifications(userProfile.user_id, currentBusiness?.id),
-        notificationService.getUnreadCount(userProfile.user_id, currentBusiness?.id),
-        notificationService.getPreferences(userProfile.user_id),
+        notificationService.getNotifications(auth.userProfile.user_id, auth.currentBusiness?.id),
+        notificationService.getUnreadCount(auth.userProfile.user_id, auth.currentBusiness?.id),
+        notificationService.getPreferences(auth.userProfile.user_id),
       ]);
 
       setNotifications(notifs);
@@ -72,17 +72,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setLoading(false);
     }
-  }, [userProfile?.user_id, currentBusiness?.id]);
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
 
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
   useEffect(() => {
-    if (!userProfile?.user_id) return;
+    if (!auth.userProfile?.user_id) return;
 
     const channel = notificationService.subscribeToNotifications(
-      userProfile.user_id,
+      auth.userProfile.user_id,
       async (notification) => {
         setNotifications((prev) => [notification, ...prev]);
         setUnreadCount((prev) => {
@@ -114,7 +114,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       notificationService.unsubscribeFromNotifications(channel);
     };
-  }, [userProfile?.user_id, preferences]);
+  }, [auth.userProfile?.user_id, preferences]);
 
   const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {
@@ -128,37 +128,53 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
+      console.log('Current userBusinesses count:', auth.userBusinesses.length);
+      console.log('Current business ID:', auth.currentBusiness?.id);
 
-      const businessExists = userBusinesses.some(b => b.id === businessId);
+      let businessExists = auth.userBusinesses.some(b => b.id === businessId);
 
       if (!businessExists) {
         console.log('Business not found in current list, refreshing businesses...');
-        await refreshUserBusinesses();
+        await auth.refreshUserBusinesses();
 
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('Waiting for business list to update...');
+        for (let i = 0; i < 10; i++) {
+          await new Promise(resolve => setTimeout(resolve, 300));
 
-        const stillNotExists = !userBusinesses.some(b => b.id === businessId);
-        if (stillNotExists) {
-          console.warn('Business still not found after refresh');
+          if (auth.userBusinesses.some(b => b.id === businessId)) {
+            businessExists = true;
+            console.log('Business found after refresh!');
+            break;
+          }
+        }
+
+        if (!businessExists) {
+          console.warn('Business still not found after refresh and waiting');
           router.push('/(app)/(tabs)/settings/team');
           return;
         }
       }
 
-      if (currentBusiness?.id !== businessId) {
-        console.log(`Switching to business: ${businessName}`);
-        await switchBusiness(businessId);
-        await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('Business exists, attempting switch...');
+      if (auth.currentBusiness?.id !== businessId) {
+        console.log(`Switching to business: ${businessName} (${businessId})`);
+        await auth.switchBusiness(businessId);
+
+        console.log('Waiting for business switch to complete...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        console.log('Business switch complete');
       } else {
         console.log('Already on the assigned business');
       }
 
+      console.log('Navigating to team page...');
       router.push('/(app)/(tabs)/settings/team');
     } catch (error) {
       console.error('Error handling role_assigned notification:', error);
       router.push('/(app)/(tabs)/settings/team');
     }
-  }, [userBusinesses, currentBusiness, switchBusiness, refreshUserBusinesses, router]);
+  }, [auth, router]);
 
   useEffect(() => {
     const setupPushNotifications = async () => {
@@ -167,12 +183,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         const pushToken = await pushNotificationService.registerForPushNotifications();
 
-        if (pushToken && userProfile?.user_id) {
+        if (pushToken && auth.userProfile?.user_id) {
           try {
             const { error } = await supabase
               .from('user_profiles')
               .update({ expo_push_token: pushToken })
-              .eq('user_id', userProfile.user_id);
+              .eq('user_id', auth.userProfile.user_id);
 
             if (error) {
               console.error('Error saving push token:', error);
@@ -191,7 +207,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
 
-    if (userProfile?.user_id) {
+    if (auth.userProfile?.user_id) {
       setupPushNotifications().catch(err => {
         console.error('Failed to setup push notifications:', err);
       });
@@ -231,7 +247,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         pushNotificationService.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [router, userProfile?.user_id, handleRoleAssignedNotification]);
+  }, [router, auth.userProfile?.user_id, handleRoleAssignedNotification]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -274,10 +290,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const markAllAsRead = useCallback(async () => {
-    if (!userProfile?.user_id) return;
+    if (!auth.userProfile?.user_id) return;
 
     try {
-      await notificationService.markAllAsRead(userProfile.user_id, currentBusiness?.id);
+      await notificationService.markAllAsRead(auth.userProfile.user_id, auth.currentBusiness?.id);
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
       await BadgeSync.clearBadge();
@@ -286,7 +302,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.error('Error marking all notifications as read:', error);
       throw error;
     }
-  }, [userProfile?.user_id, currentBusiness?.id]);
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
 
   const deleteNotification = useCallback(async (notificationId: string) => {
     try {
@@ -308,16 +324,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [notifications]);
 
   const updatePreferences = useCallback(async (prefs: Partial<NotificationPreferences>) => {
-    if (!userProfile?.user_id) return;
+    if (!auth.userProfile?.user_id) return;
 
     try {
-      const updated = await notificationService.updatePreferences(userProfile.user_id, prefs);
+      const updated = await notificationService.updatePreferences(auth.userProfile.user_id, prefs);
       setPreferences(updated);
     } catch (error) {
       console.error('Error updating notification preferences:', error);
       throw error;
     }
-  }, [userProfile?.user_id]);
+  }, [auth.userProfile?.user_id]);
 
   return (
     <NotificationContext.Provider
