@@ -20,6 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
@@ -51,6 +52,7 @@ const TIMING_CONFIG = {
 };
 
 export default function NotificationModal({ visible, onClose }: NotificationModalProps) {
+  const router = useRouter();
   const { isDark } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -123,6 +125,34 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     }
   }, [markAsRead]);
 
+  const handleNotificationPress = useCallback((notification: Notification) => {
+    if (!notification.is_read) {
+      handleMarkAsRead(notification.id);
+    }
+
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    handleClose();
+
+    setTimeout(() => {
+      const data = notification.data as any;
+
+      if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+        if (data?.sale_id) {
+          router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
+        }
+      } else if (notification.type === 'low_stock') {
+        router.push('/(app)/(tabs)/inventory/low-stock');
+      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+        router.push('/(app)/(tabs)/settings/team');
+      } else if (notification.type === 'expense_added') {
+        router.push('/(app)/(tabs)/expenses');
+      }
+    }, 300);
+  }, [handleMarkAsRead, handleClose, router]);
+
   const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsRead();
@@ -150,12 +180,15 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
   const getNotificationIcon = useCallback((type: string) => {
     switch (type) {
+      case 'sale_created':
+        return '💰';
+      case 'sale_voided':
+        return '⚠️';
       case 'low_stock':
         return '📦';
       case 'team_invite':
+      case 'role_assigned':
         return '👥';
-      case 'sale_completed':
-        return '💰';
       case 'expense_added':
         return '💳';
       default:
@@ -189,7 +222,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           borderLeftColor: item.is_read ? '#6b7280' : '#2563eb',
         },
       ]}
-      onPress={() => !item.is_read && handleMarkAsRead(item.id)}
+      onPress={() => handleNotificationPress(item)}
       activeOpacity={0.7}
     >
       <View style={styles.notificationHeader}>
@@ -223,7 +256,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  ), [isDark, deletingId, handleMarkAsRead, handleDelete, getNotificationIcon, formatTimeAgo]);
+  ), [isDark, deletingId, handleNotificationPress, handleDelete, getNotificationIcon, formatTimeAgo]);
 
   const keyExtractor = useCallback((item: Notification) => item.id, []);
 

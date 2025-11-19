@@ -94,10 +94,18 @@ export default function NotificationsScreen() {
       handleMarkAsRead(notification.id);
     }
 
+    const data = notification.data as any;
+
     if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-      if (notification.data?.sale_id) {
-        router.push(`/(app)/(tabs)/sales/details/${notification.data.sale_id}`);
+      if (data?.sale_id) {
+        router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
       }
+    } else if (notification.type === 'low_stock') {
+      router.push('/(app)/(tabs)/inventory/low-stock');
+    } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+      router.push('/(app)/(tabs)/settings/team');
+    } else if (notification.type === 'expense_added') {
+      router.push('/(app)/(tabs)/expenses');
     }
   };
 
@@ -108,7 +116,12 @@ export default function NotificationsScreen() {
       case 'sale_voided':
         return <AlertTriangle size={20} color="#ef4444" />;
       case 'role_assigned':
+      case 'team_invite':
         return <UserPlus size={20} color="#3b82f6" />;
+      case 'low_stock':
+        return <AlertTriangle size={20} color="#f59e0b" />;
+      case 'expense_added':
+        return <ShoppingCart size={20} color="#8b5cf6" />;
       default:
         return <Bell size={20} color="#6b7280" />;
     }
