@@ -33,16 +33,7 @@ export default function SaleDetailsScreen() {
   const { currentBusiness, userProfile } = useAuth();
 
   const handleGoBack = () => {
-    try {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(app)/(tabs)/sales');
-      }
-    } catch (error) {
-      console.error('Navigation error:', error);
-      router.replace('/(app)/(tabs)/sales');
-    }
+    router.navigate('/(app)/(tabs)/sales');
   };
 
   useEffect(() => {
