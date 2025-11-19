@@ -138,7 +138,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.error('Error handling notification with business switch:', error);
       router.push('/(app)/(tabs)/');
     }
-  }, [auth, router]);
+  }, [auth.currentBusiness, auth.userBusinesses, auth.switchBusiness, auth.refreshUserBusinesses, router]);
 
   useEffect(() => {
     const setupPushNotifications = async () => {

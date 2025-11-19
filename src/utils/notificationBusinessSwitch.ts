@@ -54,7 +54,7 @@ export async function handleBusinessSwitch(
   currentBusiness: Business | null,
   userBusinesses: Business[],
   switchBusiness: (businessId: string) => Promise<void>,
-  refreshUserBusinesses: () => Promise<void>
+  refreshUserBusinesses: () => Promise<Business[]>
 ): Promise<BusinessSwitchResult> {
   const context = extractBusinessContext(notification);
 
@@ -82,11 +82,13 @@ export async function handleBusinessSwitch(
   if (!hasAccess) {
     console.log('Business not found in current list, refreshing...');
     try {
-      await refreshUserBusinesses();
+      const updatedBusinesses = await refreshUserBusinesses();
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
+      hasAccess = validateBusinessAccess(context.businessId, updatedBusinesses);
+
+      console.log('After refresh - hasAccess:', hasAccess, 'businesses count:', updatedBusinesses.length);
     } catch (error) {
       console.error('Error refreshing businesses:', error);
       return {

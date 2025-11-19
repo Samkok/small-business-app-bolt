@@ -88,7 +88,21 @@ To test this implementation:
 2. `src/utils/notificationBusinessSwitch.ts` - New utility file
 3. `src/components/notifications/NotificationModal.tsx` - Updated with business switching
 4. `src/context/NotificationContext.tsx` - Updated push notification handling
-5. Database migration - Updated notification triggers
+5. `src/context/AuthContext.tsx` - Modified `refreshUserBusinesses()` to return Business[] for proper access validation
+6. Database migration - Updated notification triggers
+
+## Bug Fix: Access Denied Safeguard
+
+### Issue
+The access denied check wasn't working because after calling `refreshUserBusinesses()`, we were checking against the stale `userBusinesses` array reference. React state updates are asynchronous, so the array hadn't updated yet when we performed the validation.
+
+### Solution
+Modified `refreshUserBusinesses()` in AuthContext to return `Promise<Business[]>` instead of `Promise<void>`. This allows the business switching utility to:
+1. Call `refreshUserBusinesses()` and get the fresh list directly
+2. Validate access against the fresh list immediately
+3. Properly detect when a user no longer has access to a business
+
+The function still updates the state internally, but now also returns the fresh data for immediate use.
 
 ## Benefits
 

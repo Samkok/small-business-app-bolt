@@ -717,10 +717,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }, []);
 
-  const refreshUserBusinesses = useCallback(async () => {
+  const refreshUserBusinesses = useCallback(async (): Promise<Business[]> => {
     if (!user?.id) {
       console.log('refreshUserBusinesses: No user ID available');
-      return;
+      return [];
     }
 
     try {
@@ -742,7 +742,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!businessRoles) {
-        return;
+        return [];
       }
 
       // Extract businesses from the nested structure
@@ -769,8 +769,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentBusiness(null);
         }
       }
+
+      return businesses;
     } catch (error) {
       console.error('Error in refreshUserBusinesses:', error);
+      return [];
     }
   }, [user?.id, userBusinesses, currentBusiness]);
 
