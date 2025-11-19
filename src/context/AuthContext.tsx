@@ -120,6 +120,7 @@ interface AuthContextType {
   hasBusinessAccess: (businessId: string) => boolean;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
+  refreshUserBusinesses: () => Promise<void>;
   signedOutDueToInactivity: boolean;
   resetInactivitySignOutFlag: () => void;
 }
@@ -141,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [dataLoadingState, setDataLoadingState] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
+  const realtimeChannelRef = useRef<any>(null);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
@@ -281,6 +283,113 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Set up real-time subscription for user business roles
+  useEffect(() => {
+    if (!user?.id || !session) {
+      // Clean up any existing subscription
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+      return;
+    }
+
+    console.log('Setting up real-time subscription for user business roles');
+
+    // Create a channel for user business roles changes
+    const channel = supabase
+      .channel(`user_business_roles:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_business_roles',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          console.log('Real-time update received:', payload);
+
+          if (payload.eventType === 'INSERT') {
+            // New business assigned to user
+            const newBusinessId = (payload.new as any).business_id;
+            console.log('User assigned to new business:', newBusinessId);
+
+            // Fetch the new business details
+            const { data: newBusiness, error } = await supabase
+              .from('businesses')
+              .select('*')
+              .eq('id', newBusinessId)
+              .single();
+
+            if (!error && newBusiness && mounted.current) {
+              // Add to businesses list if not already there
+              setUserBusinesses(prev => {
+                if (prev.some(b => b.id === newBusiness.id)) {
+                  return prev;
+                }
+                return [...prev, newBusiness];
+              });
+
+              // Update roles map
+              setUserBusinessRoles(prev => {
+                const newMap = new Map(prev);
+                newMap.set(newBusinessId, (payload.new as any).role as 'admin' | 'staff');
+                return newMap;
+              });
+
+              console.log('New business added to user list:', newBusiness.business_name);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            // User role changed in a business
+            const businessId = (payload.new as any).business_id;
+            const newRole = (payload.new as any).role as 'admin' | 'staff';
+            console.log('User role updated in business:', businessId, 'new role:', newRole);
+
+            if (mounted.current) {
+              setUserBusinessRoles(prev => {
+                const newMap = new Map(prev);
+                newMap.set(businessId, newRole);
+                return newMap;
+              });
+            }
+          } else if (payload.eventType === 'DELETE') {
+            // User removed from a business
+            const businessId = (payload.old as any).business_id;
+            console.log('User removed from business:', businessId);
+
+            if (mounted.current) {
+              // Remove from businesses list
+              setUserBusinesses(prev => prev.filter(b => b.id !== businessId));
+
+              // Remove from roles map
+              setUserBusinessRoles(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(businessId);
+                return newMap;
+              });
+
+              // If removed from current business, clear it
+              if (currentBusiness?.id === businessId) {
+                setCurrentBusiness(null);
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    realtimeChannelRef.current = channel;
+
+    // Cleanup function
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+    };
+  }, [user?.id, session, currentBusiness]);
 
     // Add a safety timeout to prevent the app from being stuck in loading state
   useEffect(() => {
@@ -473,11 +582,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             
             // Extract businesses from the nested structure
-            const businesses = businessRoles.map(role => role.businesses) as Business[];
+            const businesses = businessRoles.map((role: any) => role.businesses) as Business[];
 
             // Store roles in a map for quick lookup
             const rolesMap = new Map<string, 'admin' | 'staff'>();
-            businessRoles.forEach(role => {
+            businessRoles.forEach((role: any) => {
               rolesMap.set(role.business_id, role.role as 'admin' | 'staff');
             });
             if (mounted.current) {
@@ -607,6 +716,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return { error: null };
   }, []);
+
+  const refreshUserBusinesses = useCallback(async () => {
+    if (!user?.id) {
+      console.log('refreshUserBusinesses: No user ID available');
+      return;
+    }
+
+    try {
+      console.log('Refreshing user businesses...');
+
+      // Fetch the user's businesses
+      const { data: businessRoles, error: businessRolesError } = await supabase
+        .from('user_business_roles')
+        .select(`
+          business_id,
+          role,
+          businesses:business_id(*)
+        `)
+        .eq('user_id', user.id);
+
+      if (businessRolesError) {
+        console.error('Error refreshing business roles:', businessRolesError);
+        throw businessRolesError;
+      }
+
+      if (!businessRoles) {
+        return;
+      }
+
+      // Extract businesses from the nested structure
+      const businesses = businessRoles.map((role: any) => role.businesses) as Business[];
+
+      // Store roles in a map for quick lookup
+      const rolesMap = new Map<string, 'admin' | 'staff'>();
+      businessRoles.forEach((role: any) => {
+        rolesMap.set(role.business_id, role.role as 'admin' | 'staff');
+      });
+
+      if (mounted.current) {
+        // Update businesses if changed
+        const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
+        if (shouldUpdateBusinesses) {
+          setUserBusinesses(businesses);
+          console.log('User businesses refreshed:', businesses.length);
+        }
+
+        setUserBusinessRoles(rolesMap);
+
+        // If current business was removed, clear it
+        if (currentBusiness && !businesses.some(b => b.id === currentBusiness.id)) {
+          setCurrentBusiness(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error in refreshUserBusinesses:', error);
+    }
+  }, [user?.id, userBusinesses, currentBusiness]);
 
   const createBusiness = useCallback(async (businessName: string) => {
     if (!user) {
@@ -859,6 +1025,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasBusinessAccess,
     resetPassword,
     updatePassword,
+    refreshUserBusinesses,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
   }), [
@@ -883,6 +1050,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasBusinessAccess,
     resetPassword,
     updatePassword,
+    refreshUserBusinesses,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
   ]);
