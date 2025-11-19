@@ -40,7 +40,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [unreadCount, setUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
-  const { userProfile, currentBusiness } = useAuth();
+  const { userProfile, currentBusiness, switchBusiness, refreshUserBusinesses, userBusinesses } = useAuth();
   const router = useRouter();
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
@@ -116,6 +116,50 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [userProfile?.user_id, preferences]);
 
+  const handleRoleAssignedNotification = useCallback(async (data: any) => {
+    try {
+      const businessId = data.business_id;
+      const businessName = data.business_name || 'the business';
+
+      if (!businessId) {
+        console.warn('No business_id in role_assigned notification data');
+        router.push('/(app)/(tabs)/settings/team');
+        return;
+      }
+
+      console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
+
+      const businessExists = userBusinesses.some(b => b.id === businessId);
+
+      if (!businessExists) {
+        console.log('Business not found in current list, refreshing businesses...');
+        await refreshUserBusinesses();
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const stillNotExists = !userBusinesses.some(b => b.id === businessId);
+        if (stillNotExists) {
+          console.warn('Business still not found after refresh');
+          router.push('/(app)/(tabs)/settings/team');
+          return;
+        }
+      }
+
+      if (currentBusiness?.id !== businessId) {
+        console.log(`Switching to business: ${businessName}`);
+        await switchBusiness(businessId);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } else {
+        console.log('Already on the assigned business');
+      }
+
+      router.push('/(app)/(tabs)/settings/team');
+    } catch (error) {
+      console.error('Error handling role_assigned notification:', error);
+      router.push('/(app)/(tabs)/settings/team');
+    }
+  }, [userBusinesses, currentBusiness, switchBusiness, refreshUserBusinesses, router]);
+
   useEffect(() => {
     const setupPushNotifications = async () => {
       await pushNotificationService.setupNotificationChannels();
@@ -151,7 +195,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     responseListener.current = pushNotificationService.addNotificationResponseReceivedListener(
-      (response) => {
+      async (response) => {
         const data = response.notification.request.content.data;
         console.log('Notification tapped:', data);
 
@@ -165,7 +209,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         } else if (data.type === 'low_stock_alert') {
           router.push('/(app)/(tabs)/inventory/low-stock');
         } else if (data.type === 'role_assigned') {
-          router.push('/(app)/(tabs)/settings/team');
+          await handleRoleAssignedNotification(data);
         }
       }
     );
@@ -178,7 +222,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         pushNotificationService.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [router, userProfile?.user_id]);
+  }, [router, userProfile?.user_id, handleRoleAssignedNotification]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {

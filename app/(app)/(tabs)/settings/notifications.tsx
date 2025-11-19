@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { useAuth } from '@/src/context/AuthContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -40,6 +41,7 @@ export default function NotificationsScreen() {
     markAllAsRead,
     deleteNotification,
   } = useNotifications();
+  const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
@@ -89,7 +91,7 @@ export default function NotificationsScreen() {
     ]);
   };
 
-  const handleNotificationPress = (notification: any) => {
+  const handleNotificationPress = async (notification: any) => {
     if (!notification.is_read) {
       handleMarkAsRead(notification.id);
     }
@@ -103,9 +105,53 @@ export default function NotificationsScreen() {
     } else if (notification.type === 'low_stock') {
       router.push('/(app)/(tabs)/inventory/low-stock');
     } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-      router.push('/(app)/(tabs)/settings/team');
+      await handleRoleAssignedNotification(data);
     } else if (notification.type === 'expense_added') {
       router.push('/(app)/(tabs)/expenses');
+    }
+  };
+
+  const handleRoleAssignedNotification = async (data: any) => {
+    try {
+      const businessId = data.business_id;
+      const businessName = data.business_name || 'the business';
+
+      if (!businessId) {
+        console.warn('No business_id in role_assigned notification data');
+        router.push('/(app)/(tabs)/settings/team');
+        return;
+      }
+
+      console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
+
+      const businessExists = userBusinesses.some(b => b.id === businessId);
+
+      if (!businessExists) {
+        console.log('Business not found in current list, refreshing businesses...');
+        await refreshUserBusinesses();
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const stillNotExists = !userBusinesses.some(b => b.id === businessId);
+        if (stillNotExists) {
+          console.warn('Business still not found after refresh');
+          router.push('/(app)/(tabs)/settings/team');
+          return;
+        }
+      }
+
+      if (currentBusiness?.id !== businessId) {
+        console.log(`Switching to business: ${businessName}`);
+        await switchBusiness(businessId);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } else {
+        console.log('Already on the assigned business');
+      }
+
+      router.push('/(app)/(tabs)/settings/team');
+    } catch (error) {
+      console.error('Error handling role_assigned notification:', error);
+      router.push('/(app)/(tabs)/settings/team');
     }
   };
 
