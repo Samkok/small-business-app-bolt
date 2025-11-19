@@ -16,26 +16,43 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // and falls back to AsyncStorage on web
 class CustomStorageAdapter {
   async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.getItem(key);
-    } else {
-      return SecureStore.getItemAsync(key);
+    try {
+      const value = Platform.OS === 'web'
+        ? await AsyncStorage.getItem(key)
+        : await SecureStore.getItemAsync(key);
+
+      console.log(`CustomStorageAdapter.getItem(${key}):`, value ? 'found' : 'not found');
+      return value;
+    } catch (error) {
+      console.error(`CustomStorageAdapter.getItem(${key}) error:`, error);
+      return null;
     }
   }
 
   async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.setItem(key, value);
-    } else {
-      return SecureStore.setItemAsync(key, value);
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.setItem(key, value);
+      } else {
+        await SecureStore.setItemAsync(key, value);
+      }
+      console.log(`CustomStorageAdapter.setItem(${key}): success`);
+    } catch (error) {
+      console.error(`CustomStorageAdapter.setItem(${key}) error:`, error);
+      throw error;
     }
   }
 
   async removeItem(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.removeItem(key);
-    } else {
-      return SecureStore.deleteItemAsync(key);
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.removeItem(key);
+      } else {
+        await SecureStore.deleteItemAsync(key);
+      }
+      console.log(`CustomStorageAdapter.removeItem(${key}): success`);
+    } catch (error) {
+      console.error(`CustomStorageAdapter.removeItem(${key}) error:`, error);
     }
   }
 }

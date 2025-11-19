@@ -10,9 +10,22 @@ import { clearRememberMeCredentials } from '../lib/secureStorage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
+// Helper function to get the Supabase storage key format
+function getSupabaseStorageKey(): string {
+  // Supabase uses this format for storing auth tokens
+  // Format: sb-<project-ref>-auth-token
+  const url = new URL(supabaseUrl);
+  const projectRef = url.hostname.split('.')[0];
+  return `sb-${projectRef}-auth-token`;
+}
+
 // Helper function to completely clear auth storage
 async function clearAuthStorage() {
   console.log('clearAuthStorage: Starting complete storage clear');
+
+  // Get the exact Supabase storage key
+  const supabaseStorageKey = getSupabaseStorageKey();
+  console.log('clearAuthStorage: Supabase storage key:', supabaseStorageKey);
 
   if (Platform.OS === 'web') {
     // On web, clear all AsyncStorage/localStorage keys
@@ -28,16 +41,26 @@ async function clearAuthStorage() {
         key.includes('auth.token')
       );
 
+      // Ensure the exact Supabase storage key is included
+      if (!supabaseKeys.includes(supabaseStorageKey)) {
+        supabaseKeys.push(supabaseStorageKey);
+      }
+
       if (supabaseKeys.length > 0) {
         await AsyncStorage.multiRemove(supabaseKeys);
         console.log('clearAuthStorage: Cleared web keys:', supabaseKeys);
       }
+
+      // Double-check the main key is removed
+      await AsyncStorage.removeItem(supabaseStorageKey);
+      console.log('clearAuthStorage: Ensured main key removed:', supabaseStorageKey);
     } catch (error) {
       console.error('clearAuthStorage: Error clearing web storage:', error);
     }
   } else {
     // On native, clear all possible SecureStore keys
     const possibleKeys = [
+      supabaseStorageKey,
       'supabase.auth.token',
       `${supabaseUrl}-auth-token`,
       `sb-${supabaseUrl}-auth-token`,
@@ -56,6 +79,19 @@ async function clearAuthStorage() {
   }
 
   console.log('clearAuthStorage: Complete storage clear finished');
+}
+
+// Helper function to verify session is cleared
+async function verifySessionCleared(): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const isCleared = session === null;
+    console.log('verifySessionCleared: Session cleared:', isCleared);
+    return isCleared;
+  } catch (error) {
+    console.error('verifySessionCleared: Error checking session:', error);
+    return false;
+  }
 }
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
@@ -663,7 +699,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
 
-    // Sign out from Supabase FIRST (while session is still in storage)
+    // STEP 1: Clear storage BEFORE calling Supabase signOut API
+    // This ensures the session is removed from persistent storage first
+    console.log('SignOut: Pre-clearing storage before API call');
+    await clearAuthStorage();
+
+    // STEP 2: Clear any saved credentials and app data
+    try {
+      await clearRememberMeCredentials();
+      await AsyncStorage.removeItem('lastActivityTimestamp');
+
+      // Also clear business selection
+      if (user?.id) {
+        await AsyncStorage.removeItem(`currentBusiness_${user.id}`);
+      }
+    } catch (error) {
+      console.error('SignOut: Error clearing saved credentials:', error);
+    }
+
+    // STEP 3: Call Supabase signOut API
     console.log('SignOut: Calling supabase.auth.signOut() with scope: local');
     try {
       const { error } = await supabase.auth.signOut({ scope: 'local' });
@@ -677,7 +731,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('SignOut: Exception during sign out:', error);
     }
 
-    // Clear state after API call
+    // STEP 4: Clear storage again to ensure everything is removed
+    console.log('SignOut: Post-clearing storage after API call');
+    await clearAuthStorage();
+
+    // STEP 5: Clear React state
     if (mounted.current) {
       console.log('SignOut: Clearing all auth state');
       setSession(null);
@@ -690,21 +748,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('SignOut: Auth state cleared');
     }
 
-    // Clear all storage after API call
-    console.log('SignOut: Clearing storage');
-    await clearAuthStorage();
-
-    // Clear any saved credentials
-    try {
-      await clearRememberMeCredentials();
-      await AsyncStorage.removeItem('lastActivityTimestamp');
-
-      // Also clear business selection
-      if (user?.id) {
-        await AsyncStorage.removeItem(`currentBusiness_${user.id}`);
-      }
-    } catch (error) {
-      console.error('Error clearing saved credentials:', error);
+    // STEP 6: Verify session is cleared
+    const isCleared = await verifySessionCleared();
+    if (!isCleared) {
+      console.warn('SignOut: WARNING - Session may not be fully cleared!');
+      // Force one more clear attempt
+      await clearAuthStorage();
     }
 
     console.log('SignOut: Complete');
