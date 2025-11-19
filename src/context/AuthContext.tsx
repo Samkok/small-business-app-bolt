@@ -627,10 +627,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const supabaseStorageKey = `${supabaseUrl}-auth-token`;
         try {
           await SecureStore.deleteItemAsync(supabaseStorageKey);
-          console.log('SignOut: Cleared SecureStore key:', supabaseStorageKey);
+          console.log('SignOut: Cleared SecureStore key');
         } catch (e) {
           // Key might not exist, that's okay
-          console.log('SignOut: SecureStore key might not exist:', supabaseStorageKey);
+          console.log('SignOut: SecureStore key might not exist');
         }
 
         // Also try the default key format
