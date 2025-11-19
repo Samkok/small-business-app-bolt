@@ -157,7 +157,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
+            router.push({
+              pathname: '/(app)/(tabs)/sales/details/[saleId]',
+              params: { saleId: data.sale_id }
+            });
           }
         } else if (data.type === 'low_stock_alert') {
           router.push('/(app)/(tabs)/inventory/low-stock');

@@ -9,7 +9,13 @@ export default function SalesLayout() {
       <Stack.Screen name="product-selection" />
       <Stack.Screen name="cart/[cartId]" />
       <Stack.Screen name="checkout/[cartId]" />
-      <Stack.Screen name="details/[saleId]" />
+      <Stack.Screen
+        name="details/[saleId]"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
     </Stack>
   );
 }

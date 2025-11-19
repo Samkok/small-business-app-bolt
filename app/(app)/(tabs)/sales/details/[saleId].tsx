@@ -6,7 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -32,7 +33,9 @@ export default function SaleDetailsScreen() {
   const { currentBusiness, userProfile } = useAuth();
 
   const handleGoBack = () => {
-    if (router.canGoBack()) {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      router.dismiss();
+    } else if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(app)/(tabs)/sales');
