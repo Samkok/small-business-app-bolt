@@ -598,6 +598,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('SignOut: Unexpected error during sign out:', error);
       }
     }
+
+    // Clear Supabase storage manually to ensure session is removed
+    try {
+      console.log('SignOut: Manually clearing Supabase storage');
+      await AsyncStorage.removeItem('supabase.auth.token');
+
+      // Clear all Supabase auth-related keys
+      const allKeys = await AsyncStorage.getAllKeys();
+      const supabaseKeys = allKeys.filter(key => key.startsWith('supabase.auth') || key.startsWith('sb-'));
+      if (supabaseKeys.length > 0) {
+        await AsyncStorage.multiRemove(supabaseKeys);
+        console.log('SignOut: Cleared Supabase keys:', supabaseKeys);
+      }
+    } catch (error) {
+      console.error('Error clearing Supabase storage:', error);
+    }
   }, []);
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
