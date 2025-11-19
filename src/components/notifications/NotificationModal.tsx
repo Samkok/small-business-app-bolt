@@ -9,6 +9,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -34,8 +35,7 @@ interface NotificationModalProps {
   onClose: () => void;
 }
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.8;
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 150;
 
 const SPRING_CONFIG = {
@@ -54,8 +54,11 @@ const TIMING_CONFIG = {
 export default function NotificationModal({ visible, onClose }: NotificationModalProps) {
   const router = useRouter();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
 
   const translateY = useSharedValue(MODAL_HEIGHT);
   const backdropOpacity = useSharedValue(0);
@@ -287,7 +290,11 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           <Animated.View
             style={[
               styles.modalContent,
-              { backgroundColor: isDark ? '#111827' : '#ffffff' },
+              {
+                backgroundColor: isDark ? '#111827' : '#ffffff',
+                height: MODAL_HEIGHT,
+                paddingBottom: insets.bottom
+              },
               modalAnimatedStyle
             ]}
           >
@@ -372,7 +379,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: MODAL_HEIGHT,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     shadowColor: '#000',
