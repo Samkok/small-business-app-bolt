@@ -6,11 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal,
-  BackHandler
+  Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -34,28 +32,12 @@ export default function SaleDetailsScreen() {
   const { currentBusiness, userProfile } = useAuth();
 
   const handleGoBack = () => {
-    try {
-      router.push('/(app)/(tabs)/sales');
-    } catch (error) {
-      console.error('Navigation error:', error);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
       router.replace('/(app)/(tabs)/sales');
     }
   };
-
-  useFocusEffect(
-    React.useCallback(() => {
-      const onBackPress = () => {
-        handleGoBack();
-        return true;
-      };
-
-      BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
-      return () => {
-        BackHandler.removeEventListener('hardwareBackPress', onBackPress);
-      };
-    }, [])
-  );
 
   useEffect(() => {
     loadSaleDetails();
