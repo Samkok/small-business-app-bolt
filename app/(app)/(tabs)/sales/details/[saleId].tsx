@@ -249,11 +249,7 @@ export default function SaleDetailsScreen() {
             style={styles.backButton}
             onPress={handleGoBack}
           >
-            {Platform.OS === 'web' ? (
-              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            ) : (
-              <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            )}
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Sale Details
@@ -274,11 +270,7 @@ export default function SaleDetailsScreen() {
             style={styles.backButton}
             onPress={handleGoBack}
           >
-            {Platform.OS === 'web' ? (
-              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            ) : (
-              <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            )}
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Sale Details
