@@ -51,19 +51,65 @@ export const pushNotificationService = {
       // This allows development and testing without EAS project setup
       const tokenOptions = projectId ? { projectId } : undefined;
 
-      const tokenData = await Notifications.getExpoPushTokenAsync(tokenOptions);
+      const maxRetries = 3;
+      const retryDelay = 2000;
+      let lastError: Error | null = null;
 
-      console.log('Expo Push Token:', tokenData.data);
-      return tokenData.data;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Attempting to get push token (attempt ${attempt}/${maxRetries})...`);
+          const tokenData = await Notifications.getExpoPushTokenAsync(tokenOptions);
+          console.log('Expo Push Token obtained successfully:', tokenData.data);
+          return tokenData.data;
+        } catch (error) {
+          lastError = error as Error;
+
+          if (error instanceof Error) {
+            const errorMessage = error.message.toLowerCase();
+
+            if (errorMessage.includes('503') ||
+                errorMessage.includes('upstream connect error') ||
+                errorMessage.includes('connection') ||
+                errorMessage.includes('network')) {
+              console.log(`Network error on attempt ${attempt}, retrying...`);
+
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+                continue;
+              }
+            } else if (errorMessage.includes('projectid')) {
+              console.warn(
+                'Tip: For production use, configure EAS projectId in app.json under extra.eas.projectId ' +
+                'or set EXPO_PUBLIC_EAS_PROJECT_ID environment variable'
+              );
+              return null;
+            }
+          }
+
+          if (attempt === maxRetries) {
+            throw error;
+          }
+        }
+      }
+
+      throw lastError;
     } catch (error) {
-      console.error('Error registering for push notifications:', error);
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
 
-      // Provide helpful error message for common issues
-      if (error instanceof Error && error.message.includes('projectId')) {
-        console.log(
-          'Tip: For production use, configure EAS projectId in app.json under extra.eas.projectId ' +
-          'or set EXPO_PUBLIC_EAS_PROJECT_ID environment variable'
-        );
+        if (errorMessage.includes('503') ||
+            errorMessage.includes('upstream connect error') ||
+            errorMessage.includes('connection')) {
+          console.warn(
+            'Push notification service is temporarily unavailable. ' +
+            'The app will continue to work, but push notifications may not be available until the service recovers. ' +
+            'You can try restarting the app later.'
+          );
+        } else {
+          console.error('Error registering for push notifications:', error);
+        }
+      } else {
+        console.error('Unknown error registering for push notifications:', error);
       }
 
       return null;

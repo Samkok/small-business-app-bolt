@@ -162,30 +162,39 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     const setupPushNotifications = async () => {
-      await pushNotificationService.setupNotificationChannels();
+      try {
+        await pushNotificationService.setupNotificationChannels();
 
-      const pushToken = await pushNotificationService.registerForPushNotifications();
+        const pushToken = await pushNotificationService.registerForPushNotifications();
 
-      if (pushToken && userProfile?.user_id) {
-        try {
-          const { error } = await supabase
-            .from('user_profiles')
-            .update({ expo_push_token: pushToken })
-            .eq('user_id', userProfile.user_id);
+        if (pushToken && userProfile?.user_id) {
+          try {
+            const { error } = await supabase
+              .from('user_profiles')
+              .update({ expo_push_token: pushToken })
+              .eq('user_id', userProfile.user_id);
 
-          if (error) {
-            console.error('Error saving push token:', error);
-          } else {
-            console.log('Push token saved successfully');
+            if (error) {
+              console.error('Error saving push token:', error);
+            } else {
+              console.log('Push token saved successfully');
+            }
+          } catch (error) {
+            console.error('Error updating push token:', error);
           }
-        } catch (error) {
-          console.error('Error updating push token:', error);
+        } else if (!pushToken) {
+          console.log('Push token not available - app will still work without push notifications');
         }
+      } catch (error) {
+        console.error('Error setting up push notifications:', error);
+        console.log('App will continue to work without push notifications');
       }
     };
 
     if (userProfile?.user_id) {
-      setupPushNotifications();
+      setupPushNotifications().catch(err => {
+        console.error('Failed to setup push notifications:', err);
+      });
     }
 
     notificationListener.current = pushNotificationService.addNotificationReceivedListener(
