@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,20 @@ import {
   Modal,
   TouchableOpacity,
   FlatList,
+  Platform,
+  Dimensions,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolate,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
@@ -20,45 +33,122 @@ interface NotificationModalProps {
   onClose: () => void;
 }
 
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.8;
+const DISMISS_THRESHOLD = 150;
+
+const SPRING_CONFIG = {
+  damping: 20,
+  stiffness: 300,
+  mass: 0.5,
+  overshootClamping: false,
+  restSpeedThreshold: 0.01,
+  restDisplacementThreshold: 0.01,
+};
+
+const TIMING_CONFIG = {
+  duration: 250,
+};
+
 export default function NotificationModal({ visible, onClose }: NotificationModalProps) {
   const { isDark } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const translateY = useSharedValue(MODAL_HEIGHT);
+  const backdropOpacity = useSharedValue(0);
+
   useEffect(() => {
     if (visible) {
       pushNotificationService.dismissAllNotifications();
+      translateY.value = withSpring(0, SPRING_CONFIG);
+      backdropOpacity.value = withTiming(1, TIMING_CONFIG);
+    } else {
+      translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG);
+      backdropOpacity.value = withTiming(0, TIMING_CONFIG);
     }
   }, [visible]);
 
-  const handleMarkAsRead = async (notificationId: string) => {
+  const handleClose = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG, () => {
+      runOnJS(onClose)();
+    });
+    backdropOpacity.value = withTiming(0, TIMING_CONFIG);
+  }, [onClose, translateY, backdropOpacity]);
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (event.translationY > 0) {
+        translateY.value = event.translationY;
+      }
+    })
+    .onEnd((event) => {
+      if (event.translationY > DISMISS_THRESHOLD || event.velocityY > 500) {
+        translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG, () => {
+          runOnJS(handleClose)();
+        });
+        backdropOpacity.value = withTiming(0, TIMING_CONFIG);
+      } else {
+        translateY.value = withSpring(0, SPRING_CONFIG);
+      }
+    });
+
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: backdropOpacity.value,
+    };
+  });
+
+  const handleBackdropPress = useCallback(() => {
+    handleClose();
+  }, [handleClose]);
+
+  const handleMarkAsRead = useCallback(async (notificationId: string) => {
     try {
       await markAsRead(notificationId);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  };
+  }, [markAsRead]);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsRead();
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
-  };
+  }, [markAllAsRead]);
 
-  const handleDelete = async (notificationId: string) => {
+  const handleDelete = useCallback(async (notificationId: string) => {
     setDeletingId(notificationId);
     try {
       await deleteNotification(notificationId);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     } catch (error) {
       console.error('Error deleting notification:', error);
     } finally {
       setDeletingId(null);
     }
-  };
+  }, [deleteNotification]);
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = useCallback((type: string) => {
     switch (type) {
       case 'low_stock':
         return '📦';
@@ -71,9 +161,9 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       default:
         return '📢';
     }
-  };
+  }, []);
 
-  const formatTimeAgo = (dateString: string) => {
+  const formatTimeAgo = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -86,9 +176,9 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
-  };
+  }, []);
 
-  const renderNotification = ({ item }: { item: Notification }) => (
+  const renderNotification = useCallback(({ item }: { item: Notification }) => (
     <TouchableOpacity
       style={[
         styles.notificationItem,
@@ -100,9 +190,13 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         },
       ]}
       onPress={() => !item.is_read && handleMarkAsRead(item.id)}
+      activeOpacity={0.7}
     >
       <View style={styles.notificationHeader}>
-        <View style={styles.notificationIconContainer}>
+        <View style={[
+          styles.notificationIconContainer,
+          { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+        ]}>
           <Text style={styles.notificationIcon}>{getNotificationIcon(item.type)}</Text>
         </View>
         <View style={styles.notificationContent}>
@@ -123,83 +217,129 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           style={styles.deleteButton}
           onPress={() => handleDelete(item.id)}
           disabled={deletingId === item.id}
+          activeOpacity={0.6}
         >
           <Trash2 size={16} color="#dc2626" />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  );
+  ), [isDark, deletingId, handleMarkAsRead, handleDelete, getNotificationIcon, formatTimeAgo]);
+
+  const keyExtractor = useCallback((item: Notification) => item.id, []);
+
+  const ItemSeparator = useMemo(() => (
+    <View style={[styles.separator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+  ), [isDark]);
+
+  if (!visible) return null;
 
   return (
     <Modal
       visible={visible}
       transparent={true}
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={handleClose}
+      statusBarTranslucent
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: isDark ? '#111827' : '#ffffff' }]}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleContainer}>
-              <Bell size={24} color={isDark ? '#f9fafb' : '#111827'} />
-              <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Notifications
-              </Text>
-              {unreadCount > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.headerActions}>
-              {unreadCount > 0 && (
-                <TouchableOpacity
-                  style={styles.markAllButton}
-                  onPress={handleMarkAllAsRead}
-                >
-                  <CheckCheck size={20} color="#2563eb" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-              </TouchableOpacity>
-            </View>
-          </View>
+      <View style={styles.container}>
+        <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleBackdropPress}
+          />
+        </Animated.View>
 
-          {notifications.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Bell size={64} color={isDark ? '#4b5563' : '#d1d5db'} />
-              <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                No Notifications
-              </Text>
-              <Text style={[styles.emptyMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                You're all caught up! Check back later for updates.
-              </Text>
+        <GestureDetector gesture={panGesture}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              { backgroundColor: isDark ? '#111827' : '#ffffff' },
+              modalAnimatedStyle
+            ]}
+          >
+            <View style={styles.dragHandleContainer}>
+              <View style={[styles.dragHandle, { backgroundColor: isDark ? '#4b5563' : '#d1d5db' }]} />
             </View>
-          ) : (
-            <FlatList
-              data={notifications}
-              renderItem={renderNotification}
-              keyExtractor={(item) => item.id}
-              style={styles.notificationList}
-              contentContainerStyle={styles.notificationListContent}
-              showsVerticalScrollIndicator={true}
-            />
-          )}
-        </View>
+
+            <View style={[styles.modalHeader, { borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+              <View style={styles.modalTitleContainer}>
+                <Bell size={24} color={isDark ? '#f9fafb' : '#111827'} />
+                <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Notifications
+                </Text>
+                {unreadCount > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.headerActions}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity
+                    style={styles.markAllButton}
+                    onPress={handleMarkAllAsRead}
+                    activeOpacity={0.6}
+                  >
+                    <CheckCheck size={20} color="#2563eb" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={handleClose}
+                  style={styles.closeButton}
+                  activeOpacity={0.6}
+                >
+                  <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Bell size={64} color={isDark ? '#4b5563' : '#d1d5db'} />
+                <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  No Notifications
+                </Text>
+                <Text style={[styles.emptyMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  You're all caught up! Check back later for updates.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                renderItem={renderNotification}
+                keyExtractor={keyExtractor}
+                style={styles.notificationList}
+                contentContainerStyle={styles.notificationListContent}
+                showsVerticalScrollIndicator={true}
+                ItemSeparatorComponent={() => ItemSeparator}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                updateCellsBatchingPeriod={50}
+                windowSize={10}
+              />
+            )}
+          </Animated.View>
+        </GestureDetector>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  container: {
     flex: 1,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
   modalContent: {
-    height: '80%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: MODAL_HEIGHT,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     shadowColor: '#000',
@@ -208,14 +348,22 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
   },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   modalTitleContainer: {
     flexDirection: 'row',
@@ -259,9 +407,11 @@ const styles = StyleSheet.create({
   notificationItem: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
     borderLeftWidth: 4,
+  },
+  separator: {
+    height: 1,
+    marginHorizontal: 20,
   },
   notificationHeader: {
     flexDirection: 'row',
@@ -271,7 +421,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
