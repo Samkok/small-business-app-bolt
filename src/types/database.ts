@@ -265,7 +265,7 @@ export interface Database {
           id: string;
           user_id: string;
           business_id: string;
-          type: 'sale_created' | 'sale_voided' | 'role_assigned';
+          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
           title: string;
           message: string;
           data: Record<string, any>;
@@ -276,7 +276,7 @@ export interface Database {
           id?: string;
           user_id: string;
           business_id: string;
-          type: 'sale_created' | 'sale_voided' | 'role_assigned';
+          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
           title: string;
           message: string;
           data?: Record<string, any>;
@@ -287,7 +287,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           business_id?: string;
-          type?: 'sale_created' | 'sale_voided' | 'role_assigned';
+          type?: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
           title?: string;
           message?: string;
           data?: Record<string, any>;

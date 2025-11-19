@@ -26,8 +26,9 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock, AlertCircle } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
+import { handleBusinessSwitch } from '@/src/utils/notificationBusinessSwitch';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -59,6 +60,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [accessDeniedError, setAccessDeniedError] = useState<{ businessName?: string } | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
 
@@ -142,6 +144,19 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     handleClose();
 
     setTimeout(async () => {
+      const switchResult = await handleBusinessSwitch(
+        notification,
+        currentBusiness,
+        userBusinesses,
+        switchBusiness,
+        refreshUserBusinesses
+      );
+
+      if (!switchResult.success && switchResult.error?.type === 'access_denied') {
+        setAccessDeniedError({ businessName: switchResult.error.businessName });
+        return;
+      }
+
       const data = notification.data as any;
 
       if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
@@ -151,56 +166,12 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       } else if (notification.type === 'low_stock') {
         router.push('/(app)/(tabs)/inventory/low-stock');
       } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-        await handleRoleAssignedNotification(data);
+        router.push('/(app)/(tabs)/');
       } else if (notification.type === 'expense_added') {
         router.push('/(app)/(tabs)/expenses');
       }
     }, 300);
-  }, [handleMarkAsRead, handleClose, router]);
-
-  const handleRoleAssignedNotification = useCallback(async (data: any) => {
-    try {
-      const businessId = data.business_id;
-      const businessName = data.business_name || 'the business';
-
-      if (!businessId) {
-        console.warn('No business_id in role_assigned notification data');
-        router.push('/(app)/(tabs)/settings/team');
-        return;
-      }
-
-      console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
-
-      const businessExists = userBusinesses.some(b => b.id === businessId);
-
-      if (!businessExists) {
-        console.log('Business not found in current list, refreshing businesses...');
-        await refreshUserBusinesses();
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const stillNotExists = !userBusinesses.some(b => b.id === businessId);
-        if (stillNotExists) {
-          console.warn('Business still not found after refresh');
-          router.push('/(app)/(tabs)/settings/team');
-          return;
-        }
-      }
-
-      if (currentBusiness?.id !== businessId) {
-        console.log(`Switching to business: ${businessName}`);
-        await switchBusiness(businessId);
-        await new Promise(resolve => setTimeout(resolve, 300));
-      } else {
-        console.log('Already on the assigned business');
-      }
-
-      router.push('/(app)/(tabs)/');
-    } catch (error) {
-      console.error('Error handling role_assigned notification:', error);
-      router.push('/(app)/(tabs)/');
-    }
-  }, [userBusinesses, currentBusiness, switchBusiness, refreshUserBusinesses, router]);
+  }, [handleMarkAsRead, handleClose, router, currentBusiness, userBusinesses, switchBusiness, refreshUserBusinesses]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -408,6 +379,39 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           </Animated.View>
         </GestureDetector>
       </View>
+
+      <Modal
+        visible={accessDeniedError !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAccessDeniedError(null)}
+      >
+        <View style={styles.errorModalOverlay}>
+          <View style={[styles.errorModalContent, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <View style={[styles.errorIconContainer, { backgroundColor: isDark ? '#374151' : '#fee2e2' }]}>
+              <AlertCircle size={48} color="#dc2626" />
+            </View>
+            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Access Denied
+            </Text>
+            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {accessDeniedError?.businessName
+                ? `You no longer have access to ${accessDeniedError.businessName}. The business owner may have removed your access.`
+                : 'You no longer have access to this business. The business owner may have removed your access.'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.errorButton, { backgroundColor: '#2563eb' }]}
+              onPress={() => {
+                setAccessDeniedError(null);
+                router.push('/(app)/(tabs)/');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.errorButtonText}>Go to Dashboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -554,5 +558,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  errorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorModalContent: {
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  errorIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  errorButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

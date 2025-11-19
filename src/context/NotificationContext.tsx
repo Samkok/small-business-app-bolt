@@ -9,6 +9,7 @@ import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
+import { handleBusinessSwitch } from '../utils/notificationBusinessSwitch';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -116,62 +117,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [auth.userProfile?.user_id, preferences]);
 
-  const handleRoleAssignedNotification = useCallback(async (data: any) => {
+  const handleNotificationWithBusinessSwitch = useCallback(async (notification: Notification, navigateTo: string) => {
     try {
-      const businessId = data.business_id;
-      const businessName = data.business_name || 'the business';
+      const switchResult = await handleBusinessSwitch(
+        notification,
+        auth.currentBusiness,
+        auth.userBusinesses,
+        auth.switchBusiness,
+        auth.refreshUserBusinesses
+      );
 
-      if (!businessId) {
-        console.warn('No business_id in role_assigned notification data');
-        router.push('/(app)/(tabs)/settings/team');
+      if (!switchResult.success && switchResult.error?.type === 'access_denied') {
+        console.warn('User no longer has access to business:', switchResult.error.businessName);
+        router.push('/(app)/(tabs)/');
         return;
       }
 
-      console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
-      console.log('Current userBusinesses count:', auth.userBusinesses.length);
-      console.log('Current business ID:', auth.currentBusiness?.id);
-
-      let businessExists = auth.userBusinesses.some(b => b.id === businessId);
-
-      if (!businessExists) {
-        console.log('Business not found in current list, refreshing businesses...');
-        await auth.refreshUserBusinesses();
-
-        console.log('Waiting for business list to update...');
-        for (let i = 0; i < 10; i++) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-
-          if (auth.userBusinesses.some(b => b.id === businessId)) {
-            businessExists = true;
-            console.log('Business found after refresh!');
-            break;
-          }
-        }
-
-        if (!businessExists) {
-          console.warn('Business still not found after refresh and waiting');
-          router.push('/(app)/(tabs)/settings/team');
-          return;
-        }
-      }
-
-      console.log('Business exists, attempting switch...');
-      if (auth.currentBusiness?.id !== businessId) {
-        console.log(`Switching to business: ${businessName} (${businessId})`);
-        await auth.switchBusiness(businessId);
-
-        console.log('Waiting for business switch to complete...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        console.log('Business switch complete');
-      } else {
-        console.log('Already on the assigned business');
-      }
-
-      console.log('Navigating to dashboard...');
-      router.push('/(app)/(tabs)/');
+      router.push(navigateTo);
     } catch (error) {
-      console.error('Error handling role_assigned notification:', error);
+      console.error('Error handling notification with business switch:', error);
       router.push('/(app)/(tabs)/');
     }
   }, [auth, router]);
@@ -224,17 +188,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const data = response.notification.request.content.data;
         console.log('Notification tapped:', data);
 
+        const mockNotification: Notification = {
+          id: data.id || '',
+          user_id: auth.userProfile?.user_id || '',
+          business_id: data.business_id || '',
+          type: data.type as any,
+          title: data.title || '',
+          message: data.message || '',
+          data: data,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        };
+
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            router.push({
-              pathname: '/(app)/(tabs)/sales/details/[saleId]',
-              params: { saleId: data.sale_id }
-            });
+            await handleNotificationWithBusinessSwitch(
+              mockNotification,
+              `/(app)/(tabs)/sales/details/${data.sale_id}`
+            );
           }
-        } else if (data.type === 'low_stock_alert') {
-          router.push('/(app)/(tabs)/inventory/low-stock');
-        } else if (data.type === 'role_assigned') {
-          await handleRoleAssignedNotification(data);
+        } else if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
+          await handleNotificationWithBusinessSwitch(
+            mockNotification,
+            '/(app)/(tabs)/inventory/low-stock'
+          );
+        } else if (data.type === 'role_assigned' || data.type === 'team_invite') {
+          await handleNotificationWithBusinessSwitch(
+            mockNotification,
+            '/(app)/(tabs)/'
+          );
+        } else if (data.type === 'expense_added') {
+          await handleNotificationWithBusinessSwitch(
+            mockNotification,
+            '/(app)/(tabs)/expenses'
+          );
         }
       }
     );
@@ -247,7 +234,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         pushNotificationService.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [router, auth.userProfile?.user_id, handleRoleAssignedNotification]);
+  }, [router, auth.userProfile?.user_id, handleNotificationWithBusinessSwitch]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
