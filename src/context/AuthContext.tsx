@@ -4,8 +4,11 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { AppState, Platform } from 'react-native';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -582,10 +585,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('SignOut: Auth state cleared');
     }
 
-    // Sign out from Supabase
-    console.log('SignOut: Calling supabase.auth.signOut()');
+    // Sign out from Supabase with scope: 'local' to force clear local session
+    console.log('SignOut: Calling supabase.auth.signOut() with scope: local');
     try {
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
 
       if (error) {
         if (error.message?.includes('Auth session missing')) {
@@ -607,14 +610,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Clear Supabase storage manually to ensure session is removed
     try {
       console.log('SignOut: Manually clearing Supabase storage');
-      await AsyncStorage.removeItem('supabase.auth.token');
 
-      // Clear all Supabase auth-related keys
-      const allKeys = await AsyncStorage.getAllKeys();
-      const supabaseKeys = allKeys.filter(key => key.startsWith('supabase.auth') || key.startsWith('sb-'));
-      if (supabaseKeys.length > 0) {
-        await AsyncStorage.multiRemove(supabaseKeys);
-        console.log('SignOut: Cleared Supabase keys:', supabaseKeys);
+      if (Platform.OS === 'web') {
+        // On web, clear AsyncStorage
+        await AsyncStorage.removeItem('supabase.auth.token');
+
+        // Clear all Supabase auth-related keys from AsyncStorage
+        const allKeys = await AsyncStorage.getAllKeys();
+        const supabaseKeys = allKeys.filter(key => key.startsWith('supabase.auth') || key.startsWith('sb-'));
+        if (supabaseKeys.length > 0) {
+          await AsyncStorage.multiRemove(supabaseKeys);
+          console.log('SignOut: Cleared AsyncStorage Supabase keys:', supabaseKeys);
+        }
+      } else {
+        // On native, clear SecureStore (which is what Supabase uses via CustomStorageAdapter)
+        const supabaseStorageKey = `${supabaseUrl}-auth-token`;
+        try {
+          await SecureStore.deleteItemAsync(supabaseStorageKey);
+          console.log('SignOut: Cleared SecureStore key:', supabaseStorageKey);
+        } catch (e) {
+          // Key might not exist, that's okay
+          console.log('SignOut: SecureStore key might not exist:', supabaseStorageKey);
+        }
+
+        // Also try the default key format
+        try {
+          await SecureStore.deleteItemAsync('supabase.auth.token');
+          console.log('SignOut: Cleared SecureStore default key');
+        } catch (e) {
+          console.log('SignOut: SecureStore default key might not exist');
+        }
       }
     } catch (error) {
       console.error('Error clearing Supabase storage:', error);
