@@ -166,6 +166,66 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [auth.userProfile?.user_id, auth.currentBusiness?.id, preferences]);
 
+  // Subscribe to notification DELETE events (from database trigger)
+  useEffect(() => {
+    if (!auth.userProfile?.user_id) return;
+
+    console.log('Setting up notification DELETE subscription');
+
+    const deleteChannel = supabase
+      .channel(`notification_deletes:${auth.userProfile.user_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${auth.userProfile.user_id}`,
+        },
+        (payload) => {
+          const deletedNotification = payload.old as Notification;
+          console.log('Real-time DELETE: Notification removed from database:', deletedNotification.id);
+
+          // Remove from all business notifications
+          setAllBusinessNotifications((prev) => {
+            const filtered = prev.filter(n => n.id !== deletedNotification.id);
+            if (filtered.length !== prev.length) {
+              console.log('Removed notification from allBusinessNotifications');
+            }
+            return filtered;
+          });
+
+          // Remove from current business notifications if applicable
+          setNotifications((prev) => {
+            const filtered = prev.filter(n => n.id !== deletedNotification.id);
+            if (filtered.length !== prev.length) {
+              console.log('Removed notification from current business notifications');
+            }
+            return filtered;
+          });
+
+          // Update unread counts
+          if (!deletedNotification.is_read) {
+            setAllBusinessUnreadCount((prev) => Math.max(0, prev - 1));
+
+            if (auth.currentBusiness?.id === deletedNotification.business_id) {
+              setUnreadCount((prev) => {
+                const newCount = Math.max(0, prev - 1);
+                BadgeSync.updateBadge(newCount);
+                return newCount;
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up notification DELETE subscription');
+      supabase.removeChannel(deleteChannel);
+    };
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
+
   const handleNotificationWithBusinessSwitch = useCallback(async (notification: Notification, navigateTo: string) => {
     try {
       await businessSwitch.handleNotificationNavigation(notification, navigateTo);

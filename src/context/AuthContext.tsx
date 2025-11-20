@@ -783,11 +783,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (mounted.current) {
+        // Detect removed businesses for notification cleanup
+        const removedBusinessIds = userBusinesses
+          .filter(oldBiz => !businesses.some(newBiz => newBiz.id === oldBiz.id))
+          .map(biz => biz.id);
+
         // Update businesses if changed
         const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
         if (shouldUpdateBusinesses) {
           setUserBusinesses(businesses);
           console.log('refreshUserBusinesses: Updated state with new businesses');
+
+          // Proactively cleanup notifications for removed businesses
+          if (removedBusinessIds.length > 0) {
+            console.log('refreshUserBusinesses: Cleaning up notifications for removed businesses:', removedBusinessIds);
+            removedBusinessIds.forEach(businessId => {
+              notificationCleanupService.cleanup(businessId);
+            });
+          }
         } else {
           console.log('refreshUserBusinesses: Businesses unchanged, skipping state update');
         }

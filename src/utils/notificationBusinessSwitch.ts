@@ -107,6 +107,7 @@ export async function handleBusinessSwitch(
 
   // Early validation: Check if business exists in current list
   let hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
+  let currentBusinessList = userBusinesses;
 
   console.log('Early business access check:', {
     businessId: context.businessId,
@@ -121,6 +122,7 @@ export async function handleBusinessSwitch(
     console.log('Business not found in current list, attempting single refresh...');
     try {
       const updatedBusinesses = await refreshUserBusinesses();
+      currentBusinessList = updatedBusinesses;
       hasAccess = validateBusinessAccess(context.businessId, updatedBusinesses);
 
       console.log('After refresh - access validation:', {
@@ -166,8 +168,8 @@ export async function handleBusinessSwitch(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     console.log(`Business switch attempt ${attempt + 1}/${MAX_RETRIES}`);
 
-    // Re-validate access before each switch attempt
-    hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
+    // Re-validate access before each switch attempt using the latest business list
+    hasAccess = validateBusinessAccess(context.businessId, currentBusinessList);
 
     if (!hasAccess) {
       console.warn('Business access lost between validation and switch');

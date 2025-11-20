@@ -143,10 +143,13 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
       alert(`Access Denied\n\nYou no longer have access to ${businessName}. The owner may have removed you from the team.`);
 
-      // Mark as read and close modal
-      if (!notification.is_read) {
-        handleMarkAsRead(notification.id);
+      // Delete the notification to prevent future clicks
+      try {
+        await deleteNotification(notification.id);
+      } catch (error) {
+        console.error('Failed to delete inaccessible notification:', error);
       }
+
       handleClose();
       return;
     }

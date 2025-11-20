@@ -97,26 +97,53 @@ export default function NotificationsScreen() {
       handleMarkAsRead(notification.id);
     }
 
-    if (currentBusiness?.id !== notification.business_id) {
-      const businessExists = userBusinesses.some(b => b.id === notification.business_id);
+    // Validate business access before proceeding
+    const data = notification.data as any;
+    const businessName = data?.business_name || 'this business';
+    let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
 
-      if (!businessExists) {
-        await refreshUserBusinesses();
-        await new Promise(resolve => setTimeout(resolve, 500));
+    // If business not found in current list, refresh and check with fresh data
+    if (!hasAccess) {
+      console.log('Business not in current list, refreshing...');
+      const freshBusinesses = await refreshUserBusinesses();
+      hasAccess = freshBusinesses.some(b => b.id === notification.business_id);
 
-        const stillNotExists = !userBusinesses.some(b => b.id === notification.business_id);
-        if (stillNotExists) {
-          Alert.alert('Access Denied', 'You no longer have access to this business.');
-          return;
-        }
+      if (!hasAccess) {
+        console.warn('User no longer has access to business:', notification.business_id);
+        Alert.alert(
+          'Access Denied',
+          `You no longer have access to ${businessName}. The owner may have removed you from the team.`,
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                // Remove this notification from view
+                try {
+                  await deleteNotification(notification.id);
+                } catch (error) {
+                  console.error('Failed to delete notification:', error);
+                }
+              },
+            },
+          ]
+        );
+        return;
       }
-
-      await switchBusiness(notification.business_id);
-      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    const data = notification.data as any;
+    // Switch business if needed
+    if (currentBusiness?.id !== notification.business_id) {
+      try {
+        await switchBusiness(notification.business_id);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (error) {
+        console.error('Failed to switch business:', error);
+        Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+        return;
+      }
+    }
 
+    // Navigate based on notification type
     if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
       if (data?.sale_id) {
         router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
@@ -143,17 +170,20 @@ export default function NotificationsScreen() {
 
       console.log(`Attempting to switch to business: ${businessName} (${businessId})`);
 
-      const businessExists = userBusinesses.some(b => b.id === businessId);
+      let hasAccess = userBusinesses.some(b => b.id === businessId);
 
-      if (!businessExists) {
+      // If business not found, refresh and check with fresh data
+      if (!hasAccess) {
         console.log('Business not found in current list, refreshing businesses...');
-        await refreshUserBusinesses();
+        const freshBusinesses = await refreshUserBusinesses();
+        hasAccess = freshBusinesses.some(b => b.id === businessId);
 
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const stillNotExists = !userBusinesses.some(b => b.id === businessId);
-        if (stillNotExists) {
-          console.warn('Business still not found after refresh');
+        if (!hasAccess) {
+          console.warn('User no longer has access to business:', businessId);
+          Alert.alert(
+            'Access Denied',
+            `You no longer have access to ${businessName}. The owner may have removed you from the team.`
+          );
           router.push('/(app)/(tabs)/settings/team');
           return;
         }
