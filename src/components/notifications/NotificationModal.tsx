@@ -22,8 +22,9 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
+import { useAuth } from '@/src/context/AuthContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock, AlertCircle } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 
@@ -55,6 +56,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   const insets = useSafeAreaInsets();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const businessSwitch = useBusinessSwitch();
+  const auth = useAuth();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
@@ -128,6 +130,27 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   }, [markAsRead]);
 
   const handleNotificationPress = useCallback(async (notification: Notification) => {
+    // Early validation: Check if user still has access to the business
+    const hasAccess = auth.userBusinesses.some(b => b.id === notification.business_id);
+
+    if (!hasAccess) {
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+
+      const data = notification.data as any;
+      const businessName = data?.business_name || 'this business';
+
+      alert(`Access Denied\n\nYou no longer have access to ${businessName}. The owner may have removed you from the team.`);
+
+      // Mark as read and close modal
+      if (!notification.is_read) {
+        handleMarkAsRead(notification.id);
+      }
+      handleClose();
+      return;
+    }
+
     if (!notification.is_read) {
       handleMarkAsRead(notification.id);
     }
@@ -157,7 +180,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     setTimeout(async () => {
       await businessSwitch.handleNotificationNavigation(notification, navigationTarget);
     }, 300);
-  }, [handleMarkAsRead, handleClose, businessSwitch]);
+  }, [handleMarkAsRead, handleClose, businessSwitch, auth.userBusinesses]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {

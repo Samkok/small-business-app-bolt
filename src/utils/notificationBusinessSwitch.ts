@@ -105,106 +105,121 @@ export async function handleBusinessSwitch(
     };
   }
 
-  // Retry configuration with exponential backoff
-  const MAX_RETRIES = 5;
-  const RETRY_DELAYS = [0, 500, 1000, 2000, 3000]; // in milliseconds
+  // Early validation: Check if business exists in current list
+  let hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    console.log(`Business switch attempt ${attempt + 1}/${MAX_RETRIES}`);
+  console.log('Early business access check:', {
+    businessId: context.businessId,
+    businessName: context.businessName,
+    hasAccess,
+    userBusinessesCount: userBusinesses.length,
+    userBusinessIds: userBusinesses.map(b => b.id),
+  });
 
-    // Check if business is in current list
-    let hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
+  // If not found initially, try ONE refresh to check for recent changes
+  if (!hasAccess) {
+    console.log('Business not found in current list, attempting single refresh...');
+    try {
+      const updatedBusinesses = await refreshUserBusinesses();
+      hasAccess = validateBusinessAccess(context.businessId, updatedBusinesses);
 
-    console.log(`Attempt ${attempt + 1} - Initial access check:`, {
-      businessId: context.businessId,
-      businessName: context.businessName,
-      hasAccess,
-      userBusinessesCount: userBusinesses.length,
-      userBusinessIds: userBusinesses.map(b => b.id),
-    });
+      console.log('After refresh - access validation:', {
+        hasAccess,
+        businessesCount: updatedBusinesses.length,
+        businessIds: updatedBusinesses.map(b => b.id),
+        targetBusinessId: context.businessId,
+      });
 
-    // If not found, try refreshing the business list
-    if (!hasAccess) {
-      console.log('Business not found in current list, refreshing...');
-      try {
-        const updatedBusinesses = await refreshUserBusinesses();
-
-        hasAccess = validateBusinessAccess(context.businessId, updatedBusinesses);
-
-        console.log('After refresh - access validation:', {
-          hasAccess,
-          businessesCount: updatedBusinesses.length,
-          businessIds: updatedBusinesses.map(b => b.id),
-          targetBusinessId: context.businessId,
+      // If still no access after refresh, user was likely removed
+      if (!hasAccess) {
+        console.warn('Business not accessible after refresh - user likely removed:', {
+          businessId: context.businessId,
+          businessName: context.businessName,
         });
-      } catch (error) {
-        console.error('Error refreshing businesses:', error);
-
-        // If this is not the last attempt, wait and retry
-        if (attempt < MAX_RETRIES - 1) {
-          console.log(`Waiting ${RETRY_DELAYS[attempt + 1]}ms before retry...`);
-          await sleep(RETRY_DELAYS[attempt + 1]);
-          continue;
-        }
-
-        // Last attempt failed
         return {
           success: false,
           switched: false,
           error: {
-            type: 'switch_failed',
-            message: 'Failed to refresh business list after multiple attempts',
-          },
-        };
-      }
-    }
-
-    // If we have access, try to switch
-    if (hasAccess) {
-      try {
-        console.log(`Switching to business: ${context.businessName || context.businessId}`);
-        await switchBusiness(context.businessId);
-
-        // Small delay to ensure the switch completes
-        await sleep(300);
-
-        console.log('Business switch successful');
-        return {
-          success: true,
-          switched: true,
-        };
-      } catch (error) {
-        console.error('Error switching business:', error);
-
-        // If this is not the last attempt, wait and retry
-        if (attempt < MAX_RETRIES - 1) {
-          console.log(`Waiting ${RETRY_DELAYS[attempt + 1]}ms before retry...`);
-          await sleep(RETRY_DELAYS[attempt + 1]);
-          continue;
-        }
-
-        // Last attempt failed
-        return {
-          success: false,
-          switched: false,
-          error: {
-            type: 'switch_failed',
-            message: 'Failed to switch to the business after multiple attempts',
+            type: 'access_denied',
+            message: `You no longer have access to ${context.businessName || 'this business'}. The owner may have removed you from the team.`,
             businessName: context.businessName,
           },
         };
       }
-    }
-
-    // If we still don't have access and this is not the last attempt, wait and retry
-    if (attempt < MAX_RETRIES - 1) {
-      console.log(`Business not accessible yet, waiting ${RETRY_DELAYS[attempt + 1]}ms before retry...`);
-      await sleep(RETRY_DELAYS[attempt + 1]);
+    } catch (error) {
+      console.error('Error refreshing businesses:', error);
+      return {
+        success: false,
+        switched: false,
+        error: {
+          type: 'switch_failed',
+          message: 'Failed to verify business access. Please try again.',
+        },
+      };
     }
   }
 
-  // All retries exhausted and still no access
-  console.warn('User does not have access to business after all retries:', {
+  // Retry configuration for the actual switch operation (reduced retries since access is confirmed)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [0, 500, 1000]; // in milliseconds
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    console.log(`Business switch attempt ${attempt + 1}/${MAX_RETRIES}`);
+
+    // Re-validate access before each switch attempt
+    hasAccess = validateBusinessAccess(context.businessId, userBusinesses);
+
+    if (!hasAccess) {
+      console.warn('Business access lost between validation and switch');
+      return {
+        success: false,
+        switched: false,
+        error: {
+          type: 'access_denied',
+          message: `Access to ${context.businessName || 'this business'} was revoked.`,
+          businessName: context.businessName,
+        },
+      };
+    }
+
+    // If we have access, try to switch
+    try {
+      console.log(`Switching to business: ${context.businessName || context.businessId}`);
+      await switchBusiness(context.businessId);
+
+      // Small delay to ensure the switch completes
+      await sleep(300);
+
+      console.log('Business switch successful');
+      return {
+        success: true,
+        switched: true,
+      };
+    } catch (error) {
+      console.error('Error switching business:', error);
+
+      // If this is not the last attempt, wait and retry
+      if (attempt < MAX_RETRIES - 1) {
+        console.log(`Waiting ${RETRY_DELAYS[attempt + 1]}ms before retry...`);
+        await sleep(RETRY_DELAYS[attempt + 1]);
+        continue;
+      }
+
+      // Last attempt failed
+      return {
+        success: false,
+        switched: false,
+        error: {
+          type: 'switch_failed',
+          message: 'Failed to switch to the business after multiple attempts. Please try again.',
+          businessName: context.businessName,
+        },
+      };
+    }
+  }
+
+  // All retries exhausted
+  console.warn('Failed to switch business after all retries:', {
     businessId: context.businessId,
     businessName: context.businessName,
   });
@@ -212,8 +227,8 @@ export async function handleBusinessSwitch(
     success: false,
     switched: false,
     error: {
-      type: 'access_denied',
-      message: 'You no longer have access to this business or the business data is still syncing. Please try again in a moment.',
+      type: 'switch_failed',
+      message: 'Unable to switch to the business. Please try again.',
       businessName: context.businessName,
     },
   };

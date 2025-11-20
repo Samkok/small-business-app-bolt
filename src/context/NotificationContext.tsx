@@ -10,6 +10,7 @@ import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
+import { notificationCleanupService } from '../utils/notificationCleanup';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -28,6 +29,7 @@ interface NotificationContextData {
   markAllAsReadAllBusinesses: () => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
   updatePreferences: (prefs: Partial<NotificationPreferences>) => Promise<void>;
+  cleanupNotificationsForBusiness: (businessId: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextData>({} as NotificationContextData);
@@ -54,6 +56,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const responseListener = useRef<Notifications.Subscription | undefined>();
   const appState = useRef<string>(AppState.currentState);
 
+  const filterValidNotifications = useCallback((notifs: Notification[]) => {
+    const accessibleBusinessIds = new Set(auth.userBusinesses.map(b => b.id));
+    return notifs.filter(n => accessibleBusinessIds.has(n.business_id));
+  }, [auth.userBusinesses]);
+
   const loadNotifications = useCallback(async () => {
     if (!auth.userProfile?.user_id) {
       setNotifications([]);
@@ -72,7 +79,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         notificationService.getPreferences(auth.userProfile.user_id),
       ]);
 
-      setNotifications(notifs);
+      const validNotifs = filterValidNotifications(notifs);
+      setNotifications(validNotifs);
       setUnreadCount(count);
       setPreferences(prefs);
 
@@ -82,7 +90,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setLoading(false);
     }
-  }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id, filterValidNotifications]);
 
   const loadAllBusinessNotifications = useCallback(async () => {
     if (!auth.userProfile?.user_id) {
@@ -97,12 +105,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         notificationService.getUnreadCountForAllBusinesses(auth.userProfile.user_id),
       ]);
 
-      setAllBusinessNotifications(notifs);
+      const validNotifs = filterValidNotifications(notifs);
+      setAllBusinessNotifications(validNotifs);
       setAllBusinessUnreadCount(count);
     } catch (error) {
       console.error('Error loading all business notifications:', error);
     }
-  }, [auth.userProfile?.user_id]);
+  }, [auth.userProfile?.user_id, filterValidNotifications]);
 
   useEffect(() => {
     loadNotifications();
@@ -115,6 +124,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const channel = notificationService.subscribeToNotifications(
       auth.userProfile.user_id,
       async (notification) => {
+        const hasAccess = auth.userBusinesses.some(b => b.id === notification.business_id);
+
+        if (!hasAccess) {
+          console.warn('Received notification for inaccessible business:', notification.business_id);
+          return;
+        }
+
         setAllBusinessNotifications((prev) => [notification, ...prev]);
         setAllBusinessUnreadCount((prev) => prev + 1);
 
@@ -245,6 +261,48 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
   }, [router, auth.userProfile?.user_id, handleNotificationWithBusinessSwitch]);
+
+  const cleanupNotificationsForBusiness = useCallback((businessId: string) => {
+    console.log('Cleaning up notifications for removed business:', businessId);
+
+    setAllBusinessNotifications((prev) => {
+      const filtered = prev.filter(n => n.business_id !== businessId);
+      const removedCount = prev.length - filtered.length;
+      console.log(`Removed ${removedCount} notifications for business ${businessId}`);
+      return filtered;
+    });
+
+    setNotifications((prev) => {
+      const filtered = prev.filter(n => n.business_id !== businessId);
+      return filtered;
+    });
+
+    setAllBusinessUnreadCount((prev) => {
+      const unreadForBusiness = allBusinessNotifications.filter(
+        n => n.business_id === businessId && !n.is_read
+      ).length;
+      return Math.max(0, prev - unreadForBusiness);
+    });
+
+    if (auth.currentBusiness?.id === businessId) {
+      setUnreadCount((prev) => {
+        const unreadForBusiness = notifications.filter(
+          n => n.business_id === businessId && !n.is_read
+        ).length;
+        const newCount = Math.max(0, prev - unreadForBusiness);
+        BadgeSync.updateBadge(newCount);
+        return newCount;
+      });
+    }
+  }, [allBusinessNotifications, notifications, auth.currentBusiness?.id]);
+
+  useEffect(() => {
+    notificationCleanupService.register(cleanupNotificationsForBusiness);
+
+    return () => {
+      notificationCleanupService.unregister();
+    };
+  }, [cleanupNotificationsForBusiness]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -383,6 +441,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         markAllAsReadAllBusinesses,
         deleteNotification,
         updatePreferences,
+        cleanupNotificationsForBusiness,
       }}
     >
       {children}

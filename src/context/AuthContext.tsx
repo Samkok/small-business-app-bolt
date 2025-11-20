@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { AppState, Platform } from 'react-native';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
+import { notificationCleanupService } from '../utils/notificationCleanup';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
@@ -385,6 +386,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 });
                 return newMap;
               });
+
+              // Cleanup notifications for the removed business
+              notificationCleanupService.cleanup(businessId);
 
               // If removed from current business, clear it
               if (currentBusiness?.id === businessId) {

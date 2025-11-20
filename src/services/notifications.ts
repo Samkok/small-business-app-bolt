@@ -8,6 +8,8 @@ type NotificationPreferencesUpdate = Database['public']['Tables']['notification_
 
 export const notificationService = {
   async getNotifications(userId: string, businessId?: string, limit = 50) {
+    // Note: RLS policies automatically filter notifications to only include those
+    // from businesses the user has access to via user_business_roles
     let query = supabase
       .from('notifications')
       .select('*')
@@ -26,6 +28,8 @@ export const notificationService = {
   },
 
   async getNotificationsForAllBusinesses(userId: string, limit = 50) {
+    // Note: RLS policies automatically filter notifications to only include those
+    // from businesses the user has access to via user_business_roles
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
@@ -38,6 +42,8 @@ export const notificationService = {
   },
 
   async getUnreadCount(userId: string, businessId?: string) {
+    // Note: RLS policies automatically filter to only count notifications
+    // from businesses the user has access to
     let query = supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
@@ -55,6 +61,8 @@ export const notificationService = {
   },
 
   async getUnreadCountForAllBusinesses(userId: string) {
+    // Note: RLS policies automatically filter to only count notifications
+    // from businesses the user has access to
     const { count, error } = await supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
