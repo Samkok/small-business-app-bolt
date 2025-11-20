@@ -16,19 +16,16 @@ import Animated, {
   withSpring,
   withTiming,
   runOnJS,
-  interpolate,
-  Extrapolate,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
-import { useAuth } from '@/src/context/AuthContext';
+import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock, AlertCircle } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
-import { handleBusinessSwitch } from '@/src/utils/notificationBusinessSwitch';
+import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -54,13 +51,11 @@ const TIMING_CONFIG = {
 };
 
 export default function NotificationModal({ visible, onClose }: NotificationModalProps) {
-  const router = useRouter();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
-  const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
+  const businessSwitch = useBusinessSwitch();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [accessDeniedError, setAccessDeniedError] = useState<{ businessName?: string } | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
 
@@ -143,35 +138,26 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
     handleClose();
 
+    const data = notification.data as any;
+
+    // Determine navigation target
+    let navigationTarget = '/(app)/(tabs)/';
+    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+      if (data?.sale_id) {
+        navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
+      }
+    } else if (notification.type === 'low_stock') {
+      navigationTarget = '/(app)/(tabs)/inventory/low-stock';
+    } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+      navigationTarget = '/(app)/(tabs)/';
+    } else if (notification.type === 'expense_added') {
+      navigationTarget = '/(app)/(tabs)/expenses';
+    }
+
     setTimeout(async () => {
-      const switchResult = await handleBusinessSwitch(
-        notification,
-        currentBusiness,
-        userBusinesses,
-        switchBusiness,
-        refreshUserBusinesses
-      );
-
-      if (!switchResult.success && switchResult.error?.type === 'access_denied') {
-        setAccessDeniedError({ businessName: switchResult.error.businessName });
-        return;
-      }
-
-      const data = notification.data as any;
-
-      if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-        if (data?.sale_id) {
-          router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
-        }
-      } else if (notification.type === 'low_stock') {
-        router.push('/(app)/(tabs)/inventory/low-stock');
-      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-        router.push('/(app)/(tabs)/');
-      } else if (notification.type === 'expense_added') {
-        router.push('/(app)/(tabs)/expenses');
-      }
+      await businessSwitch.handleNotificationNavigation(notification, navigationTarget);
     }, 300);
-  }, [handleMarkAsRead, handleClose, router, currentBusiness, userBusinesses, switchBusiness, refreshUserBusinesses]);
+  }, [handleMarkAsRead, handleClose, businessSwitch]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -380,38 +366,13 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         </GestureDetector>
       </View>
 
-      <Modal
-        visible={accessDeniedError !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setAccessDeniedError(null)}
-      >
-        <View style={styles.errorModalOverlay}>
-          <View style={[styles.errorModalContent, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
-            <View style={[styles.errorIconContainer, { backgroundColor: isDark ? '#374151' : '#fee2e2' }]}>
-              <AlertCircle size={48} color="#dc2626" />
-            </View>
-            <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Access Denied
-            </Text>
-            <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {accessDeniedError?.businessName
-                ? `You no longer have access to ${accessDeniedError.businessName}. The business owner may have removed your access.`
-                : 'You no longer have access to this business. The business owner may have removed your access.'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.errorButton, { backgroundColor: '#2563eb' }]}
-              onPress={() => {
-                setAccessDeniedError(null);
-                router.push('/(app)/(tabs)/');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.errorButtonText}>Go to Dashboard</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <BusinessSwitchLoadingModal
+        visible={businessSwitch.loading || businessSwitch.error !== null}
+        businessName={businessSwitch.businessName}
+        loading={businessSwitch.loading}
+        error={businessSwitch.error}
+        onDismiss={businessSwitch.dismissError}
+      />
     </Modal>
   );
 }
@@ -558,56 +519,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  errorModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorModalContent: {
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  errorIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  errorMessage: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  errorButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-  },
-  errorButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

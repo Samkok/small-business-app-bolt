@@ -9,7 +9,7 @@ import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
-import { handleBusinessSwitch } from '../utils/notificationBusinessSwitch';
+import { useBusinessSwitch } from './BusinessSwitchContext';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -49,6 +49,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [loading, setLoading] = useState(true);
   const auth = useAuth();
   const router = useRouter();
+  const businessSwitch = useBusinessSwitch();
   const notificationListener = useRef<Notifications.Subscription | undefined>();
   const responseListener = useRef<Notifications.Subscription | undefined>();
   const appState = useRef<string>(AppState.currentState);
@@ -151,26 +152,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const handleNotificationWithBusinessSwitch = useCallback(async (notification: Notification, navigateTo: string) => {
     try {
-      const switchResult = await handleBusinessSwitch(
-        notification,
-        auth.currentBusiness,
-        auth.userBusinesses,
-        auth.switchBusiness,
-        auth.refreshUserBusinesses
-      );
-
-      if (!switchResult.success && switchResult.error?.type === 'access_denied') {
-        console.warn('User no longer has access to business:', switchResult.error.businessName);
-        router.push('/(app)/(tabs)/');
-        return;
-      }
-
-      router.push(navigateTo);
+      await businessSwitch.handleNotificationNavigation(notification, navigateTo);
     } catch (error) {
       console.error('Error handling notification with business switch:', error);
-      router.push('/(app)/(tabs)/');
     }
-  }, [auth.currentBusiness, auth.userBusinesses, auth.switchBusiness, auth.refreshUserBusinesses, router]);
+  }, [businessSwitch]);
 
   useEffect(() => {
     const setupPushNotifications = async () => {
@@ -232,29 +218,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           created_at: new Date().toISOString(),
         };
 
+        let navigationTarget = '/(app)/(tabs)/';
+
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            await handleNotificationWithBusinessSwitch(
-              mockNotification,
-              `/(app)/(tabs)/sales/details/${data.sale_id}`
-            );
+            navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
           }
         } else if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
-          await handleNotificationWithBusinessSwitch(
-            mockNotification,
-            '/(app)/(tabs)/inventory/low-stock'
-          );
+          navigationTarget = '/(app)/(tabs)/inventory/low-stock';
         } else if (data.type === 'role_assigned' || data.type === 'team_invite') {
-          await handleNotificationWithBusinessSwitch(
-            mockNotification,
-            '/(app)/(tabs)/'
-          );
+          navigationTarget = '/(app)/(tabs)/';
         } else if (data.type === 'expense_added') {
-          await handleNotificationWithBusinessSwitch(
-            mockNotification,
-            '/(app)/(tabs)/expenses'
-          );
+          navigationTarget = '/(app)/(tabs)/expenses';
         }
+
+        await handleNotificationWithBusinessSwitch(mockNotification, navigationTarget);
       }
     );
 

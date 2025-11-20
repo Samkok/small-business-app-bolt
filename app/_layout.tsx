@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/src/context/ThemeContext';
 import { CartProvider } from '@/src/context/CartContext';
 import { InstantCheckoutProvider } from '@/src/context/InstantCheckoutContext';
 import { NotificationProvider } from '@/src/context/NotificationContext';
+import { BusinessSwitchProvider } from '@/src/context/BusinessSwitchContext';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -20,18 +21,20 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <AuthProvider>
-          <NotificationProvider>
-            <CartProvider>
-              <InstantCheckoutProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="(app)" />
-                  <Stack.Screen name="+not-found" />
-                </Stack>
-                <StatusBar style="auto" />
-              </InstantCheckoutProvider>
-            </CartProvider>
-          </NotificationProvider>
+          <BusinessSwitchProvider>
+            <NotificationProvider>
+              <CartProvider>
+                <InstantCheckoutProvider>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(app)" />
+                    <Stack.Screen name="+not-found" />
+                  </Stack>
+                  <StatusBar style="auto" />
+                </InstantCheckoutProvider>
+              </CartProvider>
+            </NotificationProvider>
+          </BusinessSwitchProvider>
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
