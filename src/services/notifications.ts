@@ -2,7 +2,6 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
-type NotificationInsert = Database['public']['Tables']['notifications']['Insert'];
 type NotificationUpdate = Database['public']['Tables']['notifications']['Update'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
 type NotificationPreferencesUpdate = Database['public']['Tables']['notification_preferences']['Update'];
@@ -26,6 +25,18 @@ export const notificationService = {
     return data || [];
   },
 
+  async getNotificationsForAllBusinesses(userId: string, limit = 50) {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getUnreadCount(userId: string, businessId?: string) {
     let query = supabase
       .from('notifications')
@@ -38,6 +49,17 @@ export const notificationService = {
     }
 
     const { count, error } = await query;
+
+    if (error) throw error;
+    return count || 0;
+  },
+
+  async getUnreadCountForAllBusinesses(userId: string) {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
 
     if (error) throw error;
     return count || 0;

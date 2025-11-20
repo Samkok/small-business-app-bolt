@@ -16,12 +16,16 @@ type NotificationPreferences = Database['public']['Tables']['notification_prefer
 
 interface NotificationContextData {
   notifications: Notification[];
+  allBusinessNotifications: Notification[];
   unreadCount: number;
+  allBusinessUnreadCount: number;
   preferences: NotificationPreferences | null;
   loading: boolean;
   refreshNotifications: () => Promise<void>;
+  refreshAllBusinessNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  markAllAsReadAllBusinesses: () => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
   updatePreferences: (prefs: Partial<NotificationPreferences>) => Promise<void>;
 }
@@ -38,19 +42,23 @@ export const useNotifications = () => {
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [allBusinessNotifications, setAllBusinessNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [allBusinessUnreadCount, setAllBusinessUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const auth = useAuth();
   const router = useRouter();
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
-  const appState = useRef(AppState.currentState);
+  const notificationListener = useRef<Notifications.Subscription | undefined>();
+  const responseListener = useRef<Notifications.Subscription | undefined>();
+  const appState = useRef<string>(AppState.currentState);
 
   const loadNotifications = useCallback(async () => {
     if (!auth.userProfile?.user_id) {
       setNotifications([]);
+      setAllBusinessNotifications([]);
       setUnreadCount(0);
+      setAllBusinessUnreadCount(0);
       await BadgeSync.clearBadge();
       setLoading(false);
       return;
@@ -75,9 +83,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
 
+  const loadAllBusinessNotifications = useCallback(async () => {
+    if (!auth.userProfile?.user_id) {
+      setAllBusinessNotifications([]);
+      setAllBusinessUnreadCount(0);
+      return;
+    }
+
+    try {
+      const [notifs, count] = await Promise.all([
+        notificationService.getNotificationsForAllBusinesses(auth.userProfile.user_id),
+        notificationService.getUnreadCountForAllBusinesses(auth.userProfile.user_id),
+      ]);
+
+      setAllBusinessNotifications(notifs);
+      setAllBusinessUnreadCount(count);
+    } catch (error) {
+      console.error('Error loading all business notifications:', error);
+    }
+  }, [auth.userProfile?.user_id]);
+
   useEffect(() => {
     loadNotifications();
-  }, [loadNotifications]);
+    loadAllBusinessNotifications();
+  }, [loadNotifications, loadAllBusinessNotifications]);
 
   useEffect(() => {
     if (!auth.userProfile?.user_id) return;
@@ -85,29 +114,32 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const channel = notificationService.subscribeToNotifications(
       auth.userProfile.user_id,
       async (notification) => {
-        setNotifications((prev) => [notification, ...prev]);
-        setUnreadCount((prev) => {
-          const newCount = prev + 1;
-          BadgeSync.updateBadge(newCount);
-          return newCount;
-        });
+        setAllBusinessNotifications((prev) => [notification, ...prev]);
+        setAllBusinessUnreadCount((prev) => prev + 1);
 
-        if (preferences?.enable_notifications !== false) {
-          const priority = pushNotificationService.getNotificationPriority(notification.type);
-          await pushNotificationService.scheduleLocalNotification(
-            {
-              id: notification.id,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              data: notification.data,
-            },
-            priority
-          );
+        if (auth.currentBusiness?.id === notification.business_id) {
+          setNotifications((prev) => [notification, ...prev]);
+          setUnreadCount((prev) => {
+            const newCount = prev + 1;
+            BadgeSync.updateBadge(newCount);
+            return newCount;
+          });
+        }
 
-          if (Platform.OS !== 'web') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
+        const priority = pushNotificationService.getNotificationPriority(notification.type);
+        await pushNotificationService.scheduleLocalNotification(
+          {
+            id: notification.id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            data: notification.data,
+          },
+          priority
+        );
+
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       }
     );
@@ -115,7 +147,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       notificationService.unsubscribeFromNotifications(channel);
     };
-  }, [auth.userProfile?.user_id, preferences]);
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id, preferences]);
 
   const handleNotificationWithBusinessSwitch = useCallback(async (notification: Notification, navigateTo: string) => {
     try {
@@ -189,13 +221,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Notification tapped:', data);
 
         const mockNotification: Notification = {
-          id: data.id || '',
+          id: (data.id as string) || '',
           user_id: auth.userProfile?.user_id || '',
-          business_id: data.business_id || '',
+          business_id: (data.business_id as string) || '',
           type: data.type as any,
-          title: data.title || '',
-          message: data.message || '',
-          data: data,
+          title: (data.title as string) || '',
+          message: (data.message as string) || '',
+          data: data as Record<string, any>,
           is_read: false,
           created_at: new Date().toISOString(),
         };
@@ -259,6 +291,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     await loadNotifications();
   }, [loadNotifications]);
 
+  const refreshAllBusinessNotifications = useCallback(async () => {
+    await loadAllBusinessNotifications();
+  }, [loadAllBusinessNotifications]);
+
   const markAsRead = useCallback(async (notificationId: string) => {
     try {
       await notificationService.markAsRead(notificationId);
@@ -285,30 +321,61 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(0);
       await BadgeSync.clearBadge();
       await pushNotificationService.dismissAllNotifications();
+
+      setAllBusinessNotifications((prev) =>
+        prev.map((n) =>
+          n.business_id === auth.currentBusiness?.id ? { ...n, is_read: true } : n
+        )
+      );
+      setAllBusinessUnreadCount((prev) => Math.max(0, prev - unreadCount));
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
       throw error;
     }
-  }, [auth.userProfile?.user_id, auth.currentBusiness?.id]);
+  }, [auth.userProfile?.user_id, auth.currentBusiness?.id, unreadCount]);
+
+  const markAllAsReadAllBusinesses = useCallback(async () => {
+    if (!auth.userProfile?.user_id) return;
+
+    try {
+      await notificationService.markAllAsRead(auth.userProfile.user_id);
+      setAllBusinessNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setAllBusinessUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+      await BadgeSync.clearBadge();
+      await pushNotificationService.dismissAllNotifications();
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      throw error;
+    }
+  }, [auth.userProfile?.user_id]);
 
   const deleteNotification = useCallback(async (notificationId: string) => {
     try {
       await notificationService.deleteNotification(notificationId);
-      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
 
-      const deletedNotification = notifications.find((n) => n.id === notificationId);
+      const deletedNotification = allBusinessNotifications.find((n) => n.id === notificationId);
+
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      setAllBusinessNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+
       if (deletedNotification && !deletedNotification.is_read) {
-        setUnreadCount((prev) => {
-          const newCount = Math.max(0, prev - 1);
-          BadgeSync.updateBadge(newCount);
-          return newCount;
-        });
+        setAllBusinessUnreadCount((prev) => Math.max(0, prev - 1));
+
+        if (deletedNotification.business_id === auth.currentBusiness?.id) {
+          setUnreadCount((prev) => {
+            const newCount = Math.max(0, prev - 1);
+            BadgeSync.updateBadge(newCount);
+            return newCount;
+          });
+        }
       }
     } catch (error) {
       console.error('Error deleting notification:', error);
       throw error;
     }
-  }, [notifications]);
+  }, [allBusinessNotifications, auth.currentBusiness?.id]);
 
   const updatePreferences = useCallback(async (prefs: Partial<NotificationPreferences>) => {
     if (!auth.userProfile?.user_id) return;
@@ -326,12 +393,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     <NotificationContext.Provider
       value={{
         notifications,
+        allBusinessNotifications,
         unreadCount,
+        allBusinessUnreadCount,
         preferences,
         loading,
         refreshNotifications,
+        refreshAllBusinessNotifications,
         markAsRead,
         markAllAsRead,
+        markAllAsReadAllBusinesses,
         deleteNotification,
         updatePreferences,
       }}

@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   UserPlus,
   Settings,
+  Building2,
 } from 'lucide-react-native';
 import { format } from 'date-fns';
 
@@ -33,12 +34,12 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const {
-    notifications,
-    unreadCount,
+    allBusinessNotifications,
+    allBusinessUnreadCount,
     loading,
-    refreshNotifications,
+    refreshAllBusinessNotifications,
     markAsRead,
-    markAllAsRead,
+    markAllAsReadAllBusinesses,
     deleteNotification,
   } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
@@ -53,7 +54,7 @@ export default function NotificationsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refreshNotifications();
+    await refreshAllBusinessNotifications();
     setRefreshing(false);
   };
 
@@ -67,7 +68,7 @@ export default function NotificationsScreen() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await markAllAsRead();
+      await markAllAsReadAllBusinesses();
       Alert.alert('Success', 'All notifications marked as read');
     } catch (error) {
       Alert.alert('Error', 'Failed to mark all as read');
@@ -94,6 +95,24 @@ export default function NotificationsScreen() {
   const handleNotificationPress = async (notification: any) => {
     if (!notification.is_read) {
       handleMarkAsRead(notification.id);
+    }
+
+    if (currentBusiness?.id !== notification.business_id) {
+      const businessExists = userBusinesses.some(b => b.id === notification.business_id);
+
+      if (!businessExists) {
+        await refreshUserBusinesses();
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const stillNotExists = !userBusinesses.some(b => b.id === notification.business_id);
+        if (stillNotExists) {
+          Alert.alert('Access Denied', 'You no longer have access to this business.');
+          return;
+        }
+      }
+
+      await switchBusiness(notification.business_id);
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     const data = notification.data as any;
@@ -175,8 +194,13 @@ export default function NotificationsScreen() {
 
   const filteredNotifications =
     filter === 'unread'
-      ? notifications.filter((n) => !n.is_read)
-      : notifications;
+      ? allBusinessNotifications.filter((n) => !n.is_read)
+      : allBusinessNotifications;
+
+  const getBusinessName = (businessId: string) => {
+    const business = userBusinesses.find(b => b.id === businessId);
+    return business?.business_name || 'Unknown Business';
+  };
 
   if (loading && !refreshing) {
     return (
@@ -229,7 +253,7 @@ export default function NotificationsScreen() {
               { color: filter === 'all' ? '#ffffff' : isDark ? '#d1d5db' : '#6b7280' },
             ]}
           >
-            All ({notifications.length})
+            All ({allBusinessNotifications.length})
           </Text>
         </TouchableOpacity>
 
@@ -249,11 +273,11 @@ export default function NotificationsScreen() {
               { color: filter === 'unread' ? '#ffffff' : isDark ? '#d1d5db' : '#6b7280' },
             ]}
           >
-            Unread ({unreadCount})
+            Unread ({allBusinessUnreadCount})
           </Text>
         </TouchableOpacity>
 
-        {unreadCount > 0 && (
+        {allBusinessUnreadCount > 0 && (
           <Button
             title="Mark all read"
             onPress={handleMarkAllAsRead}
@@ -308,6 +332,17 @@ export default function NotificationsScreen() {
                     {getNotificationIcon(notification.type)}
                   </View>
                   <View style={styles.notificationContent}>
+                    <View style={styles.businessBadgeContainer}>
+                      <Building2 size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <Text
+                        style={[
+                          styles.businessBadge,
+                          { color: isDark ? '#9ca3af' : '#6b7280' },
+                        ]}
+                      >
+                        {getBusinessName(notification.business_id)}
+                      </Text>
+                    </View>
                     <Text
                       style={[
                         styles.notificationTitle,
@@ -454,6 +489,16 @@ const styles = StyleSheet.create({
   },
   notificationContent: {
     flex: 1,
+  },
+  businessBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  businessBadge: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   notificationTitle: {
     fontSize: 16,
