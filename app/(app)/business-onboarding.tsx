@@ -135,7 +135,7 @@ export default function BusinessOnboardingScreen() {
             <Building2 size={48} color="#2563eb" />
           </View>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Welcome to Business Manager Pro
+            Welcome to BizManage
           </Text>
           <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
             Hello {userProfile?.full_name}! Let's set up your first business
