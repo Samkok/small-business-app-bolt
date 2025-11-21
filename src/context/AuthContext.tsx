@@ -148,6 +148,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const businessAccessHistoryRef = useRef<BusinessAccessHistory>({});
   const userBusinessesRef = useRef<Business[]>([]);
   const currentBusinessRef = useRef<Business | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
@@ -207,6 +210,127 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error updating business access history:', error);
     }
   }, [user]);
+
+  // Polling fallback function when realtime fails
+  const startPollingFallback = useCallback(() => {
+    if (!user?.id) return;
+
+    console.log('Starting polling fallback for business role changes');
+
+    // Store current business IDs for comparison
+    let lastBusinessIds = new Set(userBusinessesRef.current.map(b => b.id));
+
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        console.log('Polling for business role changes...');
+
+        const { data: roles, error } = await supabase
+          .from('user_business_roles')
+          .select('business_id')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Polling error:', error);
+          return;
+        }
+
+        const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
+
+        // Check for removed businesses
+        for (const oldId of lastBusinessIds) {
+          if (!currentBusinessIds.has(oldId)) {
+            console.log('Polling detected business removal:', oldId);
+
+            // Check if it was the current business
+            if (currentBusinessRef.current?.id === oldId) {
+              // Trigger the same logic as realtime DELETE
+              const removedBusinessName = userBusinessesRef.current.find(b => b.id === oldId)?.business_name || 'this business';
+              const remainingBusinesses = userBusinessesRef.current.filter(b => b.id !== oldId);
+
+              // Update state
+              setUserBusinesses(remainingBusinesses);
+              setUserBusinessRoles(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(oldId);
+                return newMap;
+              });
+
+              if (remainingBusinesses.length > 0) {
+                const nextBusiness = selectBestAvailableBusiness(
+                  oldId,
+                  remainingBusinesses,
+                  businessAccessHistoryRef.current
+                );
+
+                if (nextBusiness) {
+                  await switchBusiness(nextBusiness.id);
+
+                  setTimeout(async () => {
+                    try {
+                      const { router } = await import('expo-router');
+                      router.replace('/(app)/(tabs)');
+
+                      setTimeout(() => {
+                        if (Platform.OS === 'web') {
+                          alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`);
+                        } else {
+                          const { Alert } = require('react-native');
+                          Alert.alert(
+                            'Business Access Removed',
+                            `You were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`,
+                            [{ text: 'OK' }]
+                          );
+                        }
+                      }, 500);
+                    } catch (navError) {
+                      console.error('Navigation error:', navError);
+                    }
+                  }, 200);
+                }
+              } else {
+                setCurrentBusiness(null);
+
+                setTimeout(async () => {
+                  try {
+                    const { router } = await import('expo-router');
+                    router.replace('/(app)/business-onboarding');
+
+                    setTimeout(() => {
+                      if (Platform.OS === 'web') {
+                        alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}" and have no other businesses.`);
+                      } else {
+                        const { Alert } = require('react-native');
+                        Alert.alert(
+                          'Business Access Removed',
+                          `You were removed from "${removedBusinessName}" and have no other businesses.`,
+                          [{ text: 'OK' }]
+                        );
+                      }
+                    }, 500);
+                  } catch (navError) {
+                    console.error('Navigation error:', navError);
+                  }
+                }, 200);
+              }
+            } else {
+              // Just update the lists
+              setUserBusinesses(prev => prev.filter(b => b.id !== oldId));
+              setUserBusinessRoles(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(oldId);
+                return newMap;
+              });
+            }
+          }
+        }
+
+        // Update for next iteration
+        lastBusinessIds = currentBusinessIds;
+      } catch (error) {
+        console.error('Polling fallback error:', error);
+      }
+    }, 30000); // Poll every 30 seconds
+  }, [user, selectBestAvailableBusiness, switchBusiness]);
 
   useEffect(() => {
     mounted.current = true;
@@ -379,7 +503,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    console.log('Setting up real-time subscription for user business roles');
+    console.log('Setting up real-time subscription for user business roles', { userId: user.id });
+
+    // Clear any existing polling fallback
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+
+    // Clear any existing subscription timeout
+    if (subscriptionTimeoutRef.current) {
+      clearTimeout(subscriptionTimeoutRef.current);
+      subscriptionTimeoutRef.current = null;
+    }
+
+    setRealtimeStatus('connecting');
 
     // Create a channel for user business roles changes
     const channel = supabase
@@ -587,9 +725,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       )
-      .subscribe();
+      .on('system', {}, (payload: any) => {
+        console.log('Realtime system event:', payload);
+
+        if (payload.status === 'SUBSCRIBED') {
+          console.log('✅ Realtime subscription connected successfully');
+          setRealtimeStatus('connected');
+
+          // Clear subscription timeout on successful connection
+          if (subscriptionTimeoutRef.current) {
+            clearTimeout(subscriptionTimeoutRef.current);
+            subscriptionTimeoutRef.current = null;
+          }
+
+          // Clear any polling fallback
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        } else if (payload.status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime subscription error:', payload);
+          setRealtimeStatus('error');
+        } else if (payload.status === 'TIMED_OUT') {
+          console.error('❌ Realtime subscription timed out');
+          setRealtimeStatus('error');
+        } else if (payload.status === 'CLOSED') {
+          console.warn('⚠️  Realtime subscription closed');
+          setRealtimeStatus('disconnected');
+        }
+      })
+      .subscribe((status, err) => {
+        if (err) {
+          console.error('Realtime subscription error:', err);
+          setRealtimeStatus('error');
+        }
+        console.log('Realtime subscription status:', status);
+      });
 
     realtimeChannelRef.current = channel;
+
+    // Set timeout for subscription connection (10 seconds)
+    subscriptionTimeoutRef.current = setTimeout(() => {
+      if (realtimeStatus !== 'connected') {
+        console.warn('⚠️  Realtime subscription did not connect within 10 seconds, starting polling fallback');
+        startPollingFallback();
+      }
+    }, 10000);
 
     // Cleanup function
     return () => {
@@ -597,6 +778,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         supabase.removeChannel(realtimeChannelRef.current);
         realtimeChannelRef.current = null;
       }
+
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      if (subscriptionTimeoutRef.current) {
+        clearTimeout(subscriptionTimeoutRef.current);
+        subscriptionTimeoutRef.current = null;
+      }
+
+      setRealtimeStatus('disconnected');
     };
   }, [user?.id, session, selectBestAvailableBusiness, switchBusiness]);
 
