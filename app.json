@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.businessmanager.pro",
+      "usesPushNotifications": true,
       "infoPlist": {
         "NSCameraUsageDescription": "We need camera access for scanning",
         "NSPhotoLibraryUsageDescription": "Allow access your photo library to upload images",
