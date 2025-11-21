@@ -149,12 +149,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const businessAccessHistoryRef = useRef<BusinessAccessHistory>({});
   const userBusinessesRef = useRef<Business[]>([]);
   const currentBusinessRef = useRef<Business | null>(null);
+  const userRef = useRef<User | null>(null);
+  const realtimeStatusRef = useRef<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    realtimeStatusRef.current = realtimeStatus;
+  }, [realtimeStatus]);
 
   // Helper function for selecting the best available business
   const selectBestAvailableBusiness = useCallback((
@@ -219,26 +230,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Polling fallback function when realtime fails
   const startPollingFallback = useCallback(() => {
-    if (!user?.id) return;
+    // Clear any existing polling first
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
 
-    console.log('Starting polling fallback for business role changes');
+    if (!userRef.current?.id) {
+      console.warn('Cannot start polling: No valid user');
+      return;
+    }
+
+    console.log('Starting polling fallback for business role changes', { userId: userRef.current.id });
 
     // Store current business IDs for comparison
     let lastBusinessIds = new Set(userBusinessesRef.current.map(b => b.id));
+    let consecutiveFailures = 0;
+    const MAX_FAILURES = 5;
 
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        console.log('Polling for business role changes...');
+        // Guard: Check if user is still valid
+        if (!userRef.current?.id) {
+          console.warn('Polling stopped: User is no longer valid');
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          return;
+        }
+
+        // Guard: Check if real-time has connected (stop polling if so)
+        if (realtimeStatusRef.current === 'connected') {
+          console.log('Polling stopped: Real-time is now connected');
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          return;
+        }
+
+        console.log('Polling for business role changes...', { userId: userRef.current.id });
 
         const { data: roles, error } = await supabase
           .from('user_business_roles')
           .select('business_id')
-          .eq('user_id', user.id);
+          .eq('user_id', userRef.current.id);
 
         if (error) {
-          console.error('Polling error:', error);
+          consecutiveFailures++;
+          console.error('Polling error (attempt', consecutiveFailures, '/', MAX_FAILURES, '):', {
+            error: error,
+            errorCode: error.code,
+            errorMessage: error.message,
+            errorDetails: error.details,
+            errorHint: error.hint,
+            userId: userRef.current?.id,
+            timestamp: new Date().toISOString()
+          });
+
+          // Check if it's an auth error
+          const isAuthError =
+            error.message?.includes('JWT') ||
+            error.message?.includes('expired') ||
+            error.message?.includes('Invalid API key') ||
+            error.code === 'PGRST301';
+
+          if (isAuthError) {
+            console.error('Polling stopped: Authentication error detected');
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            return;
+          }
+
+          // Stop polling after max consecutive failures
+          if (consecutiveFailures >= MAX_FAILURES) {
+            console.error('Polling stopped: Too many consecutive failures');
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
           return;
         }
+
+        // Success - reset failure counter
+        consecutiveFailures = 0;
 
         const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
 
@@ -752,8 +831,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             subscriptionTimeoutRef.current = null;
           }
 
-          // Clear any polling fallback
+          // Stop polling fallback immediately
           if (pollingIntervalRef.current) {
+            console.log('Stopping polling fallback: Real-time connected');
             clearInterval(pollingIntervalRef.current);
             pollingIntervalRef.current = null;
           }
@@ -780,9 +860,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Set timeout for subscription connection (10 seconds)
     subscriptionTimeoutRef.current = setTimeout(() => {
-      if (realtimeStatus !== 'connected') {
+      // Use ref to get current status (avoids stale closure)
+      if (realtimeStatusRef.current !== 'connected') {
         console.warn('⚠️  Realtime subscription did not connect within 10 seconds, starting polling fallback');
         startPollingFallback();
+      } else {
+        console.log('Real-time already connected, skipping polling fallback');
       }
     }, 10000);
 
