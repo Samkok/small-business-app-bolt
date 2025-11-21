@@ -73,9 +73,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      const [notifs, count, prefs] = await Promise.all([
+      const [notifs, count, allBusinessCount, prefs] = await Promise.all([
         notificationService.getNotifications(auth.userProfile.user_id, auth.currentBusiness?.id),
         notificationService.getUnreadCount(auth.userProfile.user_id, auth.currentBusiness?.id),
+        notificationService.getUnreadCountForAllBusinesses(auth.userProfile.user_id),
         notificationService.getPreferences(auth.userProfile.user_id),
       ]);
 
@@ -84,7 +85,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(count);
       setPreferences(prefs);
 
-      await BadgeSync.updateBadge(count);
+      await BadgeSync.updateBadge(allBusinessCount);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -132,15 +133,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         setAllBusinessNotifications((prev) => [notification, ...prev]);
-        setAllBusinessUnreadCount((prev) => prev + 1);
+        setAllBusinessUnreadCount((prev) => {
+          const newCount = prev + 1;
+          BadgeSync.updateBadge(newCount);
+          return newCount;
+        });
 
         if (auth.currentBusiness?.id === notification.business_id) {
           setNotifications((prev) => [notification, ...prev]);
-          setUnreadCount((prev) => {
-            const newCount = prev + 1;
-            BadgeSync.updateBadge(newCount);
-            return newCount;
-          });
+          setUnreadCount((prev) => prev + 1);
         }
 
         const priority = pushNotificationService.getNotificationPriority(notification.type);
@@ -206,14 +207,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
           // Update unread counts
           if (!deletedNotification.is_read) {
-            setAllBusinessUnreadCount((prev) => Math.max(0, prev - 1));
+            setAllBusinessUnreadCount((prev) => {
+              const newCount = Math.max(0, prev - 1);
+              BadgeSync.updateBadge(newCount);
+              return newCount;
+            });
 
             if (auth.currentBusiness?.id === deletedNotification.business_id) {
-              setUnreadCount((prev) => {
-                const newCount = Math.max(0, prev - 1);
-                BadgeSync.updateBadge(newCount);
-                return newCount;
-              });
+              setUnreadCount((prev) => Math.max(0, prev - 1));
             }
           }
         }
@@ -337,22 +338,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return filtered;
     });
 
+    const unreadForBusiness = allBusinessNotifications.filter(
+      n => n.business_id === businessId && !n.is_read
+    ).length;
+
     setAllBusinessUnreadCount((prev) => {
-      const unreadForBusiness = allBusinessNotifications.filter(
-        n => n.business_id === businessId && !n.is_read
-      ).length;
-      return Math.max(0, prev - unreadForBusiness);
+      const newCount = Math.max(0, prev - unreadForBusiness);
+      BadgeSync.updateBadge(newCount);
+      return newCount;
     });
 
     if (auth.currentBusiness?.id === businessId) {
-      setUnreadCount((prev) => {
-        const unreadForBusiness = notifications.filter(
-          n => n.business_id === businessId && !n.is_read
-        ).length;
-        const newCount = Math.max(0, prev - unreadForBusiness);
-        BadgeSync.updateBadge(newCount);
-        return newCount;
-      });
+      const currentBusinessUnread = notifications.filter(
+        n => n.business_id === businessId && !n.is_read
+      ).length;
+      setUnreadCount((prev) => Math.max(0, prev - currentBusinessUnread));
     }
   }, [allBusinessNotifications, notifications, auth.currentBusiness?.id]);
 
@@ -380,8 +380,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [loadNotifications]);
 
   useEffect(() => {
-    BadgeSync.updateBadge(unreadCount);
-  }, [unreadCount]);
+    BadgeSync.updateBadge(allBusinessUnreadCount);
+  }, [allBusinessUnreadCount]);
 
   const refreshNotifications = useCallback(async () => {
     await loadNotifications();
@@ -397,7 +397,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications((prev) =>
         prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
       );
-      setUnreadCount((prev) => {
+      setAllBusinessNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setAllBusinessUnreadCount((prev) => {
         const newCount = Math.max(0, prev - 1);
         BadgeSync.updateBadge(newCount);
         return newCount;
@@ -414,16 +418,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       await notificationService.markAllAsRead(auth.userProfile.user_id, auth.currentBusiness?.id);
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-      await BadgeSync.clearBadge();
-      await pushNotificationService.dismissAllNotifications();
 
       setAllBusinessNotifications((prev) =>
         prev.map((n) =>
           n.business_id === auth.currentBusiness?.id ? { ...n, is_read: true } : n
         )
       );
-      setAllBusinessUnreadCount((prev) => Math.max(0, prev - unreadCount));
+
+      const otherBusinessesUnread = allBusinessUnreadCount - unreadCount;
+      setUnreadCount(0);
+      setAllBusinessUnreadCount(otherBusinessesUnread);
+      await BadgeSync.updateBadge(otherBusinessesUnread);
+      await pushNotificationService.dismissAllNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
       throw error;
@@ -457,14 +463,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setAllBusinessNotifications((prev) => prev.filter((n) => n.id !== notificationId));
 
       if (deletedNotification && !deletedNotification.is_read) {
-        setAllBusinessUnreadCount((prev) => Math.max(0, prev - 1));
+        setAllBusinessUnreadCount((prev) => {
+          const newCount = Math.max(0, prev - 1);
+          BadgeSync.updateBadge(newCount);
+          return newCount;
+        });
 
         if (deletedNotification.business_id === auth.currentBusiness?.id) {
-          setUnreadCount((prev) => {
-            const newCount = Math.max(0, prev - 1);
-            BadgeSync.updateBadge(newCount);
-            return newCount;
-          });
+          setUnreadCount((prev) => Math.max(0, prev - 1));
         }
       }
     } catch (error) {
