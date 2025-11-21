@@ -222,4 +222,4 @@ For support and questions:
 
 ---
 
-**Business Manager Pro** - Empowering small businesses with professional-grade management tools.
+**BizManage** - Empowering small businesses with professional-grade management tools.
