@@ -19,6 +19,7 @@ import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percen
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 import ReturnSaleForm from '@/src/components/sales/ReturnSaleForm';
+import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 
 export default function SaleDetailsScreen() {
   const [sale, setSale] = useState<any>(null);
@@ -26,6 +27,7 @@ export default function SaleDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [voidingInProgress, setVoidingInProgress] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [showVoidModal, setShowVoidModal] = useState(false);
   
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
@@ -67,31 +69,42 @@ export default function SaleDetailsScreen() {
 
   const handleVoidSale = () => {
     if (!currentBusiness?.id || !sale) return;
-    
-    Alert.alert(
-      'Void Sale',
-      `Are you sure you want to void this sale for $${sale.total_amount.toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Void Sale', 
-          style: 'destructive',
-          onPress: async () => {
-            setVoidingInProgress(true);
-            try {
-              await salesService.voidSale(sale.id, 'Sale voided by user', userProfile.user_id);
-              Alert.alert('Success', 'Sale voided successfully');
-              loadSaleDetails();
-            } catch (error) {
-              console.error('Error voiding sale:', error);
-              Alert.alert('Error', 'Failed to void sale');
-            } finally {
-              setVoidingInProgress(false);
-            }
-          }
-        },
-      ]
-    );
+    setShowVoidModal(true);
+  };
+
+  const handleVoidSaleConfirm = async (options: {
+    reason: string;
+    includeDeliveryCost: boolean;
+    lossAmount?: number;
+    lossPercentage?: number;
+    lossType?: 'fixed' | 'percentage';
+  }) => {
+    if (!sale || !userProfile) return;
+
+    setVoidingInProgress(true);
+    try {
+      await salesService.voidSale(
+        sale.id,
+        options.reason,
+        userProfile.user_id,
+        currentBusiness || undefined,
+        currentBusiness ? [currentBusiness] : undefined,
+        {
+          includeDeliveryCost: options.includeDeliveryCost,
+          lossAmount: options.lossAmount,
+          lossPercentage: options.lossPercentage,
+          lossType: options.lossType,
+        }
+      );
+      setShowVoidModal(false);
+      Alert.alert('Success', 'Sale voided successfully');
+      await loadSaleDetails();
+    } catch (error) {
+      console.error('Error voiding sale:', error);
+      Alert.alert('Error', 'Failed to void sale');
+    } finally {
+      setVoidingInProgress(false);
+    }
   };
 
   const handleReturnItems = () => {
@@ -540,7 +553,7 @@ export default function SaleDetailsScreen() {
         </Card>
 
         {/* Additional Information */}
-        {(sale.notes || sale.sale_actions_performed_by_fkey?.length > 0) && (
+        {(sale.notes || sale.sale_actions?.length > 0) && (
           <Card style={styles.section}>
             {sale.notes && (
               <>
@@ -557,7 +570,7 @@ export default function SaleDetailsScreen() {
               </>
             )}
             
-            {sale.sale_actions_performed_by_fkey?.length > 0 && (
+            {sale.sale_actions?.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { marginTop: sale.notes ? 16 : 0 }]}>
                   <AlertTriangle size={20} color="#dc2626" />
@@ -566,7 +579,7 @@ export default function SaleDetailsScreen() {
                   </Text>
                 </View>
                 
-                {sale.sale_actions_performed_by_fkey.map((action: any, index: number) => (
+                {sale.sale_actions.map((action: any, index: number) => (
                   <View key={index} style={styles.actionItem}>
                     <View style={styles.actionHeader}>
                       <Text style={[styles.actionType, { color: '#dc2626' }]}>
@@ -690,6 +703,17 @@ export default function SaleDetailsScreen() {
           onCancel={() => setShowReturnForm(false)}
         />
       </Modal>
+
+      {/* Void Sale Modal */}
+      {sale && (
+        <VoidSaleModal
+          visible={showVoidModal}
+          sale={sale}
+          onConfirm={handleVoidSaleConfirm}
+          onCancel={() => setShowVoidModal(false)}
+          loading={voidingInProgress}
+        />
+      )}
     </View>
   );
 }
