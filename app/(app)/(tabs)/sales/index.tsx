@@ -24,12 +24,12 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { TabButton } from '@/src/components/ui/TabButton';
-import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
+import { SkeletonSaleCard, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
+import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Zap } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -58,7 +58,6 @@ export default function SalesScreen() {
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
-  const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
 
   // Analytics states
@@ -535,29 +534,35 @@ export default function SalesScreen() {
     setCurrentPage(0);
   }, []);
 
-  const handleConfirmVoid = useCallback(async () => {
-    if (!voidReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for voiding this sale');
-      return;
-    }
-
+  const handleConfirmVoid = useCallback(async (options: {
+    reason: string;
+    includeDeliveryCost: boolean;
+    lossAmount?: number;
+    lossPercentage?: number;
+    lossType?: 'fixed' | 'percentage';
+  }) => {
     if (!currentBusiness?.id || !saleToVoid || !userProfile?.user_id) return;
 
     setVoidingInProgress(true);
     try {
-      // Call voidSale with business validation
+      // Call voidSale with business validation and adjustments
       await salesService.voidSale(
         saleToVoid.id,
-        voidReason.trim(),
+        options.reason,
         userProfile.user_id,
         currentBusiness,
-        userBusinesses
+        userBusinesses,
+        {
+          includeDeliveryCost: options.includeDeliveryCost,
+          lossAmount: options.lossAmount,
+          lossPercentage: options.lossPercentage,
+          lossType: options.lossType,
+        }
       );
 
       Alert.alert('Success', 'Sale voided successfully');
       setShowVoidModal(false);
       setSaleToVoid(null);
-      setVoidReason('');
 
       // Refresh sales data after voiding
       await loadSalesData(0, true);
@@ -581,7 +586,6 @@ export default function SalesScreen() {
       if (userFriendlyError.isBusinessAccessError) {
         setShowVoidModal(false);
         setSaleToVoid(null);
-        setVoidReason('');
 
         // Refresh to clear stale data
         if (userFriendlyError.action === 'REFRESH') {
@@ -591,7 +595,7 @@ export default function SalesScreen() {
     } finally {
       setVoidingInProgress(false);
     }
-  }, [voidReason, currentBusiness, saleToVoid, userProfile?.user_id, userBusinesses, loadSalesData]);
+  }, [currentBusiness, saleToVoid, userProfile?.user_id, userBusinesses, loadSalesData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
@@ -715,7 +719,7 @@ export default function SalesScreen() {
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
-  const renderSaleItem = useCallback(({ item }) => (
+  const renderSaleItem = useCallback(({ item }: { item: any }) => (
     <SaleCard
       sale={item}
       onVoid={handleVoidSale}
@@ -747,7 +751,7 @@ export default function SalesScreen() {
     </Card>
   ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleNewSale]);
 
-  const renderCartItem = useCallback(({ item }) => (
+  const renderCartItem = useCallback(({ item }: { item: any }) => (
     <ActiveCartCard
       key={item.id}
       cart={item}
@@ -1138,62 +1142,18 @@ export default function SalesScreen() {
       {renderCustomDateRangePicker()}
 
       {/* Void Sale Modal */}
-      <Modal
-        visible={showVoidModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowVoidModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={styles.voidModal}>
-            <View style={styles.voidModalHeader}>
-              <Text style={[styles.voidModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Void Sale
-              </Text>
-              <TouchableOpacity onPress={() => setShowVoidModal(false)}>
-                <X size={20} color={isDark ? '#f9fafb' : '#111827'} />
-              </TouchableOpacity>
-            </View>
-            
-            {saleToVoid && (
-              <View style={styles.saleInfoSection}>
-                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Sale #{saleToVoid.id.slice(-8)} - ${saleToVoid.total_amount.toFixed(2)}
-                </Text>
-                <Text style={[styles.customerInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Customer: {saleToVoid.customers?.name || 'Unknown'}
-                </Text>
-              </View>
-            )}
-            
-            <Input
-              label="Reason for Voiding"
-              value={voidReason}
-              onChangeText={setVoidReason}
-              placeholder="Please provide a reason for voiding this sale"
-              multiline
-              numberOfLines={3}
-              required
-            />
-            
-            <View style={styles.voidModalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setShowVoidModal(false)}
-                style={styles.voidModalButton}
-              />
-              <Button
-                title="Void Sale"
-                variant="danger"
-                onPress={handleConfirmVoid}
-                loading={voidingInProgress}
-                style={styles.voidModalButton}
-              />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+      {saleToVoid && (
+        <VoidSaleModal
+          visible={showVoidModal}
+          sale={saleToVoid}
+          onConfirm={handleConfirmVoid}
+          onCancel={() => {
+            setShowVoidModal(false);
+            setSaleToVoid(null);
+          }}
+          loading={voidingInProgress}
+        />
+      )}
 
       {/* Instant Checkout Widget */}
       <InstantCheckoutWidget />

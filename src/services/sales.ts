@@ -354,7 +354,13 @@ export const salesService = {
     reason: string,
     performedBy: string,
     currentBusiness?: Business | null,
-    userBusinesses?: Business[]
+    userBusinesses?: Business[],
+    options?: {
+      includeDeliveryCost?: boolean;
+      lossAmount?: number;
+      lossPercentage?: number;
+      lossType?: 'fixed' | 'percentage';
+    }
   ) {
     if (!saleId || !reason || !performedBy) return null;
 
@@ -377,6 +383,12 @@ export const salesService = {
       }
     }
 
+    // Calculate adjusted void amount
+    const { adjustedAmount, deliveryCostAmount, lossAmount } = this.calculateVoidAmount(
+      sale,
+      options
+    );
+
     // Restore stock for all items in the sale
     if (sale.carts?.cart_items) {
       for (const item of sale.carts.cart_items) {
@@ -396,28 +408,124 @@ export const salesService = {
       }
     }
 
-    // Perform the void action
-    return this.performSaleAction(saleId, 'void', reason, performedBy);
+    // Perform the void action with adjustments
+    return this.performSaleAction(
+      saleId,
+      'void',
+      reason,
+      performedBy,
+      sale.total_amount,
+      {
+        deliveryCostIncluded: options?.includeDeliveryCost ?? true,
+        deliveryCostAmount: deliveryCostAmount,
+        lossAmount: lossAmount,
+        lossPercentage: options?.lossPercentage || 0,
+        lossType: options?.lossType,
+        adjustedAmount: adjustedAmount,
+      }
+    );
+  },
+
+  calculateVoidAmount(
+    sale: any,
+    options?: {
+      includeDeliveryCost?: boolean;
+      lossAmount?: number;
+      lossPercentage?: number;
+      lossType?: 'fixed' | 'percentage';
+    }
+  ) {
+    let adjustedAmount = sale.total_amount;
+    let deliveryCostAmount = 0;
+    let lossAmount = 0;
+
+    // Handle delivery cost
+    const includeDelivery = options?.includeDeliveryCost ?? true;
+    if (!includeDelivery && sale.carts?.delivery_cost) {
+      deliveryCostAmount = sale.carts.delivery_cost;
+      adjustedAmount -= deliveryCostAmount;
+    } else if (includeDelivery && sale.carts?.delivery_cost) {
+      deliveryCostAmount = sale.carts.delivery_cost;
+    }
+
+    // Handle loss adjustment
+    if (options?.lossType === 'fixed' && options.lossAmount) {
+      lossAmount = options.lossAmount;
+      adjustedAmount -= lossAmount;
+    } else if (options?.lossType === 'percentage' && options.lossPercentage) {
+      lossAmount = (sale.total_amount * options.lossPercentage) / 100;
+      adjustedAmount -= lossAmount;
+    }
+
+    // Ensure adjusted amount is not negative
+    adjustedAmount = Math.max(0, adjustedAmount);
+
+    return {
+      adjustedAmount,
+      deliveryCostAmount,
+      lossAmount,
+    };
   },
 
   async refundSale(saleId: string, amount: number, reason: string, performedBy: string) {
     if (!saleId || !amount || !reason || !performedBy) return null;
-    
+
     return this.performSaleAction(saleId, 'refund', reason, performedBy, amount);
   },
 
-  async returnItems(saleId: string, returnedItems: { productId: string; quantity: number }[], reason: string, performedBy: string) {
+  async returnItems(
+    saleId: string,
+    returnedItems: {
+      productId: string;
+      quantity: number;
+      lossAmount?: number;
+      lossPercentage?: number;
+      lossType?: 'fixed' | 'percentage';
+    }[],
+    reason: string,
+    performedBy: string,
+    options?: {
+      includeDeliveryCost?: boolean;
+    }
+  ) {
     if (!saleId || !returnedItems.length || !reason || !performedBy) return null;
-    
+
     const sale = await this.getSale(saleId);
     let returnAmount = 0;
+    let totalLossAmount = 0;
+    const itemsMetadata: any[] = [];
 
     // Calculate return amount and restore inventory
     for (const returnItem of returnedItems) {
       const cartItem = sale.carts.cart_items.find(item => item.product_id === returnItem.productId);
       if (cartItem) {
         const itemReturnAmount = (cartItem.subtotal / cartItem.quantity) * returnItem.quantity;
+        let itemAdjustedAmount = itemReturnAmount;
+        let itemLoss = 0;
+
+        // Apply item-level loss adjustment
+        if (returnItem.lossType === 'fixed' && returnItem.lossAmount) {
+          itemLoss = returnItem.lossAmount;
+          itemAdjustedAmount = Math.max(0, itemReturnAmount - itemLoss);
+        } else if (returnItem.lossType === 'percentage' && returnItem.lossPercentage) {
+          itemLoss = (itemReturnAmount * returnItem.lossPercentage) / 100;
+          itemAdjustedAmount = itemReturnAmount - itemLoss;
+        }
+
         returnAmount += itemReturnAmount;
+        totalLossAmount += itemLoss;
+
+        // Store metadata for this item
+        itemsMetadata.push({
+          productId: returnItem.productId,
+          productName: cartItem.products?.name || 'Unknown',
+          quantity: returnItem.quantity,
+          originalAmount: itemReturnAmount,
+          lossAmount: itemLoss,
+          lossPercentage: returnItem.lossPercentage || 0,
+          lossType: returnItem.lossType,
+          adjustedAmount: itemAdjustedAmount,
+        });
 
         // Restore inventory
         const product = await productService.getProduct(returnItem.productId);
@@ -425,19 +533,68 @@ export const salesService = {
       }
     }
 
-    return this.performSaleAction(saleId, 'return', reason, performedBy, returnAmount);
+    // Calculate prorated delivery cost if included
+    let deliveryCostAmount = 0;
+    if (options?.includeDeliveryCost && sale.carts?.delivery_cost) {
+      const totalItems = sale.carts.cart_items.reduce((sum, item) => sum + item.quantity, 0);
+      const returnedQuantity = returnedItems.reduce((sum, item) => sum + item.quantity, 0);
+      const proratedPercentage = returnedQuantity / totalItems;
+      deliveryCostAmount = sale.carts.delivery_cost * proratedPercentage;
+    }
+
+    // Calculate final adjusted amount
+    const adjustedAmount = returnAmount + deliveryCostAmount - totalLossAmount;
+
+    return this.performSaleAction(
+      saleId,
+      'return',
+      reason,
+      performedBy,
+      returnAmount,
+      {
+        deliveryCostIncluded: options?.includeDeliveryCost ?? false,
+        deliveryCostAmount: deliveryCostAmount,
+        lossAmount: totalLossAmount,
+        lossPercentage: 0,
+        lossType: undefined,
+        adjustedAmount: adjustedAmount,
+        itemsMetadata: itemsMetadata,
+      }
+    );
   },
 
-  async performSaleAction(saleId: string, actionType: 'void' | 'refund' | 'return', reason: string, performedBy: string, amount?: number) {
+  async performSaleAction(
+    saleId: string,
+    actionType: 'void' | 'refund' | 'return',
+    reason: string,
+    performedBy: string,
+    amount?: number,
+    adjustments?: {
+      deliveryCostIncluded?: boolean;
+      deliveryCostAmount?: number;
+      lossAmount?: number;
+      lossPercentage?: number;
+      lossType?: 'fixed' | 'percentage';
+      adjustedAmount?: number;
+      itemsMetadata?: any;
+    }
+  ) {
     if (!saleId || !reason || !performedBy) return null;
-    
-    // Create sale action record
-    const actionData: SaleActionInsert = {
+
+    // Create sale action record with adjustments
+    const actionData: any = {
       sale_id: saleId,
       action_type: actionType,
       reason,
       performed_by: performedBy,
-      amount
+      amount,
+      delivery_cost_included: adjustments?.deliveryCostIncluded ?? false,
+      delivery_cost_amount: adjustments?.deliveryCostAmount ?? 0,
+      loss_amount: adjustments?.lossAmount ?? 0,
+      loss_percentage: adjustments?.lossPercentage ?? 0,
+      loss_type: adjustments?.lossType,
+      adjusted_amount: adjustments?.adjustedAmount ?? amount,
+      items_metadata: adjustments?.itemsMetadata,
     };
 
     const { data: action, error: actionError } = await supabase

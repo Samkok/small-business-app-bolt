@@ -26,6 +26,9 @@ interface ReturnItem {
   returnQuantity: number;
   unitPrice: number;
   maxReturnQuantity: number;
+  lossAmount: number;
+  lossPercentage: number;
+  lossType: 'none' | 'fixed' | 'percentage';
 }
 
 interface ReturnSaleFormProps {
@@ -39,7 +42,8 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [includeDeliveryCost, setIncludeDeliveryCost] = useState(false);
+
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
 
@@ -52,7 +56,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         originalQuantity: item.quantity,
         returnQuantity: 0,
         unitPrice: item.unit_price,
-        maxReturnQuantity: item.quantity // For now, allow returning all items
+        maxReturnQuantity: item.quantity,
+        lossAmount: 0,
+        lossPercentage: 0,
+        lossType: 'none',
       }));
       setReturnItems(items);
     }
@@ -71,16 +78,57 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const handleQuantityChange = useCallback((productId: string, change: number) => {
     const item = returnItems.find(i => i.productId === productId);
     if (!item) return;
-    
+
     const newQuantity = item.returnQuantity + change;
     updateReturnQuantity(productId, newQuantity);
   }, [returnItems, updateReturnQuantity]);
 
+  const updateItemLoss = useCallback((productId: string, lossType: 'none' | 'fixed' | 'percentage', value?: number) => {
+    setReturnItems(prev => prev.map(item => {
+      if (item.productId === productId) {
+        if (lossType === 'none') {
+          return { ...item, lossType: 'none', lossAmount: 0, lossPercentage: 0 };
+        } else if (lossType === 'fixed') {
+          return { ...item, lossType: 'fixed', lossAmount: value || 0, lossPercentage: 0 };
+        } else if (lossType === 'percentage') {
+          return { ...item, lossType: 'percentage', lossAmount: 0, lossPercentage: value || 0 };
+        }
+      }
+      return item;
+    }));
+  }, []);
+
   const calculateRefundAmount = useCallback(() => {
-    return returnItems.reduce((total, item) => {
-      return total + (item.returnQuantity * item.unitPrice);
-    }, 0);
-  }, [returnItems]);
+    let total = 0;
+    let totalLoss = 0;
+
+    returnItems.forEach(item => {
+      if (item.returnQuantity > 0) {
+        const itemAmount = item.returnQuantity * item.unitPrice;
+        let itemLoss = 0;
+
+        if (item.lossType === 'fixed') {
+          itemLoss = item.lossAmount;
+        } else if (item.lossType === 'percentage') {
+          itemLoss = (itemAmount * item.lossPercentage) / 100;
+        }
+
+        total += itemAmount;
+        totalLoss += itemLoss;
+      }
+    });
+
+    // Add prorated delivery cost if included
+    let deliveryCost = 0;
+    if (includeDeliveryCost && sale?.carts?.delivery_cost) {
+      const totalItems = sale.carts.cart_items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      const returnedQuantity = getTotalReturnItems();
+      const proratedPercentage = returnedQuantity / totalItems;
+      deliveryCost = sale.carts.delivery_cost * proratedPercentage;
+    }
+
+    return Math.max(0, total + deliveryCost - totalLoss);
+  }, [returnItems, includeDeliveryCost, sale]);
 
   const getTotalReturnItems = useCallback(() => {
     return returnItems.reduce((total, item) => total + item.returnQuantity, 0);
@@ -88,7 +136,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
 
   const handleSubmitReturn = useCallback(async () => {
     const itemsToReturn = returnItems.filter(item => item.returnQuantity > 0);
-    
+
     if (itemsToReturn.length === 0) {
       Alert.alert('Error', 'Please select at least one item to return');
       return;
@@ -104,18 +152,34 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       return;
     }
 
+    // Validate loss amounts
+    for (const item of itemsToReturn) {
+      if (item.lossType === 'fixed' && item.lossAmount < 0) {
+        Alert.alert('Error', `Invalid loss amount for ${item.productName}`);
+        return;
+      }
+      if (item.lossType === 'percentage' && (item.lossPercentage < 0 || item.lossPercentage > 100)) {
+        Alert.alert('Error', `Invalid loss percentage for ${item.productName}. Must be between 0-100`);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const returnData = itemsToReturn.map(item => ({
         productId: item.productId,
-        quantity: item.returnQuantity
+        quantity: item.returnQuantity,
+        lossAmount: item.lossType === 'fixed' ? item.lossAmount : undefined,
+        lossPercentage: item.lossType === 'percentage' ? item.lossPercentage : undefined,
+        lossType: item.lossType !== 'none' ? item.lossType : undefined,
       }));
 
       await salesService.returnItems(
         sale.id,
         returnData,
         reason.trim(),
-        userProfile.user_id
+        userProfile.user_id,
+        { includeDeliveryCost }
       );
 
       Alert.alert(
@@ -129,7 +193,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
     } finally {
       setLoading(false);
     }
-  }, [returnItems, reason, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount]);
+  }, [returnItems, reason, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount, includeDeliveryCost, userProfile]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
