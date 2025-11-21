@@ -86,8 +86,23 @@ export const reportsService = {
 
       const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
 
-      // Net Profit = Total Profit - Total Expenses
-      const netProfit = totalProfit - totalExpenses;
+      // Get loss amounts from sale actions (treated as expenses)
+      const { data: lossData } = await supabase
+        .from('sale_actions')
+        .select(`
+          loss_amount,
+          sales!inner(business_id, sale_date)
+        `)
+        .eq('sales.business_id', businessId)
+        .gte('sales.sale_date', startOfMonthStr)
+        .lte('sales.sale_date', endOfMonthStr)
+        .not('loss_amount', 'is', null)
+        .gt('loss_amount', 0);
+
+      const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
+
+      // Net Profit = Total Profit - Total Expenses - Loss Amounts
+      const netProfit = totalProfit - totalExpenses - totalLossAmount;
 
       // Low stock count
       const lowStockProducts = await productService.getLowStockProducts(businessId);
@@ -127,6 +142,7 @@ export const reportsService = {
         monthlyCOGS,
         totalProfit,
         totalExpenses,
+        totalLossAmount,
         netProfit,
         lowStockCount,
         totalCustomers: totalCustomers || 0,
@@ -426,6 +442,22 @@ export const reportsService = {
 
     if (expenseError) throw expenseError;
 
+    // Get loss data from sale actions
+    const { data: lossData, error: lossError } = await supabase
+      .from('sale_actions')
+      .select(`
+        loss_amount,
+        created_at,
+        sales!inner(business_id, sale_date)
+      `)
+      .eq('sales.business_id', businessId)
+      .gte('sales.sale_date', startDate.toISOString())
+      .lte('sales.sale_date', endDate.toISOString())
+      .not('loss_amount', 'is', null)
+      .gt('loss_amount', 0);
+
+    if (lossError) throw lossError;
+
     // Convert dates to JS Date objects
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -475,10 +507,19 @@ export const reportsService = {
         
         // Calculate total expenses for this month
         const expenses = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-        
-        // Calculate net profit (profit - expenses)
-        const netProfit = profit - expenses;
-        
+
+        // Filter loss amounts for this month
+        const monthLosses = lossData?.filter(loss => {
+          const lossMonth = (loss.sales?.sale_date || '').substring(0, 7);
+          return lossMonth === monthStr;
+        }) || [];
+
+        // Calculate total loss for this month
+        const lossAmount = monthLosses.reduce((sum, loss) => sum + (loss.loss_amount || 0), 0);
+
+        // Calculate net profit (profit - expenses - losses)
+        const netProfit = profit - expenses - lossAmount;
+
         return {
           date: format(month, 'yyyy-MM-dd'),
           label: format(month, 'MMM'),
@@ -486,6 +527,7 @@ export const reportsService = {
           cogs,
           profit,
           expenses,
+          lossAmount,
           netProfit
         };
       });
@@ -528,10 +570,19 @@ export const reportsService = {
         
         // Calculate total expenses for this day
         const expenses = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-        
-        // Calculate net profit (profit - expenses)
-        const netProfit = profit - expenses;
-        
+
+        // Filter loss amounts for this day
+        const dayLosses = lossData?.filter(loss => {
+          const lossDate = (loss.sales?.sale_date || '').split('T')[0];
+          return lossDate === dayStr;
+        }) || [];
+
+        // Calculate total loss for this day
+        const lossAmount = dayLosses.reduce((sum, loss) => sum + (loss.loss_amount || 0), 0);
+
+        // Calculate net profit (profit - expenses - losses)
+        const netProfit = profit - expenses - lossAmount;
+
         return {
           date: dayStr,
           label: format(day, 'dd/MM'),
@@ -539,6 +590,7 @@ export const reportsService = {
           cogs,
           profit,
           expenses,
+          lossAmount,
           netProfit
         };
       });
@@ -640,10 +692,25 @@ export const reportsService = {
       
       // Calculate total expenses
       const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
-      
+
+      // Get loss amounts from sale actions
+      const { data: lossData } = await supabase
+        .from('sale_actions')
+        .select(`
+          loss_amount,
+          sales!inner(business_id, sale_date)
+        `)
+        .eq('sales.business_id', businessId)
+        .gte('sales.sale_date', startDate)
+        .lte('sales.sale_date', endDate)
+        .not('loss_amount', 'is', null)
+        .gt('loss_amount', 0);
+
+      const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
+
       // Calculate inventory changes (total cost of imports)
       const inventoryChanges = inventoryData.reduce((sum, item) => sum + item.total_cost_for_item, 0);
-      
+
       // Identify equipment purchases (expenses in equipment category)
       const equipmentPurchases = expensesData
         .filter(expense => {
@@ -651,15 +718,15 @@ export const reportsService = {
           return categoryName.includes('equipment') || categoryName.includes('asset') || categoryName.includes('capital');
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
-      
+
       // For this example, we'll use placeholder values for owner contributions and withdrawals
       // In a real app, you would have a separate table to track these
       const ownerContributions = 0; // Placeholder
       const ownerWithdrawals = 0; // Placeholder
-      
-      // Calculate net income (revenue - COGS - expenses) to align with dashboard
+
+      // Calculate net income (revenue - COGS - expenses - loss amounts) to align with dashboard
       const grossProfit = totalRevenue - monthlyCOGS;
-      const netIncome = grossProfit - totalExpenses;
+      const netIncome = grossProfit - totalExpenses - totalLossAmount;
       
       // Calculate cash flows
       const operatingCashFlow = netIncome - inventoryChanges;
@@ -672,6 +739,7 @@ export const reportsService = {
       return {
         period: `${month + 1}/${year}`,
         netIncome,
+        totalLossAmount,
         inventoryChanges,
         operatingCashFlow,
         equipmentPurchases,

@@ -349,16 +349,36 @@ export default function SaleDetailsScreen() {
           <View style={styles.amountRow}>
             <DollarSign size={24} color="#059669" />
             <View style={styles.amountContainer}>
-              {sale.returned_amount > 0 ? (
+              {sale.status === 'voided' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    ${sale.total_amount.toFixed(2)}
+                    Original: ${sale.total_amount.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.currentAmount, { color: '#dc2626' }]}>
+                    ${(() => {
+                      const voidAction = sale.sale_actions?.find((a: any) => a.action_type === 'void');
+                      return (voidAction?.adjusted_amount ?? sale.total_amount).toFixed(2);
+                    })()}
+                  </Text>
+                  <Text style={[styles.returnedAmount, { color: '#6b7280' }]}>
+                    (voided)
+                  </Text>
+                </>
+              ) : sale.status === 'partially_returned' ? (
+                <>
+                  <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                    Original: ${sale.total_amount.toFixed(2)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#059669' }]}>
-                    ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
+                    ${(sale.current_total_amount ?? sale.total_amount).toFixed(2)}
                   </Text>
                   <Text style={[styles.returnedAmount, { color: '#dc2626' }]}>
-                    (-${(sale.returned_amount || 0).toFixed(2)} returned)
+                    (${(() => {
+                      const totalReturned = sale.sale_actions
+                        ?.filter((a: any) => a.action_type === 'return')
+                        ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
+                      return totalReturned.toFixed(2);
+                    })()} returned)
                   </Text>
                 </>
               ) : (

@@ -228,7 +228,8 @@ export const salesService = {
             item_discount_amount,
             products(name)
           )
-        )
+        ),
+        sale_actions(action_type, amount, adjusted_amount)
       `)
       .eq('business_id', businessId)
       .order('sale_date', { ascending: false });
@@ -239,7 +240,37 @@ export const salesService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data;
+
+    // Calculate display_amount for each sale based on status
+    const salesWithDisplayAmount = data.map(sale => {
+      let displayAmount = sale.total_amount;
+
+      if (sale.status === 'voided') {
+        // For voided sales, use adjusted_amount from void action
+        const voidAction = sale.sale_actions?.find((a: any) => a.action_type === 'void');
+        if (voidAction?.adjusted_amount != null) {
+          displayAmount = voidAction.adjusted_amount;
+        }
+      } else if (sale.status === 'partially_returned') {
+        // For partially returned, use current_total_amount if available, else calculate
+        if (sale.current_total_amount != null) {
+          displayAmount = sale.current_total_amount;
+        } else {
+          // Calculate: total - sum of adjusted return amounts
+          const totalReturned = sale.sale_actions
+            ?.filter((a: any) => a.action_type === 'return')
+            ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
+          displayAmount = sale.total_amount - totalReturned;
+        }
+      }
+
+      return {
+        ...sale,
+        display_amount: displayAmount
+      };
+    });
+
+    return salesWithDisplayAmount;
   },
 
   async getSalesWithDiscountDetails(businessId: string, limit?: number) {

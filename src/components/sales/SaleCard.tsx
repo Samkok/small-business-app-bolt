@@ -9,6 +9,7 @@ interface SaleCardProps {
   sale: {
     id: string;
     total_amount: number;
+    display_amount?: number;
     payment_method: string;
     status: string;
     sale_date: string;
@@ -96,9 +97,16 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid }: SaleCardP
             
             <View style={styles.amountRow}>
               <DollarSign size={18} color="#059669" />
-              <Text style={[styles.amount, { color: '#059669' }]}>
-                {formatCurrency(sale.total_amount)}
-              </Text>
+              <View style={styles.amountContainer}>
+                <Text style={[styles.amount, { color: '#059669' }]}>
+                  {formatCurrency(sale.display_amount ?? sale.total_amount)}
+                </Text>
+                {sale.display_amount != null && sale.display_amount !== sale.total_amount && (
+                  <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    {formatCurrency(sale.total_amount)}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
           
@@ -203,10 +211,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  amountContainer: {
+    marginLeft: 4,
+  },
   amount: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginLeft: 4,
+  },
+  originalAmount: {
+    fontSize: 12,
+    textDecorationLine: 'line-through',
+    marginTop: 2,
   },
   actionButton: {
     width: 32,
