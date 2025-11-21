@@ -72,10 +72,9 @@ async function clearAuthStorage() {
     for (const key of possibleKeys) {
       try {
         await SecureStore.deleteItemAsync(key);
-        console.log('clearAuthStorage: Cleared native key:', key);
       } catch (error) {
         // Key might not exist, that's fine
-        console.log('clearAuthStorage: Key does not exist:', key);
+        console.log('clearAuthStorage: Key does not exist');
       }
     }
   }
