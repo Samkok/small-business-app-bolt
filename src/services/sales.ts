@@ -520,7 +520,7 @@ export const salesService = {
 
   async getDiscountAnalytics(businessId: string, startDate: string, endDate: string) {
     if (!businessId || !startDate || !endDate) return null;
-    
+
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select(`
@@ -557,5 +557,60 @@ export const salesService = {
     analytics.discountPercentage = analytics.totalOriginalAmount > 0 ? (analytics.totalDiscounts / analytics.totalOriginalAmount) * 100 : 0;
 
     return analytics;
+  },
+
+  async getSalesAnalytics(
+    businessId: string,
+    startDate: string,
+    endDate: string,
+    status?: string,
+    paymentMethod?: string
+  ) {
+    if (!businessId || !startDate || !endDate) {
+      return {
+        totalRevenue: 0,
+        averageSale: 0,
+        todayRevenue: 0,
+        todaySalesCount: 0
+      };
+    }
+
+    let query = supabase
+      .from('sales')
+      .select('total_amount, sale_date, status')
+      .eq('business_id', businessId)
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    if (paymentMethod) {
+      query = query.eq('payment_method', paymentMethod);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Filter completed sales for revenue calculations
+    const completedSales = (data || []).filter(s => s.status === 'completed');
+    const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
+    const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
+
+    // Calculate today's sales
+    const today = new Date().toISOString().split('T')[0];
+    const todaySales = completedSales.filter(sale =>
+      sale.sale_date.split('T')[0] === today
+    );
+    const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
+
+    return {
+      totalRevenue,
+      averageSale,
+      todayRevenue,
+      todaySalesCount: todaySales.length
+    };
   }
 };

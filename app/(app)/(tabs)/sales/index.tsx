@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -60,6 +60,14 @@ export default function SalesScreen() {
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
+
+  // Analytics states
+  const [analytics, setAnalytics] = useState({
+    totalRevenue: 0,
+    averageSale: 0,
+    todayRevenue: 0,
+    todaySalesCount: 0
+  });
 
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -247,7 +255,7 @@ export default function SalesScreen() {
       await refreshCarts();
       
       if (activeTab === 'sales') {
-        await loadSalesData(isRefresh);
+        await loadSalesData(0, isRefresh);
       } else {
         setLoading(false);
       }
@@ -280,16 +288,42 @@ export default function SalesScreen() {
       const statusFilter = selectedStatus !== 'all' ? selectedStatus : undefined;
       const paymentFilter = selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined;
 
-      // Run both queries in parallel for better performance
-      const [count, salesData] = await Promise.all([
-        salesService.getSalesCount(
-          currentBusiness.id,
-          start.toISOString(),
-          end.toISOString(),
-          statusFilter,
-          paymentFilter
-        ),
-        salesService.getSalesPaginated(
+      // For first page or refresh, fetch analytics; for pagination, skip analytics
+      if (refresh || page === 0) {
+        const [count, salesData, analyticsData] = await Promise.all([
+          salesService.getSalesCount(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            statusFilter,
+            paymentFilter
+          ),
+          salesService.getSalesPaginated(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            page * SALES_PER_PAGE,
+            SALES_PER_PAGE,
+            statusFilter,
+            paymentFilter
+          ),
+          salesService.getSalesAnalytics(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            statusFilter,
+            paymentFilter
+          )
+        ]);
+
+        setTotalSales(count);
+        setAnalytics(analyticsData);
+        setSales(salesData);
+        setFilteredSales(salesData);
+        setCurrentPage(0);
+      } else {
+        // Pagination: only fetch sales data, not analytics
+        const salesData = await salesService.getSalesPaginated(
           currentBusiness.id,
           start.toISOString(),
           end.toISOString(),
@@ -297,16 +331,8 @@ export default function SalesScreen() {
           SALES_PER_PAGE,
           statusFilter,
           paymentFilter
-        )
-      ]);
+        );
 
-      setTotalSales(count);
-
-      if (refresh || page === 0) {
-        setSales(salesData);
-        setFilteredSales(salesData);
-        setCurrentPage(0);
-      } else {
         // Append new data for infinite scroll
         setSales(prevSales => {
           const combined = [...prevSales, ...salesData];
@@ -328,10 +354,10 @@ export default function SalesScreen() {
         }
 
         setCurrentPage(page);
-      }
 
-      // Update hasMoreSales based on returned data length
-      setHasMoreSales(salesData.length === SALES_PER_PAGE);
+        // Update hasMoreSales based on returned data length
+        setHasMoreSales(salesData.length === SALES_PER_PAGE);
+      }
     } catch (error) {
       console.error('Error loading sales data:', error);
       Alert.alert(t('common.error'), 'Failed to load sales data');
@@ -571,26 +597,11 @@ export default function SalesScreen() {
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
 
-  const getSalesStats = useCallback(() => {
-    const totalSalesCount = totalSales;
-    const completedSales = sales.filter(s => s.status === 'completed');
-    const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
-    const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
-    
-    // Today's sales
-    const today = new Date().toISOString().split('T')[0];
-    const todaySales = completedSales.filter(sale => 
-      sale.sale_date.split('T')[0] === today
-    );
-    const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
-
-    return { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales: todaySales.length };
-  }, [sales, totalSales]);
-
-  const { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales } = useMemo(
-    () => getSalesStats(),
-    [getSalesStats]
-  );
+  // Use analytics from database query instead of calculating from paginated data
+  const totalRevenue = analytics.totalRevenue;
+  const averageSale = analytics.averageSale;
+  const todayRevenue = analytics.todayRevenue;
+  const todaySales = analytics.todaySalesCount;
 
 
   const renderDateFilter = useCallback(() => (
