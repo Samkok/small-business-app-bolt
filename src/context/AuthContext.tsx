@@ -146,9 +146,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [businessAccessHistory, setBusinessAccessHistory] = useState<BusinessAccessHistory>({});
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
+  const businessAccessHistoryRef = useRef<BusinessAccessHistory>({});
+  const userBusinessesRef = useRef<Business[]>([]);
+  const currentBusinessRef = useRef<Business | null>(null);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
+
+  // Helper function for selecting the best available business
+  const selectBestAvailableBusiness = useCallback((
+    removedBusinessId: string,
+    availableBusinesses: Business[],
+    accessHistory: BusinessAccessHistory
+  ): Business | null => {
+    if (availableBusinesses.length === 0) {
+      return null;
+    }
+
+    const candidates = availableBusinesses.filter(b => b.id !== removedBusinessId);
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const sorted = candidates
+      .map(business => ({
+        business,
+        lastAccess: accessHistory[business.id] || 0,
+      }))
+      .sort((a, b) => b.lastAccess - a.lastAccess);
+
+    return sorted[0].business;
+  }, []);
+
+  // Helper function for switching business
+  const switchBusiness = useCallback(async (businessId: string) => {
+    if (!user) return;
+
+    const business = userBusinessesRef.current.find(b => b.id === businessId);
+    if (!business) {
+      console.error('Business not found:', businessId);
+      return;
+    }
+
+    setCurrentBusiness(business);
+
+    // Save preference to AsyncStorage
+    try {
+      await AsyncStorage.setItem(`currentBusiness_${user.id}`, businessId);
+    } catch (error) {
+      console.error('Error saving business preference:', error);
+    }
+
+    // Track business access for smart switching
+    try {
+      await businessAccessHistoryService.updateAccess(businessId);
+      const updatedHistory = await businessAccessHistoryService.getHistory();
+      setBusinessAccessHistory(updatedHistory);
+      businessAccessHistoryRef.current = updatedHistory;
+    } catch (error) {
+      console.error('Error updating business access history:', error);
+    }
+  }, [user]);
 
   useEffect(() => {
     mounted.current = true;
@@ -162,10 +221,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const history = await businessAccessHistoryService.getHistory();
       if (mounted.current) {
         setBusinessAccessHistory(history);
+        businessAccessHistoryRef.current = history;
       }
     }
     loadBusinessAccessHistory();
   }, []);
+
+  useEffect(() => {
+    businessAccessHistoryRef.current = businessAccessHistory;
+  }, [businessAccessHistory]);
+
+  useEffect(() => {
+    userBusinessesRef.current = userBusinesses;
+  }, [userBusinesses]);
+
+  useEffect(() => {
+    currentBusinessRef.current = currentBusiness;
+  }, [currentBusiness]);
 
   // Debug logging for data loading state
   useEffect(() => {
@@ -370,14 +442,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (payload.eventType === 'DELETE') {
             // User removed from a business
             const removedBusinessId = (payload.old as any).business_id;
-            const removedBusinessName = userBusinesses.find(b => b.id === removedBusinessId)?.business_name || 'this business';
-            const wasCurrentBusiness = currentBusiness?.id === removedBusinessId;
+            const removedBusinessName = userBusinessesRef.current.find(b => b.id === removedBusinessId)?.business_name || 'this business';
+            const wasCurrentBusiness = currentBusinessRef.current?.id === removedBusinessId;
 
             console.log('Real-time: User removed from business', {
               removedBusinessId,
               removedBusinessName,
               wasCurrentBusiness,
-              currentBusinessesCount: userBusinesses.length,
+              currentBusinessesCount: userBusinessesRef.current.length,
             });
 
             if (mounted.current) {
@@ -414,19 +486,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               // If removed from current business, handle automatic switching
               if (wasCurrentBusiness) {
-                console.log('User removed from their current business');
+                console.log('User removed from their current business - triggering automatic switch');
 
                 // Wait a bit for state updates to propagate
                 setTimeout(async () => {
-                  // Get the latest business list - use a fresh read from state
-                  const remainingBusinesses = updatedBusinessList.length > 0 ? updatedBusinessList : userBusinesses.filter(b => b.id !== removedBusinessId);
+                  // Get the latest business list from the captured value
+                  const remainingBusinesses = updatedBusinessList;
+
+                  console.log('Remaining businesses after removal:', {
+                    count: remainingBusinesses.length,
+                    ids: remainingBusinesses.map(b => b.id),
+                  });
 
                   if (remainingBusinesses.length > 0) {
+                    // Get current access history
+                    const currentHistory = businessAccessHistoryRef.current;
+
                     // Select the best available business
                     const nextBusiness = selectBestAvailableBusiness(
                       removedBusinessId,
                       remainingBusinesses,
-                      businessAccessHistory
+                      currentHistory
                     );
 
                     if (nextBusiness) {
@@ -438,17 +518,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       try {
                         await switchBusiness(nextBusiness.id);
 
+                        console.log('Business switch successful, showing alert');
+
                         // Show notification about the automatic switch
-                        if (Platform.OS !== 'web') {
-                          const { Alert } = await import('react-native');
-                          setTimeout(() => {
+                        setTimeout(() => {
+                          if (Platform.OS === 'web') {
+                            alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`);
+                          } else {
+                            const { Alert } = require('react-native');
                             Alert.alert(
                               'Business Access Removed',
                               `You were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`,
                               [{ text: 'OK' }]
                             );
-                          }, 500);
-                        }
+                          }
+                        }, 300);
                       } catch (error) {
                         console.error('Failed to automatically switch business:', error);
                         setCurrentBusiness(null);
@@ -458,22 +542,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       setCurrentBusiness(null);
                     }
                   } else {
-                    console.log('No remaining businesses, user will be shown onboarding');
+                    console.log('No remaining businesses, clearing current business');
                     setCurrentBusiness(null);
 
                     // Show notification about removal with no other businesses
-                    if (Platform.OS !== 'web') {
-                      const { Alert } = await import('react-native');
-                      setTimeout(() => {
+                    setTimeout(() => {
+                      if (Platform.OS === 'web') {
+                        alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`);
+                      } else {
+                        const { Alert } = require('react-native');
                         Alert.alert(
                           'Business Access Removed',
                           `You were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`,
                           [{ text: 'OK' }]
                         );
-                      }, 500);
-                    }
+                      }
+                    }, 300);
                   }
-                }, 300);
+                }, 100);
               }
             }
           }
@@ -490,7 +576,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         realtimeChannelRef.current = null;
       }
     };
-  }, [user?.id, session, currentBusiness]);
+  }, [user?.id, session, selectBestAvailableBusiness, switchBusiness]);
 
     // Add a safety timeout to prevent the app from being stuck in loading state
   useEffect(() => {
@@ -825,31 +911,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }, []);
 
-  const selectBestAvailableBusiness = useCallback((
-    removedBusinessId: string,
-    availableBusinesses: Business[],
-    accessHistory: BusinessAccessHistory
-  ): Business | null => {
-    if (availableBusinesses.length === 0) {
-      return null;
-    }
-
-    const candidates = availableBusinesses.filter(b => b.id !== removedBusinessId);
-
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    const sorted = candidates
-      .map(business => ({
-        business,
-        lastAccess: accessHistory[business.id] || 0,
-      }))
-      .sort((a, b) => b.lastAccess - a.lastAccess);
-
-    return sorted[0].business;
-  }, []);
-
   const refreshUserBusinesses = useCallback(async (): Promise<Business[]> => {
     if (!user?.id) {
       console.log('refreshUserBusinesses: No user ID available');
@@ -999,34 +1060,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Computed properties for role checks
   const isAdmin = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
   const isStaff = useMemo(() => currentUserRole === 'staff', [currentUserRole]);
-
-  const switchBusiness = useCallback(async (businessId: string) => {
-    if (!user) return;
-
-    const business = userBusinesses.find(b => b.id === businessId);
-    if (!business) {
-      console.error('Business not found:', businessId);
-      return;
-    }
-
-    setCurrentBusiness(business);
-
-    // Save preference to AsyncStorage
-    try {
-      await AsyncStorage.setItem(`currentBusiness_${user.id}`, businessId);
-    } catch (error) {
-      console.error('Error saving business preference:', error);
-    }
-
-    // Track business access for smart switching
-    try {
-      await businessAccessHistoryService.updateAccess(businessId);
-      const updatedHistory = await businessAccessHistoryService.getHistory();
-      setBusinessAccessHistory(updatedHistory);
-    } catch (error) {
-      console.error('Error updating business access history:', error);
-    }
-  }, [user, userBusinesses]);
 
   const signOut = useCallback(async () => {
     console.log('SignOut: Starting sign out process');
