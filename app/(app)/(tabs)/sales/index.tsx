@@ -406,7 +406,6 @@ export default function SalesScreen() {
 
   const handleVoidSale = useCallback((sale: any) => {
     setSaleToVoid(sale);
-    setVoidReason('');
     setShowVoidModal(true);
   }, []);
 
