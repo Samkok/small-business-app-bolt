@@ -14,9 +14,9 @@ import { BusinessSwitchProvider } from '@/src/context/BusinessSwitchContext';
 import '@/src/locales';
 import { adapty } from 'react-native-adapty';
 
-adapty.activate('public_live_o5acxLBP.0qPu9fprqJG19o9ZINDJ');
-
 export default function RootLayout() {
+
+  adapty.activate('public_live_o5acxLBP.0qPu9fprqJG19o9ZINDJ');
   console.log('RootLayout rendering');
   useFrameworkReady();
 
