@@ -517,21 +517,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       try {
                         await switchBusiness(nextBusiness.id);
 
-                        console.log('Business switch successful, showing alert');
+                        console.log('Business switch successful, triggering navigation');
 
-                        // Show notification about the automatic switch
-                        setTimeout(() => {
-                          if (Platform.OS === 'web') {
-                            alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`);
-                          } else {
-                            const { Alert } = require('react-native');
-                            Alert.alert(
-                              'Business Access Removed',
-                              `You were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`,
-                              [{ text: 'OK' }]
-                            );
+                        // Force navigation to dashboard after business switch
+                        setTimeout(async () => {
+                          try {
+                            // Dynamically import router to avoid circular dependencies
+                            const { router } = await import('expo-router');
+                            console.log('Navigating to dashboard after business switch');
+                            router.replace('/(app)/(tabs)');
+
+                            // Show notification after navigation
+                            setTimeout(() => {
+                              if (Platform.OS === 'web') {
+                                alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`);
+                              } else {
+                                const { Alert } = require('react-native');
+                                Alert.alert(
+                                  'Business Access Removed',
+                                  `You were removed from "${removedBusinessName}". Switched to "${nextBusiness.business_name}".`,
+                                  [{ text: 'OK' }]
+                                );
+                              }
+                            }, 500);
+                          } catch (navError) {
+                            console.error('Navigation error after business switch:', navError);
                           }
-                        }, 300);
+                        }, 200);
                       } catch (error) {
                         console.error('Failed to automatically switch business:', error);
                         setCurrentBusiness(null);
@@ -541,22 +553,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       setCurrentBusiness(null);
                     }
                   } else {
-                    console.log('No remaining businesses, clearing current business');
+                    console.log('No remaining businesses, clearing current business and navigating to onboarding');
                     setCurrentBusiness(null);
 
-                    // Show notification about removal with no other businesses
-                    setTimeout(() => {
-                      if (Platform.OS === 'web') {
-                        alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`);
-                      } else {
-                        const { Alert } = require('react-native');
-                        Alert.alert(
-                          'Business Access Removed',
-                          `You were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`,
-                          [{ text: 'OK' }]
-                        );
+                    // Navigate to business onboarding
+                    setTimeout(async () => {
+                      try {
+                        const { router } = await import('expo-router');
+                        console.log('Navigating to business onboarding after removal');
+                        router.replace('/(app)/business-onboarding');
+
+                        // Show notification after navigation
+                        setTimeout(() => {
+                          if (Platform.OS === 'web') {
+                            alert(`Business Access Removed\n\nYou were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`);
+                          } else {
+                            const { Alert } = require('react-native');
+                            Alert.alert(
+                              'Business Access Removed',
+                              `You were removed from "${removedBusinessName}" and have no other businesses. You can create a new business to continue.`,
+                              [{ text: 'OK' }]
+                            );
+                          }
+                        }, 500);
+                      } catch (navError) {
+                        console.error('Navigation error after business removal:', navError);
                       }
-                    }, 300);
+                    }, 200);
                   }
                 }, 100);
               }
