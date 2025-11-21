@@ -86,8 +86,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setPreferences(prefs);
 
       await BadgeSync.updateBadge(allBusinessCount);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
+    } catch (error: any) {
+      // Check if it's an auth error - these are expected during session transitions
+      const isAuthError = error?.message?.includes('JWT') ||
+                          error?.message?.includes('expired') ||
+                          error?.message?.includes('Invalid API key') ||
+                          error?.code === 'PGRST301';
+
+      if (isAuthError) {
+        console.log('Notification loading postponed - session is refreshing. Will retry automatically.');
+      } else {
+        console.error('Error loading notifications:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -109,8 +119,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const validNotifs = filterValidNotifications(notifs);
       setAllBusinessNotifications(validNotifs);
       setAllBusinessUnreadCount(count);
-    } catch (error) {
-      console.error('Error loading all business notifications:', error);
+    } catch (error: any) {
+      // Check if it's an auth error - these are expected during session transitions
+      const isAuthError = error?.message?.includes('JWT') ||
+                          error?.message?.includes('expired') ||
+                          error?.message?.includes('Invalid API key') ||
+                          error?.code === 'PGRST301';
+
+      if (isAuthError) {
+        console.log('All business notifications loading postponed - session is refreshing.');
+      } else {
+        console.error('Error loading all business notifications:', error);
+      }
     }
   }, [auth.userProfile?.user_id, filterValidNotifications]);
 
@@ -250,12 +270,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
               .eq('user_id', auth.userProfile.user_id);
 
             if (error) {
-              console.error('Error saving push token:', error);
+              // Check if it's an auth error - these are expected during session transitions
+              const isAuthError = error.message?.includes('JWT') ||
+                                  error.message?.includes('expired') ||
+                                  error.message?.includes('Invalid API key');
+
+              if (isAuthError) {
+                console.log('Push token save skipped - session refreshing. Will retry automatically.');
+              } else {
+                console.error('Error saving push token:', error);
+              }
             } else {
               console.log('Push token saved successfully');
             }
-          } catch (error) {
-            console.error('Error updating push token:', error);
+          } catch (error: any) {
+            // Check if it's an auth error
+            const isAuthError = error?.message?.includes('JWT') ||
+                                error?.message?.includes('expired') ||
+                                error?.message?.includes('Invalid API key');
+
+            if (isAuthError) {
+              console.log('Push token update postponed - session will refresh automatically');
+            } else {
+              console.error('Error updating push token:', error);
+            }
           }
         } else if (!pushToken) {
           console.log('Push token not available - app will still work without push notifications');
@@ -368,8 +406,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         console.log('App has come to the foreground');
-        await loadNotifications();
-        await pushNotificationService.dismissAllNotifications();
+
+        // Add a small delay to allow AuthContext to refresh session first
+        // This prevents auth errors when loading notifications with a stale token
+        setTimeout(async () => {
+          try {
+            await loadNotifications();
+            await pushNotificationService.dismissAllNotifications();
+          } catch (error) {
+            console.warn('Error loading notifications on foreground:', error);
+          }
+        }, 500);
       }
       appState.current = nextAppState;
     });
