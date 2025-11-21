@@ -6,7 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -18,6 +19,7 @@ import { ArrowLeft, User, Calendar, CreditCard, DollarSign, ShoppingCart, Percen
 import { salesService } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 import ReturnSaleForm from '@/src/components/sales/ReturnSaleForm';
+import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 
 export default function SaleDetailsScreen() {
   const [sale, setSale] = useState<any>(null);
@@ -25,11 +27,22 @@ export default function SaleDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [voidingInProgress, setVoidingInProgress] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [showVoidModal, setShowVoidModal] = useState(false);
   
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
+
+  const handleGoBack = () => {
+    // Always go back to sales index, handling both modal and stack navigation
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // If no back navigation available, navigate to sales tab
+      router.push('/(app)/(tabs)/sales');
+    }
+  };
 
   useEffect(() => {
     loadSaleDetails();
@@ -56,31 +69,42 @@ export default function SaleDetailsScreen() {
 
   const handleVoidSale = () => {
     if (!currentBusiness?.id || !sale) return;
-    
-    Alert.alert(
-      'Void Sale',
-      `Are you sure you want to void this sale for $${sale.total_amount.toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Void Sale', 
-          style: 'destructive',
-          onPress: async () => {
-            setVoidingInProgress(true);
-            try {
-              await salesService.voidSale(sale.id, 'Sale voided by user', userProfile.user_id);
-              Alert.alert('Success', 'Sale voided successfully');
-              loadSaleDetails();
-            } catch (error) {
-              console.error('Error voiding sale:', error);
-              Alert.alert('Error', 'Failed to void sale');
-            } finally {
-              setVoidingInProgress(false);
-            }
-          }
-        },
-      ]
-    );
+    setShowVoidModal(true);
+  };
+
+  const handleVoidSaleConfirm = async (options: {
+    reason: string;
+    includeDeliveryCost: boolean;
+    lossAmount?: number;
+    lossPercentage?: number;
+    lossType?: 'fixed' | 'percentage';
+  }) => {
+    if (!sale || !userProfile) return;
+
+    setVoidingInProgress(true);
+    try {
+      await salesService.voidSale(
+        sale.id,
+        options.reason,
+        userProfile.user_id,
+        currentBusiness || undefined,
+        currentBusiness ? [currentBusiness] : undefined,
+        {
+          includeDeliveryCost: options.includeDeliveryCost,
+          lossAmount: options.lossAmount,
+          lossPercentage: options.lossPercentage,
+          lossType: options.lossType,
+        }
+      );
+      setShowVoidModal(false);
+      Alert.alert('Success', 'Sale voided successfully');
+      await loadSaleDetails();
+    } catch (error) {
+      console.error('Error voiding sale:', error);
+      Alert.alert('Error', 'Failed to void sale');
+    } finally {
+      setVoidingInProgress(false);
+    }
   };
 
   const handleReturnItems = () => {
@@ -236,7 +260,7 @@ export default function SaleDetailsScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={handleGoBack}
           >
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
@@ -245,7 +269,7 @@ export default function SaleDetailsScreen() {
           </Text>
           <View style={styles.headerRight} />
         </View>
-        
+
         <SaleDetailsSkeleton />
       </View>
     );
@@ -257,7 +281,7 @@ export default function SaleDetailsScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={handleGoBack}
           >
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
@@ -266,7 +290,7 @@ export default function SaleDetailsScreen() {
           </Text>
           <View style={styles.headerRight} />
         </View>
-        
+
         <View style={styles.errorContainer}>
           <AlertTriangle size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
           <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -282,7 +306,7 @@ export default function SaleDetailsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleGoBack}
         >
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
@@ -325,16 +349,36 @@ export default function SaleDetailsScreen() {
           <View style={styles.amountRow}>
             <DollarSign size={24} color="#059669" />
             <View style={styles.amountContainer}>
-              {sale.returned_amount > 0 ? (
+              {sale.status === 'voided' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    ${sale.total_amount.toFixed(2)}
+                    Original: ${sale.total_amount.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.currentAmount, { color: '#dc2626' }]}>
+                    ${(() => {
+                      const voidAction = sale.sale_actions?.find((a: any) => a.action_type === 'void');
+                      return (voidAction?.adjusted_amount ?? sale.total_amount).toFixed(2);
+                    })()}
+                  </Text>
+                  <Text style={[styles.returnedAmount, { color: '#6b7280' }]}>
+                    (voided)
+                  </Text>
+                </>
+              ) : sale.status === 'partially_returned' ? (
+                <>
+                  <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                    Original: ${sale.total_amount.toFixed(2)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#059669' }]}>
-                    ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
+                    ${(sale.current_total_amount ?? sale.total_amount).toFixed(2)}
                   </Text>
                   <Text style={[styles.returnedAmount, { color: '#dc2626' }]}>
-                    (-${(sale.returned_amount || 0).toFixed(2)} returned)
+                    (${(() => {
+                      const totalReturned = sale.sale_actions
+                        ?.filter((a: any) => a.action_type === 'return')
+                        ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
+                      return totalReturned.toFixed(2);
+                    })()} returned)
                   </Text>
                 </>
               ) : (
@@ -529,7 +573,7 @@ export default function SaleDetailsScreen() {
         </Card>
 
         {/* Additional Information */}
-        {(sale.notes || sale.sale_actions_performed_by_fkey?.length > 0) && (
+        {(sale.notes || sale.sale_actions?.length > 0) && (
           <Card style={styles.section}>
             {sale.notes && (
               <>
@@ -546,7 +590,7 @@ export default function SaleDetailsScreen() {
               </>
             )}
             
-            {sale.sale_actions_performed_by_fkey?.length > 0 && (
+            {sale.sale_actions?.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { marginTop: sale.notes ? 16 : 0 }]}>
                   <AlertTriangle size={20} color="#dc2626" />
@@ -555,7 +599,7 @@ export default function SaleDetailsScreen() {
                   </Text>
                 </View>
                 
-                {sale.sale_actions_performed_by_fkey.map((action: any, index: number) => (
+                {sale.sale_actions.map((action: any, index: number) => (
                   <View key={index} style={styles.actionItem}>
                     <View style={styles.actionHeader}>
                       <Text style={[styles.actionType, { color: '#dc2626' }]}>
@@ -565,23 +609,78 @@ export default function SaleDetailsScreen() {
                         {formatDate(action.created_at)}
                       </Text>
                     </View>
-                    
+
                     <Text style={[styles.actionReason, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       Reason: {action.reason}
                     </Text>
-                    
-                    {action.amount && (
-                      <Text style={[styles.actionAmount, { color: '#dc2626' }]}>
-                        Amount: ${action.amount.toFixed(2)}
-                      </Text>
-                    )}
-                    
+
+                    {/* Amount Breakdown */}
+                    <View style={styles.amountBreakdown}>
+                      {action.amount && (
+                        <View style={styles.actionAmountRow}>
+                          <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                            Original Amount:
+                          </Text>
+                          <Text style={[styles.amountValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                            ${action.amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Delivery Cost Info */}
+                      {action.delivery_cost_amount > 0 && (
+                        <View style={styles.actionAmountRow}>
+                          <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                            {action.delivery_cost_included ? 'Delivery (included):' : 'Delivery (excluded):'}
+                          </Text>
+                          <Text style={[styles.amountValue, { color: action.delivery_cost_included ? isDark ? '#f9fafb' : '#111827' : '#f59e0b' }]}>
+                            ${action.delivery_cost_amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Loss Amount Info */}
+                      {action.loss_amount > 0 && (
+                        <>
+                          <View style={styles.actionAmountRow}>
+                            <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              Loss Adjustment:
+                            </Text>
+                            <Text style={[styles.amountValue, { color: '#dc2626' }]}>
+                              -${action.loss_amount.toFixed(2)}
+                            </Text>
+                          </View>
+                          {action.loss_type && (
+                            <View style={styles.lossTypeRow}>
+                              <Text style={[styles.lossTypeText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                {action.loss_type === 'fixed'
+                                  ? 'Fixed amount loss'
+                                  : `Percentage loss (${action.loss_percentage?.toFixed(1)}%)`}
+                              </Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+
+                      {/* Adjusted Amount (Final) */}
+                      {action.adjusted_amount != null && action.adjusted_amount !== action.amount && (
+                        <View style={[styles.actionAmountRow, styles.adjustedAmountRow]}>
+                          <Text style={[styles.amountLabel, styles.adjustedAmountLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                            Final Amount:
+                          </Text>
+                          <Text style={[styles.amountValue, styles.adjustedAmountValue, { color: '#2563eb' }]}>
+                            ${action.adjusted_amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
                     {action.notes && (
                       <Text style={[styles.actionNotes, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                         Notes: {action.notes}
                       </Text>
                     )}
-                    
+
                     <Text style={[styles.actionPerformer, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                       Performed by: {action.performer_name || 'Unknown'}
                     </Text>
@@ -624,6 +723,17 @@ export default function SaleDetailsScreen() {
           onCancel={() => setShowReturnForm(false)}
         />
       </Modal>
+
+      {/* Void Sale Modal */}
+      {sale && (
+        <VoidSaleModal
+          visible={showVoidModal}
+          sale={sale}
+          onConfirm={handleVoidSaleConfirm}
+          onCancel={() => setShowVoidModal(false)}
+          loading={voidingInProgress}
+        />
+      )}
     </View>
   );
 }
@@ -868,6 +978,47 @@ const styles = StyleSheet.create({
   actionPerformer: {
     fontSize: 12,
     marginTop: 4,
+  },
+  amountBreakdown: {
+    marginTop: 8,
+    marginBottom: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  actionAmountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  amountLabel: {
+    fontSize: 13,
+  },
+  amountValue: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  lossTypeRow: {
+    marginLeft: 16,
+    marginBottom: 6,
+  },
+  lossTypeText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  adjustedAmountRow: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#d1d5db',
+  },
+  adjustedAmountLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  adjustedAmountValue: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',

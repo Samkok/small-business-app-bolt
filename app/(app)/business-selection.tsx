@@ -8,7 +8,8 @@ import {
   Alert,
   Modal,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  RefreshControl
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -19,21 +20,33 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { Briefcase, Plus, ChevronRight, LogOut, Building } from 'lucide-react-native';
+import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw } from 'lucide-react-native';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
   const [newBusinessName, setNewBusinessName] = useState('');
   const [creatingBusiness, setCreatingBusiness] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut } = useAuth();
+  const { userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses } = useAuth();
 
   const handleSelectBusiness = async (businessId: string) => {
     await switchBusiness(businessId);
     router.replace('/(app)/(tabs)');
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshUserBusinesses();
+    } catch (error) {
+      console.error('Error refreshing businesses:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleCreateBusiness = async () => {
@@ -45,13 +58,13 @@ export default function BusinessSelectionScreen() {
     setCreatingBusiness(true);
     try {
       const { error, business } = await createBusiness(newBusinessName.trim());
-      
+
       if (error) {
         Alert.alert('Error', error.message || 'Failed to create business');
       } else {
         setShowCreateBusinessModal(false);
         setNewBusinessName('');
-        
+
         // If this is the first business, navigate to the main app
         if (userBusinesses.length === 0) {
           router.replace('/(app)/(tabs)');
@@ -65,7 +78,7 @@ export default function BusinessSelectionScreen() {
     }
   };
 
-  const renderBusinessItem = ({ item }) => (
+  const renderBusinessItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[
         styles.businessCard,
@@ -107,9 +120,21 @@ export default function BusinessSelectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
+        <View style={styles.headerLeft} />
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Select Business
         </Text>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          disabled={refreshing}
+        >
+          <RefreshCw
+            size={20}
+            color={isDark ? '#f9fafb' : '#111827'}
+            style={refreshing ? styles.refreshingIcon : undefined}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.welcomeSection}>
@@ -130,6 +155,14 @@ export default function BusinessSelectionScreen() {
         keyExtractor={(item) => item.id}
         style={styles.businessList}
         contentContainerStyle={styles.businessListContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={isDark ? '#f9fafb' : '#111827'}
+            colors={['#2563eb']}
+          />
+        }
         ListEmptyComponent={() => (
           <Card style={styles.emptyState}>
             <Building size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
@@ -222,14 +255,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 16,
-    alignItems: 'center',
+  },
+  headerLeft: {
+    width: 40,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    padding: 8,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshingIcon: {
+    transform: [{ rotate: '180deg' }],
   },
   welcomeSection: {
     alignItems: 'center',

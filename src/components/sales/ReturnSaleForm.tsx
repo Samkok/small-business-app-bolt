@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 
 interface ReturnItem {
@@ -26,6 +26,9 @@ interface ReturnItem {
   returnQuantity: number;
   unitPrice: number;
   maxReturnQuantity: number;
+  lossAmount: number;
+  lossPercentage: number;
+  lossType: 'none' | 'fixed' | 'percentage';
 }
 
 interface ReturnSaleFormProps {
@@ -39,7 +42,8 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [includeDeliveryCost, setIncludeDeliveryCost] = useState(false);
+
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
 
@@ -52,7 +56,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         originalQuantity: item.quantity,
         returnQuantity: 0,
         unitPrice: item.unit_price,
-        maxReturnQuantity: item.quantity // For now, allow returning all items
+        maxReturnQuantity: item.quantity,
+        lossAmount: 0,
+        lossPercentage: 0,
+        lossType: 'none',
       }));
       setReturnItems(items);
     }
@@ -71,16 +78,57 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const handleQuantityChange = useCallback((productId: string, change: number) => {
     const item = returnItems.find(i => i.productId === productId);
     if (!item) return;
-    
+
     const newQuantity = item.returnQuantity + change;
     updateReturnQuantity(productId, newQuantity);
   }, [returnItems, updateReturnQuantity]);
 
+  const updateItemLoss = useCallback((productId: string, lossType: 'none' | 'fixed' | 'percentage', value?: number) => {
+    setReturnItems(prev => prev.map(item => {
+      if (item.productId === productId) {
+        if (lossType === 'none') {
+          return { ...item, lossType: 'none', lossAmount: 0, lossPercentage: 0 };
+        } else if (lossType === 'fixed') {
+          return { ...item, lossType: 'fixed', lossAmount: value || 0, lossPercentage: 0 };
+        } else if (lossType === 'percentage') {
+          return { ...item, lossType: 'percentage', lossAmount: 0, lossPercentage: value || 0 };
+        }
+      }
+      return item;
+    }));
+  }, []);
+
   const calculateRefundAmount = useCallback(() => {
-    return returnItems.reduce((total, item) => {
-      return total + (item.returnQuantity * item.unitPrice);
-    }, 0);
-  }, [returnItems]);
+    let total = 0;
+    let totalLoss = 0;
+
+    returnItems.forEach(item => {
+      if (item.returnQuantity > 0) {
+        const itemAmount = item.returnQuantity * item.unitPrice;
+        let itemLoss = 0;
+
+        if (item.lossType === 'fixed') {
+          itemLoss = item.lossAmount;
+        } else if (item.lossType === 'percentage') {
+          itemLoss = (itemAmount * item.lossPercentage) / 100;
+        }
+
+        total += itemAmount;
+        totalLoss += itemLoss;
+      }
+    });
+
+    // Add prorated delivery cost if included
+    let deliveryCost = 0;
+    if (includeDeliveryCost && sale?.carts?.delivery_cost) {
+      const totalItems = sale.carts.cart_items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      const returnedQuantity = getTotalReturnItems();
+      const proratedPercentage = returnedQuantity / totalItems;
+      deliveryCost = sale.carts.delivery_cost * proratedPercentage;
+    }
+
+    return Math.max(0, total + deliveryCost - totalLoss);
+  }, [returnItems, includeDeliveryCost, sale]);
 
   const getTotalReturnItems = useCallback(() => {
     return returnItems.reduce((total, item) => total + item.returnQuantity, 0);
@@ -88,7 +136,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
 
   const handleSubmitReturn = useCallback(async () => {
     const itemsToReturn = returnItems.filter(item => item.returnQuantity > 0);
-    
+
     if (itemsToReturn.length === 0) {
       Alert.alert('Error', 'Please select at least one item to return');
       return;
@@ -104,18 +152,34 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       return;
     }
 
+    // Validate loss amounts
+    for (const item of itemsToReturn) {
+      if (item.lossType === 'fixed' && item.lossAmount < 0) {
+        Alert.alert('Error', `Invalid loss amount for ${item.productName}`);
+        return;
+      }
+      if (item.lossType === 'percentage' && (item.lossPercentage < 0 || item.lossPercentage > 100)) {
+        Alert.alert('Error', `Invalid loss percentage for ${item.productName}. Must be between 0-100`);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const returnData = itemsToReturn.map(item => ({
         productId: item.productId,
-        quantity: item.returnQuantity
+        quantity: item.returnQuantity,
+        lossAmount: item.lossType === 'fixed' ? item.lossAmount : undefined,
+        lossPercentage: item.lossType === 'percentage' ? item.lossPercentage : undefined,
+        lossType: item.lossType !== 'none' ? item.lossType : undefined,
       }));
 
       await salesService.returnItems(
         sale.id,
         returnData,
         reason.trim(),
-        userProfile.user_id
+        userProfile.user_id,
+        { includeDeliveryCost }
       );
 
       Alert.alert(
@@ -129,7 +193,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
     } finally {
       setLoading(false);
     }
-  }, [returnItems, reason, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount]);
+  }, [returnItems, reason, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount, includeDeliveryCost, userProfile]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -239,19 +303,20 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
           
           {returnItems.map((item) => (
             <View key={item.productId} style={styles.returnItem}>
-              <View style={styles.itemInfo}>
-                <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {item.productName}
-                </Text>
-                <Text style={[styles.itemDetails, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Original: {item.originalQuantity} × ${item.unitPrice.toFixed(2)}
-                </Text>
-                <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-                  Subtotal: ${(item.originalQuantity * item.unitPrice).toFixed(2)}
-                </Text>
-              </View>
-              
-              <View style={styles.returnControls}>
+              <View style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {item.productName}
+                  </Text>
+                  <Text style={[styles.itemDetails, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Original: {item.originalQuantity} × ${item.unitPrice.toFixed(2)}
+                  </Text>
+                  <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
+                    Subtotal: ${(item.originalQuantity * item.unitPrice).toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.returnControls}>
                 <Text style={[styles.returnLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   Return Qty:
                 </Text>
@@ -305,7 +370,127 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                     Refund: ${(item.returnQuantity * item.unitPrice).toFixed(2)}
                   </Text>
                 )}
+                </View>
               </View>
+
+              {/* Loss Adjustment Section - Only show when item is selected for return */}
+              {item.returnQuantity > 0 && (
+                <View style={[styles.lossAdjustmentSection, {
+                  backgroundColor: isDark ? '#1f2937' : '#fef3c7',
+                  borderColor: isDark ? '#374151' : '#fbbf24'
+                }]}>
+                  <View style={styles.lossHeader}>
+                    <TrendingDown size={16} color="#dc2626" />
+                    <Text style={[styles.lossTitle, { color: isDark ? '#fbbf24' : '#92400e' }]}>
+                      Loss Adjustment (Optional)
+                    </Text>
+                  </View>
+
+                  <View style={styles.lossRadioGroup}>
+                    <TouchableOpacity
+                      style={styles.lossRadioOption}
+                      onPress={() => updateItemLoss(item.productId, 'none')}
+                    >
+                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
+                        {item.lossType === 'none' && <View style={styles.lossRadioInner} />}
+                      </View>
+                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
+                        No loss
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.lossRadioOption}
+                      onPress={() => updateItemLoss(item.productId, 'fixed')}
+                    >
+                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
+                        {item.lossType === 'fixed' && <View style={styles.lossRadioInner} />}
+                      </View>
+                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
+                        Fixed amount
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.lossRadioOption}
+                      onPress={() => updateItemLoss(item.productId, 'percentage')}
+                    >
+                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
+                        {item.lossType === 'percentage' && <View style={styles.lossRadioInner} />}
+                      </View>
+                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
+                        Percentage
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {item.lossType === 'fixed' && (
+                    <View style={styles.lossInputContainer}>
+                      <DollarSign size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <TextInput
+                        style={[styles.lossInput, {
+                          color: isDark ? '#f9fafb' : '#111827',
+                          backgroundColor: isDark ? '#374151' : '#ffffff',
+                          borderColor: isDark ? '#4b5563' : '#d1d5db'
+                        }]}
+                        placeholder="Loss amount"
+                        placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                        value={item.lossAmount > 0 ? item.lossAmount.toString() : ''}
+                        onChangeText={(value) => {
+                          const amount = parseFloat(value) || 0;
+                          updateItemLoss(item.productId, 'fixed', amount);
+                        }}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  )}
+
+                  {item.lossType === 'percentage' && (
+                    <View style={styles.lossInputContainer}>
+                      <Percent size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <TextInput
+                        style={[styles.lossInput, {
+                          color: isDark ? '#f9fafb' : '#111827',
+                          backgroundColor: isDark ? '#374151' : '#ffffff',
+                          borderColor: isDark ? '#4b5563' : '#d1d5db'
+                        }]}
+                        placeholder="Loss percentage (0-100)"
+                        placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                        value={item.lossPercentage > 0 ? item.lossPercentage.toString() : ''}
+                        onChangeText={(value) => {
+                          const percentage = parseFloat(value) || 0;
+                          updateItemLoss(item.productId, 'percentage', percentage);
+                        }}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={[styles.percentSymbol, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                        %
+                      </Text>
+                    </View>
+                  )}
+
+                  {item.lossType !== 'none' && (
+                    <View style={styles.lossCalculation}>
+                      <Text style={[styles.lossCalculationText, { color: isDark ? '#f87171' : '#dc2626' }]}>
+                        Loss: -${(
+                          item.lossType === 'fixed'
+                            ? item.lossAmount
+                            : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
+                        ).toFixed(2)}
+                      </Text>
+                      <Text style={[styles.lossCalculationText, { color: '#059669' }]}>
+                        Final refund: ${Math.max(0, (
+                          item.returnQuantity * item.unitPrice - (
+                            item.lossType === 'fixed'
+                              ? item.lossAmount
+                              : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
+                          )
+                        )).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           ))}
           
@@ -486,12 +671,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   returnItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   itemInfo: {
     flex: 1,
@@ -540,6 +728,81 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   returnAmount: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  lossAdjustmentSection: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  lossHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  lossTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  lossRadioGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 8,
+  },
+  lossRadioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lossRadio: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lossRadioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+  },
+  lossRadioLabel: {
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  lossInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  lossInput: {
+    flex: 1,
+    fontSize: 13,
+    marginLeft: 6,
+    paddingVertical: 2,
+  },
+  percentSymbol: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  lossCalculation: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(107, 114, 128, 0.2)',
+    gap: 4,
+  },
+  lossCalculationText: {
     fontSize: 12,
     fontWeight: '500',
   },

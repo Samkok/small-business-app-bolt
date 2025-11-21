@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,12 +24,12 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { TabButton } from '@/src/components/ui/TabButton';
-import { SkeletonSaleCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
+import { SkeletonSaleCard, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
+import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
-import Input from '@/src/components/ui/Input';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, Filter, DollarSign, TrendingUp, Calendar, Receipt, Users, Download, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Zap } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -37,6 +37,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
+import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
+import { errorHandler } from '@/src/utils/errorHandler';
+import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
 
 const SALES_PER_PAGE = 10;
 
@@ -55,8 +58,15 @@ export default function SalesScreen() {
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
-  const [voidReason, setVoidReason] = useState('');
   const [voidingInProgress, setVoidingInProgress] = useState(false);
+
+  // Analytics states
+  const [analytics, setAnalytics] = useState({
+    totalRevenue: 0,
+    averageSale: 0,
+    todayRevenue: 0,
+    todaySalesCount: 0
+  });
 
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -76,10 +86,13 @@ export default function SalesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness, userProfile } = useAuth();
+  const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Detect business mismatch in sales data
+  const { hasMismatch, mismatchedItems } = useBusinessMismatchDetector(sales, currentBusiness);
 
   const statusFilters = [
     { value: 'all', label: 'All Sales' },
@@ -163,17 +176,43 @@ export default function SalesScreen() {
     return { start, end, text };
   }, []);
 
-  // Initial load on mount
+  // Cleanup function for when business changes
+  const clearSalesData = useCallback(() => {
+    console.log('[SalesScreen] Clearing sales data');
+    setSales([]);
+    setFilteredSales([]);
+    setCurrentPage(0);
+    setTotalSales(0);
+    setHasMoreSales(true);
+  }, []);
+
+  // Register cleanup callback with cleanup registry
+  useEffect(() => {
+    dataCleanupRegistry.register('sales-screen', clearSalesData);
+
+    return () => {
+      dataCleanupRegistry.unregister('sales-screen');
+    };
+  }, [clearSalesData]);
+
+  // Initial load on mount and when business changes
   useEffect(() => {
     if (currentBusiness?.id) {
+      // Clear previous business data first
+      clearSalesData();
+
       // Set loading to false initially for carts tab, as CartContext handles its own loading
       if (activeTab === 'carts') {
         setLoading(false);
       } else {
         loadData();
       }
+    } else {
+      // No business selected, clear data
+      clearSalesData();
+      setLoading(false);
     }
-  }, [currentBusiness?.id]);
+  }, [currentBusiness?.id, clearSalesData]);
 
   // Load sales data when tab changes to sales or filter parameters change
   useEffect(() => {
@@ -215,7 +254,7 @@ export default function SalesScreen() {
       await refreshCarts();
       
       if (activeTab === 'sales') {
-        await loadSalesData(isRefresh);
+        await loadSalesData(0, isRefresh);
       } else {
         setLoading(false);
       }
@@ -248,16 +287,42 @@ export default function SalesScreen() {
       const statusFilter = selectedStatus !== 'all' ? selectedStatus : undefined;
       const paymentFilter = selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined;
 
-      // Run both queries in parallel for better performance
-      const [count, salesData] = await Promise.all([
-        salesService.getSalesCount(
-          currentBusiness.id,
-          start.toISOString(),
-          end.toISOString(),
-          statusFilter,
-          paymentFilter
-        ),
-        salesService.getSalesPaginated(
+      // For first page or refresh, fetch analytics; for pagination, skip analytics
+      if (refresh || page === 0) {
+        const [count, salesData, analyticsData] = await Promise.all([
+          salesService.getSalesCount(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            statusFilter,
+            paymentFilter
+          ),
+          salesService.getSalesPaginated(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            page * SALES_PER_PAGE,
+            SALES_PER_PAGE,
+            statusFilter,
+            paymentFilter
+          ),
+          salesService.getSalesAnalytics(
+            currentBusiness.id,
+            start.toISOString(),
+            end.toISOString(),
+            statusFilter,
+            paymentFilter
+          )
+        ]);
+
+        setTotalSales(count);
+        setAnalytics(analyticsData);
+        setSales(salesData);
+        setFilteredSales(salesData);
+        setCurrentPage(0);
+      } else {
+        // Pagination: only fetch sales data, not analytics
+        const salesData = await salesService.getSalesPaginated(
           currentBusiness.id,
           start.toISOString(),
           end.toISOString(),
@@ -265,16 +330,8 @@ export default function SalesScreen() {
           SALES_PER_PAGE,
           statusFilter,
           paymentFilter
-        )
-      ]);
+        );
 
-      setTotalSales(count);
-
-      if (refresh || page === 0) {
-        setSales(salesData);
-        setFilteredSales(salesData);
-        setCurrentPage(0);
-      } else {
         // Append new data for infinite scroll
         setSales(prevSales => {
           const combined = [...prevSales, ...salesData];
@@ -296,10 +353,10 @@ export default function SalesScreen() {
         }
 
         setCurrentPage(page);
-      }
 
-      // Update hasMoreSales based on returned data length
-      setHasMoreSales(salesData.length === SALES_PER_PAGE);
+        // Update hasMoreSales based on returned data length
+        setHasMoreSales(salesData.length === SALES_PER_PAGE);
+      }
     } catch (error) {
       console.error('Error loading sales data:', error);
       Alert.alert(t('common.error'), 'Failed to load sales data');
@@ -349,7 +406,6 @@ export default function SalesScreen() {
 
   const handleVoidSale = useCallback((sale: any) => {
     setSaleToVoid(sale);
-    setVoidReason('');
     setShowVoidModal(true);
   }, []);
 
@@ -477,55 +533,78 @@ export default function SalesScreen() {
     setCurrentPage(0);
   }, []);
 
-  const handleConfirmVoid = useCallback(async () => {
-    if (!voidReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for voiding this sale');
-      return;
-    }
-
+  const handleConfirmVoid = useCallback(async (options: {
+    reason: string;
+    includeDeliveryCost: boolean;
+    lossAmount?: number;
+    lossPercentage?: number;
+    lossType?: 'fixed' | 'percentage';
+  }) => {
     if (!currentBusiness?.id || !saleToVoid || !userProfile?.user_id) return;
 
     setVoidingInProgress(true);
     try {
-      await salesService.voidSale(saleToVoid.id, voidReason.trim(), userProfile.user_id);
+      // Call voidSale with business validation and adjustments
+      await salesService.voidSale(
+        saleToVoid.id,
+        options.reason,
+        userProfile.user_id,
+        currentBusiness,
+        userBusinesses,
+        {
+          includeDeliveryCost: options.includeDeliveryCost,
+          lossAmount: options.lossAmount,
+          lossPercentage: options.lossPercentage,
+          lossType: options.lossType,
+        }
+      );
+
       Alert.alert('Success', 'Sale voided successfully');
       setShowVoidModal(false);
       setSaleToVoid(null);
-      setVoidReason('');
+
       // Refresh sales data after voiding
       await loadSalesData(0, true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error voiding sale:', error);
-      Alert.alert('Error', 'Failed to void sale');
+
+      // Handle business access errors with user-friendly messages
+      const userFriendlyError = errorHandler.handleBusinessAccessError(
+        error,
+        'void sale',
+        currentBusiness,
+        saleToVoid.business_name
+      );
+
+      Alert.alert(
+        userFriendlyError.title,
+        errorHandler.formatErrorMessage(userFriendlyError)
+      );
+
+      // If it's a business access error, close modal and refresh data
+      if (userFriendlyError.isBusinessAccessError) {
+        setShowVoidModal(false);
+        setSaleToVoid(null);
+
+        // Refresh to clear stale data
+        if (userFriendlyError.action === 'REFRESH') {
+          await loadSalesData(0, true);
+        }
+      }
     } finally {
       setVoidingInProgress(false);
     }
-  }, [voidReason, currentBusiness?.id, saleToVoid, loadSalesData]);
+  }, [currentBusiness, saleToVoid, userProfile?.user_id, userBusinesses, loadSalesData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
 
-  const getSalesStats = useCallback(() => {
-    const totalSalesCount = totalSales;
-    const completedSales = sales.filter(s => s.status === 'completed');
-    const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
-    const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
-    
-    // Today's sales
-    const today = new Date().toISOString().split('T')[0];
-    const todaySales = completedSales.filter(sale => 
-      sale.sale_date.split('T')[0] === today
-    );
-    const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0) || 0;
-
-    return { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales: todaySales.length };
-  }, [sales, totalSales]);
-
-  const { totalSalesCount, totalRevenue, averageSale, todayRevenue, todaySales } = useMemo(
-    () => getSalesStats(),
-    [getSalesStats]
-  );
+  // Use analytics from database query instead of calculating from paginated data
+  const totalRevenue = analytics.totalRevenue;
+  const averageSale = analytics.averageSale;
+  const todayRevenue = analytics.todayRevenue;
+  const todaySales = analytics.todaySalesCount;
 
 
   const renderDateFilter = useCallback(() => (
@@ -639,7 +718,7 @@ export default function SalesScreen() {
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
-  const renderSaleItem = useCallback(({ item }) => (
+  const renderSaleItem = useCallback(({ item }: { item: any }) => (
     <SaleCard
       sale={item}
       onVoid={handleVoidSale}
@@ -671,7 +750,7 @@ export default function SalesScreen() {
     </Card>
   ), [searchQuery, selectedStatus, selectedPaymentMethod, isDark, handleNewSale]);
 
-  const renderCartItem = useCallback(({ item }) => (
+  const renderCartItem = useCallback(({ item }: { item: any }) => (
     <ActiveCartCard
       key={item.id}
       cart={item}
@@ -1062,62 +1141,18 @@ export default function SalesScreen() {
       {renderCustomDateRangePicker()}
 
       {/* Void Sale Modal */}
-      <Modal
-        visible={showVoidModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowVoidModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={styles.voidModal}>
-            <View style={styles.voidModalHeader}>
-              <Text style={[styles.voidModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Void Sale
-              </Text>
-              <TouchableOpacity onPress={() => setShowVoidModal(false)}>
-                <X size={20} color={isDark ? '#f9fafb' : '#111827'} />
-              </TouchableOpacity>
-            </View>
-            
-            {saleToVoid && (
-              <View style={styles.saleInfoSection}>
-                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Sale #{saleToVoid.id.slice(-8)} - ${saleToVoid.total_amount.toFixed(2)}
-                </Text>
-                <Text style={[styles.customerInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Customer: {saleToVoid.customers?.name || 'Unknown'}
-                </Text>
-              </View>
-            )}
-            
-            <Input
-              label="Reason for Voiding"
-              value={voidReason}
-              onChangeText={setVoidReason}
-              placeholder="Please provide a reason for voiding this sale"
-              multiline
-              numberOfLines={3}
-              required
-            />
-            
-            <View style={styles.voidModalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setShowVoidModal(false)}
-                style={styles.voidModalButton}
-              />
-              <Button
-                title="Void Sale"
-                variant="danger"
-                onPress={handleConfirmVoid}
-                loading={voidingInProgress}
-                style={styles.voidModalButton}
-              />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+      {saleToVoid && (
+        <VoidSaleModal
+          visible={showVoidModal}
+          sale={saleToVoid}
+          onConfirm={handleConfirmVoid}
+          onCancel={() => {
+            setShowVoidModal(false);
+            setSaleToVoid(null);
+          }}
+          loading={voidingInProgress}
+        />
+      )}
 
       {/* Instant Checkout Widget */}
       <InstantCheckoutWidget />

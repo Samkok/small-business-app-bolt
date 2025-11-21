@@ -272,8 +272,39 @@ export const customerService = {
     }
 
     if (!data) {
-      logger.error('Guest customer not found for business', { businessId });
-      throw new DatabaseError('Guest customer not found. Please contact support.');
+      logger.warn('Guest customer not found for business, creating one', { businessId });
+
+      try {
+        const { data: newGuestCustomer, error: createError } = await supabase
+          .from('customers')
+          .insert({
+            name: 'Guest Customer',
+            business_id: businessId,
+            is_system_customer: true,
+            phone: null,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          logger.error('Failed to create guest customer', createError, { businessId });
+          throw new DatabaseError('Failed to create guest customer');
+        }
+
+        if (!newGuestCustomer) {
+          logger.error('Guest customer creation returned no data', { businessId });
+          throw new DatabaseError('Failed to create guest customer');
+        }
+
+        logger.info('Guest customer created successfully', { businessId, customerId: newGuestCustomer.id });
+        return newGuestCustomer;
+      } catch (createError: any) {
+        if (createError instanceof DatabaseError) {
+          throw createError;
+        }
+        logger.error('Unexpected error creating guest customer', createError, { businessId });
+        throw new DatabaseError('Failed to create guest customer');
+      }
     }
 
     return data;
