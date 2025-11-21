@@ -31,7 +31,7 @@ export const reportsService = {
         .from('sales')
         .select(`
           total_amount,
-          sale_actions!left(amount, action_type)
+          sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
         .in('status', ['completed', 'partially_returned'])
@@ -41,7 +41,7 @@ export const reportsService = {
       const todayRevenue = todaySalesData?.reduce((sum, sale) => {
         const returnedAmount = sale.sale_actions
           ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
         return sum + (sale.total_amount - returnedAmount);
       }, 0) || 0;
 
@@ -50,7 +50,7 @@ export const reportsService = {
         .from('sales')
         .select(`
           total_amount,
-          sale_actions!left(amount, action_type)
+          sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
         .in('status', ['completed', 'partially_returned'])
@@ -60,7 +60,7 @@ export const reportsService = {
       const monthlyRevenue = monthlySalesData?.reduce((sum, sale) => {
         const returnedAmount = sale.sale_actions
           ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
         return sum + (sale.total_amount - returnedAmount);
       }, 0) || 0;
 
@@ -402,7 +402,7 @@ export const reportsService = {
       .select(`
         total_amount,
         sale_date,
-        sale_actions!left(amount, action_type)
+        sale_actions!left(amount, action_type, adjusted_amount)
       `)
       .eq('business_id', businessId)
       .in('status', ['completed', 'partially_returned'])
@@ -449,11 +449,11 @@ export const reportsService = {
           return saleMonth === monthStr;
         });
         
-        // Calculate revenue for this month (subtracting returned amounts)
+        // Calculate revenue for this month (subtracting returned amounts with adjustments)
         const revenue = monthRevenueSales.reduce((sum, sale) => {
           const returnedAmount = sale.sale_actions
             ?.filter(action => action.action_type === 'return')
-            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
           return sum + (sale.total_amount - returnedAmount);
         }, 0);
         
@@ -502,11 +502,11 @@ export const reportsService = {
           return saleDate === dayStr;
         });
         
-        // Calculate revenue for this day (subtracting returned amounts)
+        // Calculate revenue for this day (subtracting returned amounts with adjustments)
         const revenue = dayRevenueSales.reduce((sum, sale) => {
           const returnedAmount = sale.sale_actions
             ?.filter(action => action.action_type === 'return')
-            ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
           return sum + (sale.total_amount - returnedAmount);
         }, 0);
         
@@ -592,7 +592,7 @@ export const reportsService = {
         .from('sales')
         .select(`
           total_amount,
-          sale_actions!left(amount, action_type)
+          sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
         .in('status', ['completed', 'partially_returned'])
@@ -600,12 +600,12 @@ export const reportsService = {
         .lte('sale_date', endDate);
 
       if (salesError) throw salesError;
-      
-      // Calculate total revenue (subtracting returned amounts)
+
+      // Calculate total revenue (subtracting returned amounts with adjustments)
       const totalRevenue = salesData?.reduce((sum, sale) => {
         const returnedAmount = sale.sale_actions
           ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
         return sum + (sale.total_amount - returnedAmount);
       }, 0) || 0;
 
@@ -920,5 +920,198 @@ export const reportsService = {
       totalItems,
       uniqueProductsPurchased: uniqueProducts.size
     };
+  },
+
+  async getVoidReturnSummary(businessId: string, startDate: Date, endDate: Date) {
+    try {
+      const { data, error } = await supabase
+        .from('sale_actions')
+        .select(`
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          delivery_cost_included,
+          delivery_cost_amount,
+          loss_amount,
+          loss_percentage,
+          loss_type,
+          reason,
+          created_at,
+          sales!inner(
+            id,
+            total_amount,
+            sale_date,
+            business_id
+          )
+        `)
+        .eq('sales.business_id', businessId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .in('action_type', ['void', 'return'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const voidActions = data.filter(action => action.action_type === 'void');
+      const returnActions = data.filter(action => action.action_type === 'return');
+
+      const totalVoidAmount = voidActions.reduce((sum, action) => sum + (action.amount || 0), 0);
+      const totalVoidAdjustedAmount = voidActions.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0);
+      const totalVoidLoss = voidActions.reduce((sum, action) => sum + (action.loss_amount || 0), 0);
+
+      const totalReturnAmount = returnActions.reduce((sum, action) => sum + (action.amount || 0), 0);
+      const totalReturnAdjustedAmount = returnActions.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0);
+      const totalReturnLoss = returnActions.reduce((sum, action) => sum + (action.loss_amount || 0), 0);
+
+      const totalDeliveryCostExcluded = [...voidActions, ...returnActions]
+        .filter(action => !action.delivery_cost_included)
+        .reduce((sum, action) => sum + (action.delivery_cost_amount || 0), 0);
+
+      return {
+        voidSummary: {
+          count: voidActions.length,
+          totalAmount: totalVoidAmount,
+          totalAdjustedAmount: totalVoidAdjustedAmount,
+          totalLoss: totalVoidLoss,
+          actions: voidActions,
+        },
+        returnSummary: {
+          count: returnActions.length,
+          totalAmount: totalReturnAmount,
+          totalAdjustedAmount: totalReturnAdjustedAmount,
+          totalLoss: totalReturnLoss,
+          actions: returnActions,
+        },
+        overallSummary: {
+          totalActions: data.length,
+          totalGrossAmount: totalVoidAmount + totalReturnAmount,
+          totalAdjustedAmount: totalVoidAdjustedAmount + totalReturnAdjustedAmount,
+          totalLossAmount: totalVoidLoss + totalReturnLoss,
+          totalDeliveryCostExcluded: totalDeliveryCostExcluded,
+        },
+      };
+    } catch (error) {
+      console.error('Error getting void/return summary:', error);
+      throw error;
+    }
+  },
+
+  async getLossAnalysis(businessId: string, startDate: Date, endDate: Date) {
+    try {
+      const { data, error } = await supabase
+        .from('sale_actions')
+        .select(`
+          id,
+          action_type,
+          loss_amount,
+          loss_percentage,
+          loss_type,
+          reason,
+          created_at,
+          sales!inner(
+            id,
+            total_amount,
+            business_id
+          )
+        `)
+        .eq('sales.business_id', businessId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .not('loss_amount', 'is', null)
+        .gt('loss_amount', 0);
+
+      if (error) throw error;
+
+      const totalLoss = data.reduce((sum, action) => sum + (action.loss_amount || 0), 0);
+      const averageLoss = data.length > 0 ? totalLoss / data.length : 0;
+
+      const byType = {
+        fixed: data.filter(a => a.loss_type === 'fixed'),
+        percentage: data.filter(a => a.loss_type === 'percentage'),
+      };
+
+      const byActionType = {
+        void: data.filter(a => a.action_type === 'void'),
+        return: data.filter(a => a.action_type === 'return'),
+      };
+
+      const averagePercentageLoss = byType.percentage.length > 0
+        ? byType.percentage.reduce((sum, a) => sum + (a.loss_percentage || 0), 0) / byType.percentage.length
+        : 0;
+
+      return {
+        totalLoss,
+        averageLoss,
+        totalActionsWithLoss: data.length,
+        byLossType: {
+          fixed: {
+            count: byType.fixed.length,
+            totalLoss: byType.fixed.reduce((sum, a) => sum + (a.loss_amount || 0), 0),
+          },
+          percentage: {
+            count: byType.percentage.length,
+            totalLoss: byType.percentage.reduce((sum, a) => sum + (a.loss_amount || 0), 0),
+            averagePercentage: averagePercentageLoss,
+          },
+        },
+        byActionType: {
+          void: {
+            count: byActionType.void.length,
+            totalLoss: byActionType.void.reduce((sum, a) => sum + (a.loss_amount || 0), 0),
+          },
+          return: {
+            count: byActionType.return.length,
+            totalLoss: byActionType.return.reduce((sum, a) => sum + (a.loss_amount || 0), 0),
+          },
+        },
+        actions: data,
+      };
+    } catch (error) {
+      console.error('Error getting loss analysis:', error);
+      throw error;
+    }
+  },
+
+  async getDeliveryCostImpact(businessId: string, startDate: Date, endDate: Date) {
+    try {
+      const { data, error } = await supabase
+        .from('sale_actions')
+        .select(`
+          id,
+          action_type,
+          delivery_cost_included,
+          delivery_cost_amount,
+          created_at,
+          sales!inner(
+            id,
+            business_id
+          )
+        `)
+        .eq('sales.business_id', businessId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .in('action_type', ['void', 'return']);
+
+      if (error) throw error;
+
+      const withDelivery = data.filter(a => a.delivery_cost_included);
+      const withoutDelivery = data.filter(a => !a.delivery_cost_included);
+
+      const totalDeliveryIncluded = withDelivery.reduce((sum, a) => sum + (a.delivery_cost_amount || 0), 0);
+      const totalDeliveryExcluded = withoutDelivery.reduce((sum, a) => sum + (a.delivery_cost_amount || 0), 0);
+
+      return {
+        totalActions: data.length,
+        actionsWithDeliveryIncluded: withDelivery.length,
+        actionsWithDeliveryExcluded: withoutDelivery.length,
+        totalDeliveryIncluded,
+        totalDeliveryExcluded,
+        totalDeliveryCostSaved: totalDeliveryExcluded,
+      };
+    } catch (error) {
+      console.error('Error getting delivery cost impact:', error);
+      throw error;
+    }
   }
 };
