@@ -576,23 +576,78 @@ export default function SaleDetailsScreen() {
                         {formatDate(action.created_at)}
                       </Text>
                     </View>
-                    
+
                     <Text style={[styles.actionReason, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       Reason: {action.reason}
                     </Text>
-                    
-                    {action.amount && (
-                      <Text style={[styles.actionAmount, { color: '#dc2626' }]}>
-                        Amount: ${action.amount.toFixed(2)}
-                      </Text>
-                    )}
-                    
+
+                    {/* Amount Breakdown */}
+                    <View style={styles.amountBreakdown}>
+                      {action.amount && (
+                        <View style={styles.actionAmountRow}>
+                          <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                            Original Amount:
+                          </Text>
+                          <Text style={[styles.amountValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                            ${action.amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Delivery Cost Info */}
+                      {action.delivery_cost_amount > 0 && (
+                        <View style={styles.actionAmountRow}>
+                          <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                            {action.delivery_cost_included ? 'Delivery (included):' : 'Delivery (excluded):'}
+                          </Text>
+                          <Text style={[styles.amountValue, { color: action.delivery_cost_included ? isDark ? '#f9fafb' : '#111827' : '#f59e0b' }]}>
+                            ${action.delivery_cost_amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Loss Amount Info */}
+                      {action.loss_amount > 0 && (
+                        <>
+                          <View style={styles.actionAmountRow}>
+                            <Text style={[styles.amountLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              Loss Adjustment:
+                            </Text>
+                            <Text style={[styles.amountValue, { color: '#dc2626' }]}>
+                              -${action.loss_amount.toFixed(2)}
+                            </Text>
+                          </View>
+                          {action.loss_type && (
+                            <View style={styles.lossTypeRow}>
+                              <Text style={[styles.lossTypeText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                {action.loss_type === 'fixed'
+                                  ? 'Fixed amount loss'
+                                  : `Percentage loss (${action.loss_percentage?.toFixed(1)}%)`}
+                              </Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+
+                      {/* Adjusted Amount (Final) */}
+                      {action.adjusted_amount != null && action.adjusted_amount !== action.amount && (
+                        <View style={[styles.actionAmountRow, styles.adjustedAmountRow]}>
+                          <Text style={[styles.amountLabel, styles.adjustedAmountLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                            Final Amount:
+                          </Text>
+                          <Text style={[styles.amountValue, styles.adjustedAmountValue, { color: '#2563eb' }]}>
+                            ${action.adjusted_amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
                     {action.notes && (
                       <Text style={[styles.actionNotes, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                         Notes: {action.notes}
                       </Text>
                     )}
-                    
+
                     <Text style={[styles.actionPerformer, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                       Performed by: {action.performer_name || 'Unknown'}
                     </Text>
@@ -879,6 +934,47 @@ const styles = StyleSheet.create({
   actionPerformer: {
     fontSize: 12,
     marginTop: 4,
+  },
+  amountBreakdown: {
+    marginTop: 8,
+    marginBottom: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  actionAmountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  amountLabel: {
+    fontSize: 13,
+  },
+  amountValue: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  lossTypeRow: {
+    marginLeft: 16,
+    marginBottom: 6,
+  },
+  lossTypeText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  adjustedAmountRow: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#d1d5db',
+  },
+  adjustedAmountLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  adjustedAmountValue: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
