@@ -2,11 +2,13 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { cartService } from './carts';
 import { productService } from './products';
+import { businessAccessGuard } from '../utils/businessAccessGuard';
 
 type Sale = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
 type SaleAction = Database['public']['Tables']['sale_actions']['Row'];
 type SaleActionInsert = Database['public']['Tables']['sale_actions']['Insert'];
+type Business = Database['public']['Tables']['businesses']['Row'];
 
 export const salesService = {
   async completeSale(saleData: Omit<SaleInsert, 'total_amount' | 'subtotal_before_discount' | 'sale_discount_amount'>) {
@@ -286,25 +288,44 @@ export const salesService = {
     return data;
   },
 
-  async voidSale(saleId: string, reason: string, performedBy: string) {
+  async voidSale(
+    saleId: string,
+    reason: string,
+    performedBy: string,
+    currentBusiness?: Business | null,
+    userBusinesses?: Business[]
+  ) {
     if (!saleId || !reason || !performedBy) return null;
-    
+
     // Get the sale details first to access cart items
     const sale = await this.getSale(saleId);
     if (!sale) {
       throw new Error('Sale not found');
     }
-    
+
+    // Validate business access if provided
+    if (currentBusiness && userBusinesses) {
+      const validation = businessAccessGuard.validateActionOnBusinessData(
+        sale.business_id,
+        currentBusiness,
+        userBusinesses
+      );
+
+      if (!validation.isValid) {
+        throw new Error(validation.error || 'Business access validation failed');
+      }
+    }
+
     // Restore stock for all items in the sale
     if (sale.carts?.cart_items) {
       for (const item of sale.carts.cart_items) {
         try {
           // Get current product stock
           const product = await productService.getProduct(item.product_id);
-          
+
           // Add the sold quantity back to stock
           const newStock = product.current_stock + item.quantity;
-          
+
           // Update the product stock
           await productService.updateStock(item.product_id, newStock);
         } catch (error) {
@@ -313,7 +334,7 @@ export const salesService = {
         }
       }
     }
-    
+
     // Perform the void action
     return this.performSaleAction(saleId, 'void', reason, performedBy);
   },

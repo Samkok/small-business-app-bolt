@@ -37,6 +37,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
+import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
+import { errorHandler } from '@/src/utils/errorHandler';
+import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
 
 const SALES_PER_PAGE = 10;
 
@@ -76,10 +79,13 @@ export default function SalesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness, userProfile } = useAuth();
+  const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Detect business mismatch in sales data
+  const { hasMismatch, mismatchedItems } = useBusinessMismatchDetector(sales, currentBusiness);
 
   const statusFilters = [
     { value: 'all', label: 'All Sales' },
@@ -163,17 +169,43 @@ export default function SalesScreen() {
     return { start, end, text };
   }, []);
 
-  // Initial load on mount
+  // Cleanup function for when business changes
+  const clearSalesData = useCallback(() => {
+    console.log('[SalesScreen] Clearing sales data');
+    setSales([]);
+    setFilteredSales([]);
+    setCurrentPage(0);
+    setTotalSales(0);
+    setHasMoreSales(true);
+  }, []);
+
+  // Register cleanup callback with cleanup registry
+  useEffect(() => {
+    dataCleanupRegistry.register('sales-screen', clearSalesData);
+
+    return () => {
+      dataCleanupRegistry.unregister('sales-screen');
+    };
+  }, [clearSalesData]);
+
+  // Initial load on mount and when business changes
   useEffect(() => {
     if (currentBusiness?.id) {
+      // Clear previous business data first
+      clearSalesData();
+
       // Set loading to false initially for carts tab, as CartContext handles its own loading
       if (activeTab === 'carts') {
         setLoading(false);
       } else {
         loadData();
       }
+    } else {
+      // No business selected, clear data
+      clearSalesData();
+      setLoading(false);
     }
-  }, [currentBusiness?.id]);
+  }, [currentBusiness?.id, clearSalesData]);
 
   // Load sales data when tab changes to sales or filter parameters change
   useEffect(() => {
@@ -487,20 +519,53 @@ export default function SalesScreen() {
 
     setVoidingInProgress(true);
     try {
-      await salesService.voidSale(saleToVoid.id, voidReason.trim(), userProfile.user_id);
+      // Call voidSale with business validation
+      await salesService.voidSale(
+        saleToVoid.id,
+        voidReason.trim(),
+        userProfile.user_id,
+        currentBusiness,
+        userBusinesses
+      );
+
       Alert.alert('Success', 'Sale voided successfully');
       setShowVoidModal(false);
       setSaleToVoid(null);
       setVoidReason('');
+
       // Refresh sales data after voiding
       await loadSalesData(0, true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error voiding sale:', error);
-      Alert.alert('Error', 'Failed to void sale');
+
+      // Handle business access errors with user-friendly messages
+      const userFriendlyError = errorHandler.handleBusinessAccessError(
+        error,
+        'void sale',
+        currentBusiness,
+        saleToVoid.business_name
+      );
+
+      Alert.alert(
+        userFriendlyError.title,
+        errorHandler.formatErrorMessage(userFriendlyError)
+      );
+
+      // If it's a business access error, close modal and refresh data
+      if (userFriendlyError.isBusinessAccessError) {
+        setShowVoidModal(false);
+        setSaleToVoid(null);
+        setVoidReason('');
+
+        // Refresh to clear stale data
+        if (userFriendlyError.action === 'REFRESH') {
+          await loadSalesData(0, true);
+        }
+      }
     } finally {
       setVoidingInProgress(false);
     }
-  }, [voidReason, currentBusiness?.id, saleToVoid, loadSalesData]);
+  }, [voidReason, currentBusiness, saleToVoid, userProfile?.user_id, userBusinesses, loadSalesData]);
 
   const toggleStatsCollapse = useCallback(() => {
     setStatsCollapsed(!statsCollapsed);

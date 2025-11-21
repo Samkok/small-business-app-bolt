@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { cartService } from '@/src/services/carts';
 import { productService } from '@/src/services/products';
 import { salesService } from '@/src/services/sales';
+import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 
 // Types
 export interface CartItem {
@@ -72,10 +73,28 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const cartsCache = useRef<Map<string, { cart: Cart; timestamp: number }>>(new Map());
   const CACHE_TTL = 5000;
 
-  // Load carts from database on mount
+  // Cleanup function for when business changes
+  const clearCarts = useCallback(() => {
+    console.log('[CartContext] Clearing carts data');
+    setCarts([]);
+    cartsCache.current.clear();
+  }, []);
+
+  // Register cleanup callback with cleanup registry
+  useEffect(() => {
+    dataCleanupRegistry.register('cart-context', clearCarts);
+
+    return () => {
+      dataCleanupRegistry.unregister('cart-context');
+    };
+  }, [clearCarts]);
+
+  // Load carts from database on mount and when business changes
   useEffect(() => {
     console.log('CartContext: Initial');
     if (currentBusiness?.id) {
+      // Clear previous business data first
+      clearCarts();
       refreshCarts();
       console.log('CartContext: Initial refreshCarts called with currentBusiness ID:', currentBusiness.id);
     } else {
@@ -84,7 +103,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCarts([]);
       setLoading(false);
     }
-  }, [currentBusiness?.id]);
+  }, [currentBusiness?.id, clearCarts]);
 
   // Helper functions - defined first as they have no dependencies
   const calculateCartDiscount = useCallback((subtotalAmount: number, discountType?: 'percentage' | 'fixed', discountValue?: number): number => {

@@ -9,6 +9,7 @@ import { AppState, Platform } from 'react-native';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
+import { dataCleanupRegistry } from '../utils/dataCleanupRegistry';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
@@ -191,6 +192,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    console.log('[AuthContext] Switching business, triggering data cleanup');
+
+    // Trigger data cleanup for all registered components
+    await dataCleanupRegistry.cleanupAll();
+
     setCurrentBusiness(business);
 
     // Save preference to AsyncStorage
@@ -254,6 +260,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 newMap.delete(oldId);
                 return newMap;
               });
+
+              // Cleanup data for removed business
+              console.log('[Polling] Cleaning up data for removed business:', oldId);
+              dataCleanupRegistry.cleanupForRemovedBusiness(oldId);
 
               if (remainingBusinesses.length > 0) {
                 const nextBusiness = selectBestAvailableBusiness(
@@ -617,6 +627,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               // Cleanup notifications for the removed business
               notificationCleanupService.cleanup(removedBusinessId);
+
+              // Cleanup all data for the removed business
+              console.log('[AuthContext] User removed from business, triggering data cleanup');
+              dataCleanupRegistry.cleanupForRemovedBusiness(removedBusinessId);
 
               // Remove business from access history
               businessAccessHistoryService.removeBusinessFromHistory(removedBusinessId);
@@ -1182,11 +1196,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserBusinesses(businesses);
           console.log('refreshUserBusinesses: Updated state with new businesses');
 
-          // Proactively cleanup notifications for removed businesses
+          // Proactively cleanup notifications and data for removed businesses
           if (removedBusinessIds.length > 0) {
-            console.log('refreshUserBusinesses: Cleaning up notifications for removed businesses:', removedBusinessIds);
+            console.log('refreshUserBusinesses: Cleaning up data for removed businesses:', removedBusinessIds);
             removedBusinessIds.forEach(businessId => {
               notificationCleanupService.cleanup(businessId);
+              dataCleanupRegistry.cleanupForRemovedBusiness(businessId);
             });
           }
         } else {
