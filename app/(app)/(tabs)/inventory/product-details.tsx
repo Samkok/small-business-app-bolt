@@ -17,7 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonProductDetails } from '@/src/components/ui/SkeletonLoader';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2, ArchiveRestore, Archive } from 'lucide-react-native';
+import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2, Archive } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
@@ -58,7 +58,7 @@ export default function ProductDetailsScreen() {
       
       // Load import history for this product
       const importData = await inventoryService.getImportsByProductId(productId as string);
-      setImportHistory(importData);
+      setImportHistory(importData || []);
       
       // Get financial summary for this product
       // Default to last 6 months
@@ -92,6 +92,10 @@ export default function ProductDetailsScreen() {
   const handleImportStock = useCallback(() => {
     router.push(`/inventory/import-form?productId=${productId}`);
   }, [productId, router]);
+
+  const handleShowInSales = useCallback(() => {
+    router.push(`/inventory/product-sales?productId=${productId}&productName=${encodeURIComponent(product?.name || 'Product')}`);
+  }, [productId, product?.name, router]);
 
   const handleUnarchiveProduct = useCallback(async () => {
     if (!product || !currentBusiness?.id) return;
@@ -453,6 +457,12 @@ export default function ProductDetailsScreen() {
           <Text style={[styles.periodNote, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
             Data shown for the last 6 months
           </Text>
+
+          <Button
+            title="Show in Sales"
+            onPress={handleShowInSales}
+            style={styles.showInSalesButton}
+          />
         </Card>
 
         {/* Import History */}
@@ -871,5 +881,8 @@ const styles = StyleSheet.create({
   archiveInfoText: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  showInSalesButton: {
+    marginTop: 16,
   },
 });

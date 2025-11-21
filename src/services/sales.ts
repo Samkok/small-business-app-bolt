@@ -97,7 +97,7 @@ export const salesService = {
       console.warn('salesService.getSalesPaginated called without businessId');
       return [];
     }
-    
+
     let query = supabase
       .from('sales')
       .select(`
@@ -124,21 +124,82 @@ export const salesService = {
       .gte('sale_date', startDate)
       .lte('sale_date', endDate)
       .order('sale_date', { ascending: false });
-    
+
     if (status) {
       query = query.eq('status', status);
     }
-    
+
     if (paymentMethod) {
       query = query.eq('payment_method', paymentMethod);
     }
-    
+
     query = query.range(offset, offset + limit - 1);
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data || [];
+  },
+
+  async getSalesByProduct(
+    businessId: string,
+    productId: string,
+    startDate: string,
+    endDate: string
+  ) {
+    if (!businessId || !productId) {
+      console.warn('salesService.getSalesByProduct called without required parameters');
+      return [];
+    }
+
+    // First, get all cart_items for this product within the date range
+    const { data: cartItems, error: cartItemsError } = await supabase
+      .from('cart_items')
+      .select('cart_id')
+      .eq('product_id', productId);
+
+    if (cartItemsError) throw cartItemsError;
+
+    if (!cartItems || cartItems.length === 0) {
+      return [];
+    }
+
+    // Extract unique cart IDs
+    const cartIds = [...new Set(cartItems.map(item => item.cart_id))];
+
+    // Now get all sales that use these carts
+    const { data: sales, error: salesError } = await supabase
+      .from('sales')
+      .select(`
+        *,
+        customers(name, phone),
+        carts(
+          total_amount,
+          discount_type,
+          discount_value,
+          delivery_cost,
+          cart_items(
+            quantity,
+            unit_price,
+            subtotal,
+            original_subtotal,
+            item_discount_type,
+            item_discount_value,
+            item_discount_amount,
+            product_id,
+            products(name)
+          )
+        )
+      `)
+      .eq('business_id', businessId)
+      .in('cart_id', cartIds)
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
+      .order('sale_date', { ascending: false });
+
+    if (salesError) throw salesError;
+
+    return sales || [];
   },
 
   async getSales(businessId: string, limit?: number) {
