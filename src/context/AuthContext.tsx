@@ -154,6 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const appStateRef = useRef<string>('active');
+  const isRefreshingSessionRef = useRef<boolean>(false);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
@@ -228,6 +230,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  // Helper function to refresh session when it might be stale
+  const refreshSessionIfNeeded = useCallback(async (): Promise<boolean> => {
+    // Prevent multiple simultaneous refresh attempts
+    if (isRefreshingSessionRef.current) {
+      console.log('Session refresh already in progress, skipping');
+      return false;
+    }
+
+    isRefreshingSessionRef.current = true;
+
+    try {
+      console.log('Attempting to refresh session...');
+
+      const { data, error } = await supabase.auth.refreshSession();
+
+      if (error) {
+        console.error('Session refresh failed:', error.message);
+        isRefreshingSessionRef.current = false;
+        return false;
+      }
+
+      if (data.session) {
+        console.log('Session refreshed successfully');
+        setSession(data.session);
+        setUser(data.session.user);
+        userRef.current = data.session.user;
+        isRefreshingSessionRef.current = false;
+        return true;
+      } else {
+        console.warn('Session refresh returned no session');
+        isRefreshingSessionRef.current = false;
+        return false;
+      }
+    } catch (error) {
+      console.error('Unexpected error during session refresh:', error);
+      isRefreshingSessionRef.current = false;
+      return false;
+    }
+  }, []);
+
   // Polling fallback function when realtime fails
   const startPollingFallback = useCallback(() => {
     // Clear any existing polling first
@@ -279,12 +321,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           consecutiveFailures++;
-          console.error('Polling error (attempt', consecutiveFailures, '/', MAX_FAILURES, '):', {
+
+          // Use context-aware logging based on app state
+          const isInBackground = appStateRef.current !== 'active';
+          const logLevel = isInBackground ? 'warn' : 'error';
+
+          console[logLevel]('Polling error (attempt', consecutiveFailures, '/', MAX_FAILURES, '):', {
             error: error,
             errorCode: error.code,
             errorMessage: error.message,
-            errorDetails: error.details,
-            errorHint: error.hint,
+            appState: appStateRef.current,
             userId: userRef.current?.id,
             timestamp: new Date().toISOString()
           });
@@ -297,12 +343,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error.code === 'PGRST301';
 
           if (isAuthError) {
-            console.error('Polling stopped: Authentication error detected');
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
+            console.log('Auth error detected, attempting session refresh...');
+
+            // Attempt to refresh the session
+            const refreshSuccess = await refreshSessionIfNeeded();
+
+            if (refreshSuccess) {
+              console.log('Session refreshed successfully, resetting error counter');
+              consecutiveFailures = 0;
+              return; // Continue polling with refreshed session
+            } else {
+              console.error('Session refresh failed, stopping polling');
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+              }
+              return;
             }
-            return;
           }
 
           // Stop polling after max consecutive failures
@@ -958,13 +1015,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     
     // Add app state change listener for foreground/background transitions
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      console.log('App state changed:', previousState, '->', nextAppState);
+
+      if (nextAppState === 'active' && previousState !== 'active') {
+        // App is returning to foreground
+        console.log('App returning to foreground, refreshing session...');
+
+        // Refresh session first before any other operations
+        if (session) {
+          const refreshSuccess = await refreshSessionIfNeeded();
+
+          if (refreshSuccess) {
+            console.log('Session refreshed on foreground transition');
+          } else {
+            console.warn('Session refresh failed on foreground transition');
+          }
+        }
+
+        // Then proceed with activity checks
         checkActivity();
+
         // Update last activity timestamp when app comes to foreground
         if (session) {
           updateLastActivityTimestamp();
         }
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // App is going to background
+        console.log('App going to background');
       }
     });
     
