@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -59,6 +59,8 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
 
+  const isMountedRef = useRef(true);
+
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 20;
 
   const translateY = useSharedValue(MODAL_HEIGHT);
@@ -66,14 +68,24 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
 
   useEffect(() => {
     if (visible) {
+      isMountedRef.current = true;
       translateY.value = withSpring(0, SPRING_CONFIG);
       backdropOpacity.value = withTiming(1, TIMING_CONFIG);
       if (saleId) {
         loadSaleDetails();
       }
     } else {
+      isMountedRef.current = false;
       translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG);
       backdropOpacity.value = withTiming(0, TIMING_CONFIG);
+      // Reset state when modal closes
+      setTimeout(() => {
+        setSale(null);
+        setSaleDetails(null);
+        setLoading(true);
+        setShowReturnForm(false);
+        setShowVoidModal(false);
+      }, 300);
     }
   }, [visible, saleId]);
 
@@ -87,13 +99,20 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
         salesService.getSaleWithDiscountBreakdown(saleId)
       ]);
 
-      setSale(saleData);
-      setSaleDetails(detailsData);
+      // Only update state if modal is still visible
+      if (isMountedRef.current) {
+        setSale(saleData);
+        setSaleDetails(detailsData);
+      }
     } catch (error) {
       console.error('Error loading sale details:', error);
-      Alert.alert('Error', 'Failed to load sale details');
+      if (isMountedRef.current) {
+        Alert.alert('Error', 'Failed to load sale details');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
