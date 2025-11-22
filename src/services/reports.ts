@@ -213,32 +213,33 @@ export const reportsService = {
     const endOfMonthStr = endOfMonthDate.toISOString();
 
     const { data, error } = await supabase
-      .from('cart_items')
+      .from('sales')
       .select(`
-        quantity,
-        product_id,
-        unit_price,
-        subtotal,
-        products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level),
+        id,
+        business_id,
+        sale_date,
+        status,
+        sale_actions(
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          items_metadata
+        ),
         carts!inner(
-          sales!inner(
-            id,
-            business_id,
-            sale_date,
-            status,
-            sale_actions(
-              id,
-              action_type,
-              amount,
-              adjusted_amount,
-              items_metadata
-            )
+          id,
+          cart_items(
+            quantity,
+            product_id,
+            unit_price,
+            subtotal,
+            products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level)
           )
         )
       `)
-      .eq('carts.sales.business_id', businessId)
-      .gte('carts.sales.sale_date', startOfMonthStr)
-      .lte('carts.sales.sale_date', endOfMonthStr);
+      .eq('business_id', businessId)
+      .gte('sale_date', startOfMonthStr)
+      .lte('sale_date', endOfMonthStr);
 
     if (error) throw error;
 
@@ -259,60 +260,64 @@ export const reportsService = {
       profit: number
     }> = {};
 
-    data.forEach(item => {
-      const sale = item.carts?.sales;
-
+    data.forEach(sale => {
       // Skip voided sales
-      if (!sale || isSaleVoided(sale)) {
+      if (isSaleVoided(sale)) {
         return;
       }
 
-      const productId = item.product_id || item.products?.id || 'unknown';
-      const productName = item.products?.name || 'Unknown';
-      const productPrice = item.products?.price || 0;
-      const productCost = item.products?.cost_per_unit || 0;
+      // Get cart items from this sale
+      const cartItems = sale.carts?.cart_items || [];
 
-      // Initialize product entry if not exists
-      if (!productSales[productId]) {
-        productSales[productId] = {
-          id: productId,
-          name: productName,
-          price: productPrice,
-          description: item.products?.description,
-          image_url: item.products?.image_url,
-          barcode: item.products?.barcode,
-          current_stock: item.products?.current_stock || 0,
-          min_stock_level: item.products?.min_stock_level || 0,
-          cost_per_unit: productCost,
-          quantity: 0,
-          revenue: 0,
-          cost: 0,
-          profit: 0
-        };
-      }
+      // Process each product in this sale
+      cartItems.forEach((item: any) => {
+        const productId = item.product_id || item.products?.id || 'unknown';
+        const productName = item.products?.name || 'Unknown';
+        const productPrice = item.products?.price || 0;
+        const productCost = item.products?.cost_per_unit || 0;
 
-      // Calculate net quantity (original - returned)
-      const originalQuantity = item.quantity || 0;
-      const returnedQuantity = getReturnedQuantityForProduct(sale, productId);
-      const netQuantity = originalQuantity - returnedQuantity;
+        // Initialize product entry if not exists
+        if (!productSales[productId]) {
+          productSales[productId] = {
+            id: productId,
+            name: productName,
+            price: productPrice,
+            description: item.products?.description,
+            image_url: item.products?.image_url,
+            barcode: item.products?.barcode,
+            current_stock: item.products?.current_stock || 0,
+            min_stock_level: item.products?.min_stock_level || 0,
+            cost_per_unit: productCost,
+            quantity: 0,
+            revenue: 0,
+            cost: 0,
+            profit: 0
+          };
+        }
 
-      // Only add if net quantity is positive
-      if (netQuantity > 0) {
-        // Calculate net revenue
-        const originalRevenue = item.subtotal || (originalQuantity * productPrice);
-        const returnedRevenue = getReturnedRevenueForProduct(sale, productId);
-        const netRevenue = originalRevenue - returnedRevenue;
+        // Calculate net quantity (original - returned)
+        const originalQuantity = item.quantity || 0;
+        const returnedQuantity = getReturnedQuantityForProduct(sale, productId);
+        const netQuantity = originalQuantity - returnedQuantity;
 
-        // Calculate net cost and profit
-        const netCost = netQuantity * productCost;
-        const netProfit = netRevenue - netCost;
+        // Only add if net quantity is positive
+        if (netQuantity > 0) {
+          // Calculate net revenue
+          const originalRevenue = item.subtotal || (originalQuantity * productPrice);
+          const returnedRevenue = getReturnedRevenueForProduct(sale, productId);
+          const netRevenue = originalRevenue - returnedRevenue;
 
-        // Add to totals
-        productSales[productId].quantity += netQuantity;
-        productSales[productId].revenue += netRevenue;
-        productSales[productId].cost += netCost;
-        productSales[productId].profit += netProfit;
-      }
+          // Calculate net cost and profit
+          const netCost = netQuantity * productCost;
+          const netProfit = netRevenue - netCost;
+
+          // Add to totals
+          productSales[productId].quantity += netQuantity;
+          productSales[productId].revenue += netRevenue;
+          productSales[productId].cost += netCost;
+          productSales[productId].profit += netProfit;
+        }
+      });
     });
 
     return Object.values(productSales)
