@@ -157,6 +157,52 @@ export const reportsService = {
   },
 
   async getTopProducts(businessId: string, limit = 5, year?: number, month?: number) {
+    // Helper to check if a sale is completely voided
+    const isSaleVoided = (sale: any): boolean => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return false;
+      return sale.sale_actions.some((action: any) => action.action_type === 'void');
+    };
+
+    // Helper to get returned quantity for a specific product
+    const getReturnedQuantityForProduct = (sale: any, productId: string): number => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return 0;
+
+      let returnedQty = 0;
+      const returns = sale.sale_actions.filter((action: any) => action.action_type === 'return');
+
+      returns.forEach((returnAction: any) => {
+        if (returnAction.items_metadata) {
+          const returnedItems = returnAction.items_metadata;
+          const productReturn = returnedItems.find((item: any) => item.product_id === productId);
+          if (productReturn) {
+            returnedQty += productReturn.quantity || 0;
+          }
+        }
+      });
+
+      return returnedQty;
+    };
+
+    // Helper to get returned revenue for a specific product
+    const getReturnedRevenueForProduct = (sale: any, productId: string): number => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return 0;
+
+      let returnedRevenue = 0;
+      const returns = sale.sale_actions.filter((action: any) => action.action_type === 'return');
+
+      returns.forEach((returnAction: any) => {
+        if (returnAction.items_metadata) {
+          const returnedItems = returnAction.items_metadata;
+          const productReturn = returnedItems.find((item: any) => item.product_id === productId);
+          if (productReturn) {
+            returnedRevenue += parseFloat(productReturn.amount || 0);
+          }
+        }
+      });
+
+      return returnedRevenue;
+    };
+
     // Use provided year/month or default to current month
     const targetDate = year && month ? new Date(year, month - 1, 1) : new Date();
     const startOfMonthDate = startOfMonth(targetDate);
@@ -170,26 +216,36 @@ export const reportsService = {
       .from('cart_items')
       .select(`
         quantity,
+        product_id,
+        unit_price,
+        subtotal,
         products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level),
         carts!inner(
           sales!inner(
+            id,
             business_id,
             sale_date,
-            status
+            status,
+            sale_actions(
+              id,
+              action_type,
+              amount,
+              adjusted_amount,
+              items_metadata
+            )
           )
         )
       `)
       .eq('carts.sales.business_id', businessId)
-      .eq('carts.sales.status', 'completed')
       .gte('carts.sales.sale_date', startOfMonthStr)
       .lte('carts.sales.sale_date', endOfMonthStr);
 
     if (error) throw error;
 
-    // Group by product and sum quantities
-    const productSales: Record<string, { 
-      id: string; 
-      name: string; 
+    // Group by product and sum net quantities (excluding voided sales and subtracting returns)
+    const productSales: Record<string, {
+      id: string;
+      name: string;
       price: number;
       description?: string;
       image_url?: string;
@@ -197,22 +253,30 @@ export const reportsService = {
       current_stock: number;
       min_stock_level: number;
       cost_per_unit: number;
-      quantity: number; 
-      revenue: number; 
-      cost: number; 
-      profit: number 
+      quantity: number;
+      revenue: number;
+      cost: number;
+      profit: number
     }> = {};
-    
+
     data.forEach(item => {
-      const productId = item.products?.id || 'unknown';
+      const sale = item.carts?.sales;
+
+      // Skip voided sales
+      if (!sale || isSaleVoided(sale)) {
+        return;
+      }
+
+      const productId = item.products?.id || item.product_id || 'unknown';
       const productName = item.products?.name || 'Unknown';
       const productPrice = item.products?.price || 0;
       const productCost = item.products?.cost_per_unit || 0;
-      
+
+      // Initialize product entry if not exists
       if (!productSales[productId]) {
-        productSales[productId] = { 
+        productSales[productId] = {
           id: productId,
-          name: productName, 
+          name: productName,
           price: productPrice,
           description: item.products?.description,
           image_url: item.products?.image_url,
@@ -220,20 +284,39 @@ export const reportsService = {
           current_stock: item.products?.current_stock || 0,
           min_stock_level: item.products?.min_stock_level || 0,
           cost_per_unit: productCost,
-          quantity: 0, 
+          quantity: 0,
           revenue: 0,
           cost: 0,
           profit: 0
         };
       }
-      
-      productSales[productId].quantity += item.quantity;
-      productSales[productId].revenue += item.quantity * productPrice;
-      productSales[productId].cost += item.quantity * productCost;
-      productSales[productId].profit += item.quantity * (productPrice - productCost);
+
+      // Calculate net quantity (original - returned)
+      const originalQuantity = item.quantity || 0;
+      const returnedQuantity = getReturnedQuantityForProduct(sale, productId);
+      const netQuantity = originalQuantity - returnedQuantity;
+
+      // Only add if net quantity is positive
+      if (netQuantity > 0) {
+        // Calculate net revenue
+        const originalRevenue = item.subtotal || (originalQuantity * productPrice);
+        const returnedRevenue = getReturnedRevenueForProduct(sale, productId);
+        const netRevenue = originalRevenue - returnedRevenue;
+
+        // Calculate net cost and profit
+        const netCost = netQuantity * productCost;
+        const netProfit = netRevenue - netCost;
+
+        // Add to totals
+        productSales[productId].quantity += netQuantity;
+        productSales[productId].revenue += netRevenue;
+        productSales[productId].cost += netCost;
+        productSales[productId].profit += netProfit;
+      }
     });
 
     return Object.values(productSales)
+      .filter(product => product.quantity > 0)
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, limit);
   },
