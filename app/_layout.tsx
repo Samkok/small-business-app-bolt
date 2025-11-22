@@ -23,8 +23,8 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <BusinessSwitchProvider>
-            <NotificationProvider>
-              <SaleDetailsModalProvider>
+            <SaleDetailsModalProvider>
+              <NotificationProvider>
                 <CartProvider>
                   <InstantCheckoutProvider>
                     <Stack screenOptions={{ headerShown: false }}>
@@ -35,8 +35,8 @@ export default function RootLayout() {
                     <StatusBar style="auto" />
                   </InstantCheckoutProvider>
                 </CartProvider>
-              </SaleDetailsModalProvider>
-            </NotificationProvider>
+              </NotificationProvider>
+            </SaleDetailsModalProvider>
           </BusinessSwitchProvider>
         </AuthProvider>
       </ThemeProvider>
