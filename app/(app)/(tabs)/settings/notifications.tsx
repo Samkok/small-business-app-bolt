@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -41,9 +42,9 @@ export default function NotificationsScreen() {
     markAsRead,
     markAllAsReadAllBusinesses,
     deleteNotification,
-    openSaleDetails,
   } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
+  const saleDetailsModal = useSaleDetailsModal();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
@@ -104,7 +105,7 @@ export default function NotificationsScreen() {
       // Handle sale notifications with modal (modal handles business switching and mark-as-read)
       if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
         if (data?.sale_id) {
-          await openSaleDetails(data.sale_id, notification);
+          await saleDetailsModal.openSaleDetails(data.sale_id, notification, markAsRead);
         }
         return;
       }
@@ -171,7 +172,7 @@ export default function NotificationsScreen() {
       // Clear loading state
       setLoadingNotificationId(null);
     }
-  }, [openSaleDetails, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification, deleteNotification]);
+  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification]);
 
   const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {

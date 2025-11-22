@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
@@ -10,10 +10,8 @@ import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
+import { useSaleDetailsModal } from './SaleDetailsModalContext';
 import { notificationCleanupService } from '../utils/notificationCleanup';
-import { handleBusinessSwitch } from '../utils/notificationBusinessSwitch';
-import SaleDetailsModal from '../components/sales/SaleDetailsModal';
-import BusinessSwitchLoadingModal from '../components/notifications/BusinessSwitchLoadingModal';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -33,8 +31,6 @@ interface NotificationContextData {
   deleteNotification: (notificationId: string) => Promise<void>;
   updatePreferences: (prefs: Partial<NotificationPreferences>) => Promise<void>;
   cleanupNotificationsForBusiness: (businessId: string) => void;
-  openSaleDetails: (saleId: string, notification?: Notification) => Promise<void>;
-  closeSaleDetails: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextData>({} as NotificationContextData);
@@ -54,16 +50,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [allBusinessUnreadCount, setAllBusinessUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saleModalVisible, setSaleModalVisible] = useState(false);
-  const [saleModalId, setSaleModalId] = useState<string | null>(null);
-  const [switchState, setSwitchState] = useState<{
-    loading: boolean;
-    businessName?: string;
-    error: { type: string; message: string } | null;
-  }>({ loading: false, businessName: undefined, error: null });
   const auth = useAuth();
   const router = useRouter();
   const businessSwitch = useBusinessSwitch();
+  const saleDetailsModal = useSaleDetailsModal();
   const notificationListener = useRef<Notifications.Subscription | undefined>();
   const responseListener = useRef<Notifications.Subscription | undefined>();
   const appState = useRef<string>(AppState.currentState);
@@ -267,123 +257,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [businessSwitch]);
 
-  const markAsRead = useCallback(async (notificationId: string) => {
-    try {
-      await notificationService.markAsRead(notificationId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
-      );
-      setAllBusinessNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-      setAllBusinessUnreadCount((prev) => {
-        const newCount = Math.max(0, prev - 1);
-        BadgeSync.updateBadge(newCount);
-        return newCount;
-      });
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      throw error;
-    }
-  }, []);
-
-  const openSaleDetails = useCallback(
-    async (newSaleId: string, notification?: Notification) => {
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
-      // If notification is provided, handle business switching first
-      if (notification) {
-        const data = notification.data as any;
-        const notificationBusinessName = data?.business_name;
-
-        // Batch state update
-        setSwitchState({
-          loading: true,
-          businessName: notificationBusinessName,
-          error: null,
-        });
-
-        try {
-          const switchResult = await handleBusinessSwitch(
-            notification,
-            auth.currentBusiness,
-            auth.userBusinesses,
-            auth.switchBusiness,
-            auth.refreshUserBusinesses
-          );
-
-          if (!switchResult.success) {
-            setSwitchState({
-              loading: false,
-              businessName: notificationBusinessName,
-              error: {
-                type: switchResult.error?.type || 'unknown',
-                message: switchResult.error?.message || 'Failed to switch business',
-              },
-            });
-            return;
-          }
-
-          // Business switched successfully
-          setSwitchState({
-            loading: false,
-            businessName: undefined,
-            error: null,
-          });
-
-          // Mark as read after successful business switch
-          if (!notification.is_read) {
-            markAsRead(notification.id).catch(err =>
-              console.error('Failed to mark notification as read:', err)
-            );
-          }
-
-          // Use startTransition for non-urgent modal opening
-          startTransition(() => {
-            setSaleModalId(newSaleId);
-            setSaleModalVisible(true);
-          });
-        } catch (err: any) {
-          setSwitchState({
-            loading: false,
-            businessName: notificationBusinessName,
-            error: {
-              type: 'unknown',
-              message: err?.message || 'An unexpected error occurred',
-            },
-          });
-        }
-      } else {
-        // No notification, just open the modal directly
-        setSaleModalId(newSaleId);
-        setSaleModalVisible(true);
-      }
-    },
-    [auth.currentBusiness, auth.userBusinesses, auth.switchBusiness, auth.refreshUserBusinesses, markAsRead]
-  );
-
-  const closeSaleDetails = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    setSaleModalVisible(false);
-    // Clear saleId after animation completes
-    setTimeout(() => {
-      setSaleModalId(null);
-    }, 300);
-  }, []);
-
-  const dismissSwitchError = useCallback(() => {
-    setSwitchState({
-      loading: false,
-      businessName: undefined,
-      error: null,
-    });
-  }, []);
-
   useEffect(() => {
     const setupPushNotifications = async () => {
       try {
@@ -466,7 +339,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // Handle sale notifications with modal
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            await openSaleDetails(data.sale_id as string, mockNotification);
+            await saleDetailsModal.openSaleDetails(data.sale_id as string, mockNotification);
           }
           return;
         }
@@ -494,7 +367,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         pushNotificationService.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [router, auth.userProfile?.user_id, handleNotificationWithBusinessSwitch, openSaleDetails]);
+  }, [router, auth.userProfile?.user_id, handleNotificationWithBusinessSwitch]);
 
   const cleanupNotificationsForBusiness = useCallback((businessId: string) => {
     console.log('Cleaning up notifications for removed business:', businessId);
@@ -572,6 +445,27 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const refreshAllBusinessNotifications = useCallback(async () => {
     await loadAllBusinessNotifications();
   }, [loadAllBusinessNotifications]);
+
+  const markAsRead = useCallback(async (notificationId: string) => {
+    try {
+      await notificationService.markAsRead(notificationId);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
+      );
+      setAllBusinessNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setAllBusinessUnreadCount((prev) => {
+        const newCount = Math.max(0, prev - 1);
+        BadgeSync.updateBadge(newCount);
+        return newCount;
+      });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  }, []);
 
   const markAllAsRead = useCallback(async () => {
     if (!auth.userProfile?.user_id) return;
@@ -669,27 +563,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         deleteNotification,
         updatePreferences,
         cleanupNotificationsForBusiness,
-        openSaleDetails,
-        closeSaleDetails,
       }}
     >
       {children}
-
-      {/* Sale Details Modal */}
-      <SaleDetailsModal
-        visible={saleModalVisible}
-        saleId={saleModalId}
-        onClose={closeSaleDetails}
-      />
-
-      {/* Business Switch Loading Modal */}
-      <BusinessSwitchLoadingModal
-        visible={switchState.loading || switchState.error !== null}
-        businessName={switchState.businessName}
-        loading={switchState.loading}
-        error={switchState.error}
-        onDismiss={dismissSwitchError}
-      />
     </NotificationContext.Provider>
   );
 };
