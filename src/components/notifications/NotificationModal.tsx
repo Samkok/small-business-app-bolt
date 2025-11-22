@@ -23,12 +23,10 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
 import { useAuth } from '@/src/context/AuthContext';
-import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
 import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -56,10 +54,9 @@ const TIMING_CONFIG = {
 export default function NotificationModal({ visible, onClose }: NotificationModalProps) {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, openSaleDetails } = useNotifications();
   const businessSwitch = useBusinessSwitch();
   const auth = useAuth();
-  const saleDetailsModal = useSaleDetailsModal();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
 
@@ -175,7 +172,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         if (data?.sale_id) {
           // Small delay to let modal close animation finish
           setTimeout(async () => {
-            await saleDetailsModal.openSaleDetails(data.sale_id as string, notification, markAsRead);
+            await openSaleDetails(data.sale_id as string, notification);
           }, 250);
           return;
         }
@@ -203,7 +200,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       // Clear loading state after a short delay
       setTimeout(() => setLoadingNotificationId(null), 300);
     }
-  }, [handleMarkAsRead, handleClose, businessSwitch, saleDetailsModal, auth.userBusinesses, markAsRead, deleteNotification]);
+  }, [handleMarkAsRead, handleClose, businessSwitch, openSaleDetails, auth.userBusinesses, deleteNotification]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -421,14 +418,6 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           </Animated.View>
         </GestureDetector>
       </View>
-
-      <BusinessSwitchLoadingModal
-        visible={businessSwitch.loading || businessSwitch.error !== null}
-        businessName={businessSwitch.businessName}
-        loading={businessSwitch.loading}
-        error={businessSwitch.error}
-        onDismiss={businessSwitch.dismissError}
-      />
     </Modal>
   );
 }
