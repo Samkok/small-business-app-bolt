@@ -189,6 +189,15 @@ export const salesService = {
             product_id,
             products(name)
           )
+        ),
+        sale_actions(
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          items_metadata,
+          reason,
+          created_at
         )
       `)
       .eq('business_id', businessId)
