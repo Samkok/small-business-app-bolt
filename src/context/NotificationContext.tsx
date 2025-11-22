@@ -10,6 +10,7 @@ import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
+import { useSaleDetailsModal } from './SaleDetailsModalContext';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -52,6 +53,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const auth = useAuth();
   const router = useRouter();
   const businessSwitch = useBusinessSwitch();
+  const saleDetailsModal = useSaleDetailsModal();
   const notificationListener = useRef<Notifications.Subscription | undefined>();
   const responseListener = useRef<Notifications.Subscription | undefined>();
   const appState = useRef<string>(AppState.currentState);
@@ -334,13 +336,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           created_at: new Date().toISOString(),
         };
 
-        let navigationTarget = '/(app)/(tabs)/';
-
+        // Handle sale notifications with modal
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
+            await saleDetailsModal.openSaleDetails(data.sale_id as string, mockNotification);
           }
-        } else if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
+          return;
+        }
+
+        // Handle other notifications with navigation
+        let navigationTarget = '/(app)/(tabs)/';
+
+        if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
           navigationTarget = '/(app)/(tabs)/inventory/low-stock';
         } else if (data.type === 'role_assigned' || data.type === 'team_invite') {
           navigationTarget = '/(app)/(tabs)/';

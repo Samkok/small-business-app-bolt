@@ -23,8 +23,9 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock, AlertCircle } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 
@@ -57,6 +58,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const businessSwitch = useBusinessSwitch();
   const auth = useAuth();
+  const saleDetailsModal = useSaleDetailsModal();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
@@ -166,13 +168,19 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
     const data = notification.data as any;
 
-    // Determine navigation target
-    let navigationTarget = '/(app)/(tabs)/';
+    // Handle sale notifications with modal
     if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
       if (data?.sale_id) {
-        navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
+        setTimeout(async () => {
+          await saleDetailsModal.openSaleDetails(data.sale_id as string, notification);
+        }, 300);
+        return;
       }
-    } else if (notification.type === 'low_stock') {
+    }
+
+    // Determine navigation target for other notifications
+    let navigationTarget = '/(app)/(tabs)/';
+    if (notification.type === 'low_stock') {
       navigationTarget = '/(app)/(tabs)/inventory/low-stock';
     } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
       navigationTarget = '/(app)/(tabs)/';
@@ -183,7 +191,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     setTimeout(async () => {
       await businessSwitch.handleNotificationNavigation(notification, navigationTarget);
     }, 300);
-  }, [handleMarkAsRead, handleClose, businessSwitch, auth.userBusinesses]);
+  }, [handleMarkAsRead, handleClose, businessSwitch, saleDetailsModal, auth.userBusinesses]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
