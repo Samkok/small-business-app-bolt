@@ -132,6 +132,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // One week in milliseconds
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
+// Grace periods for app foreground transitions
+const SESSION_REFRESH_GRACE_PERIOD = 60 * 1000; // 1 minute for session refresh (performance)
+const SECURITY_CHECK_GRACE_PERIOD = 5 * 1000; // 5 seconds for business access check (security)
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mounted = useRef(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -152,6 +156,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const realtimeStatusRef = useRef<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const lastForegroundTimeRef = useRef<number>(0);
+  const lastSecurityCheckTimeRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<string>('active');
@@ -1006,6 +1012,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Lightweight check to verify user still has access to their businesses
+  const checkBusinessAccessSecurity = useCallback(async () => {
+    if (!userRef.current?.id) {
+      console.log('checkBusinessAccessSecurity: No user, skipping');
+      return;
+    }
+
+    try {
+      console.log('checkBusinessAccessSecurity: Performing lightweight business access check');
+
+      const { data: roles, error } = await supabase
+        .from('user_business_roles')
+        .select('business_id')
+        .eq('user_id', userRef.current.id);
+
+      if (error) {
+        console.warn('checkBusinessAccessSecurity: Error checking business access:', error.message);
+        return;
+      }
+
+      const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
+      const previousBusinessIds = new Set(userBusinessesRef.current.map(b => b.id));
+
+      // Check if user was removed from any business
+      const removedBusinessIds = Array.from(previousBusinessIds).filter(
+        id => !currentBusinessIds.has(id)
+      );
+
+      if (removedBusinessIds.length > 0) {
+        console.warn('checkBusinessAccessSecurity: User removed from businesses:', removedBusinessIds);
+
+        // Trigger refresh to handle the removal properly
+        await refreshUserBusinesses();
+      } else {
+        console.log('checkBusinessAccessSecurity: All business access verified');
+      }
+
+      lastSecurityCheckTimeRef.current = Date.now();
+    } catch (error) {
+      console.error('checkBusinessAccessSecurity: Unexpected error:', error);
+    }
+  }, []);
+
   // Check for session activity whenever the app comes to foreground
   useEffect(() => {
     const checkActivity = async () => {
@@ -1023,23 +1072,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (nextAppState === 'active' && previousState !== 'active') {
         // App is returning to foreground
-        console.log('App returning to foreground, refreshing session...');
+        const now = Date.now();
+        const timeSinceLastForeground = now - lastForegroundTimeRef.current;
+        const timeSinceSecurityCheck = now - lastSecurityCheckTimeRef.current;
 
-        // Refresh session first before any other operations
-        if (session) {
-          const refreshSuccess = await refreshSessionIfNeeded();
+        console.log('App returning to foreground', {
+          timeSinceLastForeground: `${(timeSinceLastForeground / 1000).toFixed(1)}s`,
+          timeSinceSecurityCheck: `${(timeSinceSecurityCheck / 1000).toFixed(1)}s`,
+          sessionRefreshGracePeriod: `${(SESSION_REFRESH_GRACE_PERIOD / 1000).toFixed(0)}s`,
+          securityCheckGracePeriod: `${(SECURITY_CHECK_GRACE_PERIOD / 1000).toFixed(0)}s`
+        });
 
-          if (refreshSuccess) {
-            console.log('Session refreshed on foreground transition');
-          } else {
-            console.warn('Session refresh failed on foreground transition');
-          }
+        // SECURITY CHECK: Always verify business access frequently (5 second grace period)
+        if (timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
+          console.log('Security check grace period exceeded, performing business access check');
+          await checkBusinessAccessSecurity();
+        } else {
+          console.log('Security check grace period active, skipping business access check');
         }
 
-        // Then proceed with activity checks
-        checkActivity();
+        // PERFORMANCE OPTIMIZATION: Only refresh session if grace period exceeded (60 second grace period)
+        if (timeSinceLastForeground > SESSION_REFRESH_GRACE_PERIOD) {
+          console.log('Session refresh grace period exceeded, refreshing session...');
 
-        // Update last activity timestamp when app comes to foreground
+          if (session) {
+            const refreshSuccess = await refreshSessionIfNeeded();
+
+            if (refreshSuccess) {
+              console.log('Session refreshed on foreground transition');
+            } else {
+              console.warn('Session refresh failed on foreground transition');
+            }
+          }
+
+          // Then proceed with activity checks
+          checkActivity();
+        } else {
+          console.log('Session refresh grace period active, skipping session refresh');
+        }
+
+        // Always update timestamps and last activity
+        lastForegroundTimeRef.current = now;
         if (session) {
           updateLastActivityTimestamp();
         }
@@ -1052,7 +1125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.remove();
     };
-  }, [session]);
+  }, [session, checkBusinessAccessSecurity]);
 
   const checkSessionActivity = async (currentSession: Session) => {
     try {
