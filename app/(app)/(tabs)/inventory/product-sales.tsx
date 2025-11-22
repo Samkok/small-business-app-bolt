@@ -184,7 +184,7 @@ export default function ProductSalesScreen() {
     returns.forEach((returnAction: any) => {
       if (returnAction.items_metadata) {
         const returnedItems = returnAction.items_metadata;
-        const productReturn = returnedItems.find((item: any) => item.product_id === productId);
+        const productReturn = returnedItems.find((item: any) => item.productId === productId);
         if (productReturn) {
           returnedQty += productReturn.quantity || 0;
         }
@@ -202,9 +202,9 @@ export default function ProductSalesScreen() {
     returns.forEach((returnAction: any) => {
       if (returnAction.items_metadata) {
         const returnedItems = returnAction.items_metadata;
-        const productReturn = returnedItems.find((item: any) => item.product_id === productId);
+        const productReturn = returnedItems.find((item: any) => item.productId === productId);
         if (productReturn) {
-          returnedRevenue += parseFloat(productReturn.amount || 0);
+          returnedRevenue += parseFloat(productReturn.adjustedAmount || 0);
         }
       }
     });
