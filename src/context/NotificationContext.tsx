@@ -261,6 +261,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await pushNotificationService.setupNotificationChannels();
 
         const pushToken = await pushNotificationService.registerForPushNotifications();
+        console.log("Expo Push Notification: " + pushToken);
 
         if (pushToken && auth.userProfile?.user_id) {
           try {
