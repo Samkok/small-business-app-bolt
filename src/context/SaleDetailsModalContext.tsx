@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, startTransition } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from './AuthContext';
@@ -12,7 +12,7 @@ type Notification = Database['public']['Tables']['notifications']['Row'];
 interface SaleDetailsModalContextData {
   visible: boolean;
   saleId: string | null;
-  openSaleDetails: (saleId: string, notification?: Notification) => Promise<void>;
+  openSaleDetails: (saleId: string, notification?: Notification, markAsReadFn?: (id: string) => Promise<void>) => Promise<void>;
   closeSaleDetails: () => void;
 }
 
@@ -33,14 +33,16 @@ export const SaleDetailsModalProvider: React.FC<{ children: React.ReactNode }> =
 }) => {
   const [visible, setVisible] = useState(false);
   const [saleId, setSaleId] = useState<string | null>(null);
-  const [switchLoading, setSwitchLoading] = useState(false);
-  const [switchBusinessName, setSwitchBusinessName] = useState<string | undefined>();
-  const [switchError, setSwitchError] = useState<{ type: string; message: string } | null>(null);
+  const [switchState, setSwitchState] = useState<{
+    loading: boolean;
+    businessName?: string;
+    error: { type: string; message: string } | null;
+  }>({ loading: false, businessName: undefined, error: null });
 
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
 
   const openSaleDetails = useCallback(
-    async (newSaleId: string, notification?: Notification) => {
+    async (newSaleId: string, notification?: Notification, markAsReadFn?: (id: string) => Promise<void>) => {
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -50,9 +52,12 @@ export const SaleDetailsModalProvider: React.FC<{ children: React.ReactNode }> =
         const data = notification.data as any;
         const notificationBusinessName = data?.business_name;
 
-        setSwitchLoading(true);
-        setSwitchBusinessName(notificationBusinessName);
-        setSwitchError(null);
+        // Batch state update
+        setSwitchState({
+          loading: true,
+          businessName: notificationBusinessName,
+          error: null,
+        });
 
         try {
           const switchResult = await handleBusinessSwitch(
@@ -63,27 +68,45 @@ export const SaleDetailsModalProvider: React.FC<{ children: React.ReactNode }> =
             refreshUserBusinesses
           );
 
-          setSwitchLoading(false);
-
           if (!switchResult.success) {
-            setSwitchError({
-              type: switchResult.error?.type || 'unknown',
-              message: switchResult.error?.message || 'Failed to switch business',
+            setSwitchState({
+              loading: false,
+              businessName: notificationBusinessName,
+              error: {
+                type: switchResult.error?.type || 'unknown',
+                message: switchResult.error?.message || 'Failed to switch business',
+              },
             });
             return;
           }
 
-          // Business switched successfully or already on correct business
-          // Add a small delay to ensure business context is updated
-          setTimeout(() => {
+          // Business switched successfully
+          setSwitchState({
+            loading: false,
+            businessName: undefined,
+            error: null,
+          });
+
+          // Mark as read if function provided
+          if (markAsReadFn && !notification.is_read) {
+            markAsReadFn(notification.id).catch(err =>
+              console.error('Failed to mark notification as read:', err)
+            );
+          }
+
+          // Use startTransition for non-urgent modal opening
+          startTransition(() => {
             setSaleId(newSaleId);
             setVisible(true);
-          }, 100);
+          });
         } catch (err: any) {
-          setSwitchLoading(false);
-          setSwitchError({
-            type: 'unknown',
-            message: err?.message || 'An unexpected error occurred',
+          setSwitchState({
+            loading: false,
+            businessName: notificationBusinessName,
+            error: {
+              type: 'unknown',
+              message: err?.message || 'An unexpected error occurred',
+            },
           });
         }
       } else {
@@ -107,8 +130,11 @@ export const SaleDetailsModalProvider: React.FC<{ children: React.ReactNode }> =
   }, []);
 
   const dismissSwitchError = useCallback(() => {
-    setSwitchError(null);
-    setSwitchBusinessName(undefined);
+    setSwitchState({
+      loading: false,
+      businessName: undefined,
+      error: null,
+    });
   }, []);
 
   return (
@@ -131,10 +157,10 @@ export const SaleDetailsModalProvider: React.FC<{ children: React.ReactNode }> =
 
       {/* Business Switch Loading Modal */}
       <BusinessSwitchLoadingModal
-        visible={switchLoading || switchError !== null}
-        businessName={switchBusinessName}
-        loading={switchLoading}
-        error={switchError}
+        visible={switchState.loading || switchState.error !== null}
+        businessName={switchState.businessName}
+        loading={switchState.loading}
+        error={switchState.error}
         onDismiss={dismissSwitchError}
       />
     </SaleDetailsModalContext.Provider>

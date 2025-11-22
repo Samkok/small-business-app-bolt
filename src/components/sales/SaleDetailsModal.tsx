@@ -60,6 +60,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
   const [showVoidModal, setShowVoidModal] = useState(false);
 
   const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 20;
 
@@ -76,21 +77,47 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
       }
     } else {
       isMountedRef.current = false;
+
+      // Cancel any ongoing fetch
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
       translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG);
       backdropOpacity.value = withTiming(0, TIMING_CONFIG);
-      // Reset state when modal closes
+
+      // Reset state after animation completes
       setTimeout(() => {
-        setSale(null);
-        setSaleDetails(null);
-        setLoading(true);
-        setShowReturnForm(false);
-        setShowVoidModal(false);
+        if (!isMountedRef.current) {
+          setSale(null);
+          setSaleDetails(null);
+          setLoading(true);
+          setShowReturnForm(false);
+          setShowVoidModal(false);
+        }
       }, 300);
     }
+
+    return () => {
+      // Cleanup on unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [visible, saleId]);
 
   const loadSaleDetails = async () => {
     if (!saleId) return;
+
+    // Cancel previous request if exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+    const controller = abortControllerRef.current;
 
     setLoading(true);
     try {
@@ -99,18 +126,22 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
         salesService.getSaleWithDiscountBreakdown(saleId)
       ]);
 
-      // Only update state if modal is still visible
-      if (isMountedRef.current) {
+      // Only update state if not aborted and still visible
+      if (!controller.signal.aborted && isMountedRef.current) {
         setSale(saleData);
         setSaleDetails(detailsData);
+        setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore abort errors
+      if (error?.name === 'AbortError') {
+        console.log('Sale details fetch aborted');
+        return;
+      }
+
       console.error('Error loading sale details:', error);
-      if (isMountedRef.current) {
+      if (!controller.signal.aborted && isMountedRef.current) {
         Alert.alert('Error', 'Failed to load sale details');
-      }
-    } finally {
-      if (isMountedRef.current) {
         setLoading(false);
       }
     }

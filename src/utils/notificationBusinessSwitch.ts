@@ -189,8 +189,8 @@ export async function handleBusinessSwitch(
       console.log(`Switching to business: ${context.businessName || context.businessId}`);
       await switchBusiness(context.businessId);
 
-      // Small delay to ensure the switch completes
-      await sleep(300);
+      // Minimal delay to ensure the switch completes
+      await sleep(100);
 
       console.log('Business switch successful');
       return {

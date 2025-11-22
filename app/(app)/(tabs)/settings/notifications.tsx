@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -47,6 +47,7 @@ export default function NotificationsScreen() {
   const saleDetailsModal = useSaleDetailsModal();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -54,30 +55,30 @@ export default function NotificationsScreen() {
     }, [])
   );
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshAllBusinessNotifications();
     setRefreshing(false);
-  };
+  }, [refreshAllBusinessNotifications]);
 
-  const handleMarkAsRead = async (notificationId: string) => {
+  const handleMarkAsRead = useCallback(async (notificationId: string) => {
     try {
       await markAsRead(notificationId);
     } catch (error) {
       Alert.alert('Error', 'Failed to mark notification as read');
     }
-  };
+  }, [markAsRead]);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsReadAllBusinesses();
       Alert.alert('Success', 'All notifications marked as read');
     } catch (error) {
       Alert.alert('Error', 'Failed to mark all as read');
     }
-  };
+  }, [markAllAsReadAllBusinesses]);
 
-  const handleDelete = (notificationId: string) => {
+  const handleDelete = useCallback((notificationId: string) => {
     Alert.alert('Delete Notification', 'Are you sure you want to delete this notification?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -92,24 +93,29 @@ export default function NotificationsScreen() {
         },
       },
     ]);
-  };
+  }, [deleteNotification]);
 
-  const handleNotificationPress = async (notification: any) => {
-    if (!notification.is_read) {
-      handleMarkAsRead(notification.id);
-    }
-
+  const handleNotificationPress = useCallback(async (notification: any) => {
     const data = notification.data as any;
 
-    // Handle sale notifications with modal (modal handles business switching internally)
-    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-      if (data?.sale_id) {
-        await saleDetailsModal.openSaleDetails(data.sale_id, notification);
-      }
-      return;
-    }
+    // Set loading state for this notification
+    setLoadingNotificationId(notification.id);
 
-    // For other notifications, validate business access and switch if needed
+    try {
+      // Handle sale notifications with modal (modal handles business switching and mark-as-read)
+      if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+        if (data?.sale_id) {
+          await saleDetailsModal.openSaleDetails(data.sale_id, notification, markAsRead);
+        }
+        return;
+      }
+
+      // For other notifications, mark as read immediately
+      if (!notification.is_read) {
+        handleMarkAsRead(notification.id);
+      }
+
+      // For other notifications, validate business access and switch if needed
     const businessName = data?.business_name || 'this business';
     let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
 
@@ -154,17 +160,21 @@ export default function NotificationsScreen() {
       }
     }
 
-    // Navigate based on notification type
-    if (notification.type === 'low_stock') {
-      router.push('/(app)/(tabs)/inventory/low-stock');
-    } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-      await handleRoleAssignedNotification(data);
-    } else if (notification.type === 'expense_added') {
-      router.push('/(app)/(tabs)/expenses');
+      // Navigate based on notification type
+      if (notification.type === 'low_stock') {
+        router.push('/(app)/(tabs)/inventory/low-stock');
+      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+        await handleRoleAssignedNotification(data);
+      } else if (notification.type === 'expense_added') {
+        router.push('/(app)/(tabs)/expenses');
+      }
+    } finally {
+      // Clear loading state
+      setLoadingNotificationId(null);
     }
-  };
+  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification]);
 
-  const handleRoleAssignedNotification = async (data: any) => {
+  const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {
       const businessId = data.business_id;
       const businessName = data.business_name || 'the business';
@@ -209,7 +219,7 @@ export default function NotificationsScreen() {
       console.error('Error handling role_assigned notification:', error);
       router.push('/(app)/(tabs)/');
     }
-  };
+  }, [switchBusiness, router, currentBusiness]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -229,15 +239,21 @@ export default function NotificationsScreen() {
     }
   };
 
-  const filteredNotifications =
-    filter === 'unread'
-      ? allBusinessNotifications.filter((n) => !n.is_read)
-      : allBusinessNotifications;
+  const filteredNotifications = useMemo(
+    () =>
+      filter === 'unread'
+        ? allBusinessNotifications.filter((n) => !n.is_read)
+        : allBusinessNotifications,
+    [filter, allBusinessNotifications]
+  );
 
-  const getBusinessName = (businessId: string) => {
-    const business = userBusinesses.find(b => b.id === businessId);
-    return business?.business_name || 'Unknown Business';
-  };
+  const getBusinessName = useCallback(
+    (businessId: string) => {
+      const business = userBusinesses.find((b) => b.id === businessId);
+      return business?.business_name || 'Unknown Business';
+    },
+    [userBusinesses]
+  );
 
   if (loading && !refreshing) {
     return (
@@ -348,6 +364,7 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               key={notification.id}
               onPress={() => handleNotificationPress(notification)}
+              disabled={loadingNotificationId === notification.id}
             >
               <Card
                 style={[
@@ -361,12 +378,17 @@ export default function NotificationsScreen() {
                       : isDark
                       ? '#1f2937'
                       : '#ffffff',
+                    opacity: loadingNotificationId === notification.id ? 0.6 : 1,
                   },
                 ]}
               >
                 <View style={styles.notificationHeader}>
                   <View style={styles.notificationIcon}>
-                    {getNotificationIcon(notification.type)}
+                    {loadingNotificationId === notification.id ? (
+                      <LoadingSpinner size="small" />
+                    ) : (
+                      getNotificationIcon(notification.type)
+                    )}
                   </View>
                   <View style={styles.notificationContent}>
                     <View style={styles.businessBadgeContainer}>
