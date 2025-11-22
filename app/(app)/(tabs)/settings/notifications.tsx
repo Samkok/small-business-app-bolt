@@ -99,8 +99,17 @@ export default function NotificationsScreen() {
       handleMarkAsRead(notification.id);
     }
 
-    // Validate business access before proceeding
     const data = notification.data as any;
+
+    // Handle sale notifications with modal (modal handles business switching internally)
+    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+      if (data?.sale_id) {
+        await saleDetailsModal.openSaleDetails(data.sale_id, notification);
+      }
+      return;
+    }
+
+    // For other notifications, validate business access and switch if needed
     const businessName = data?.business_name || 'this business';
     let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
 
@@ -146,11 +155,7 @@ export default function NotificationsScreen() {
     }
 
     // Navigate based on notification type
-    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-      if (data?.sale_id) {
-        await saleDetailsModal.openSaleDetails(data.sale_id, notification);
-      }
-    } else if (notification.type === 'low_stock') {
+    if (notification.type === 'low_stock') {
       router.push('/(app)/(tabs)/inventory/low-stock');
     } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
       await handleRoleAssignedNotification(data);
