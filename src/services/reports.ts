@@ -267,7 +267,7 @@ export const reportsService = {
         return;
       }
 
-      const productId = item.products?.id || item.product_id || 'unknown';
+      const productId = item.product_id || item.products?.id || 'unknown';
       const productName = item.products?.name || 'Unknown';
       const productPrice = item.products?.price || 0;
       const productCost = item.products?.cost_per_unit || 0;
