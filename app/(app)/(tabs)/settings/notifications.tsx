@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -43,6 +44,7 @@ export default function NotificationsScreen() {
     deleteNotification,
   } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
+  const saleDetailsModal = useSaleDetailsModal();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
@@ -146,7 +148,7 @@ export default function NotificationsScreen() {
     // Navigate based on notification type
     if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
       if (data?.sale_id) {
-        router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
+        await saleDetailsModal.openSaleDetails(data.sale_id, notification);
       }
     } else if (notification.type === 'low_stock') {
       router.push('/(app)/(tabs)/inventory/low-stock');
