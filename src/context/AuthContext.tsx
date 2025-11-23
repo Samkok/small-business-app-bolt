@@ -1653,6 +1653,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     console.log('SignOut: Starting sign out process');
+    setSignedOutDueToInactivity(false);
 
     // Set flag to indicate this is an explicit sign out
     setIsExplicitSignOut(true);
