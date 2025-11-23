@@ -633,7 +633,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Handle sign out events
         if (event === 'SIGNED_OUT') {
-          console.log('AuthContext: SIGNED_OUT event received, explicit:', isExplicitSignOut);
+          console.log('AuthContext: SIGNED_OUT event received, explicit:', isExplicitSignOut, 'previous inactivity flag:', signedOutDueToInactivity);
 
           if (!isExplicitSignOut) {
             // If signed out but not explicitly by the user, it was due to inactivity
