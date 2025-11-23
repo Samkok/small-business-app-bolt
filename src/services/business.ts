@@ -67,19 +67,41 @@ export const businessService = {
     }
 
     try {
-      const { error: saleActionsError } = await supabase
-        .from('sale_actions')
-        .delete()
-        .in('sale_id', supabase.from('sales').select('id').eq('business_id', businessId));
+      // Fetch sale IDs first
+      const { data: sales } = await supabase
+        .from('sales')
+        .select('id')
+        .eq('business_id', businessId);
 
-      if (saleActionsError) throw saleActionsError;
+      const saleIds = sales?.map(s => s.id) || [];
 
-      const { error: cartItemsError } = await supabase
-        .from('cart_items')
-        .delete()
-        .in('cart_id', supabase.from('carts').select('id').eq('business_id', businessId));
+      // Delete sale actions if there are sales
+      if (saleIds.length > 0) {
+        const { error: saleActionsError } = await supabase
+          .from('sale_actions')
+          .delete()
+          .in('sale_id', saleIds);
 
-      if (cartItemsError) throw cartItemsError;
+        if (saleActionsError) throw saleActionsError;
+      }
+
+      // Fetch cart IDs first
+      const { data: carts } = await supabase
+        .from('carts')
+        .select('id')
+        .eq('business_id', businessId);
+
+      const cartIds = carts?.map(c => c.id) || [];
+
+      // Delete cart items if there are carts
+      if (cartIds.length > 0) {
+        const { error: cartItemsError } = await supabase
+          .from('cart_items')
+          .delete()
+          .in('cart_id', cartIds);
+
+        if (cartItemsError) throw cartItemsError;
+      }
 
       const { error: cartsError } = await supabase
         .from('carts')
@@ -109,12 +131,23 @@ export const businessService = {
 
       if (expenseCategoriesError) throw expenseCategoriesError;
 
-      const { error: importCostsError } = await supabase
-        .from('import_costs')
-        .delete()
-        .in('batch_id', supabase.from('inventory_batches').select('id').eq('business_id', businessId));
+      // Fetch batch IDs first
+      const { data: batches } = await supabase
+        .from('inventory_batches')
+        .select('id')
+        .eq('business_id', businessId);
 
-      if (importCostsError) throw importCostsError;
+      const batchIds = batches?.map(b => b.id) || [];
+
+      // Delete import costs if there are batches
+      if (batchIds.length > 0) {
+        const { error: importCostsError } = await supabase
+          .from('import_costs')
+          .delete()
+          .in('batch_id', batchIds);
+
+        if (importCostsError) throw importCostsError;
+      }
 
       const { error: inventoryImportsError } = await supabase
         .from('inventory_imports')
