@@ -48,16 +48,20 @@ export default function ForgotPasswordScreen() {
       let redirectTo: string;
 
       if (Platform.OS === 'web') {
+        // For web, use the current origin or fallback to configured URL
         if (typeof window !== 'undefined' && window.location?.origin) {
           redirectTo = `${window.location.origin}/reset-password`;
         } else {
           redirectTo = `${appUrl}/reset-password`;
         }
       } else {
+        // For mobile (iOS/Android), use the app's deep link scheme
+        // This format works with Expo's deep linking: scheme://path
         redirectTo = `${appScheme}://reset-password`;
       }
 
       console.log('Password reset redirect URL:', redirectTo);
+      console.log('Platform:', Platform.OS);
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
@@ -65,9 +69,13 @@ export default function ForgotPasswordScreen() {
 
       if (error) {
         console.error("Password reset error from Supabase:", error);
-        Alert.alert(t('common.error'), error.message || 'Failed to send reset email');
+        Alert.alert(
+          t('common.error'),
+          error.message || 'Failed to send reset email. Please check that your email is registered.'
+        );
       } else {
         console.log("Password reset email sent successfully to:", email);
+        console.log("User should click the link in their email to reset password");
         setResetSent(true);
       }
     } catch (error: any) {
