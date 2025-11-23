@@ -158,8 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const lastForegroundTimeRef = useRef<number>(Date.now());
   const lastBackgroundTimeRef = useRef<number>(0);
-  const lastSecurityCheckTimeRef = useRef<number>(0);
-  const isFirstLaunchRef = useRef<boolean>(true);
+  const lastSecurityCheckTimeRef = useRef<number>(Date.now());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<string>('active');
@@ -1077,15 +1076,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const now = Date.now();
 
         // Calculate actual background duration (not time since last foreground)
+        // If lastBackgroundTimeRef is 0, it means we haven't gone to background yet (first launch)
         const backgroundDuration = lastBackgroundTimeRef.current > 0
           ? now - lastBackgroundTimeRef.current
           : 0;
 
         const timeSinceSecurityCheck = now - lastSecurityCheckTimeRef.current;
-        const isFirstLaunch = isFirstLaunchRef.current;
+        const isFirstTransition = lastBackgroundTimeRef.current === 0;
 
         console.log('App returning to foreground', {
-          isFirstLaunch,
+          isFirstTransition,
           backgroundDuration: `${(backgroundDuration / 1000).toFixed(1)}s`,
           timeSinceSecurityCheck: `${(timeSinceSecurityCheck / 1000).toFixed(1)}s`,
           sessionRefreshGracePeriod: `${(SESSION_REFRESH_GRACE_PERIOD / 1000).toFixed(0)}s`,
@@ -1094,14 +1094,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           now: now
         });
 
-        // Skip all checks on first app launch (when the app is initially opened)
-        if (isFirstLaunch) {
-          console.log('First app launch detected, skipping all checks');
-          isFirstLaunchRef.current = false;
+        // Skip all checks if this is the first transition (app hasn't been to background yet)
+        // This handles the case where the app just launched and is already active
+        if (isFirstTransition) {
+          console.log('First foreground transition detected (no background yet), skipping all checks');
           lastForegroundTimeRef.current = now;
-
-          // Initialize last security check time
-          lastSecurityCheckTimeRef.current = now;
 
           if (session) {
             updateLastActivityTimestamp();
@@ -1110,10 +1107,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // SECURITY CHECK: Always verify business access frequently (5 second grace period)
-        // Only check if we have a valid background duration measurement
+        // Only check if we actually have a background duration to measure
         if (backgroundDuration > 0 && timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
           console.log('Security check grace period exceeded, performing business access check');
-          await checkBusinessAccessSecurity();
+          try {
+            await checkBusinessAccessSecurity();
+          } catch (error) {
+            console.error('Error during business access security check:', error);
+          }
         } else if (backgroundDuration > 0) {
           console.log('Security check grace period active, skipping business access check');
         }
@@ -1124,17 +1125,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) exceeded grace period, refreshing session...`);
 
           if (session) {
-            const refreshSuccess = await refreshSessionIfNeeded();
+            try {
+              const refreshSuccess = await refreshSessionIfNeeded();
 
-            if (refreshSuccess) {
-              console.log('Session refreshed on foreground transition');
-            } else {
-              console.warn('Session refresh failed on foreground transition');
+              if (refreshSuccess) {
+                console.log('Session refreshed on foreground transition');
+              } else {
+                console.warn('Session refresh failed on foreground transition');
+              }
+            } catch (error) {
+              console.error('Error during session refresh:', error);
             }
           }
 
           // Then proceed with activity checks
-          checkActivity();
+          try {
+            await checkActivity();
+          } catch (error) {
+            console.error('Error during activity check:', error);
+          }
         } else if (backgroundDuration > 0) {
           console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) within grace period, skipping session refresh`);
         }
