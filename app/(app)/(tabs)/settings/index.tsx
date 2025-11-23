@@ -33,8 +33,11 @@ import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { UnauthorizedDeleteModal } from '@/src/components/business/UnauthorizedDeleteModal';
 import { DeleteBusinessModal } from '@/src/components/business/DeleteBusinessModal';
+import { DeleteAccountModal } from '@/src/components/account/DeleteAccountModal';
 import { useBusinessDeletion } from '@/src/hooks/useBusinessDeletion';
+import { useAccountDeletion } from '@/src/hooks/useAccountDeletion';
 import { businessService } from '@/src/services/business';
+import { accountService, AccountDeletePreview } from '@/src/services/account';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -44,9 +47,12 @@ export default function SettingsScreen() {
   const { unreadCount } = useNotifications();
   const router = useRouter();
   const { deleteBusiness, isDeleting } = useBusinessDeletion();
+  const { deleteAccount } = useAccountDeletion();
 
   const [showUnauthorizedModal, setShowUnauthorizedModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [accountPreview, setAccountPreview] = useState<AccountDeletePreview | null>(null);
 
   const handleLanguageChange = async (language: string) => {
     try {
@@ -106,22 +112,27 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      t('settings.deleteAccount'),
-      t('settings.deleteAccountWarning'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: () => {
-            // TODO: Implement delete account functionality
-            Alert.alert(t('common.error'), t('settings.featureNotImplemented'));
-          }
-        }
-      ]
-    );
+  const handleDeleteAccount = async () => {
+    if (!userProfile) return;
+
+    try {
+      const preview = await accountService.getAccountDeletePreview(userProfile.user_id);
+      setAccountPreview(preview);
+      setShowDeleteAccountModal(true);
+    } catch (error) {
+      console.error('Error fetching account deletion preview:', error);
+      Alert.alert(t('common.error'), t('common.somethingWentWrong'));
+    }
+  };
+
+  const handleDeleteAccountComplete = async () => {
+    try {
+      await deleteAccount();
+      setShowDeleteAccountModal(false);
+    } catch (error: any) {
+      console.error('Error in delete account complete:', error);
+      Alert.alert(t('common.error'), error.message || t('deleteAccount.errorMessage'));
+    }
   };
 
   const SettingItem = ({ 
@@ -370,6 +381,16 @@ export default function SettingsScreen() {
           businessId={currentBusiness.id}
           onClose={() => setShowDeleteModal(false)}
           onComplete={handleDeleteComplete}
+        />
+      )}
+
+      {userProfile && accountPreview && (
+        <DeleteAccountModal
+          visible={showDeleteAccountModal}
+          userEmail={userProfile.email || ''}
+          preview={accountPreview}
+          onClose={() => setShowDeleteAccountModal(false)}
+          onComplete={handleDeleteAccountComplete}
         />
       )}
     </ScrollView>
