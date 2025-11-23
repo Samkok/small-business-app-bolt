@@ -240,6 +240,14 @@ export function DeleteBusinessModal({
         )}
       </View>
 
+      <Button
+        title={t('deleteBusiness.deleteBusinessButton')}
+        variant="danger"
+        onPress={handleConfirmDelete}
+        disabled={businessNameInput.trim() !== businessName}
+        style={styles.deleteButton}
+      />
+
       <View style={styles.buttonsContainer}>
         <Button
           title={t('deleteBusiness.back')}
@@ -251,13 +259,6 @@ export function DeleteBusinessModal({
           title={t('common.cancel')}
           variant="outline"
           onPress={onClose}
-          style={styles.button}
-        />
-        <Button
-          title={t('deleteBusiness.deleteBusinessButton')}
-          variant="danger"
-          onPress={handleConfirmDelete}
-          disabled={businessNameInput.trim() !== businessName}
           style={styles.button}
         />
       </View>
@@ -483,10 +484,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+  deleteButton: {
+    marginTop: 24,
+    marginBottom: 12,
+  },
   buttonsContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 24,
   },
   button: {
     flex: 1,
