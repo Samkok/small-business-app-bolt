@@ -8,7 +8,7 @@ import { useTranslation } from '@/src/locales';
 export function useBusinessDeletion() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { userProfile, currentBusiness, setCurrentBusiness, userBusinesses, refreshUserBusinesses } = useAuth();
+  const { userProfile, switchBusiness, refreshUserBusinesses } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleBusinessDeleted = async () => {
@@ -21,7 +21,7 @@ export function useBusinessDeletion() {
 
       if (remainingBusinesses.length > 0) {
         const nextBusiness = remainingBusinesses[0];
-        await setCurrentBusiness(nextBusiness);
+        await switchBusiness(nextBusiness.id);
 
         router.replace('/(app)/(tabs)');
 
@@ -32,9 +32,7 @@ export function useBusinessDeletion() {
           );
         }, 500);
       } else {
-        await setCurrentBusiness(null);
-
-        router.replace('/business-onboarding');
+        router.replace('/(app)/business-onboarding');
 
         setTimeout(() => {
           Alert.alert(
