@@ -121,7 +121,8 @@
     "unarchiveProductMessage": "确定要取消存档 \"{{name}}\" 吗？它将恢复到您的活跃产品列表。",
     "unarchiveSuccess": "产品取消存档成功",
     "unarchiveError": "取消存档产品失败",
-    "createNewImport": "创建新入库"
+    "createNewImport": "创建新入库",
+    "searchBatches": "搜索批次..."
   },
   "customers": {
     "title": "客户",
@@ -250,7 +251,8 @@
     "deselectAll": "取消全选"
   },
   "search": {
-    "foundResults": "找到 {{count}} 个产品"
+    "foundResults": "找到 {{count}} 个产品",
+    "foundBatches": "找到 {{count}} 个批次"
   },
   "dateRanges": {
     "today": "今天",
@@ -407,6 +409,11 @@
     "noProductsSearchMessage": "找不到匹配 \"{{query}}\" 的{{type}}产品",
     "archivedProductsMessage": "存档的产品将显示在这里",
     "addFirstProduct": "添加您的第一个产品以开始管理库存",
+    "noBatchesForQuery": "未找到 \"{{query}}\" 的批次",
+    "noMatchingBatches": "未找到匹配的批次",
+    "noImportHistory": "无入库历史",
+    "noBatchesSearchMessage": "没有批次匹配您的搜索 \"{{query}}\"",
+    "importBatchesMessage": "开始导入库存后，入库批次将显示在这里",
     "noCustomers": "暂无客户",
     "noSales": "暂无销售",
     "noExpenses": "暂无支出",

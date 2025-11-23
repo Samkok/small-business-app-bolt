@@ -121,7 +121,8 @@
     "unarchiveProductMessage": "Are you sure you want to unarchive \"{{name}}\"? It will be restored to your active products list.",
     "unarchiveSuccess": "Product unarchived successfully",
     "unarchiveError": "Failed to unarchive product",
-    "createNewImport": "Create New Import"
+    "createNewImport": "Create New Import",
+    "searchBatches": "Search batches..."
   },
   "customers": {
     "title": "Customers",
@@ -250,7 +251,8 @@
     "deselectAll": "Deselect All"
   },
   "search": {
-    "foundResults": "Found {{count}} product(s)"
+    "foundResults": "Found {{count}} product(s)",
+    "foundBatches": "Found {{count}} batch(es)"
   },
   "dateRanges": {
     "today": "Today",
@@ -407,6 +409,11 @@
     "noProductsSearchMessage": "We couldn't find any {{type}}products matching \"{{query}}\"",
     "archivedProductsMessage": "Products that are archived will appear here",
     "addFirstProduct": "Add your first product to start managing inventory",
+    "noBatchesForQuery": "No batches found for \"{{query}}\"",
+    "noMatchingBatches": "No matching batches found",
+    "noImportHistory": "No Import History",
+    "noBatchesSearchMessage": "No batches match your search \"{{query}}\"",
+    "importBatchesMessage": "Import batches will appear here once you start importing inventory",
     "noCustomers": "No customers yet",
     "noSales": "No sales yet",
     "noExpenses": "No expenses yet",

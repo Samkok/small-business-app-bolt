@@ -1027,7 +1027,7 @@ export default function InventoryScreen() {
             <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             <TextInput
               style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder="Search batches..."
+              placeholder={t('inventory.searchBatches')}
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               value={batchSearchQuery}
               onChangeText={setBatchSearchQuery}
@@ -1057,8 +1057,8 @@ export default function InventoryScreen() {
           <View style={styles.searchResultsHeader}>
             <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {filteredBatchHistory.length === 0 
-                ? `No batches found for "${batchSearchQuery}"` 
-                : `Found ${filteredBatchHistory.length} batch${filteredBatchHistory.length !== 1 ? 'es' : ''}`}
+                ? t('empty.noBatchesForQuery', { query: batchSearchQuery })
+                : t('search.foundBatches', { count: filteredBatchHistory.length })}
             </Text>
             <TouchableOpacity onPress={handleClearBatchSearch}>
               <Text style={styles.clearSearchText}>Clear</Text>
@@ -1131,12 +1131,12 @@ export default function InventoryScreen() {
       <Card style={styles.emptyState}>
         <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
         <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          {isBatchSearching ? 'No matching batches found' : 'No Import History'}
+          {isBatchSearching ? t('empty.noMatchingBatches') : t('empty.noImportHistory')}
         </Text>
         <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          {isBatchSearching 
-            ? `No batches match your search "${batchSearchQuery}"`
-            : 'Import batches will appear here once you start importing inventory'
+          {isBatchSearching
+            ? t('empty.noBatchesSearchMessage', { query: batchSearchQuery })
+            : t('empty.importBatchesMessage')
           }
         </Text>
         {isBatchSearching ? (
