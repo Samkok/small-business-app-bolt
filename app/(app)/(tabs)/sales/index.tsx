@@ -95,27 +95,27 @@ export default function SalesScreen() {
   const { hasMismatch, mismatchedItems } = useBusinessMismatchDetector(sales, currentBusiness);
 
   const statusFilters = [
-    { value: 'all', label: 'All Sales' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'voided', label: 'Voided' },
-    { value: 'refunded', label: 'Refunded' },
-    { value: 'partially_returned', label: 'Partial Return' },
+    { value: 'all', label: t('sales.title') },
+    { value: 'completed', label: t('status.completed') },
+    { value: 'voided', label: t('status.voided') },
+    { value: 'refunded', label: t('sales.refund') },
+    { value: 'partially_returned', label: t('sales.return') },
   ];
 
   const paymentMethodFilters = [
-    { value: 'all', label: 'All Methods' },
-    { value: 'cash', label: 'Cash' },
-    { value: 'card', label: 'Card' },
-    { value: 'transfer', label: 'Transfer' },
-    { value: 'other', label: 'Other' },
+    { value: 'all', label: t('sales.paymentMethod') },
+    { value: 'cash', label: t('sales.cash') },
+    { value: 'card', label: t('sales.card') },
+    { value: 'transfer', label: t('sales.transfer') },
+    { value: 'other', label: t('customers.other') },
   ];
 
   const dateFilterOptions = [
-    { value: 'this_month', label: 'This Month' },
-    { value: 'three_months', label: 'Last 3 Months' },
-    { value: 'six_months', label: 'Last 6 Months' },
-    { value: 'custom', label: 'Custom Range' },
-    { value: 'all', label: 'All Time' },
+    { value: 'this_month', label: t('dateRanges.thisMonth') },
+    { value: 'three_months', label: t('dateRanges.last3Months') },
+    { value: 'six_months', label: t('dateRanges.last6Months') },
+    { value: 'custom', label: t('dateRanges.customRange') },
+    { value: 'all', label: t('dateRanges.allTime') },
   ];
 
   // Helper function to calculate dates without state updates
@@ -133,7 +133,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'This Month';
+        text = t('dateRanges.thisMonth');
         break;
       case 'three_months':
         start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -142,7 +142,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'Last 3 Months';
+        text = t('dateRanges.last3Months');
         break;
       case 'six_months':
         start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -151,7 +151,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'Last 6 Months';
+        text = t('dateRanges.last6Months');
         break;
       case 'custom':
         start = customStart || new Date();
@@ -169,7 +169,7 @@ export default function SalesScreen() {
         end = now;
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'All Time';
+        text = t('dateRanges.allTime');
         break;
     }
     
@@ -742,7 +742,7 @@ export default function SalesScreen() {
       </Text>
       {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
         <Button
-          title="New Sale"
+          title={t('sales.newSale')}
           onPress={handleNewSale}
           style={styles.emptyButton}
         />
@@ -763,13 +763,13 @@ export default function SalesScreen() {
     <Card style={styles.emptyState}>
       <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
       <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-        No Active Carts
+        {t('empty.noData')}
       </Text>
       <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
         Start a new sale by selecting a customer and adding products
       </Text>
       <Button
-        title="Start New Sale"
+        title={t('actions.startNewSale')}
         onPress={handleNewSale}
         style={styles.emptyButton}
       />
@@ -801,14 +801,14 @@ export default function SalesScreen() {
 
         <View style={styles.tabs}>
           <TabButton
-            title="Active Carts"
+            title={t('sales.activeCarts')}
             icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'carts'}
             onPress={() => setActiveTab('carts')}
             isDark={isDark}
           />
           <TabButton
-            title="Sales History"
+            title={t('sales.saleHistory')}
             icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'sales'}
             onPress={() => setActiveTab('sales')}
@@ -943,7 +943,7 @@ export default function SalesScreen() {
                       ${todayRevenue.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Revenue
+                      {t('financials.todayRevenue')}
                     </Text>
                   </View>
                 </View>
@@ -957,7 +957,7 @@ export default function SalesScreen() {
                       ${totalRevenue.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Total Revenue
+                      {t('financials.totalRevenue')}
                     </Text>
                   </View>
                 </View>
@@ -971,7 +971,7 @@ export default function SalesScreen() {
                       {todaySales}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Sales
+                      {t('financials.todaySales')}
                     </Text>
                   </View>
                 </View>
@@ -985,7 +985,7 @@ export default function SalesScreen() {
                       ${averageSale.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Average Sale
+                      {t('financials.averageSale')}
                     </Text>
                   </View>
                 </View>

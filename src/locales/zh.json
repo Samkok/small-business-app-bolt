@@ -221,7 +221,9 @@
     "revenue": "收入",
     "profit": "利润",
     "costOfGoods": "商品成本",
-    "operatingExpenses": "运营费用"
+    "operatingExpenses": "运营费用",
+    "todaySales": "今日销售",
+    "averageSale": "平均销售"
   },
   "inventory": {
     "title": "库存",

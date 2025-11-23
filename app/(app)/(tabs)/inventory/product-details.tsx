@@ -22,6 +22,7 @@ import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
 import { productTransactionService } from '@/src/services/productTransactions';
+import { useTranslation } from '@/src/locales';
 
 export default function ProductDetailsScreen() {
   const [product, setProduct] = useState<any>(null);
@@ -37,6 +38,7 @@ export default function ProductDetailsScreen() {
   const { productId } = params;
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (productId) {
@@ -411,7 +413,7 @@ export default function ProductDetailsScreen() {
                 ${financialSummary?.totalRevenue?.toFixed(2) || '0.00'}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Revenue
+                {t('financials.totalRevenue')}
               </Text>
             </View>
             
@@ -435,7 +437,7 @@ export default function ProductDetailsScreen() {
                 ${financialSummary?.totalProfit?.toFixed(2) || '0.00'}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Profit
+                {t('financials.totalProfit')}
               </Text>
             </View>
           </View>

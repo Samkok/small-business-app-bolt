@@ -17,6 +17,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { useTranslation } from '@/src/locales';
 
 export default function ProductSalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
@@ -36,9 +37,10 @@ export default function ProductSalesScreen() {
   const { productId, productName } = params;
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { t } = useTranslation();
 
   const dateFilterOptions = [
-    { value: 'this_month', label: 'This Month' },
+    { value: 'this_month', label: t('dateRanges.thisMonth') },
     { value: 'three_months', label: 'Last 3 Months' },
     { value: 'six_months', label: 'Last 6 Months' },
     { value: 'custom', label: 'Custom Range' },
@@ -501,7 +503,7 @@ export default function ProductSalesScreen() {
               ${stats.totalRevenue.toFixed(2)}
             </Text>
             <Text style={[styles.statsLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              Total Revenue
+              {t('financials.totalRevenue')}
             </Text>
           </Card>
 

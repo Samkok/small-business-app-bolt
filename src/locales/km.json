@@ -221,7 +221,9 @@
     "revenue": "ចំណូល",
     "profit": "ប្រាក់ចំណេញ",
     "costOfGoods": "តម្លៃទំនិញ",
-    "operatingExpenses": "ការចំណាយប្រតិបត្តិការ"
+    "operatingExpenses": "ការចំណាយប្រតិបត្តិការ",
+    "todaySales": "ការលក់ថ្ងៃនេះ",
+    "averageSale": "ការលក់មធ្យម"
   },
   "inventory": {
     "title": "ស្តុក",

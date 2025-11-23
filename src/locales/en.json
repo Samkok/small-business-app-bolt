@@ -221,7 +221,9 @@
     "revenue": "Revenue",
     "profit": "Profit",
     "costOfGoods": "Cost of Goods",
-    "operatingExpenses": "Operating Expenses"
+    "operatingExpenses": "Operating Expenses",
+    "todaySales": "Today's Sales",
+    "averageSale": "Average Sale"
   },
   "inventory": {
     "title": "Inventory",

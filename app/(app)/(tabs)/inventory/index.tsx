@@ -839,7 +839,7 @@ export default function InventoryScreen() {
                       {lowStockCount}
                     </Text>
                     <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Low Stock
+                      {t('inventory.lowStock')}
                     </Text>
                   </View>
                 </View>
