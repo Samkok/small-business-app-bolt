@@ -160,7 +160,8 @@
     "instagram": "Instagram",
     "telegram": "Telegram",
     "walkIn": "到店",
-    "other": "其他"
+    "other": "其他",
+    "unknown": "未知客户"
   },
   "sales": {
     "title": "销售",
@@ -393,7 +394,25 @@
     "startNewSaleHint": "通过选择客户和添加产品来开始新销售",
     "searchPlaceholder": "搜索销售记录...",
     "salesAnalytics": "销售分析",
-    "deletingCart": "正在删除购物车..."
+    "deletingCart": "正在删除购物车...",
+    "loadDetailsFailed": "加载销售详情失败",
+    "voidFailed": "作废销售失败",
+    "saleNotFound": "未找到销售记录",
+    "saleNumber": "销售 #{{number}}",
+    "original": "原始",
+    "returned": "已退货",
+    "customerInformation": "客户信息",
+    "off": "折扣",
+    "priceBreakdown": "价格明细",
+    "itemsSubtotal": "商品小计",
+    "itemDiscounts": "商品折扣",
+    "subtotalAfterItemDiscounts": "商品折扣后小计",
+    "cartDiscount": "购物车折扣",
+    "currentTotal": "当前总计",
+    "originalTotal": "原始总计",
+    "returnedAmount": "退货金额",
+    "saleActions": "销售操作",
+    "returnMoreItems": "退货更多商品"
   },
   "business": {
     "onboarding": "企业入驻",

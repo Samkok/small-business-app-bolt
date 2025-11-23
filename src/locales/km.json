@@ -159,7 +159,8 @@
     "instagram": "អ៊ីនស្តាក្រាម",
     "telegram": "តេលេក្រាម",
     "walkIn": "មកដោយផ្ទាល់",
-    "other": "ផ្សេងៗ"
+    "other": "ផ្សេងៗ",
+    "unknown": "អតិថិជនមិនស្គាល់"
   },
   "sales": {
     "title": "ការលក់",
@@ -392,7 +393,25 @@
     "startNewSaleHint": "ចាប់ផ្តើមការលក់ថ្មីដោយជ្រើសរើសអតិថិជននិងបន្ថែមផលិតផល",
     "searchPlaceholder": "ស្វែងរកការលក់...",
     "salesAnalytics": "វិភាគការលក់",
-    "deletingCart": "កំពុងលុបកន្ត្រក..."
+    "deletingCart": "កំពុងលុបកន្ត្រក...",
+    "loadDetailsFailed": "បរាជ័យក្នុងការផ្ទុកព័ត៌មានលម្អិតការលក់",
+    "voidFailed": "បរាជ័យក្នុងការបោះបង់ការលក់",
+    "saleNotFound": "រកមិនឃើញការលក់",
+    "saleNumber": "ការលក់ #{{number}}",
+    "original": "ដើម",
+    "returned": "បានប្រគល់វិញ",
+    "customerInformation": "ព័ត៌មានអតិថិជន",
+    "off": "បញ្ចុះ",
+    "priceBreakdown": "ការបែងចែកតម្លៃ",
+    "itemsSubtotal": "សរុបរងទំនិញ",
+    "itemDiscounts": "ការបញ្ចុះតម្លៃទំនិញ",
+    "subtotalAfterItemDiscounts": "សរុបរងបន្ទាប់ពីការបញ្ចុះតម្លៃទំនិញ",
+    "cartDiscount": "ការបញ្ចុះតម្លៃកន្ត្រក",
+    "currentTotal": "សរុបបច្ចុប្បន្ន",
+    "originalTotal": "សរុបដើម",
+    "returnedAmount": "ចំនួនទឹកប្រាក់បានប្រគល់វិញ",
+    "saleActions": "សកម្មភាពការលក់",
+    "returnMoreItems": "ប្រគល់វិញបន្ថែម"
   },
   "business": {
     "onboarding": "ការចាប់ផ្តើមអាជីវកម្ម",

@@ -6,6 +6,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -51,6 +52,7 @@ export default function SaleDetailsContent({
   onCancelReturn,
   onCancelVoid,
 }: SaleDetailsContentProps) {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
 
   const formatDate = (dateString: string) => {
@@ -200,7 +202,7 @@ export default function SaleDetailsContent({
       <View style={styles.errorContainer}>
         <AlertTriangle size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
         <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Sale not found
+          {t('sales.saleNotFound')}
         </Text>
       </View>
     );
@@ -213,7 +215,7 @@ export default function SaleDetailsContent({
         <Card style={styles.saleHeader}>
           <View style={styles.saleIdRow}>
             <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Sale #{sale.id.slice(-8)}
+              {t('sales.saleNumber', { number: sale.id.slice(-8) })}
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
               <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
@@ -244,7 +246,7 @@ export default function SaleDetailsContent({
               {sale.status === 'voided' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    Original: ${sale.total_amount.toFixed(2)}
+                    {t('sales.original')}: ${sale.total_amount.toFixed(2)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#dc2626' }]}>
                     ${(() => {
@@ -253,13 +255,13 @@ export default function SaleDetailsContent({
                     })()}
                   </Text>
                   <Text style={[styles.returnedAmount, { color: '#6b7280' }]}>
-                    (voided)
+                    ({t('status.voided')})
                   </Text>
                 </>
               ) : sale.status === 'partially_returned' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    Original: ${sale.total_amount.toFixed(2)}
+                    {t('sales.original')}: ${sale.total_amount.toFixed(2)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#059669' }]}>
                     ${(sale.current_total_amount ?? sale.total_amount).toFixed(2)}
@@ -270,7 +272,7 @@ export default function SaleDetailsContent({
                         ?.filter((a: any) => a.action_type === 'return')
                         ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
                       return totalReturned.toFixed(2);
-                    })()} returned)
+                    })()} {t('sales.returned')})
                   </Text>
                 </>
               ) : (
@@ -287,30 +289,30 @@ export default function SaleDetailsContent({
           <View style={styles.sectionHeader}>
             <User size={20} color="#2563eb" />
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Customer Information
+              {t('sales.customerInformation')}
             </Text>
           </View>
 
           <View style={styles.customerInfo}>
             <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {sale.customers?.name || 'Unknown Customer'}
+              {sale.customers?.name || t('customers.unknown')}
             </Text>
 
             {sale.customers?.phone && (
               <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Phone: {sale.customers.phone}
+                {t('customers.phone')}: {sale.customers.phone}
               </Text>
             )}
 
             {sale.customers?.address && (
               <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Address: {sale.customers.address}
+                {t('customers.address')}: {sale.customers.address}
               </Text>
             )}
 
             {sale.customers?.platform && (
               <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Platform: {sale.customers.platform.charAt(0).toUpperCase() + sale.customers.platform.slice(1).replace('_', ' ')}
+                {t('customers.platform')}: {sale.customers.platform.charAt(0).toUpperCase() + sale.customers.platform.slice(1).replace('_', ' ')}
               </Text>
             )}
           </View>
@@ -321,7 +323,7 @@ export default function SaleDetailsContent({
           <View style={styles.sectionHeader}>
             <ShoppingCart size={20} color="#059669" />
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Items ({sale.carts?.cart_items?.length || 0})
+              {t('sales.items')} ({sale.carts?.cart_items?.length || 0})
             </Text>
           </View>
 
@@ -341,8 +343,8 @@ export default function SaleDetailsContent({
                       <Percent size={12} color="#dc2626" />
                       <Text style={[styles.discountText, { color: '#dc2626' }]}>
                         {item.item_discount_type === 'percentage'
-                          ? `${item.item_discount_value}% off`
-                          : `$${item.item_discount_value} off`
+                          ? `${item.item_discount_value}% ${t('sales.off')}`
+                          : `$${item.item_discount_value} ${t('sales.off')}`
                         }
                         {item.item_discount_amount > 0 && ` (-$${item.item_discount_amount.toFixed(2)})`}
                       </Text>
@@ -370,14 +372,14 @@ export default function SaleDetailsContent({
           <View style={styles.sectionHeader}>
             <DollarSign size={20} color="#8b5cf6" />
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Price Breakdown
+              {t('sales.priceBreakdown')}
             </Text>
           </View>
 
           <View style={styles.priceBreakdown}>
             <View style={styles.priceRow}>
               <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Items Subtotal:
+                {t('sales.itemsSubtotal')}:
               </Text>
               <Text style={[styles.priceValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 ${saleDetails?.items_original_total.toFixed(2)}
@@ -387,7 +389,7 @@ export default function SaleDetailsContent({
             {saleDetails?.items_total_discount > 0 && (
               <View style={styles.priceRow}>
                 <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Item Discounts:
+                  {t('sales.itemDiscounts')}:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
                   -${saleDetails.items_total_discount.toFixed(2)}
@@ -397,7 +399,7 @@ export default function SaleDetailsContent({
 
             <View style={styles.priceRow}>
               <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Subtotal after Item Discounts:
+                {t('sales.subtotalAfterItemDiscounts')}:
               </Text>
               <Text style={[styles.priceValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 ${saleDetails?.items_subtotal_after_discount.toFixed(2)}
@@ -407,7 +409,7 @@ export default function SaleDetailsContent({
             {saleDetails?.cart_discount_amount > 0 && (
               <View style={styles.priceRow}>
                 <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Cart Discount
+                  {t('sales.cartDiscount')}
                   {saleDetails.cart_discount_type && saleDetails.cart_discount_value &&
                     ` (${saleDetails.cart_discount_type === 'percentage'
                       ? `${saleDetails.cart_discount_value}%`
@@ -423,7 +425,7 @@ export default function SaleDetailsContent({
             {saleDetails?.delivery_cost > 0 && (
               <View style={styles.priceRow}>
                 <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Delivery Cost:
+                  {t('sales.deliveryCost')}:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
                   -${saleDetails.delivery_cost.toFixed(2)}
@@ -433,7 +435,7 @@ export default function SaleDetailsContent({
 
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {sale.returned_amount > 0 ? 'Current Total:' : 'Total:'}
+                {sale.returned_amount > 0 ? t('sales.currentTotal') : t('common.total')}:
               </Text>
               <Text style={[styles.totalValue, { color: '#059669' }]}>
                 ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
@@ -444,7 +446,7 @@ export default function SaleDetailsContent({
               <>
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Original Total:
+                    {t('sales.originalTotal')}:
                   </Text>
                   <Text style={[styles.originalTotalValue, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
                     ${sale.total_amount.toFixed(2)}
@@ -453,7 +455,7 @@ export default function SaleDetailsContent({
 
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Returned Amount:
+                    {t('sales.returnedAmount')}:
                   </Text>
                   <Text style={[styles.returnedAmountValue, { color: '#dc2626' }]}>
                     -${(sale.returned_amount || 0).toFixed(2)}
@@ -472,7 +474,7 @@ export default function SaleDetailsContent({
                 <View style={styles.sectionHeader}>
                   <FileText size={20} color="#ea580c" />
                   <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    Notes
+                    {t('common.notes')}
                   </Text>
                 </View>
 
@@ -487,7 +489,7 @@ export default function SaleDetailsContent({
                 <View style={[styles.sectionHeader, { marginTop: sale.notes ? 16 : 0 }]}>
                   <AlertTriangle size={20} color="#dc2626" />
                   <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    Sale Actions
+                    {t('sales.saleActions')}
                   </Text>
                 </View>
 
@@ -588,13 +590,13 @@ export default function SaleDetailsContent({
       {(sale.status === 'completed' || sale.status === 'partially_returned') && (
         <View style={styles.footer}>
           <Button
-            title={sale.status === 'completed' ? "Return Items" : "Return More Items"}
+            title={sale.status === 'completed' ? t('sales.returnItems') : t('sales.returnMoreItems')}
             variant="secondary"
             onPress={onReturnItems}
             style={styles.footerButton}
           />
           <Button
-            title="Void Sale"
+            title={t('sales.voidSale')}
             variant="danger"
             onPress={onVoidSale}
             loading={voidingInProgress}

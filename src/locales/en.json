@@ -159,7 +159,8 @@
     "instagram": "Instagram",
     "telegram": "Telegram",
     "walkIn": "Walk-in",
-    "other": "Other"
+    "other": "Other",
+    "unknown": "Unknown Customer"
   },
   "sales": {
     "title": "Sales",
@@ -392,7 +393,25 @@
     "startNewSaleHint": "Start a new sale by selecting a customer and adding products",
     "searchPlaceholder": "Search sales...",
     "salesAnalytics": "Sales Analytics",
-    "deletingCart": "Deleting cart..."
+    "deletingCart": "Deleting cart...",
+    "loadDetailsFailed": "Failed to load sale details",
+    "voidFailed": "Failed to void sale",
+    "saleNotFound": "Sale not found",
+    "saleNumber": "Sale #{{number}}",
+    "original": "Original",
+    "returned": "returned",
+    "customerInformation": "Customer Information",
+    "off": "off",
+    "priceBreakdown": "Price Breakdown",
+    "itemsSubtotal": "Items Subtotal",
+    "itemDiscounts": "Item Discounts",
+    "subtotalAfterItemDiscounts": "Subtotal after Item Discounts",
+    "cartDiscount": "Cart Discount",
+    "currentTotal": "Current Total",
+    "originalTotal": "Original Total",
+    "returnedAmount": "Returned Amount",
+    "saleActions": "Sale Actions",
+    "returnMoreItems": "Return More Items"
   },
   "business": {
     "onboarding": "Business Onboarding",

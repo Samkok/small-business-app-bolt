@@ -7,6 +7,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { ArrowLeft } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
@@ -23,6 +24,7 @@ export default function SaleDetailsScreen() {
 
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness, userProfile } = useAuth();
 
@@ -51,7 +53,7 @@ export default function SaleDetailsScreen() {
       setSaleDetails(detailsData);
     } catch (error) {
       console.error('Error loading sale details:', error);
-      Alert.alert('Error', 'Failed to load sale details');
+      Alert.alert(t('common.error'), t('sales.loadDetailsFailed'));
     } finally {
       setLoading(false);
     }
@@ -87,11 +89,11 @@ export default function SaleDetailsScreen() {
         }
       );
       setShowVoidModal(false);
-      Alert.alert('Success', 'Sale voided successfully');
+      Alert.alert(t('common.success'), t('sales.voidSuccess'));
       await loadSaleDetails();
     } catch (error) {
       console.error('Error voiding sale:', error);
-      Alert.alert('Error', 'Failed to void sale');
+      Alert.alert(t('common.error'), t('sales.voidFailed'));
     } finally {
       setVoidingInProgress(false);
     }
@@ -124,7 +126,7 @@ export default function SaleDetailsScreen() {
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Sale Details
+          {t('sales.saleDetails')}
         </Text>
         <View style={styles.headerRight} />
       </View>
