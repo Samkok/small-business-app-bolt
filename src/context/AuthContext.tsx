@@ -5,7 +5,9 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, Alert } from 'react-native';
+import { useRouter, useSegments } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
@@ -164,6 +166,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<string>('active');
   const isRefreshingSessionRef = useRef<boolean>(false);
+  const autoRedirectRef = useRef<boolean>(false);
+
+  // Router context for auto-redirect on business assignment
+  const router = useRouter();
+  const segments = useSegments();
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
@@ -237,6 +244,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error updating business access history:', error);
     }
   }, [user]);
+
+  // Helper function to determine if we should auto-redirect when a business is assigned
+  const shouldAutoRedirectOnAssignment = useCallback((
+    routeSegments: string[],
+    hasCurrentBusiness: boolean
+  ): boolean => {
+    const currentRoute = routeSegments[routeSegments.length - 1];
+    const isInTabs = routeSegments.includes('(tabs)');
+
+    // Auto-redirect if on business-onboarding (user waiting for first business)
+    if (currentRoute === 'business-onboarding') {
+      console.log('Should auto-redirect: on business-onboarding page');
+      return true;
+    }
+
+    // Auto-redirect if on business-selection with no current business
+    if (currentRoute === 'business-selection' && !hasCurrentBusiness) {
+      console.log('Should auto-redirect: on business-selection with no current business');
+      return true;
+    }
+
+    // Edge case: in tabs but no current business (shouldn't happen, but handle it)
+    if (isInTabs && !hasCurrentBusiness) {
+      console.log('Should auto-redirect: in tabs but no current business');
+      return true;
+    }
+
+    // All other cases: don't redirect (user is actively using app)
+    console.log('Should NOT auto-redirect: user is actively using app', {
+      currentRoute,
+      isInTabs,
+      hasCurrentBusiness
+    });
+    return false;
+  }, []);
 
   // Helper function to refresh session when it might be stale
   const refreshSessionIfNeeded = useCallback(async (): Promise<boolean> => {
@@ -716,6 +758,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
 
               console.log('New business added to user list:', newBusiness.business_name);
+
+              // Check if we should auto-redirect user to the new business
+              const shouldRedirect = shouldAutoRedirectOnAssignment(
+                segments,
+                !!currentBusinessRef.current
+              );
+
+              if (shouldRedirect && !autoRedirectRef.current) {
+                // Prevent duplicate redirects
+                autoRedirectRef.current = true;
+
+                console.log('Auto-redirecting user to newly assigned business:', newBusiness.business_name);
+
+                try {
+                  // Switch to the new business
+                  await switchBusiness(newBusinessId);
+
+                  // Show welcome message
+                  Alert.alert(
+                    'Welcome!',
+                    `You've been added to ${newBusiness.business_name}`,
+                    [{ text: 'OK' }]
+                  );
+
+                  // Haptic feedback for mobile
+                  if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+
+                  // Navigate to main app
+                  router.replace('/(app)/(tabs)');
+                } catch (redirectError) {
+                  console.error('Error during auto-redirect:', redirectError);
+                } finally {
+                  // Reset the flag after a short delay
+                  setTimeout(() => {
+                    autoRedirectRef.current = false;
+                  }, 2000);
+                }
+              } else {
+                console.log('Not auto-redirecting - user is actively using app. Notification will be sent.');
+              }
             }
           } else if (payload.eventType === 'UPDATE') {
             // User role changed in a business
