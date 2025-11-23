@@ -143,6 +143,7 @@ export default function SignInScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              showPasswordToggle
               required
             />
 

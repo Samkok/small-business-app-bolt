@@ -293,6 +293,7 @@ export default function ResetPasswordScreen() {
                   onChangeText={setPassword}
                   secureTextEntry
                   autoCapitalize="none"
+                  showPasswordToggle
                   required
                 />
 
@@ -302,6 +303,7 @@ export default function ResetPasswordScreen() {
                   onChangeText={setConfirmPassword}
                   secureTextEntry
                   autoCapitalize="none"
+                  showPasswordToggle
                   required
                 />
 

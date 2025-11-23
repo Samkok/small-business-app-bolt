@@ -112,6 +112,7 @@ export default function SignUpScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              showPasswordToggle
               required
             />
 
@@ -120,6 +121,7 @@ export default function SignUpScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              showPasswordToggle
               required
             />
 
