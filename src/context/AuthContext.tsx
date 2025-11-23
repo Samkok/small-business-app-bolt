@@ -133,7 +133,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
 // Grace periods for app foreground transitions
-const SESSION_REFRESH_GRACE_PERIOD = 60 * 1000; // 1 minute for session refresh (performance)
+const SESSION_REFRESH_GRACE_PERIOD = 300 * 1000; // 1 minute for session refresh (performance)
 const SECURITY_CHECK_GRACE_PERIOD = 5 * 1000; // 5 seconds for business access check (security)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
