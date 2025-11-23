@@ -216,7 +216,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const business = userBusinessesRef.current.find(b => b.id === businessId);
     if (!business) {
-      console.error('Business not found:', businessId);
+      console.error('Business not found:', businessId, {
+        availableBusinesses: userBusinessesRef.current.map(b => ({ id: b.id, name: b.business_name })),
+        requestedId: businessId,
+        totalBusinesses: userBusinessesRef.current.length
+      });
       return;
     }
 
@@ -758,6 +762,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
 
               console.log('New business added to user list:', newBusiness.business_name);
+
+              // Manually update ref immediately to avoid race condition with switchBusiness
+              if (!userBusinessesRef.current.some(b => b.id === newBusiness.id)) {
+                userBusinessesRef.current = [...userBusinessesRef.current, newBusiness];
+              }
 
               // Check if we should auto-redirect user to the new business
               const shouldRedirect = shouldAutoRedirectOnAssignment(
