@@ -158,6 +158,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
           console.error('Failed to delete inaccessible notification:', error);
         }
 
+        setLoadingNotificationId(null);
         handleClose();
         return;
       }
@@ -173,6 +174,8 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       // Handle sale notifications with modal (modal handles mark-as-read)
       if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
         if (data?.sale_id) {
+          // Clear loading state immediately before closing and opening new modal
+          setTimeout(() => setLoadingNotificationId(null), 300);
           // Small delay to let modal close animation finish
           setTimeout(async () => {
             await saleDetailsModal.openSaleDetails(data.sale_id as string, notification, markAsRead);

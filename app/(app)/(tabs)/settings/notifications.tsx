@@ -107,6 +107,7 @@ export default function NotificationsScreen() {
         if (data?.sale_id) {
           await saleDetailsModal.openSaleDetails(data.sale_id, notification, markAsRead);
         }
+        setLoadingNotificationId(null);
         return;
       }
 
@@ -144,6 +145,7 @@ export default function NotificationsScreen() {
             },
           ]
         );
+        setLoadingNotificationId(null);
         return;
       }
     }
@@ -156,6 +158,7 @@ export default function NotificationsScreen() {
       } catch (error) {
         console.error('Failed to switch business:', error);
         Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+        setLoadingNotificationId(null);
         return;
       }
     }
