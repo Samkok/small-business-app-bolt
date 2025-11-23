@@ -57,11 +57,11 @@ export default function ExpensesScreen() {
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
-    { value: 'all', label: 'All Time' },
-    { value: 'today', label: 'Today' },
-    { value: 'week', label: 'This Week' },
-    { value: 'month', label: 'This Month' },
-    { value: 'year', label: 'This Year' },
+    { value: 'all', label: t('dateRanges.allTime') },
+    { value: 'today', label: t('dateRanges.today') },
+    { value: 'week', label: t('dateRanges.thisWeek') },
+    { value: 'month', label: t('dateRanges.thisMonth') },
+    { value: 'year', label: t('dateRanges.thisYear') },
   ];
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function ExpensesScreen() {
       setCategories(categoriesData);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), 'Failed to load expenses');
+      Alert.alert(t('common.error'), t('expenses.loadFailed'));
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -178,21 +178,21 @@ export default function ExpensesScreen() {
 
   const handleDeleteExpense = useCallback((expense: any) => {
     Alert.alert(
-      'Delete Expense',
-      `Are you sure you want to delete this expense of $${expense.amount.toFixed(2)}?`,
+      t('expenses.deleteExpense'),
+      t('expenses.deleteConfirm', { amount: expense.amount.toFixed(2) }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await expenseService.deleteExpense(expense.id);
-              Alert.alert('Success', 'Expense deleted successfully');
+              Alert.alert(t('common.success'), t('expenses.deleteSuccess'));
               loadData();
             } catch (error) {
               console.error('Error deleting expense:', error);
-              Alert.alert('Error', 'Failed to delete expense');
+              Alert.alert(t('common.error'), t('expenses.deleteFailed'));
             }
           }
         },
@@ -220,7 +220,7 @@ export default function ExpensesScreen() {
     // Category breakdown
     const categoryTotals: Record<string, number> = {};
     filteredExpenses.forEach(expense => {
-      const categoryName = expense.expense_categories?.name || 'Uncategorized';
+      const categoryName = expense.expense_categories?.name || t('expenses.uncategorized');
       categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + expense.amount;
     });
 
@@ -249,27 +249,27 @@ export default function ExpensesScreen() {
     <Card style={styles.emptyState}>
       <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
       <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-        {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all' 
-          ? 'No expenses found' 
-          : 'No expenses yet'
+        {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all'
+          ? t('expenses.noExpensesFound')
+          : t('expenses.noExpensesYet')
         }
       </Text>
       <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
         {searchQuery || selectedCategory !== 'all' || selectedPeriod !== 'all'
-          ? 'Try adjusting your search or filter criteria'
-          : 'Add your first expense to start tracking'
+          ? t('expenses.tryAdjustingFilter')
+          : t('expenses.addFirstExpense')
         }
       </Text>
       {!searchQuery && selectedCategory === 'all' && selectedPeriod === 'all' && (
         <View style={styles.emptyActions}>
           <Button
-            title="Add Category"
+            title={t('expenses.addCategory')}
             variant="outline"
             onPress={() => setShowCategoryForm(true)}
             style={styles.emptyButton}
           />
           <Button
-            title="Add Expense"
+            title={t('expenses.addExpense')}
             onPress={() => setShowExpenseForm(true)}
             style={styles.emptyButton}
           />
@@ -404,7 +404,7 @@ export default function ExpensesScreen() {
           <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
           <TextInput
             style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-            placeholder="Search expenses..."
+            placeholder={t('expenses.searchPlaceholder')}
             placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -416,7 +416,7 @@ export default function ExpensesScreen() {
       <View style={styles.collapsibleHeader}>
         <View style={styles.collapsibleTitle}>
           <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Expense Statistics
+            {t('expenses.expenseStatistics')}
           </Text>
         </View>
         <TouchableOpacity 
@@ -493,7 +493,7 @@ export default function ExpensesScreen() {
                   : (isDark ? '#f9fafb' : '#374151') 
               }
             ]}>
-              All Categories
+              {t('expenses.allCategories')}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -540,7 +540,7 @@ export default function ExpensesScreen() {
                   ${todayTotal.toFixed(2)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Today's Expenses
+                  {t('expenses.todayExpenses')}
                 </Text>
               </View>
             </View>
@@ -554,7 +554,7 @@ export default function ExpensesScreen() {
                   ${totalExpenses.toFixed(2)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Total Expenses
+                  {t('expenses.totalExpenses')}
                 </Text>
               </View>
             </View>
@@ -568,7 +568,7 @@ export default function ExpensesScreen() {
                   {expenseCount}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Total Records
+                  {t('expenses.totalRecords')}
                 </Text>
               </View>
             </View>
@@ -582,7 +582,7 @@ export default function ExpensesScreen() {
                   ${averageExpense.toFixed(2)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Average Expense
+                  {t('expenses.averageExpense')}
                 </Text>
               </View>
             </View>
@@ -593,7 +593,7 @@ export default function ExpensesScreen() {
         {topCategories.length > 0 && (
           <Card style={styles.categoriesCard}>
             <Text style={[styles.categoriesTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Top Expense Categories
+              {t('expenses.topCategories')}
             </Text>
             <View style={styles.categoriesGrid}>
               {topCategories.map((category, index) => (
@@ -624,7 +624,7 @@ export default function ExpensesScreen() {
             onRefresh={handleRefresh}
             colors={['#2563eb']}
             tintColor="#2563eb"
-            title="Pull to refresh"
+            title={t('common.pullToRefresh')}
             titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
