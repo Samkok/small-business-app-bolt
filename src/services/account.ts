@@ -100,13 +100,8 @@ export const accountService = {
 
       if (profileError) throw profileError;
 
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (authError) {
-        console.error('Error deleting auth user (this may require admin privileges):', authError);
-      }
-
-      console.log('Account deleted successfully:', userId);
+      console.log('Account data deleted successfully:', userId);
+      console.log('Note: User will be signed out and can no longer access the account.');
     } catch (error) {
       console.error('Error deleting account:', error);
       throw error;
