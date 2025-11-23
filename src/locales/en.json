@@ -24,7 +24,8 @@
     "amount": "Amount",
     "notes": "Notes",
     "note": "Note",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "pullToRefresh": "Pull to refresh"
   },
   "auth": {
     "signIn": "Sign In",
@@ -372,7 +373,26 @@
     "voidSale": "Void Sale",
     "returnItems": "Return Items",
     "selectProduct": "Select Product",
-    "completeSale": "Complete Sale"
+    "completeSale": "Complete Sale",
+    "loadFailed": "Failed to load sales data",
+    "refreshFailed": "Failed to refresh data",
+    "cartDeleted": "Cart deleted successfully",
+    "cartDeleteFailed": "Failed to delete cart",
+    "noBusinessFound": "No business found",
+    "exportSuccess": "Sales data exported successfully",
+    "sharingNotAvailable": "Sharing is not available on this device",
+    "exportFailed": "Failed to export sales data",
+    "voidSuccess": "Sale voided successfully",
+    "selectDateRange": "Select Date Range",
+    "selectCustomDateRange": "Select Custom Date Range",
+    "noSalesFound": "No sales found",
+    "noSalesYet": "No sales yet",
+    "tryAdjustingFilter": "Try adjusting your search or filter criteria",
+    "createFirstSale": "Create your first sale to get started",
+    "startNewSaleHint": "Start a new sale by selecting a customer and adding products",
+    "searchPlaceholder": "Search sales...",
+    "salesAnalytics": "Sales Analytics",
+    "deletingCart": "Deleting cart..."
   },
   "business": {
     "onboarding": "Business Onboarding",

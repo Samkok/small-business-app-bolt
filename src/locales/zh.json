@@ -24,7 +24,8 @@
     "amount": "金额",
     "notes": "备注",
     "note": "备注",
-    "processing": "处理中..."
+    "processing": "处理中...",
+    "pullToRefresh": "下拉刷新"
   },
   "auth": {
     "signIn": "登录",
@@ -373,7 +374,26 @@
     "voidSale": "作废销售",
     "returnItems": "退货",
     "selectProduct": "选择产品",
-    "completeSale": "完成销售"
+    "completeSale": "完成销售",
+    "loadFailed": "加载销售数据失败",
+    "refreshFailed": "刷新数据失败",
+    "cartDeleted": "购物车已成功删除",
+    "cartDeleteFailed": "删除购物车失败",
+    "noBusinessFound": "未找到企业",
+    "exportSuccess": "销售数据导出成功",
+    "sharingNotAvailable": "此设备不支持分享功能",
+    "exportFailed": "导出销售数据失败",
+    "voidSuccess": "销售已成功作废",
+    "selectDateRange": "选择日期范围",
+    "selectCustomDateRange": "选择自定义日期范围",
+    "noSalesFound": "未找到销售记录",
+    "noSalesYet": "暂无销售记录",
+    "tryAdjustingFilter": "请尝试调整搜索或筛选条件",
+    "createFirstSale": "创建您的第一笔销售以开始",
+    "startNewSaleHint": "通过选择客户和添加产品来开始新销售",
+    "searchPlaceholder": "搜索销售记录...",
+    "salesAnalytics": "销售分析",
+    "deletingCart": "正在删除购物车..."
   },
   "business": {
     "onboarding": "企业入驻",
