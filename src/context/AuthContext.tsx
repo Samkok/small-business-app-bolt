@@ -167,6 +167,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const appStateRef = useRef<string>('active');
   const isRefreshingSessionRef = useRef<boolean>(false);
   const autoRedirectRef = useRef<boolean>(false);
+  const isExplicitSignOutRef = useRef<boolean>(false);
+  const signedOutDueToInactivityRef = useRef<boolean>(false);
 
   // Router context for auto-redirect on business assignment
   const router = useRouter();
@@ -183,6 +185,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     realtimeStatusRef.current = realtimeStatus;
   }, [realtimeStatus]);
+
+  useEffect(() => {
+    isExplicitSignOutRef.current = isExplicitSignOut;
+  }, [isExplicitSignOut]);
+
+  useEffect(() => {
+    signedOutDueToInactivityRef.current = signedOutDueToInactivity;
+  }, [signedOutDueToInactivity]);
 
   // Helper function for selecting the best available business
   const selectBestAvailableBusiness = useCallback((
@@ -633,11 +643,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Handle sign out events
         if (event === 'SIGNED_OUT') {
-          console.log('AuthContext: SIGNED_OUT event received, explicit:', isExplicitSignOut, 'previous inactivity flag:', signedOutDueToInactivity);
+          console.log('AuthContext: SIGNED_OUT event received, explicit (ref):', isExplicitSignOutRef.current, 'previous inactivity flag (ref):', signedOutDueToInactivityRef.current);
 
-          if (!isExplicitSignOut) {
+          // Use refs instead of state to avoid stale closure issues
+          if (!isExplicitSignOutRef.current) {
             // If signed out but not explicitly by the user, it was due to inactivity
+            console.log('AuthContext: Inactivity sign-out detected, setting flag');
             setSignedOutDueToInactivity(true);
+            signedOutDueToInactivityRef.current = true;
+          } else {
+            // Explicit sign out - ensure flag stays false
+            console.log('AuthContext: Explicit sign-out detected, ensuring flag is false');
+            setSignedOutDueToInactivity(false);
+            signedOutDueToInactivityRef.current = false;
           }
 
           // Clear everything on sign out
@@ -651,22 +669,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setDataLoadingState('loaded');
           }
 
-          // Reset the explicit sign out flag
+          // Reset the explicit sign out flag (both state and ref)
           setIsExplicitSignOut(false);
+          isExplicitSignOutRef.current = false;
           return; // Don't process further
         }
 
         if (event === 'SIGNED_IN') {
-          // Reset the inactivity flag when user signs in
+          // Reset the inactivity flag when user signs in (both state and ref)
           setSignedOutDueToInactivity(false);
+          signedOutDueToInactivityRef.current = false;
 
           // Update last activity timestamp
           await updateLastActivityTimestamp();
         }
 
         // Reset the explicit sign out flag for other events
-        if (isExplicitSignOut) {
+        if (isExplicitSignOutRef.current) {
           setIsExplicitSignOut(false);
+          isExplicitSignOutRef.current = false;
         }
 
        if (mounted.current) {
@@ -1653,10 +1674,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     console.log('SignOut: Starting sign out process');
-    setSignedOutDueToInactivity(false);
 
-    // Set flag to indicate this is an explicit sign out
+    // Clear inactivity flag (both state and ref)
+    setSignedOutDueToInactivity(false);
+    signedOutDueToInactivityRef.current = false;
+
+    // Set flag to indicate this is an explicit sign out (both state and ref)
     setIsExplicitSignOut(true);
+    isExplicitSignOutRef.current = true;
 
     // STEP 1: Clear storage BEFORE calling Supabase signOut API
     // This ensures the session is removed from persistent storage first
