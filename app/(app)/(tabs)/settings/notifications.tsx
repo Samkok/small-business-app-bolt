@@ -102,10 +102,73 @@ export default function NotificationsScreen() {
     setLoadingNotificationId(notification.id);
 
     try {
-      // Handle sale notifications with modal (modal handles business switching and mark-as-read)
+      // Validate business access first for all notification types
+      const businessName = data?.business_name || 'this business';
+      let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
+
+      // If business not found in current list, refresh and check with fresh data
+      if (!hasAccess) {
+        console.log('Business not in current list, refreshing...');
+        const freshBusinesses = await refreshUserBusinesses();
+        hasAccess = freshBusinesses.some(b => b.id === notification.business_id);
+
+        if (!hasAccess) {
+          console.warn('User no longer has access to business:', notification.business_id);
+          Alert.alert(
+            'Access Denied',
+            `You no longer have access to ${businessName}. The owner may have removed you from the team.`,
+            [
+              {
+                text: 'OK',
+                onPress: async () => {
+                  // Remove this notification from view
+                  try {
+                    await deleteNotification(notification.id);
+                  } catch (error) {
+                    console.error('Failed to delete notification:', error);
+                  }
+                },
+              },
+            ]
+          );
+          setLoadingNotificationId(null);
+          return;
+        }
+      }
+
+      // Handle sale notifications with optimized business checking
       if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
         if (data?.sale_id) {
-          await saleDetailsModal.openSaleDetails(data.sale_id, notification, markAsRead);
+          // Check if already on the correct business
+          if (currentBusiness?.id === notification.business_id) {
+            // Same business - directly open modal without business switching
+            if (!notification.is_read) {
+              handleMarkAsRead(notification.id);
+            }
+            // Open modal without notification object to skip business switching logic
+            await saleDetailsModal.openSaleDetails(data.sale_id);
+            setLoadingNotificationId(null);
+            return;
+          } else {
+            // Different business - switch first, then open modal
+            try {
+              await switchBusiness(notification.business_id);
+              await new Promise(resolve => setTimeout(resolve, 300));
+
+              if (!notification.is_read) {
+                handleMarkAsRead(notification.id);
+              }
+              // Open modal without notification object since we already switched
+              await saleDetailsModal.openSaleDetails(data.sale_id);
+              setLoadingNotificationId(null);
+              return;
+            } catch (error) {
+              console.error('Failed to switch business:', error);
+              Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+              setLoadingNotificationId(null);
+              return;
+            }
+          }
         }
         setLoadingNotificationId(null);
         return;
@@ -116,52 +179,18 @@ export default function NotificationsScreen() {
         handleMarkAsRead(notification.id);
       }
 
-      // For other notifications, validate business access and switch if needed
-    const businessName = data?.business_name || 'this business';
-    let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
-
-    // If business not found in current list, refresh and check with fresh data
-    if (!hasAccess) {
-      console.log('Business not in current list, refreshing...');
-      const freshBusinesses = await refreshUserBusinesses();
-      hasAccess = freshBusinesses.some(b => b.id === notification.business_id);
-
-      if (!hasAccess) {
-        console.warn('User no longer has access to business:', notification.business_id);
-        Alert.alert(
-          'Access Denied',
-          `You no longer have access to ${businessName}. The owner may have removed you from the team.`,
-          [
-            {
-              text: 'OK',
-              onPress: async () => {
-                // Remove this notification from view
-                try {
-                  await deleteNotification(notification.id);
-                } catch (error) {
-                  console.error('Failed to delete notification:', error);
-                }
-              },
-            },
-          ]
-        );
-        setLoadingNotificationId(null);
-        return;
+      // Switch business if needed for other notification types
+      if (currentBusiness?.id !== notification.business_id) {
+        try {
+          await switchBusiness(notification.business_id);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error('Failed to switch business:', error);
+          Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+          setLoadingNotificationId(null);
+          return;
+        }
       }
-    }
-
-    // Switch business if needed
-    if (currentBusiness?.id !== notification.business_id) {
-      try {
-        await switchBusiness(notification.business_id);
-        await new Promise(resolve => setTimeout(resolve, 300));
-      } catch (error) {
-        console.error('Failed to switch business:', error);
-        Alert.alert('Error', 'Failed to switch to the business. Please try again.');
-        setLoadingNotificationId(null);
-        return;
-      }
-    }
 
       // Navigate based on notification type
       if (notification.type === 'low_stock') {
@@ -175,7 +204,7 @@ export default function NotificationsScreen() {
       // Clear loading state
       setLoadingNotificationId(null);
     }
-  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification]);
+  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification, deleteNotification]);
 
   const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {
