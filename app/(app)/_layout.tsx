@@ -5,12 +5,14 @@ import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from '@/src/locales';
 
 export default function AppLayout() {
   const { session, loading, initialDataLoaded, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
   const { refreshCarts } = useCart();
   const router = useRouter();
   const segments = useSegments();
+  const { t } = useTranslation();
   const alertShownRef = useRef(false);
 
   const currentRoute = segments[segments.length - 1];
@@ -34,8 +36,8 @@ export default function AppLayout() {
       alertShownRef.current = true;
 
       Alert.alert(
-        'Session Expired',
-        'Your session has expired due to inactivity. Please sign in again.',
+        t('alerts.sessionExpired'),
+        t('alerts.sessionExpiredMessage'),
         [
           {
             text: 'OK',

@@ -119,7 +119,7 @@ export default function SignInScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              BizManage
+              {t('app.name')}
             </Text>
             <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {t('auth.signIn')}
@@ -159,7 +159,7 @@ export default function SignInScreen() {
                   <Square size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                 )}
                 <Text style={[styles.rememberMeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Remember me
+                  {t('actions.rememberMe')}
                 </Text>
               </TouchableOpacity>
 

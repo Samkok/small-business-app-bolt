@@ -146,15 +146,15 @@ export default function ResetPasswordScreen() {
       console.error('Error handling deep link:', error);
       console.error('Error details:', error.message, error.code);
       Alert.alert(
-        'Invalid Reset Link',
-        'This password reset link is invalid or has expired. Please request a new one.\n\nError: ' + (error?.message || 'Unknown error'),
+        t('alerts.invalidResetLink'),
+        t('alerts.invalidResetLinkMessage') + '\n\nError: ' + (error?.message || 'Unknown error'),
         [
           {
-            text: 'Request New Link',
+            text: t('actions.requestNewLink'),
             onPress: () => router.push('/(auth)/forgot-password')
           },
           {
-            text: 'Cancel',
+            text: t('common.cancel'),
             style: 'cancel'
           }
         ]
