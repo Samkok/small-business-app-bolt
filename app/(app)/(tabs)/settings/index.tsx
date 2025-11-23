@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useLanguage } from '@/src/context/LanguageContext';
 import { Card } from '@/src/components/ui/Card';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLanguageNativeLabel } from '@/src/utils/language';
 import {
   User,
   Palette,
@@ -30,19 +31,20 @@ import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
 
 export default function SettingsScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
   const { signOut, userProfile, currentBusiness, userBusinesses } = useAuth();
+  const { changeLanguage, currentLanguage } = useLanguage();
   const { unreadCount } = useNotifications();
   const router = useRouter();
 
   const handleLanguageChange = async (language: string) => {
     try {
-      await i18n.changeLanguage(language);
-      await AsyncStorage.setItem('language', language);
-      Alert.alert(t('common.success'), `Language changed to ${language}`);
+      await changeLanguage(language);
+      const languageName = getLanguageNativeLabel(language);
+      Alert.alert(t('common.success'), t('settings.languageChanged', { language: languageName }));
     } catch (error) {
-      Alert.alert(t('common.error'), 'Failed to change language');
+      Alert.alert(t('common.error'), t('settings.languageChangeFailed'));
     }
   };
 
@@ -197,7 +199,7 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<Globe size={20} color="#8b5cf6" />}
           title={t('settings.language')}
-          subtitle={`Current: ${i18n.language}`}
+          subtitle={`Current: ${getLanguageNativeLabel(currentLanguage)}`}
           onPress={() => {
             Alert.alert(
               t('settings.language'),

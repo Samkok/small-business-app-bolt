@@ -239,7 +239,9 @@
     "team": "团队",
     "notifications": "通知",
     "privacy": "隐私政策",
-    "terms": "条款与条件"
+    "terms": "条款与条件",
+    "languageChanged": "语言已更改为 {{language}}",
+    "languageChangeFailed": "更改语言失败"
   },
   "app": {
     "name": "BizManage",

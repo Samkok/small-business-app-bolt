@@ -238,7 +238,9 @@
     "team": "Team",
     "notifications": "Notifications",
     "privacy": "Privacy Policy",
-    "terms": "Terms & Conditions"
+    "terms": "Terms & Conditions",
+    "languageChanged": "Language changed to {{language}}",
+    "languageChangeFailed": "Failed to change language"
   },
   "app": {
     "name": "BizManage",

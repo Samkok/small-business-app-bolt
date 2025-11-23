@@ -238,7 +238,9 @@
     "team": "ក្រុម",
     "notifications": "ការជូនដំណឹង",
     "privacy": "គោលការណ៍​ភាព​ឯកជន",
-    "terms": "លក្ខខណ្ឌ"
+    "terms": "លក្ខខណ្ឌ",
+    "languageChanged": "ភាសាបានផ្លាស់ប្តូរទៅ {{language}}",
+    "languageChangeFailed": "បរាជ័យក្នុងការផ្លាស់ប្តូរភាសា"
   },
   "app": {
     "name": "BizManage",
