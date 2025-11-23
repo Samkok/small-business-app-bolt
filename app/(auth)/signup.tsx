@@ -80,7 +80,7 @@ export default function SignUpScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Business Manager Pro
+              BizManage
             </Text>
             <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {t('auth.signUp')}
