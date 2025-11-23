@@ -188,7 +188,7 @@ export function DeleteBusinessModal({
   );
 
   const renderStep2 = () => (
-    <View style={styles.stepContainer}>
+    <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <View style={[styles.warningIconContainer, { backgroundColor: '#fee2e2' }]}>
           <Trash2 size={32} color="#dc2626" />
@@ -261,7 +261,7 @@ export function DeleteBusinessModal({
           style={styles.button}
         />
       </View>
-    </View>
+    </ScrollView>
   );
 
   const renderStep3 = () => (
@@ -352,9 +352,9 @@ export function DeleteBusinessModal({
       onRequestClose={currentStep === 3 ? undefined : onClose}
     >
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-        <Card style={[styles.modal, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+        <View style={[styles.modal, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
           {renderCurrentStep()}
-        </Card>
+        </View>
       </View>
     </Modal>
   );
@@ -364,15 +364,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
   },
   modal: {
-    maxHeight: '90%',
+    flex: 1,
     borderRadius: 16,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   stepContainer: {
-    flex: 1,
+    paddingBottom: 20,
   },
   header: {
     alignItems: 'center',
