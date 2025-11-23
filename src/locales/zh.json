@@ -22,7 +22,9 @@
     "description": "描述",
     "date": "日期",
     "amount": "金额",
-    "notes": "备注"
+    "notes": "备注",
+    "note": "备注",
+    "processing": "处理中..."
   },
   "auth": {
     "signIn": "登录",
@@ -132,7 +134,18 @@
     "deleteProductPermanentlyMessage": "此产品没有交易历史记录，将被永久删除。此操作无法撤销。继续?",
     "productArchivedSuccess": "产品存档成功",
     "productDeletedSuccess": "产品已永久删除",
-    "deleteProductError": "删除产品失败"
+    "deleteProductError": "删除产品失败",
+    "productDetails": "产品详情",
+    "archivedProduct": "已存档产品",
+    "archivedOn": "存档于 {{date}}",
+    "costPerUnit": "单位成本",
+    "showInSales": "在销售中显示",
+    "quantity": "数量",
+    "baseCost": "基础成本",
+    "finalCost": "最终成本",
+    "totalCost": "总成本",
+    "unarchivingProduct": "正在取消存档...",
+    "productArchivedSuccess": "产品已成功存档。它已从产品列表中隐藏，但保留在您的记录中。"
   },
   "customers": {
     "title": "客户",
@@ -206,7 +219,8 @@
     "cashFlow": "现金流",
     "incomeStatement": "损益表",
     "topProducts": "热销产品",
-    "topCustomers": "优质客户"
+    "topCustomers": "优质客户",
+    "dataLast6Months": "显示过去 6 个月的数据"
   },
   "settings": {
     "title": "设置",
@@ -270,7 +284,14 @@
     "selectMultiple": "多选",
     "cancelSelection": "取消选择",
     "selectAll": "全选",
-    "deselectAll": "取消全选"
+    "deselectAll": "取消全选",
+    "goBack": "返回"
+  },
+  "errors": {
+    "loadFailed": "无法加载产品详情",
+    "checkStatusFailed": "无法检查产品状态。请重试。",
+    "productNotFound": "找不到产品",
+    "productNotFoundMessage": "您要找的产品不存在或已被删除。"
   },
   "search": {
     "foundResults": "找到 {{count}} 个产品",
@@ -303,7 +324,9 @@
     "costOfGoods": "商品成本",
     "operatingExpenses": "运营费用",
     "todaySales": "今日销售",
-    "averageSale": "平均销售"
+    "averageSale": "平均销售",
+    "financialSummary": "财务摘要",
+    "totalCOGS": "总 COGS"
   },
   "sales": {
     "title": "销售",

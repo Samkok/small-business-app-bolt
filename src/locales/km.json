@@ -22,7 +22,9 @@
     "description": "ការពណ៌នា",
     "date": "កាលបរិច្ឆេទ",
     "amount": "ចំនួនទឹកប្រាក់",
-    "notes": "កំណត់ចំណាំ"
+    "notes": "កំណត់ចំណាំ",
+    "note": "កំណត់ចំណាំ",
+    "processing": "កំពុងដំណើរការ..."
   },
   "auth": {
     "signIn": "ចូលប្រើ",
@@ -130,9 +132,19 @@
     "archiveProductMessage": "ផលិតផលនេះមានប្រវត្តិប្រតិបត្តិការ ({{summary}}) ហើយនឹងត្រូវបានរក្សាទុកជំនួសឱ្យការលុបជាអចិន្ត្រៃយ៍។\n\nផលិតផលដែលបានរក្សាទុកត្រូវបានលាក់ពីទិដ្ឋភាពធម្មតាប៉ុន្តែត្រូវបានរក្សាទុកសម្រាប់របាយការណ៍។ បន្ត?",
     "deleteProductPermanentlyTitle": "លុបផលិតផលជាអចិន្ត្រៃយ៍?",
     "deleteProductPermanentlyMessage": "ផលិតផលនេះមិនមានប្រវត្តិប្រតិបត្តិការហើយនឹងត្រូវបានលុបជាអចិន្ត្រៃយ៍។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។ បន្ត?",
-    "productArchivedSuccess": "រក្សាទុកផលិតផលដោយជោគជ័យ",
+    "productArchivedSuccess": "រក្សាទុកផលិតផលដោយជោគជ័យ។ វាត្រូវបានលាក់ពីបញ្ជីផលិតផល ប៉ុន្តែនៅទុកក្នុងកំណត់ត្រារបស់អ្នក។",
     "productDeletedSuccess": "លុបផលិតផលជាអចិន្ត្រៃយ៍",
-    "deleteProductError": "បរាជ័យក្នុងការលុបផលិតផល"
+    "deleteProductError": "បរាជ័យក្នុងការលុបផលិតផល",
+    "productDetails": "ព័ត៌មានលម្អិតផលិតផល",
+    "archivedProduct": "ផលិតផលបានរក្សាទុក",
+    "archivedOn": "បានរក្សាទុកនៅ {{date}}",
+    "costPerUnit": "តម្លៃក្នុងមួយឯកតា",
+    "showInSales": "បង្ហាញក្នុងការលក់",
+    "quantity": "បរិមាណ",
+    "baseCost": "តម្លៃមូលដ្ឋាន",
+    "finalCost": "តម្លៃចុងក្រោយ",
+    "totalCost": "តម្លៃសរុប",
+    "unarchivingProduct": "កំពុងស្តារផលិតផល..."
   },
   "customers": {
     "title": "អតិថិជន",
@@ -206,7 +218,8 @@
     "cashFlow": "លំហូរសាច់ប្រាក់",
     "incomeStatement": "របាយការណ៍ប្រាក់ចំណូល",
     "topProducts": "ផលិតផលល្អបំផុត",
-    "topCustomers": "អតិថិជនល្អបំផុត"
+    "topCustomers": "អតិថិជនល្អបំផុត",
+    "dataLast6Months": "ទិន្នន័យបង្ហាញសម្រាប់ 6 ខែចុងក្រោយ"
   },
   "settings": {
     "title": "ការកំណត់",
@@ -270,7 +283,14 @@
     "selectMultiple": "ជ្រើសរើសច្រើន",
     "cancelSelection": "បោះបង់ការជ្រើសរើស",
     "selectAll": "ជ្រើសរើសទាំងអស់",
-    "deselectAll": "លុបការជ្រើសរើសទាំងអស់"
+    "deselectAll": "លុបការជ្រើសរើសទាំងអស់",
+    "goBack": "ត្រឡប់ក្រោយ"
+  },
+  "errors": {
+    "loadFailed": "មិនអាចដំណើរការព័ត៌មានលម្អិតផលិតផល",
+    "checkStatusFailed": "មិនអាចពិនិត្យស្ថានភាពផលិតផល។ សូមព្យាយាមម្តងទៀត។",
+    "productNotFound": "រកមិនឃើញផលិតផល",
+    "productNotFoundMessage": "ផលិតផលដែលអ្នកកំពុងស្វែងរកមិនមាន ឬត្រូវបានលុបឬហើយ។"
   },
   "search": {
     "foundResults": "រកឃើញ {{count}} ផលិតផល",
@@ -303,7 +323,9 @@
     "costOfGoods": "តម្លៃទំនិញ",
     "operatingExpenses": "ការចំណាយប្រតិបត្តិការ",
     "todaySales": "ការលក់ថ្ងៃនេះ",
-    "averageSale": "ការលក់មធ្យម"
+    "averageSale": "ការលក់មធ្យម",
+    "financialSummary": "សរុបហិរញ្ញវត្ថុ",
+    "totalCOGS": "COGS សរុប"
   },
   "sales": {
     "title": "ការលក់",

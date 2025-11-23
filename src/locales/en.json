@@ -22,7 +22,9 @@
     "description": "Description",
     "date": "Date",
     "amount": "Amount",
-    "notes": "Notes"
+    "notes": "Notes",
+    "note": "Note",
+    "processing": "Processing..."
   },
   "auth": {
     "signIn": "Sign In",
@@ -130,9 +132,19 @@
     "archiveProductMessage": "This product has transaction history ({{summary}}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?",
     "deleteProductPermanentlyTitle": "Delete Product Permanently?",
     "deleteProductPermanentlyMessage": "This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?",
-    "productArchivedSuccess": "Product archived successfully",
+    "productArchivedSuccess": "Product archived successfully. It has been hidden from the product list but remains in your records.",
     "productDeletedSuccess": "Product deleted permanently",
-    "deleteProductError": "Failed to delete product"
+    "deleteProductError": "Failed to delete product",
+    "productDetails": "Product Details",
+    "archivedProduct": "Archived Product",
+    "archivedOn": "Archived on {{date}}",
+    "costPerUnit": "Cost Per Unit",
+    "showInSales": "Show in Sales",
+    "quantity": "Quantity",
+    "baseCost": "Base Cost",
+    "finalCost": "Final Cost",
+    "totalCost": "Total Cost",
+    "unarchivingProduct": "Unarchiving product..."
   },
   "customers": {
     "title": "Customers",
@@ -206,7 +218,8 @@
     "cashFlow": "Cash Flow",
     "incomeStatement": "Income Statement",
     "topProducts": "Top Products",
-    "topCustomers": "Top Customers"
+    "topCustomers": "Top Customers",
+    "dataLast6Months": "Data shown for the last 6 months"
   },
   "settings": {
     "title": "Settings",
@@ -270,7 +283,14 @@
     "selectMultiple": "Select Multiple",
     "cancelSelection": "Cancel Selection",
     "selectAll": "Select All",
-    "deselectAll": "Deselect All"
+    "deselectAll": "Deselect All",
+    "goBack": "Go Back"
+  },
+  "errors": {
+    "loadFailed": "Failed to load product details",
+    "checkStatusFailed": "Failed to check product status. Please try again.",
+    "productNotFound": "Product Not Found",
+    "productNotFoundMessage": "The product you're looking for doesn't exist or has been deleted."
   },
   "search": {
     "foundResults": "Found {{count}} product(s)",
@@ -303,7 +323,9 @@
     "costOfGoods": "Cost of Goods",
     "operatingExpenses": "Operating Expenses",
     "todaySales": "Today's Sales",
-    "averageSale": "Average Sale"
+    "averageSale": "Average Sale",
+    "financialSummary": "Financial Summary",
+    "totalCOGS": "Total COGS"
   },
   "sales": {
     "title": "Sales",
