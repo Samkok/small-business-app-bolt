@@ -156,8 +156,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const realtimeStatusRef = useRef<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  const lastForegroundTimeRef = useRef<number>(0);
+  const lastForegroundTimeRef = useRef<number>(Date.now());
+  const lastBackgroundTimeRef = useRef<number>(0);
   const lastSecurityCheckTimeRef = useRef<number>(0);
+  const isFirstLaunchRef = useRef<boolean>(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<string>('active');
@@ -1062,7 +1064,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkSessionActivity(session);
       }
     };
-    
+
     // Add app state change listener for foreground/background transitions
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       const previousState = appStateRef.current;
@@ -1073,27 +1075,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (nextAppState === 'active' && previousState !== 'active') {
         // App is returning to foreground
         const now = Date.now();
-        const timeSinceLastForeground = now - lastForegroundTimeRef.current;
+
+        // Calculate actual background duration (not time since last foreground)
+        const backgroundDuration = lastBackgroundTimeRef.current > 0
+          ? now - lastBackgroundTimeRef.current
+          : 0;
+
         const timeSinceSecurityCheck = now - lastSecurityCheckTimeRef.current;
+        const isFirstLaunch = isFirstLaunchRef.current;
 
         console.log('App returning to foreground', {
-          timeSinceLastForeground: `${(timeSinceLastForeground / 1000).toFixed(1)}s`,
+          isFirstLaunch,
+          backgroundDuration: `${(backgroundDuration / 1000).toFixed(1)}s`,
           timeSinceSecurityCheck: `${(timeSinceSecurityCheck / 1000).toFixed(1)}s`,
           sessionRefreshGracePeriod: `${(SESSION_REFRESH_GRACE_PERIOD / 1000).toFixed(0)}s`,
-          securityCheckGracePeriod: `${(SECURITY_CHECK_GRACE_PERIOD / 1000).toFixed(0)}s`
+          securityCheckGracePeriod: `${(SECURITY_CHECK_GRACE_PERIOD / 1000).toFixed(0)}s`,
+          lastBackgroundTime: lastBackgroundTimeRef.current,
+          now: now
         });
 
+        // Skip all checks on first app launch (when the app is initially opened)
+        if (isFirstLaunch) {
+          console.log('First app launch detected, skipping all checks');
+          isFirstLaunchRef.current = false;
+          lastForegroundTimeRef.current = now;
+
+          // Initialize last security check time
+          lastSecurityCheckTimeRef.current = now;
+
+          if (session) {
+            updateLastActivityTimestamp();
+          }
+          return;
+        }
+
         // SECURITY CHECK: Always verify business access frequently (5 second grace period)
-        if (timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
+        // Only check if we have a valid background duration measurement
+        if (backgroundDuration > 0 && timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
           console.log('Security check grace period exceeded, performing business access check');
           await checkBusinessAccessSecurity();
-        } else {
+        } else if (backgroundDuration > 0) {
           console.log('Security check grace period active, skipping business access check');
         }
 
-        // PERFORMANCE OPTIMIZATION: Only refresh session if grace period exceeded (60 second grace period)
-        if (timeSinceLastForeground > SESSION_REFRESH_GRACE_PERIOD) {
-          console.log('Session refresh grace period exceeded, refreshing session...');
+        // PERFORMANCE OPTIMIZATION: Only refresh session if background duration exceeded grace period
+        // This ensures we only reload when the app was actually in background for more than 1 minute
+        if (backgroundDuration > SESSION_REFRESH_GRACE_PERIOD) {
+          console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) exceeded grace period, refreshing session...`);
 
           if (session) {
             const refreshSuccess = await refreshSessionIfNeeded();
@@ -1107,8 +1135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // Then proceed with activity checks
           checkActivity();
-        } else {
-          console.log('Session refresh grace period active, skipping session refresh');
+        } else if (backgroundDuration > 0) {
+          console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) within grace period, skipping session refresh`);
         }
 
         // Always update timestamps and last activity
@@ -1117,11 +1145,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           updateLastActivityTimestamp();
         }
       } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App is going to background
-        console.log('App going to background');
+        // App is going to background - record the timestamp
+        const now = Date.now();
+        lastBackgroundTimeRef.current = now;
+        console.log('App going to background at:', new Date(now).toISOString());
       }
     });
-    
+
     return () => {
       subscription.remove();
     };
