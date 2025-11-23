@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,10 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { UnauthorizedDeleteModal } from '@/src/components/business/UnauthorizedDeleteModal';
+import { DeleteBusinessModal } from '@/src/components/business/DeleteBusinessModal';
+import { useBusinessDeletion } from '@/src/hooks/useBusinessDeletion';
+import { businessService } from '@/src/services/business';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -39,6 +43,10 @@ export default function SettingsScreen() {
   const { changeLanguage, currentLanguage } = useLanguage();
   const { unreadCount } = useNotifications();
   const router = useRouter();
+  const { deleteBusiness, isDeleting } = useBusinessDeletion();
+
+  const [showUnauthorizedModal, setShowUnauthorizedModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleLanguageChange = async (language: string) => {
     try {
@@ -65,22 +73,37 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleDeleteBusiness = () => {
-    Alert.alert(
-      t('settings.deleteBusiness'),
-      t('settings.deleteBusinessWarning'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: () => {
-            // TODO: Implement delete business functionality
-            Alert.alert(t('common.error'), t('settings.featureNotImplemented'));
-          }
-        }
-      ]
-    );
+  const handleDeleteBusiness = async () => {
+    if (!userProfile || !currentBusiness) return;
+
+    try {
+      const isOwner = await businessService.checkBusinessOwnership(
+        currentBusiness.id,
+        userProfile.user_id
+      );
+
+      if (!isOwner) {
+        setShowUnauthorizedModal(true);
+        return;
+      }
+
+      setShowDeleteModal(true);
+    } catch (error) {
+      console.error('Error checking business ownership:', error);
+      Alert.alert(t('common.error'), t('common.somethingWentWrong'));
+    }
+  };
+
+  const handleDeleteComplete = async () => {
+    if (!currentBusiness) return;
+
+    try {
+      await deleteBusiness(currentBusiness.id);
+      setShowDeleteModal(false);
+    } catch (error: any) {
+      console.error('Error in delete complete:', error);
+      Alert.alert(t('common.error'), error.message || t('deleteBusiness.errorMessage'));
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -334,6 +357,21 @@ export default function SettingsScreen() {
           style={styles.signOutButton}
         />
       </View>
+
+      <UnauthorizedDeleteModal
+        visible={showUnauthorizedModal}
+        onClose={() => setShowUnauthorizedModal(false)}
+      />
+
+      {currentBusiness && (
+        <DeleteBusinessModal
+          visible={showDeleteModal}
+          businessName={currentBusiness.business_name}
+          businessId={currentBusiness.id}
+          onClose={() => setShowDeleteModal(false)}
+          onComplete={handleDeleteComplete}
+        />
+      )}
     </ScrollView>
   );
 }
