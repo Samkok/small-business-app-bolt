@@ -362,26 +362,26 @@ export default function InventoryScreen() {
 
   const handleMarkAsArrived = async (importRecord: any) => {
     if (importRecord.status === 'completed') {
-      Alert.alert('Already Arrived', 'This batch has already been marked as arrived.');
+      Alert.alert(t('inventory.alreadyArrived'), t('inventory.alreadyArrivedMessage'));
       return;
     }
 
     Alert.alert(
-      'Mark Batch as Arrived',
-      'Are you sure you want to mark this batch as arrived? This will update all product stocks in this batch and cannot be undone.',
+      t('inventory.markBatchArrived'),
+      t('inventory.markBatchArrivedMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('actions.cancel'), style: 'cancel' },
         { 
-          text: 'Confirm', 
+          text: t('actions.confirm'), 
           onPress: async () => {
             try {
               setMarkingAsArrived(importRecord.id);
               await batchImportService.markBatchAsArrived(importRecord.id);
-              Alert.alert('Success', 'Batch marked as arrived successfully');
+              Alert.alert(t('common.success'), t('inventory.batchArrivedSuccess'));
               loadData();
             } catch (error) {
               console.error('Error marking batch as arrived:', error);
-              Alert.alert('Error', 'Failed to mark batch as arrived');
+              Alert.alert(t('common.error'), t('inventory.batchArrivedError'));
             } finally {
               setMarkingAsArrived(null);
             }
@@ -397,22 +397,22 @@ export default function InventoryScreen() {
 
   const handleDeleteBatch = async (batch: any) => {
     Alert.alert(
-      'Delete Batch',
-      `Are you sure you want to delete this entire batch? ${batch.status === 'completed' ? 'This will also adjust all product stocks in this batch.' : ''}`,
+      t('inventory.deleteBatch'),
+      `${t('inventory.deleteBatchMessage')} ${batch.status === 'completed' ? t('inventory.deleteBatchStockWarning') : ''}`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('actions.cancel'), style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: t('actions.delete'), 
           style: 'destructive',
           onPress: async () => {
             try {
               setDeletingImport(batch.id);
               await batchImportService.deleteBatchImport(batch.id);
-              Alert.alert('Success', 'Batch deleted successfully');
+              Alert.alert(t('common.success'), t('inventory.batchDeleteSuccess'));
               loadData();
             } catch (error) {
               console.error('Error deleting batch:', error);
-              Alert.alert('Error', 'Failed to delete batch');
+              Alert.alert(t('common.error'), t('inventory.batchDeleteError'));
             } finally {
               setDeletingImport(null);
             }
@@ -452,17 +452,17 @@ export default function InventoryScreen() {
 
   const handleBulkDelete = async () => {
     if (selectedBatches.size === 0) {
-      Alert.alert('No Batches Selected', 'Please select at least one batch to delete.');
+      Alert.alert(t('inventory.noBatchesSelected'), t('inventory.selectBatchMessage'));
       return;
     }
 
     Alert.alert(
-      'Delete Selected Batches',
-      `Are you sure you want to delete ${selectedBatches.size} batch(es)? This will adjust product stock levels for completed batches.`,
+      t('inventory.deleteSelectedBatches'),
+      t('inventory.deleteMultipleBatchesMessage', { count: selectedBatches.size }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('actions.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('actions.delete'),
           style: 'destructive',
           onPress: async () => {
             setBulkDeleteLoading(true);
@@ -483,11 +483,11 @@ export default function InventoryScreen() {
               }
 
               if (errorCount === 0) {
-                Alert.alert('Success', `Successfully deleted ${successCount} batch(es).`);
+                Alert.alert(t('common.success'), t('inventory.batchesDeletedSuccess', { count: successCount }));
               } else {
                 Alert.alert(
-                  'Partial Success',
-                  `Successfully deleted ${successCount} batch(es), but failed to delete ${errorCount} batch(es).`
+                  t('inventory.partialSuccess'),
+                  t('inventory.partialDeleteMessage', { successCount, errorCount })
                 );
               }
 
@@ -497,7 +497,7 @@ export default function InventoryScreen() {
               loadData();
             } catch (error) {
               console.error('Error in bulk delete operation:', error);
-              Alert.alert('Error', 'An error occurred during the bulk delete operation.');
+              Alert.alert(t('common.error'), t('inventory.bulkDeleteError'));
             } finally {
               setBulkDeleteLoading(false);
             }
@@ -587,12 +587,12 @@ export default function InventoryScreen() {
     if (!currentBusiness?.id) return;
 
     Alert.alert(
-      'Unarchive Product',
-      `Are you sure you want to unarchive "${product.name}"? It will be restored to your active products list.`,
+      t('inventory.unarchiveProduct'),
+      t('inventory.unarchiveProductMessage', { name: product.name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('actions.cancel'), style: 'cancel' },
         {
-          text: 'Unarchive',
+          text: t('actions.unarchive'),
           onPress: async () => {
             try {
               setUnarchivingProduct(product.id);
@@ -601,12 +601,12 @@ export default function InventoryScreen() {
 
               await productService.unarchiveProduct(product.id, user.id);
 
-              Alert.alert('Success', 'Product unarchived successfully');
+              Alert.alert(t('common.success'), t('inventory.unarchiveSuccess'));
 
               await loadData(true);
             } catch (error) {
               console.error('Error unarchiving product:', error);
-              Alert.alert('Error', 'Failed to unarchive product');
+              Alert.alert(t('common.error'), t('inventory.unarchiveError'));
             } finally {
               setUnarchivingProduct(null);
             }
@@ -762,7 +762,7 @@ export default function InventoryScreen() {
               styles.filterButtonText,
               { color: !showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
             ]}>
-              Active ({totalProducts})
+              {t('inventory.active')} ({totalProducts})
             </Text>
           </TouchableOpacity>
 
@@ -781,7 +781,7 @@ export default function InventoryScreen() {
               styles.filterButtonText,
               { color: showArchived ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
             ]}>
-              Archived ({totalArchivedProducts})
+              {t('inventory.archived')} ({totalArchivedProducts})
             </Text>
           </TouchableOpacity>
         </View>
@@ -791,7 +791,7 @@ export default function InventoryScreen() {
             <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             <TextInput
               style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder={`Search ${showArchived ? 'archived ' : ''}products...`}
+              placeholder={`${t('actions.search')} ${showArchived ? t('inventory.archived').toLowerCase() + ' ' : ''}${t('inventory.products').toLowerCase()}...`}
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -856,13 +856,13 @@ export default function InventoryScreen() {
         {isSearching && (
           <View style={styles.searchResultsHeader}>
             <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {searchResults.length === 0 
-                ? `No products found for "${searchQuery}"` 
-                : `Found ${searchResults.length} product${searchResults.length !== 1 ? 's' : ''}`}
+              {searchResults.length === 0
+                ? t('empty.noProductsForQuery', { query: searchQuery })
+                : t('search.foundResults', { count: searchResults.length })}
             </Text>
             {searchResults.length > 0 && (
               <TouchableOpacity onPress={handleClearSearch}>
-                <Text style={styles.clearSearchText}>Clear</Text>
+                <Text style={styles.clearSearchText}>{t('actions.clear')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -880,7 +880,7 @@ export default function InventoryScreen() {
               onRefresh={handleRefresh}
               colors={['#2563eb']}
               tintColor="#2563eb"
-              title="Pull to refresh"
+              title={t('actions.refresh')}
               titleColor={isDark ? '#f9fafb' : '#111827'}
             />
           }
@@ -917,22 +917,22 @@ export default function InventoryScreen() {
             <Card style={styles.emptyState}>
               {showArchived ? <Archive size={48} color={isDark ? '#6b7280' : '#9ca3af'} /> : <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />}
               <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {isSearching ? 'No products found' : (showArchived ? 'No archived products' : 'No products yet')}
+                {isSearching ? t('empty.noProductsFound') : (showArchived ? t('empty.noArchivedProducts') : t('empty.noProducts'))}
               </Text>
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 {isSearching
-                  ? `We couldn't find any ${showArchived ? 'archived ' : ''}products matching "${searchQuery}"`
-                  : (showArchived ? 'Products that are archived will appear here' : 'Add your first product to start managing inventory')}
+                  ? t('empty.noProductsSearchMessage', { query: searchQuery, type: showArchived ? t('inventory.archived').toLowerCase() + ' ' : '' })
+                  : (showArchived ? t('empty.archivedProductsMessage') : t('empty.addFirstProduct'))}
               </Text>
               {isSearching ? (
                 <Button
-                  title="Clear Search"
+                  title={t('actions.clearSearch')}
                   onPress={handleClearSearch}
                   style={styles.emptyButton}
                 />
               ) : !showArchived ? (
                 <Button
-                  title="Add Product"
+                  title={t('inventory.addProduct')}
                   onPress={() => setShowProductForm(true)}
                   style={styles.emptyButton}
                 />
@@ -1015,7 +1015,7 @@ export default function InventoryScreen() {
           </View>
           
           <Button
-            title="Import Stock"
+            title={t('inventory.importStock')}
             onPress={() => setShowImportForm(true)}
             style={styles.importButton}
           />
@@ -1080,7 +1080,7 @@ export default function InventoryScreen() {
                 styles.multiSelectButtonText, 
                 { color: isMultiSelectMode ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
               ]}>
-                {isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple'}
+                {isMultiSelectMode ? t('actions.cancelSelection') : t('actions.selectMultiple')}
               </Text>
             </TouchableOpacity>
 
@@ -1094,7 +1094,7 @@ export default function InventoryScreen() {
                   onPress={handleSelectAllBatches}
                 >
                   <Text style={{ color: isDark ? '#f9fafb' : '#374151' }}>
-                    {selectedBatches.size === filteredBatchHistory.length ? 'Deselect All' : 'Select All'}
+                    {selectedBatches.size === filteredBatchHistory.length ? t('actions.deselectAll') : t('actions.selectAll')}
                   </Text>
                 </TouchableOpacity>
                 
@@ -1115,7 +1115,7 @@ export default function InventoryScreen() {
                     <>
                       <Trash2 size={16} color="#ffffff" />
                       <Text style={{ color: '#ffffff', marginLeft: 4 }}>
-                        Delete ({selectedBatches.size})
+                        {t('actions.delete')} ({selectedBatches.size})
                       </Text>
                     </>
                   )}
@@ -1147,7 +1147,7 @@ export default function InventoryScreen() {
           />
         ) : (
           <Button
-            title="Create New Import"
+            title={t('inventory.createNewImport')}
             onPress={() => setShowImportForm(true)}
             style={styles.emptyButton}
           />
@@ -1171,7 +1171,7 @@ export default function InventoryScreen() {
               onRefresh={handleRefresh}
               colors={['#2563eb']}
               tintColor="#2563eb"
-              title="Pull to refresh"
+              title={t('actions.refresh')}
               titleColor={isDark ? '#f9fafb' : '#111827'}
             />
           }
@@ -1201,14 +1201,14 @@ export default function InventoryScreen() {
 
       <View style={styles.tabs}>
         <TabButton
-          title="Products"
+          title={t('inventory.products')}
           icon={<Package size={18} color={activeTab === 'products' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'products'}
           onPress={() => setActiveTab('products')}
           isDark={isDark}
         />
         <TabButton
-          title="Import History"
+          title={t('inventory.importHistory')}
           icon={<Archive size={18} color={activeTab === 'history' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
