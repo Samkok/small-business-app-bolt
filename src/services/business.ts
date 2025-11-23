@@ -93,6 +93,14 @@ export const businessService = {
 
       const cartIds = carts?.map(c => c.id) || [];
 
+      // Delete sales first (they reference carts)
+      const { error: salesError } = await supabase
+        .from('sales')
+        .delete()
+        .eq('business_id', businessId);
+
+      if (salesError) throw salesError;
+
       // Delete cart items if there are carts
       if (cartIds.length > 0) {
         const { error: cartItemsError } = await supabase
@@ -103,19 +111,13 @@ export const businessService = {
         if (cartItemsError) throw cartItemsError;
       }
 
+      // Now delete carts
       const { error: cartsError } = await supabase
         .from('carts')
         .delete()
         .eq('business_id', businessId);
 
       if (cartsError) throw cartsError;
-
-      const { error: salesError } = await supabase
-        .from('sales')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (salesError) throw salesError;
 
       const { error: expensesError } = await supabase
         .from('expenses')
