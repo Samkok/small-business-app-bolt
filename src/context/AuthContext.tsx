@@ -5,7 +5,7 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { AppState, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
@@ -132,9 +132,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // One week in milliseconds
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
-// Grace periods for app foreground transitions
-const SESSION_REFRESH_GRACE_PERIOD = 60 * 1000; // 1 minute for session refresh (performance)
-const SECURITY_CHECK_GRACE_PERIOD = 5 * 1000; // 5 seconds for business access check (security)
+// Grace periods removed - Supabase Realtime handles business access changes instantly
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mounted = useRef(true);
@@ -156,12 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const realtimeStatusRef = useRef<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  const lastForegroundTimeRef = useRef<number>(Date.now());
-  const lastBackgroundTimeRef = useRef<number>(0);
-  const lastSecurityCheckTimeRef = useRef<number>(Date.now());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const appStateRef = useRef<string>('active');
   const isRefreshingSessionRef = useRef<boolean>(false);
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
@@ -329,15 +323,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           consecutiveFailures++;
 
-          // Use context-aware logging based on app state
-          const isInBackground = appStateRef.current !== 'active';
-          const logLevel = isInBackground ? 'warn' : 'error';
-
-          console[logLevel]('Polling error (attempt', consecutiveFailures, '/', MAX_FAILURES, '):', {
+          // Log polling errors
+          console.error('Polling error (attempt', consecutiveFailures, '/', MAX_FAILURES, '):', {
             error: error,
             errorCode: error.code,
             errorMessage: error.message,
-            appState: appStateRef.current,
             userId: userRef.current?.id,
             timestamp: new Date().toISOString()
           });
@@ -1013,192 +1003,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Lightweight check to verify user still has access to their businesses
-  const checkBusinessAccessSecurity = useCallback(async () => {
-    if (!userRef.current?.id) {
-      console.log('checkBusinessAccessSecurity: No user, skipping');
-      return;
-    }
-
-    const startTime = Date.now();
-    const SECURITY_CHECK_TIMEOUT = 2000; // 2 second timeout
-
-    try {
-      console.log('checkBusinessAccessSecurity: Performing lightweight business access check');
-
-      // Wrap in Promise.race to prevent blocking
-      const checkPromise = (async () => {
-        const { data: roles, error } = await supabase
-          .from('user_business_roles')
-          .select('business_id')
-          .eq('user_id', userRef.current!.id);
-
-        if (error) {
-          console.warn('checkBusinessAccessSecurity: Error checking business access:', error.message);
-          return;
-        }
-
-        const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
-        const previousBusinessIds = new Set(userBusinessesRef.current.map(b => b.id));
-
-        // Check if user was removed from any business
-        const removedBusinessIds = Array.from(previousBusinessIds).filter(
-          id => !currentBusinessIds.has(id)
-        );
-
-        if (removedBusinessIds.length > 0) {
-          console.warn('checkBusinessAccessSecurity: User removed from businesses:', removedBusinessIds);
-
-          // Trigger refresh to handle the removal properly (non-blocking)
-          refreshUserBusinesses().catch(err => {
-            console.error('checkBusinessAccessSecurity: Error refreshing businesses:', err);
-          });
-        } else {
-          console.log('checkBusinessAccessSecurity: All business access verified');
-        }
-
-        lastSecurityCheckTimeRef.current = Date.now();
-      })();
-
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Security check timeout')), SECURITY_CHECK_TIMEOUT);
-      });
-
-      await Promise.race([checkPromise, timeoutPromise]);
-
-      const duration = Date.now() - startTime;
-      console.log(`checkBusinessAccessSecurity: Completed in ${duration}ms`);
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      if (error instanceof Error && error.message === 'Security check timeout') {
-        console.warn(`checkBusinessAccessSecurity: Timed out after ${duration}ms`);
-      } else {
-        console.error('checkBusinessAccessSecurity: Unexpected error:', error);
-      }
-    }
-  }, [refreshUserBusinesses]);
-
-  // Check for session activity whenever the app comes to foreground
-  useEffect(() => {
-    const checkActivity = async () => {
-      if (session) {
-        checkSessionActivity(session);
-      }
-    };
-
-    // Add app state change listener for foreground/background transitions
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      const previousState = appStateRef.current;
-      appStateRef.current = nextAppState;
-
-      console.log('App state changed:', previousState, '->', nextAppState);
-
-      if (nextAppState === 'active' && previousState !== 'active') {
-        // App is returning to foreground - handle async operations non-blocking
-        (async () => {
-          const now = Date.now();
-
-          // Calculate actual background duration (not time since last foreground)
-          // If lastBackgroundTimeRef is 0, it means we haven't gone to background yet (first launch)
-          const backgroundDuration = lastBackgroundTimeRef.current > 0
-            ? now - lastBackgroundTimeRef.current
-            : 0;
-
-          const timeSinceSecurityCheck = now - lastSecurityCheckTimeRef.current;
-          const isFirstTransition = lastBackgroundTimeRef.current === 0;
-
-          console.log('App returning to foreground', {
-            isFirstTransition,
-            backgroundDuration: `${(backgroundDuration / 1000).toFixed(1)}s`,
-            timeSinceSecurityCheck: `${(timeSinceSecurityCheck / 1000).toFixed(1)}s`,
-            sessionRefreshGracePeriod: `${(SESSION_REFRESH_GRACE_PERIOD / 1000).toFixed(0)}s`,
-            securityCheckGracePeriod: `${(SECURITY_CHECK_GRACE_PERIOD / 1000).toFixed(0)}s`,
-            lastBackgroundTime: lastBackgroundTimeRef.current,
-            now: now
-          });
-
-          // Skip all checks if this is the first transition (app hasn't been to background yet)
-          // This handles the case where the app just launched and is already active
-          if (isFirstTransition) {
-            console.log('First foreground transition detected (no background yet), skipping all checks');
-            lastForegroundTimeRef.current = now;
-
-            if (session) {
-              updateLastActivityTimestamp();
-            }
-            return;
-          }
-
-          // SECURITY CHECK: Always verify business access frequently (5 second grace period)
-          // Only check if we actually have a background duration to measure
-          // Run non-blocking to prevent UI freeze
-          if (backgroundDuration > 0 && timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
-            console.log('Security check grace period exceeded, performing business access check');
-            checkBusinessAccessSecurity().catch(error => {
-              console.error('Error during business access security check:', error);
-            });
-          } else if (backgroundDuration > 0) {
-            console.log('Security check grace period active, skipping business access check');
-          }
-
-          // PERFORMANCE OPTIMIZATION: Only refresh session if background duration exceeded grace period
-          // This ensures we only reload when the app was actually in background for more than 1 minute
-          if (backgroundDuration > SESSION_REFRESH_GRACE_PERIOD) {
-            console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) exceeded grace period, refreshing session...`);
-
-            if (session) {
-              try {
-                const SESSION_REFRESH_TIMEOUT = 5000; // 5 second timeout
-                const refreshPromise = refreshSessionIfNeeded();
-                const timeoutPromise = new Promise<boolean>((resolve) => {
-                  setTimeout(() => {
-                    console.warn('Session refresh timed out');
-                    resolve(false);
-                  }, SESSION_REFRESH_TIMEOUT);
-                });
-
-                const refreshSuccess = await Promise.race([refreshPromise, timeoutPromise]);
-
-                if (refreshSuccess) {
-                  console.log('Session refreshed on foreground transition');
-                } else {
-                  console.warn('Session refresh failed on foreground transition');
-                }
-              } catch (error) {
-                console.error('Error during session refresh:', error);
-              }
-            }
-
-            // Then proceed with activity checks
-            try {
-              await checkActivity();
-            } catch (error) {
-              console.error('Error during activity check:', error);
-            }
-          } else if (backgroundDuration > 0) {
-            console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) within grace period, skipping session refresh`);
-          }
-
-          // Always update timestamps and last activity
-          lastForegroundTimeRef.current = now;
-          if (session) {
-            updateLastActivityTimestamp();
-          }
-        })().catch(error => {
-          console.error('Unhandled error in app state change handler:', error);
-        });
-      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App is going to background - record the timestamp
-        const now = Date.now();
-        lastBackgroundTimeRef.current = now;
-        console.log('App going to background at:', new Date(now).toISOString());
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [session]);
+  // Note: Business access security is now handled entirely by Supabase Realtime subscriptions
+  // The realtime channel (user_business_roles) immediately detects when users are removed from businesses
+  // and triggers automatic cleanup and redirection - see setupRealtimeSubscription() below
 
   const checkSessionActivity = async (currentSession: Session) => {
     try {
