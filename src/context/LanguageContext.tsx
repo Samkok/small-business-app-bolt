@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '@/src/locales';
 
@@ -57,6 +58,14 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     currentLanguage,
     changeLanguage,
   };
+
+  if (!isI18nReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' }}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
 
   return (
     <LanguageContext.Provider value={value}>
