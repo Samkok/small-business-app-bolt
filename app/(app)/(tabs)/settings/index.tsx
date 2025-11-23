@@ -55,7 +55,7 @@ export default function SettingsScreen() {
   const handleSignOut = () => {
     Alert.alert(
       t('auth.signOut'),
-      'Are you sure you want to sign out?',
+      t('settings.signOutConfirm'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('auth.signOut'), style: 'destructive', onPress: signOut },
@@ -128,14 +128,14 @@ export default function SettingsScreen() {
               {userProfile?.full_name || 'User'}
             </Text>
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {currentBusiness?.business_name || 'No Business Selected'}
+              {currentBusiness?.business_name || t('settings.noBusinessSelected')}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.switchBusinessButton}
               onPress={() => router.push('/business-selection')}
             >
               <Text style={styles.switchBusinessText}>
-                Manage Businesses
+                {t('settings.manageBusinesses')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -146,8 +146,8 @@ export default function SettingsScreen() {
         <View style={styles.notificationItemWrapper}>
           <SettingItem
             icon={<Bell size={20} color="#f59e0b" />}
-            title="Notifications"
-            subtitle="Manage your notification preferences"
+            title={t('settings.notifications')}
+            subtitle={t('settings.notificationsSubtitle')}
             onPress={() => router.push('/settings/notifications')}
           />
           {unreadCount > 0 && (
@@ -160,32 +160,32 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<User size={20} color="#2563eb" />}
           title={t('settings.profile')}
-          subtitle="Edit your personal and business information"
+          subtitle={t('settings.profileSubtitle')}
           onPress={() => router.push('/settings/profile')}
         />
 
         <SettingItem
           icon={<Building size={20} color="#8b5cf6" />}
-          title="Business Settings"
-          subtitle="Manage your business information"
+          title={t('settings.businessSettings')}
+          subtitle={t('settings.businessSubtitle')}
           onPress={() => router.push('/settings/business')}
         />
 
         <SettingItem
           icon={<Users size={20} color="#ea580c" />}
-          title="Team Members"
-          subtitle="Manage users and permissions"
+          title={t('settings.teamMembers')}
+          subtitle={t('settings.teamSubtitle')}
           onPress={() => router.push('/settings/team')}
         />
 
         <SettingItem
           icon={<Palette size={20} color="#059669" />}
           title={t('settings.theme')}
-          subtitle={`Current: ${theme}`}
+          subtitle={t('settings.currentTheme', { theme })}
           onPress={() => {
             Alert.alert(
               t('settings.theme'),
-              'Choose theme',
+              t('settings.chooseTheme'),
               [
                 { text: t('settings.light'), onPress: () => handleThemeChange('light') },
                 { text: t('settings.dark'), onPress: () => handleThemeChange('dark') },
@@ -199,11 +199,11 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<Globe size={20} color="#8b5cf6" />}
           title={t('settings.language')}
-          subtitle={`Current: ${getLanguageNativeLabel(currentLanguage)}`}
+          subtitle={t('settings.currentLanguage', { language: getLanguageNativeLabel(currentLanguage) })}
           onPress={() => {
             Alert.alert(
               t('settings.language'),
-              'Choose language',
+              t('settings.chooseLanguage'),
               [
                 { text: t('settings.english'), onPress: () => handleLanguageChange('en') },
                 { text: t('settings.khmer'), onPress: () => handleLanguageChange('km') },
@@ -217,18 +217,18 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Legal
+          {t('settings.legal')}
         </Text>
         <SettingItem
           icon={<FileText size={20} color="#dc2626" />}
-          title="Terms and Conditions"
-          subtitle="Read our terms of service"
+          title={t('settings.terms')}
+          subtitle={t('settings.termsSubtitle')}
           onPress={() => router.push('/settings/terms')}
         />
         <SettingItem
           icon={<Shield size={20} color="#16a34a" />}
-          title="Privacy Policy"
-          subtitle="Learn how we protect your data"
+          title={t('settings.privacy')}
+          subtitle={t('settings.privacySubtitle')}
           onPress={() => router.push('/settings/privacy')}
         />
       </View>
