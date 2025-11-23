@@ -122,7 +122,14 @@
     "unarchiveSuccess": "Product unarchived successfully",
     "unarchiveError": "Failed to unarchive product",
     "createNewImport": "Create New Import",
-    "searchBatches": "Search batches..."
+    "searchBatches": "Search batches...",
+    "archiveProductTitle": "Archive Product?",
+    "archiveProductMessage": "This product has transaction history ({{summary}}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?",
+    "deleteProductPermanentlyTitle": "Delete Product Permanently?",
+    "deleteProductPermanentlyMessage": "This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?",
+    "productArchivedSuccess": "Product archived successfully",
+    "productDeletedSuccess": "Product deleted permanently",
+    "deleteProductError": "Failed to delete product"
   },
   "customers": {
     "title": "Customers",
@@ -241,6 +248,7 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "delete": "Delete",
+    "archive": "Archive",
     "unarchive": "Unarchive",
     "search": "Search",
     "clear": "Clear",

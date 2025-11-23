@@ -122,7 +122,14 @@
     "unarchiveSuccess": "产品取消存档成功",
     "unarchiveError": "取消存档产品失败",
     "createNewImport": "创建新入库",
-    "searchBatches": "搜索批次..."
+    "searchBatches": "搜索批次...",
+    "archiveProductTitle": "存档产品?",
+    "archiveProductMessage": "此产品有交易历史记录 ({{summary}})，将被存档而不是永久删除。\n\n存档的产品在正常视图中隐藏，但会保留用于报告。继续?",
+    "deleteProductPermanentlyTitle": "永久删除产品?",
+    "deleteProductPermanentlyMessage": "此产品没有交易历史记录，将被永久删除。此操作无法撤销。继续?",
+    "productArchivedSuccess": "产品存档成功",
+    "productDeletedSuccess": "产品已永久删除",
+    "deleteProductError": "删除产品失败"
   },
   "customers": {
     "title": "客户",
@@ -241,6 +248,7 @@
     "cancel": "取消",
     "confirm": "确认",
     "delete": "删除",
+    "archive": "存档",
     "unarchive": "取消存档",
     "search": "搜索",
     "clear": "清除",

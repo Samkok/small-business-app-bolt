@@ -317,16 +317,16 @@ export default function InventoryScreen() {
       const summary = productTransactionService.getTransactionSummary(transactionCheck);
 
       const message = transactionCheck.hasTransactions
-        ? `This product has transaction history (${summary}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?`
-        : 'This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?';
+        ? t('inventory.archiveProductMessage', { summary })
+        : t('inventory.deleteProductPermanentlyMessage');
 
       Alert.alert(
-        transactionCheck.hasTransactions ? 'Archive Product?' : 'Delete Product Permanently?',
+        transactionCheck.hasTransactions ? t('inventory.archiveProductTitle') : t('inventory.deleteProductPermanentlyTitle'),
         message,
         [
-          { text: 'Cancel', style: 'cancel', onPress: () => setDeletingProduct(null) },
+          { text: t('actions.cancel'), style: 'cancel', onPress: () => setDeletingProduct(null) },
           {
-            text: transactionCheck.hasTransactions ? 'Archive' : 'Delete',
+            text: transactionCheck.hasTransactions ? t('actions.archive') : t('actions.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -336,16 +336,16 @@ export default function InventoryScreen() {
                 const result = await productService.deleteProduct(product.id, user.id);
 
                 const successMessage = result.type === 'archived'
-                  ? 'Product archived successfully'
-                  : 'Product deleted permanently';
+                  ? t('inventory.productArchivedSuccess')
+                  : t('inventory.productDeletedSuccess');
 
-                Alert.alert('Success', successMessage);
+                Alert.alert(t('common.success'), successMessage);
 
                 // Refresh product list
                 await loadData(true);
               } catch (error) {
                 console.error('Error deleting product:', error);
-                Alert.alert('Error', 'Failed to delete product');
+                Alert.alert(t('common.error'), t('inventory.deleteProductError'));
               } finally {
                 setDeletingProduct(null);
               }
@@ -1141,7 +1141,7 @@ export default function InventoryScreen() {
         </Text>
         {isBatchSearching ? (
           <Button
-            title="Clear Search"
+            title={t('actions.clearSearch')}
             onPress={handleClearBatchSearch}
             style={styles.emptyButton}
           />
