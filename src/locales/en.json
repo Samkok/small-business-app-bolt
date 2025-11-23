@@ -95,6 +95,9 @@
     "perTotal": "Per Total",
     "lowStock": "Low Stock",
     "lowStockAlert": "Low Stock Alert",
+    "outOfStock": "Out of Stock",
+    "inStock": "In Stock",
+    "searchProducts": "Search products...",
     "viewAllProducts": "View All Products",
     "active": "Active",
     "archived": "Archived",
@@ -192,7 +195,18 @@
     "last3Months": "Last 3 Months",
     "thisYear": "This Year",
     "customRange": "Custom Range",
-    "selectDateRange": "Select Date Range"
+    "selectDateRange": "Select Date Range",
+    "revenue": "Revenue",
+    "profit": "Profit",
+    "margin": "Margin",
+    "unitsSold": "Units Sold",
+    "thisMonthTopPerformers": "This Month's Top Performers",
+    "productsOfTotal": "{{count}} of {{total}} products",
+    "productsSoldThisMonth": "{{count}} products sold this month",
+    "cashFlow": "Cash Flow",
+    "incomeStatement": "Income Statement",
+    "topProducts": "Top Products",
+    "topCustomers": "Top Customers"
   },
   "settings": {
     "title": "Settings",
@@ -396,28 +410,9 @@
     "noSales": "No sales yet",
     "noExpenses": "No expenses yet",
     "noResults": "No results found",
-    "startAdding": "Start by adding your first {{item}}"
-  },
-  "reports": {
-    "title": "Reports",
-    "salesReport": "Sales Report",
-    "expenseReport": "Expense Report",
-    "profitLoss": "Profit & Loss",
-    "inventoryReport": "Inventory Report",
-    "dateRange": "Date Range",
-    "from": "From",
-    "to": "To",
-    "generate": "Generate Report",
-    "export": "Export",
-    "thisWeek": "This Week",
-    "thisMonth": "This Month",
-    "last3Months": "Last 3 Months",
-    "thisYear": "This Year",
-    "customRange": "Custom Range",
-    "selectDateRange": "Select Date Range",
-    "cashFlow": "Cash Flow",
-    "incomeStatement": "Income Statement",
-    "topProducts": "Top Products",
-    "topCustomers": "Top Customers"
+    "startAdding": "Start by adding your first {{item}}",
+    "noProductSales": "No Product Sales",
+    "noProductsMatch": "No products match \"{{query}}\"",
+    "noProductsSoldThisMonth": "No products have been sold this month yet"
   }
 }

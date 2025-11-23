@@ -19,6 +19,7 @@ import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { ArrowLeft, Package, ShoppingCart, DollarSign, Calendar, Search, X, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { useTranslation } from 'react-i18next';
 
 interface TopProduct {
   id: string;
@@ -37,6 +38,7 @@ interface TopProduct {
 }
 
 export default function TopProductsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
@@ -109,9 +111,9 @@ export default function TopProductsScreen() {
   };
 
   const getStockStatus = (product: TopProduct) => {
-    if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: 'Out of Stock' };
-    if (product.current_stock <= product.min_stock_level) return { status: 'low', color: '#ea580c', label: 'Low Stock' };
-    return { status: 'good', color: '#059669', label: 'In Stock' };
+    if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: t('inventory.outOfStock') };
+    if (product.current_stock <= product.min_stock_level) return { status: 'low', color: '#ea580c', label: t('inventory.lowStock') };
+    return { status: 'good', color: '#059669', label: t('inventory.inStock') };
   };
 
   const ProductCard = ({ product, index }: { product: TopProduct; index: number }) => {
@@ -176,7 +178,7 @@ export default function TopProductsScreen() {
                     {product.quantity}
                   </Text>
                   <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Units Sold
+                    {t('reports.unitsSold')}
                   </Text>
                 </View>
               </View>
@@ -190,7 +192,7 @@ export default function TopProductsScreen() {
                     {formatCurrency(product.revenue)}
                   </Text>
                   <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Revenue
+                    {t('reports.revenue')}
                   </Text>
                 </View>
               </View>
@@ -206,7 +208,7 @@ export default function TopProductsScreen() {
                     {formatCurrency(product.profit)}
                   </Text>
                   <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Profit
+                    {t('reports.profit')}
                   </Text>
                 </View>
               </View>
@@ -220,7 +222,7 @@ export default function TopProductsScreen() {
                     {profitMargin.toFixed(1)}%
                   </Text>
                   <Text style={[styles.metricLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Margin
+                    {t('reports.margin')}
                   </Text>
                 </View>
               </View>
@@ -230,7 +232,7 @@ export default function TopProductsScreen() {
           {product.barcode && (
             <View style={styles.barcodeSection}>
               <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                Barcode: {product.barcode}
+                {t('inventory.barcode')}: {product.barcode}
               </Text>
             </View>
           )}
@@ -276,7 +278,7 @@ export default function TopProductsScreen() {
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Top Products
+            {t('reports.topProducts')}
           </Text>
           <View style={styles.headerRight} />
         </View>
@@ -325,7 +327,7 @@ export default function TopProductsScreen() {
             onRefresh={handleRefresh}
             colors={['#2563eb']}
             tintColor="#2563eb"
-            title="Pull to refresh"
+            title={t('actions.refresh')}
             titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
@@ -335,11 +337,11 @@ export default function TopProductsScreen() {
           <View style={styles.summaryHeader}>
             <Calendar size={20} color="#2563eb" />
             <Text style={[styles.summaryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              This Month's Top Performers
+              {t('reports.thisMonthTopPerformers')}
             </Text>
           </View>
           <Text style={[styles.summaryText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {searchQuery ? `${filteredProducts.length} of ${products.length} products` : `${products.length} products sold this month`}
+            {searchQuery ? t('reports.productsOfTotal', { count: filteredProducts.length, total: products.length }) : t('reports.productsSoldThisMonth', { count: products.length })}
           </Text>
         </Card>
 
@@ -349,7 +351,7 @@ export default function TopProductsScreen() {
             <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             <TextInput
               style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder="Search products..."
+              placeholder={t('inventory.searchProducts')}
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -372,12 +374,12 @@ export default function TopProductsScreen() {
             <Card style={styles.emptyState}>
               <Package size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
               <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {searchQuery ? 'No products found' : 'No Product Sales'}
+                {searchQuery ? t('empty.noProductsFound') : t('empty.noProductSales')}
               </Text>
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {searchQuery 
-                  ? `No products match "${searchQuery}"`
-                  : 'No products have been sold this month yet'
+                {searchQuery
+                  ? t('empty.noProductsMatch', { query: searchQuery })
+                  : t('empty.noProductsSoldThisMonth')
                 }
               </Text>
               {searchQuery && (
@@ -385,7 +387,7 @@ export default function TopProductsScreen() {
                   style={styles.clearSearchButton}
                   onPress={handleClearSearch}
                 >
-                  <Text style={styles.clearSearchText}>Clear Search</Text>
+                  <Text style={styles.clearSearchText}>{t('actions.clearSearch')}</Text>
                 </TouchableOpacity>
               )}
             </Card>

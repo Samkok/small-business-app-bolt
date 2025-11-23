@@ -95,6 +95,9 @@
     "perTotal": "按总额",
     "lowStock": "低库存",
     "lowStockAlert": "低库存提醒",
+    "outOfStock": "缺货",
+    "inStock": "有货",
+    "searchProducts": "搜索产品...",
     "viewAllProducts": "查看所有产品",
     "active": "活跃",
     "archived": "已存档",
@@ -192,7 +195,18 @@
     "last3Months": "最近3个月",
     "thisYear": "今年",
     "customRange": "自定义范围",
-    "selectDateRange": "选择日期范围"
+    "selectDateRange": "选择日期范围",
+    "revenue": "收入",
+    "profit": "利润",
+    "margin": "利润率",
+    "unitsSold": "销售数量",
+    "thisMonthTopPerformers": "本月最佳表现",
+    "productsOfTotal": "{{count}} / {{total}} 个产品",
+    "productsSoldThisMonth": "本月已销售 {{count}} 个产品",
+    "cashFlow": "现金流",
+    "incomeStatement": "损益表",
+    "topProducts": "热销产品",
+    "topCustomers": "优质客户"
   },
   "settings": {
     "title": "设置",
@@ -396,28 +410,9 @@
     "noSales": "暂无销售",
     "noExpenses": "暂无支出",
     "noResults": "未找到结果",
-    "startAdding": "开始添加您的第一个{{item}}"
-  },
-  "reports": {
-    "title": "报告",
-    "salesReport": "销售报告",
-    "expenseReport": "支出报告",
-    "profitLoss": "损益",
-    "inventoryReport": "库存报告",
-    "dateRange": "日期范围",
-    "from": "从",
-    "to": "到",
-    "generate": "生成报告",
-    "export": "导出",
-    "thisWeek": "本周",
-    "thisMonth": "本月",
-    "last3Months": "最近3个月",
-    "thisYear": "今年",
-    "customRange": "自定义范围",
-    "selectDateRange": "选择日期范围",
-    "cashFlow": "现金流",
-    "incomeStatement": "收入报表",
-    "topProducts": "热销产品",
-    "topCustomers": "重要客户"
+    "startAdding": "开始添加您的第一个{{item}}",
+    "noProductSales": "无产品销售",
+    "noProductsMatch": "没有产品匹配 \"{{query}}\"",
+    "noProductsSoldThisMonth": "本月尚未售出任何产品"
   }
 }

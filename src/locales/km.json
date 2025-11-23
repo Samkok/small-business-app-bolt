@@ -95,6 +95,9 @@
     "perTotal": "ក្នុងសរុប",
     "lowStock": "ស្តុកតិច",
     "lowStockAlert": "ការជូនដំណឹងស្តុកតិច",
+    "outOfStock": "អស់ស្តុក",
+    "inStock": "មានស្តុក",
+    "searchProducts": "ស្វែងរកផលិតផល...",
     "viewAllProducts": "មើលផលិតផលទាំងអស់",
     "active": "សកម្ម",
     "archived": "បានរក្សាទុក",
@@ -192,7 +195,18 @@
     "last3Months": "៣ ខែចុងក្រោយ",
     "thisYear": "ឆ្នាំនេះ",
     "customRange": "ជ្រើសរើសកាលបរិច្ឆេទ",
-    "selectDateRange": "ជ្រើសរើសចន្លោះកាលបរិច្ឆេទ"
+    "selectDateRange": "ជ្រើសរើសចន្លោះកាលបរិច្ឆេទ",
+    "revenue": "ប្រាក់ចំណូល",
+    "profit": "ប្រាក់ចំណេញ",
+    "margin": "រឹម",
+    "unitsSold": "ឯកតាបានលក់",
+    "thisMonthTopPerformers": "អ្នកដំណើរការល្អបំផុតខែនេះ",
+    "productsOfTotal": "{{count}} ក្នុងចំណោម {{total}} ផលិតផល",
+    "productsSoldThisMonth": "{{count}} ផលិតផលបានលក់ក្នុងខែនេះ",
+    "cashFlow": "លំហូរសាច់ប្រាក់",
+    "incomeStatement": "របាយការណ៍ប្រាក់ចំណូល",
+    "topProducts": "ផលិតផលល្អបំផុត",
+    "topCustomers": "អតិថិជនល្អបំផុត"
   },
   "settings": {
     "title": "ការកំណត់",
@@ -396,28 +410,9 @@
     "noSales": "មិនទាន់មានការលក់នៅឡើយ",
     "noExpenses": "មិនទាន់មានការចំណាយនៅឡើយ",
     "noResults": "រកមិនឃើញលទ្ធផល",
-    "startAdding": "ចាប់ផ្តើមដោយបន្ថែម {{item}} ដំបូង"
-  },
-  "reports": {
-    "title": "របាយការណ៍",
-    "salesReport": "របាយការណ៍ការលក់",
-    "expenseReport": "របាយការណ៍ការចំណាយ",
-    "profitLoss": "ចំណេញ និងខាត",
-    "inventoryReport": "របាយការណ៍ស្តុក",
-    "dateRange": "ចម្ងាយកាលបរិច្ឆេទ",
-    "from": "ពី",
-    "to": "ដល់",
-    "generate": "បង្កើតរបាយការណ៍",
-    "export": "នាំចេញ",
-    "thisWeek": "សប្តាហ៍នេះ",
-    "thisMonth": "ខែនេះ",
-    "last3Months": "៣ ខែចុងក្រោយ",
-    "thisYear": "ឆ្នាំនេះ",
-    "customRange": "ជ្រើសរើសកាលបរិច្ឆេទ",
-    "selectDateRange": "ជ្រើសរើសចន្លោះកាលបរិច្ឆេទ",
-    "cashFlow": "លំហូរសាច់ប្រាក់",
-    "incomeStatement": "របាយការណ៍ចំណូល",
-    "topProducts": "ផលិតផលល្អបំផុត",
-    "topCustomers": "អតិថិជនល្អបំផុត"
+    "startAdding": "ចាប់ផ្តើមដោយបន្ថែម {{item}} ដំបូង",
+    "noProductSales": "គ្មានការលក់ផលិតផល",
+    "noProductsMatch": "គ្មានផលិតផលត្រូវគ្នានឹង \"{{query}}\"",
+    "noProductsSoldThisMonth": "មិនទាន់មានផលិតផលត្រូវបានលក់ក្នុងខែនេះនៅឡើយ"
   }
 }
