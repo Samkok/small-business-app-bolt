@@ -216,7 +216,7 @@ export default function DashboardScreen() {
           {product.name}
         </Text>
         <Text style={[styles.topItemSubtext, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          {product.quantity} sold
+          {product.quantity} {t('dashboard.sold')}
         </Text>
       </View>
       <View style={styles.topItemValues}>
@@ -224,7 +224,7 @@ export default function DashboardScreen() {
           ${product.revenue.toFixed(2)}
         </Text>
         <Text style={[styles.topItemProfit, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
-          Profit: ${product.profit.toFixed(2)}
+          {t('financials.profit')}: ${product.profit.toFixed(2)}
         </Text>
       </View>
     </View>
@@ -237,7 +237,7 @@ export default function DashboardScreen() {
           {customer.name}
         </Text>
         <Text style={[styles.topItemSubtext, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          {customer.orderCount} orders
+          {customer.orderCount} {t('dashboard.orders')}
         </Text>
       </View>
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
@@ -267,10 +267,10 @@ export default function DashboardScreen() {
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
           <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Welcome back,
+            {t('dashboard.welcomeBack')},
           </Text>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-            {currentBusiness?.business_name || 'Business Owner'}
+            {currentBusiness?.business_name || t('dashboard.businessOwner')}
           </Text>
         </View>
         
@@ -278,7 +278,7 @@ export default function DashboardScreen() {
           <Card style={styles.errorCard}>
             <AlertTriangle size={48} color="#dc2626" style={styles.errorIcon} />
             <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Unable to Load Dashboard
+              {t('dashboard.unableToLoad')}
             </Text>
             <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {error}
@@ -287,7 +287,7 @@ export default function DashboardScreen() {
               style={styles.retryButton}
               onPress={() => loadDashboardData()}
             >
-              <Text style={styles.retryButtonText}>Try Again</Text>
+              <Text style={styles.retryButtonText}>{t('actions.tryAgain')}</Text>
             </TouchableOpacity>
           </Card>
         </View>
@@ -301,10 +301,10 @@ export default function DashboardScreen() {
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
           <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Welcome back,
+            {t('dashboard.welcomeBack')},
           </Text>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-            {currentBusiness?.business_name || 'Business Owner'}
+            {currentBusiness?.business_name || t('dashboard.businessOwner')}
           </Text>
         </View>
         
@@ -312,16 +312,16 @@ export default function DashboardScreen() {
           <Card style={styles.errorCard}>
             <Package size={48} color="#6b7280" style={styles.errorIcon} />
             <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              No Dashboard Data Available
+              {t('dashboard.noData')}
             </Text>
             <Text style={[styles.errorMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Unable to load dashboard statistics. Please try refreshing the data.
+              {t('dashboard.noDataMessage')}
             </Text>
             <TouchableOpacity
               style={styles.retryButton}
               onPress={() => loadDashboardData()}
             >
-              <Text style={styles.retryButtonText}>Refresh Data</Text>
+              <Text style={styles.retryButtonText}>{t('actions.refresh')}</Text>
             </TouchableOpacity>
           </Card>
         </View>
@@ -340,7 +340,7 @@ export default function DashboardScreen() {
           onRefresh={handleRefresh}
           colors={['#2563eb']} // Android
           tintColor="#2563eb" // iOS
-          title="Pull to refresh"
+          title={t('actions.refresh')}
           titleColor={isDark ? '#f9fafb' : '#111827'}
         />
       }
@@ -348,10 +348,10 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={[styles.welcomeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Welcome back,
+            {t('dashboard.welcomeBack')},
           </Text>
           <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
-            {currentBusiness?.business_name || 'Business Owner'}
+            {currentBusiness?.business_name || t('dashboard.businessOwner')}
           </Text>
         </View>
         <View style={styles.headerRight}>
@@ -410,40 +410,40 @@ export default function DashboardScreen() {
         <>
           <View style={styles.statsGrid}>
             <StatCard
-              title="Today's Revenue"
+              title={t('financials.todayRevenue')}
               value={`$${stats.todayRevenue.toFixed(2)}`}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
               trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
-              title="Monthly Revenue"
+              title={t('financials.monthlyRevenue')}
               value={`$${stats.monthlyRevenue.toFixed(2)}`}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
               trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
-              title="Monthly COGS"
+              title={t('dashboard.monthlyCOGS')}
               value={`$${stats.monthlyCOGS.toFixed(2)}`}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
-              title="Total Profit"
+              title={t('financials.totalProfit')}
               value={`$${stats.totalProfit.toFixed(2)}`}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
               trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
-              title="Total Expenses"
+              title={t('expenses.totalExpenses')}
               value={`$${stats.totalExpenses.toFixed(2)}`}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
-              title="Net Profit"
+              title={t('financials.netProfit')}
               value={`$${stats.netProfit.toFixed(2)}`}
               icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
               color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
@@ -453,13 +453,13 @@ export default function DashboardScreen() {
 
           <View style={styles.statsRow}>
             <StatCard
-              title="Total Products Sold"
+              title={t('dashboard.totalProductsSold')}
               value={stats.totalProductsSold.toString()}
               icon={<Package size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
-              title="Monthly Customer"
+              title={t('dashboard.monthlyCustomer')}
               value={stats.totalCustomersBought.toString()}
               icon={<Users size={20} color="#06b6d4" />}
               color="#06b6d4"
@@ -473,10 +473,10 @@ export default function DashboardScreen() {
                 <BarChart size={24} color="#2563eb" />
                 <View style={styles.reportsText}>
                   <Text style={[styles.reportsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    Business Reports
+                    {t('dashboard.businessReports')}
                   </Text>
                   <Text style={[styles.reportsSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    View detailed reports, charts, and financial statements
+                    {t('dashboard.viewReports')}
                   </Text>
                 </View>
               </View>
@@ -488,7 +488,7 @@ export default function DashboardScreen() {
             <TouchableOpacity onPress={() => router.push('/top-products')}>
               <Card style={styles.topSection}>
                 <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  Top Products This Month
+                  {t('dashboard.topProductsMonth')}
                 </Text>
                 {topProducts.map((product, index) => (
                   <TopProductCard key={index} product={product} />
@@ -502,7 +502,7 @@ export default function DashboardScreen() {
             <TouchableOpacity onPress={() => router.push('/top-customers')}>
               <Card style={styles.topSection}>
                 <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  Top Customers This Month
+                  {t('dashboard.topCustomersMonth')}
                 </Text>
                 {topCustomers.map((customer, index) => (
                   <TopCustomerCard key={index} customer={customer} />

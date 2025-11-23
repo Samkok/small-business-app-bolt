@@ -58,7 +58,21 @@
     "lowStockAlerts": "低库存提醒",
     "recentSales": "最近销售",
     "topProducts": "热销产品",
-    "topCustomers": "重要客户"
+    "topCustomers": "重要客户",
+    "welcomeBack": "欢迎回来",
+    "businessOwner": "企业主",
+    "unableToLoad": "无法加载仪表板",
+    "noData": "无仪表板数据",
+    "noDataMessage": "无法加载仪表板统计信息。请尝试刷新数据。",
+    "monthlyCOGS": "月销售成本",
+    "totalProductsSold": "总销售产品数",
+    "monthlyCustomer": "月客户数",
+    "businessReports": "业务报告",
+    "viewReports": "查看详细报告、图表和财务报表",
+    "topProductsMonth": "本月热销产品",
+    "topCustomersMonth": "本月重要客户",
+    "sold": "已售",
+    "orders": "订单"
   },
   "inventory": {
     "title": "库存",

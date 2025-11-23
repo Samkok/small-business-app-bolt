@@ -58,7 +58,21 @@
     "lowStockAlerts": "Low Stock Alerts",
     "recentSales": "Recent Sales",
     "topProducts": "Top Products",
-    "topCustomers": "Top Customers"
+    "topCustomers": "Top Customers",
+    "welcomeBack": "Welcome back",
+    "businessOwner": "Business Owner",
+    "unableToLoad": "Unable to Load Dashboard",
+    "noData": "No Dashboard Data Available",
+    "noDataMessage": "Unable to load dashboard statistics. Please try refreshing the data.",
+    "monthlyCOGS": "Monthly COGS",
+    "totalProductsSold": "Total Products Sold",
+    "monthlyCustomer": "Monthly Customer",
+    "businessReports": "Business Reports",
+    "viewReports": "View detailed reports, charts, and financial statements",
+    "topProductsMonth": "Top Products This Month",
+    "topCustomersMonth": "Top Customers This Month",
+    "sold": "sold",
+    "orders": "orders"
   },
   "inventory": {
     "title": "Inventory",
