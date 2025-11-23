@@ -74,6 +74,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
+    // Additional safety check - ensure we have valid user data
+    if (!auth.userProfile.user_id || auth.userProfile.user_id.length === 0) {
+      console.log('Skipping notification load - invalid user_id');
+      setLoading(false);
+      return;
+    }
+
     try {
       const [notifs, count, allBusinessCount, prefs] = await Promise.all([
         notificationService.getNotifications(auth.userProfile.user_id, auth.currentBusiness?.id),
@@ -93,12 +100,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isAuthError = error?.message?.includes('JWT') ||
                           error?.message?.includes('expired') ||
                           error?.message?.includes('Invalid API key') ||
-                          error?.code === 'PGRST301';
+                          error?.message?.includes('refresh') ||
+                          error?.message?.includes('session') ||
+                          error?.code === 'PGRST301' ||
+                          error?.code === 'PGRST116';
 
       if (isAuthError) {
         console.log('Notification loading postponed - session is refreshing. Will retry automatically.');
       } else {
-        console.error('Error loading notifications:', error);
+        // Log detailed error information for debugging
+        console.error('Error loading notifications:', {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          userId: auth.userProfile?.user_id,
+          businessId: auth.currentBusiness?.id,
+        });
       }
     } finally {
       setLoading(false);
@@ -109,6 +127,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!auth.userProfile?.user_id) {
       setAllBusinessNotifications([]);
       setAllBusinessUnreadCount(0);
+      return;
+    }
+
+    // Additional safety check - ensure we have valid user data
+    if (!auth.userProfile.user_id || auth.userProfile.user_id.length === 0) {
+      console.log('Skipping all business notifications load - invalid user_id');
       return;
     }
 
@@ -126,17 +150,42 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isAuthError = error?.message?.includes('JWT') ||
                           error?.message?.includes('expired') ||
                           error?.message?.includes('Invalid API key') ||
-                          error?.code === 'PGRST301';
+                          error?.message?.includes('refresh') ||
+                          error?.message?.includes('session') ||
+                          error?.code === 'PGRST301' ||
+                          error?.code === 'PGRST116';
 
       if (isAuthError) {
         console.log('All business notifications loading postponed - session is refreshing.');
       } else {
-        console.error('Error loading all business notifications:', error);
+        // Log detailed error information for debugging
+        console.error('Error loading all business notifications:', {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          userId: auth.userProfile?.user_id,
+        });
       }
     }
   }, [auth.userProfile?.user_id, filterValidNotifications]);
 
   useEffect(() => {
+    // Check if we're in an auth flow (signin, signup, reset-password, forgot-password)
+    // Skip notification loading during these flows to prevent errors
+    if (typeof window !== 'undefined' && window.location) {
+      const pathname = window.location.pathname;
+      const isAuthFlow = pathname.includes('/signin') ||
+                        pathname.includes('/signup') ||
+                        pathname.includes('/reset-password') ||
+                        pathname.includes('/forgot-password');
+
+      if (isAuthFlow) {
+        console.log('Skipping notification load - in auth flow:', pathname);
+        return;
+      }
+    }
+
     loadNotifications();
     loadAllBusinessNotifications();
   }, [loadNotifications, loadAllBusinessNotifications]);
