@@ -25,7 +25,9 @@ import {
   Users,
   FileText,
   Shield,
-  Bell
+  Bell,
+  Trash2,
+  TriangleAlert as AlertTriangle
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
@@ -59,6 +61,42 @@ export default function SettingsScreen() {
       [
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('auth.signOut'), style: 'destructive', onPress: signOut },
+      ]
+    );
+  };
+
+  const handleDeleteBusiness = () => {
+    Alert.alert(
+      t('settings.deleteBusiness'),
+      t('settings.deleteBusinessWarning'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => {
+            // TODO: Implement delete business functionality
+            Alert.alert(t('common.error'), t('settings.featureNotImplemented'));
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      t('settings.deleteAccount'),
+      t('settings.deleteAccountWarning'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => {
+            // TODO: Implement delete account functionality
+            Alert.alert(t('common.error'), t('settings.featureNotImplemented'));
+          }
+        }
       ]
     );
   };
@@ -233,6 +271,61 @@ export default function SettingsScreen() {
         />
       </View>
 
+      {/* Danger Zone */}
+      <View style={styles.section}>
+        <View style={styles.dangerZoneHeader}>
+          <AlertTriangle size={20} color="#dc2626" />
+          <Text style={[styles.dangerZoneTitle, { color: '#dc2626' }]}>
+            {t('settings.dangerZone')}
+          </Text>
+        </View>
+        <Card style={[styles.dangerZoneCard, { borderColor: '#dc2626', borderWidth: 1 }]}>
+          <TouchableOpacity onPress={handleDeleteBusiness}>
+            <View style={styles.dangerZoneItem}>
+              <View style={styles.dangerZoneContent}>
+                <View style={styles.dangerZoneLeft}>
+                  <View style={[styles.dangerIconContainer, { backgroundColor: '#fee2e2' }]}>
+                    <Trash2 size={20} color="#dc2626" />
+                  </View>
+                  <View style={styles.dangerZoneText}>
+                    <Text style={[styles.dangerZoneItemTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {t('settings.deleteBusiness')}
+                    </Text>
+                    <Text style={[styles.dangerZoneItemSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      {t('settings.deleteBusinessSubtitle')}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#dc2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.dangerZoneDivider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+
+          <TouchableOpacity onPress={handleDeleteAccount}>
+            <View style={styles.dangerZoneItem}>
+              <View style={styles.dangerZoneContent}>
+                <View style={styles.dangerZoneLeft}>
+                  <View style={[styles.dangerIconContainer, { backgroundColor: '#fee2e2' }]}>
+                    <Trash2 size={20} color="#dc2626" />
+                  </View>
+                  <View style={styles.dangerZoneText}>
+                    <Text style={[styles.dangerZoneItemTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {t('settings.deleteAccount')}
+                    </Text>
+                    <Text style={[styles.dangerZoneItemSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      {t('settings.deleteAccountSubtitle')}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#dc2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Card>
+      </View>
+
       <View style={styles.section}>
         <Button
           title={t('auth.signOut')}
@@ -399,4 +492,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
   },
+  dangerZoneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  dangerZoneTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 8,
+  },
+  dangerZoneCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  dangerZoneItem: {
+    padding: 16,
+  },
+  dangerZoneContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dangerZoneLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dangerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  dangerZoneText: {
+    flex: 1,
+  },
+  dangerZoneItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dangerZoneItemSubtitle: {
+    fontSize: 12,
+  },
+  dangerZoneDivider: {
+    height: 1,
+    marginHorizontal: 16,
+  }
 });

@@ -276,7 +276,15 @@
     "legal": "法律条款",
     "termsSubtitle": "阅读我们的服务条款",
     "privacySubtitle": "了解我们如何保护您的数据",
-    "signOutConfirm": "您确定要退出登录吗？"
+    "signOutConfirm": "您确定要退出登录吗？",
+    "dangerZone": "危险区域",
+    "deleteBusiness": "删除企业",
+    "deleteBusinessSubtitle": "永久删除此企业及其所有数据",
+    "deleteBusinessWarning": "这将永久删除您的企业及所有相关数据。此操作无法撤销。您确定吗？",
+    "deleteAccount": "删除账户",
+    "deleteAccountSubtitle": "永久删除您的账户及所有数据",
+    "deleteAccountWarning": "这将永久删除您的账户、所有企业及所有相关数据。此操作无法撤销。您确定吗？",
+    "featureNotImplemented": "此功能尚未实现"
   },
   "app": {
     "name": "BizManage",

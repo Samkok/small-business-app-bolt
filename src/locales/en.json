@@ -275,7 +275,15 @@
     "legal": "Legal",
     "termsSubtitle": "Read our terms of service",
     "privacySubtitle": "Learn how we protect your data",
-    "signOutConfirm": "Are you sure you want to sign out?"
+    "signOutConfirm": "Are you sure you want to sign out?",
+    "dangerZone": "Danger Zone",
+    "deleteBusiness": "Delete Business",
+    "deleteBusinessSubtitle": "Permanently delete this business and all its data",
+    "deleteBusinessWarning": "This will permanently delete your business and all associated data. This action cannot be undone. Are you sure?",
+    "deleteAccount": "Delete Account",
+    "deleteAccountSubtitle": "Permanently delete your account and all data",
+    "deleteAccountWarning": "This will permanently delete your account, all your businesses, and all associated data. This action cannot be undone. Are you sure?",
+    "featureNotImplemented": "This feature is not yet implemented"
   },
   "app": {
     "name": "BizManage",
