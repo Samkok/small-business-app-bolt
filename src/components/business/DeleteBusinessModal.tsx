@@ -257,7 +257,7 @@ export function DeleteBusinessModal({
           title={t('deleteBusiness.deleteBusinessButton')}
           variant="danger"
           onPress={handleConfirmDelete}
-          disabled={!businessNameInput.trim()}
+          disabled={businessNameInput.trim() !== businessName}
           style={styles.button}
         />
       </View>
