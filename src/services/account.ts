@@ -1,4 +1,4 @@
-import { supabase } from '@/src/config/supabase';
+import { supabase, supabaseUrl } from '@/src/config/supabase';
 
 export interface OwnedBusiness {
   id: string;
@@ -93,6 +93,13 @@ export const accountService = {
         await this.deleteBusiness(business.id);
       }
 
+      const { error: rolesError } = await supabase
+        .from('user_business_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (rolesError) throw rolesError;
+
       const { error: profileError } = await supabase
         .from('user_profiles')
         .delete()
@@ -100,8 +107,29 @@ export const accountService = {
 
       if (profileError) throw profileError;
 
-      console.log('Account data deleted successfully:', userId);
-      console.log('Note: User will be signed out and can no longer access the account.');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      const functionUrl = `${supabaseUrl}/functions/v1/delete-auth-user`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to delete auth user:', errorData);
+        throw new Error(`Failed to delete auth user: ${errorData.error}`);
+      }
+
+      console.log('Account and auth user deleted successfully:', userId);
     } catch (error) {
       console.error('Error deleting account:', error);
       throw error;

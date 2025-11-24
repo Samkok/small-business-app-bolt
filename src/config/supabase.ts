@@ -65,3 +65,5 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: new CustomStorageAdapter(),
   },
 });
+
+export { supabaseUrl };
