@@ -1338,21 +1338,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .from('user_profiles')
             .select('*')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
           console.log("Data return: ", data);
-            
+
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
-            
+
             // If it's not the last attempt, wait with exponential backoff before retrying
             if (attempt < MAX_RETRIES - 1) {
               const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
               await new Promise(resolve => setTimeout(resolve, delayMs));
               continue;
             }
-            
+
             // On the last attempt, if there's an error, we'll handle it below
             throw error;
           }
