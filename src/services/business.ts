@@ -62,21 +62,36 @@ export const businessService = {
 
   async deleteBusiness(businessId: string, userId: string): Promise<void> {
     try {
+      // Get the current session to ensure we have a valid token
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('No active session. Please sign in again.');
+      }
+
       // Call the Edge Function to delete the business
       // The Edge Function uses service role key to bypass RLS and ensures atomic deletion
       // CASCADE constraints automatically delete all related data (sales, products, customers, etc.)
-      const { data, error } = await supabase.functions.invoke('delete-business', {
+      const response = await supabase.functions.invoke('delete-business', {
         body: { businessId, userId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      if (error) {
-        console.error('Error calling delete-business function:', error);
-        throw new Error(error.message || 'Failed to delete business');
+      console.log('Edge Function response:', JSON.stringify(response, null, 2));
+
+      if (response.error) {
+        console.error('Error calling delete-business function:', response.error);
+        console.error('Full error details:', JSON.stringify(response.error, null, 2));
+
+        const errorMessage = response.data?.error || response.data?.message || response.error.message || 'Failed to delete business';
+        throw new Error(errorMessage);
       }
 
-      if (data?.error) {
-        console.error('Error from delete-business function:', data.error);
-        throw new Error(data.error);
+      if (response.data?.error) {
+        console.error('Error from delete-business function:', response.data.error);
+        throw new Error(response.data.error);
       }
 
       console.log('Business deleted successfully:', businessId);
