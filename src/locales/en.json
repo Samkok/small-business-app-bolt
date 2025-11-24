@@ -28,7 +28,12 @@
     "pullToRefresh": "Pull to refresh",
     "ok": "OK",
     "retry": "Retry",
-    "somethingWentWrong": "Something went wrong. Please try again."
+    "somethingWentWrong": "Something went wrong. Please try again.",
+    "deleted": "deleted",
+    "filters": "Filters",
+    "all": "All",
+    "reset": "Reset",
+    "apply": "Apply"
   },
   "auth": {
     "signIn": "Sign In",
@@ -243,7 +248,12 @@
     "incomeStatement": "Income Statement",
     "topProducts": "Top Products",
     "topCustomers": "Top Customers",
-    "dataLast6Months": "Data shown for the last 6 months"
+    "dataLast6Months": "Data shown for the last 6 months",
+    "salesHistory": "Sales History",
+    "createdBy": "Created by",
+    "totalSales": "Total Sales",
+    "totalRevenue": "Total Revenue",
+    "averageSale": "Average Sale"
   },
   "settings": {
     "title": "Settings",

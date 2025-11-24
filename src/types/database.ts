@@ -367,7 +367,8 @@ export interface Database {
           delivery_cost?: number;
           notes?: string;
           business_id: string;
-          created_by: string;
+          created_by?: string;
+          created_by_name?: string;
           created_at: string;
           updated_at: string;
         };
@@ -381,7 +382,8 @@ export interface Database {
           delivery_cost?: number;
           notes?: string;
           business_id: string;
-          created_by: string;
+          created_by?: string;
+          created_by_name?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -396,6 +398,7 @@ export interface Database {
           notes?: string;
           business_id?: string;
           created_by?: string;
+          created_by_name?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -461,7 +464,8 @@ export interface Database {
           sale_date: string;
           notes?: string;
           business_id: string;
-          created_by: string;
+          created_by?: string;
+          created_by_name?: string;
           created_at: string;
           sale_discount_type?: 'percentage' | 'fixed';
           sale_discount_value?: number;
@@ -479,7 +483,8 @@ export interface Database {
           sale_date?: string;
           notes?: string;
           business_id: string;
-          created_by: string;
+          created_by?: string;
+          created_by_name?: string;
           created_at?: string;
           sale_discount_type?: 'percentage' | 'fixed';
           sale_discount_value?: number;
@@ -498,6 +503,7 @@ export interface Database {
           notes?: string;
           business_id?: string;
           created_by?: string;
+          created_by_name?: string;
           created_at?: string;
           sale_discount_type?: 'percentage' | 'fixed';
           sale_discount_value?: number;
@@ -547,7 +553,8 @@ export interface Database {
           expense_date: string;
           notes?: string;
           business_id: string;
-          created_by: string;
+          created_by?: string;
+          created_by_name?: string;
           created_at: string;
         };
         Insert: {

@@ -11,9 +11,10 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck } from 'lucide-react-native';
 import ReturnSaleForm from './ReturnSaleForm';
 import VoidSaleModal from './VoidSaleModal';
+import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -239,6 +240,17 @@ export default function SaleDetailsContent({
               </Text>
             </View>
           </View>
+
+          {(sale.created_by_name || sale.carts?.created_by_name) && (
+            <View style={styles.saleInfoRow}>
+              <View style={styles.saleInfoItem}>
+                <UserCheck size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('reports.createdBy')}: {getUserDisplayName(sale.created_by_name || sale.carts?.created_by_name)}
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View style={styles.amountRow}>
             <DollarSign size={24} color="#059669" />

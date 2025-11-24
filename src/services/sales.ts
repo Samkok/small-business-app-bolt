@@ -108,6 +108,7 @@ export const salesService = {
           discount_type,
           discount_value,
           delivery_cost,
+          created_by_name,
           cart_items(
             quantity,
             unit_price,
@@ -178,6 +179,7 @@ export const salesService = {
           discount_type,
           discount_value,
           delivery_cost,
+          created_by_name,
           cart_items(
             quantity,
             unit_price,
@@ -227,6 +229,7 @@ export const salesService = {
           discount_type,
           discount_value,
           delivery_cost,
+          created_by_name,
           cart_items(
             quantity,
             unit_price,

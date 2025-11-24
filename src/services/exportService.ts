@@ -26,8 +26,10 @@ export const exportService = {
           status,
           sale_date,
           notes,
+          created_by_name,
           customers(name, phone),
           carts(
+            created_by_name,
             cart_items(
               quantity,
               unit_price,
@@ -81,8 +83,8 @@ export const exportService = {
       });
       
       // Create CSV header with comprehensive cost breakdown
-      let csv = 'Sale ID,Date,Customer,Customer Phone,Payment Method,Products,Total Items,Original Subtotal,Item Discounts,Cart Discount Type,Cart Discount Value,Cart Discount Amount,Delivery Cost,Final Total,Notes\n';
-      
+      let csv = 'Sale ID,Date,Customer,Customer Phone,Payment Method,Created By,Products,Total Items,Original Subtotal,Item Discounts,Cart Discount Type,Cart Discount Value,Cart Discount Amount,Delivery Cost,Final Total,Notes\n';
+
       // Process each sale as a single row
       salesData.forEach(sale => {
         const saleId = sale.id;
@@ -90,6 +92,7 @@ export const exportService = {
         const customer = sale.customers?.name || 'Unknown';
         const customerPhone = sale.customers?.phone || '';
         const paymentMethod = sale.payment_method;
+        const createdBy = sale.created_by_name || sale.carts?.created_by_name || 'Unknown';
         const notes = sale.notes || '';
         
         // Get discount details for this sale
@@ -121,11 +124,12 @@ export const exportService = {
         
         // Escape any commas in text fields by wrapping in quotes
         const escapedCustomer = customer.includes(',') ? `"${customer}"` : customer;
+        const escapedCreatedBy = createdBy.includes(',') ? `"${createdBy}"` : createdBy;
         const escapedProducts = productsString.includes(',') ? `"${productsString}"` : productsString;
         const escapedNotes = notes.includes(',') ? `"${notes}"` : notes;
-        
+
         // Add single row for this sale
-        csv += `${saleId},${date},${escapedCustomer},${customerPhone},${paymentMethod},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
+        csv += `${saleId},${date},${escapedCustomer},${customerPhone},${paymentMethod},${escapedCreatedBy},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
       });
       
       return csv;
