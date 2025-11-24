@@ -162,7 +162,8 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
-          imported_by: string;
+          imported_by?: string;
+          imported_by_name?: string;
           purchase_date: string;
           arrival_date?: string;
           notes?: string;
@@ -174,7 +175,8 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
-          imported_by: string;
+          imported_by?: string;
+          imported_by_name?: string;
           purchase_date?: string;
           arrival_date?: string;
           notes?: string;
@@ -187,6 +189,7 @@ export interface Database {
           id?: string;
           business_id?: string;
           imported_by?: string;
+          imported_by_name?: string;
           purchase_date?: string;
           arrival_date?: string;
           notes?: string;

@@ -2,13 +2,15 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck } from 'lucide-react-native';
+import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface BatchHistoryCardProps {
   batch: {
     id: string;
     business_id: string;
-    imported_by: string;
+    imported_by?: string;
+    imported_by_name?: string;
     purchase_date: string;
     arrival_date?: string;
     notes?: string;
@@ -95,6 +97,15 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
               </Text>
             </View>
             
+            {batch.imported_by_name && (
+              <View style={styles.metaItem}>
+                <UserCheck size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {getUserDisplayName(batch.imported_by_name)}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.metaItem}>
               <Package size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>

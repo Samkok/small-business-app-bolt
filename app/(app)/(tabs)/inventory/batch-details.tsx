@@ -17,8 +17,9 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
-import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2, UserCheck } from 'lucide-react-native';
 import { batchImportService } from '@/src/services/batchImport';
+import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 export default function BatchDetailsScreen() {
   const [batch, setBatch] = useState<any>(null);
@@ -234,12 +235,21 @@ export default function BatchDetailsScreen() {
                   Purchased: {formatDate(batch.purchase_date)}
                 </Text>
               </View>
-              
+
               {batch.arrival_date && (
                 <View style={styles.metaItem}>
                   <CheckCircle size={16} color="#059669" />
                   <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                     Arrived: {formatDate(batch.arrival_date)}
+                  </Text>
+                </View>
+              )}
+
+              {batch.imported_by_name && (
+                <View style={styles.metaItem}>
+                  <UserCheck size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                  <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Imported by: {getUserDisplayName(batch.imported_by_name)}
                   </Text>
                 </View>
               )}

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { ShoppingCart, User, Clock, DollarSign, Trash2 } from 'lucide-react-native';
+import { ShoppingCart, User, Clock, DollarSign, Trash2, UserCheck } from 'lucide-react-native';
+import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface ActiveCartCardProps {
   cart: {
@@ -10,6 +11,7 @@ interface ActiveCartCardProps {
     customer_id: string;
     customer_name: string;
     customer_phone?: string;
+    created_by_name?: string;
     status: 'active' | 'completed' | 'abandoned';
     total_amount: number;
     created_at: string;
@@ -82,6 +84,15 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
           </View>
         </View>
         
+        {cart.created_by_name && (
+          <View style={styles.creatorSection}>
+            <UserCheck size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.creatorText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Created by: {getUserDisplayName(cart.created_by_name)}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.itemsSection}>
           <Text style={[styles.itemsTitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
             Items:
@@ -181,6 +192,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  creatorSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  creatorText: {
+    fontSize: 12,
   },
   itemsSection: {
     marginBottom: 12,
