@@ -722,6 +722,7 @@ export default function SalesScreen() {
     <SaleCard
       sale={item}
       onVoid={handleVoidSale}
+      showCreator={true}
     />
   ), [handleVoidSale]);
 
