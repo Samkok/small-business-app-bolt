@@ -158,7 +158,7 @@ export default function TeamScreen() {
       console.error('Error changing user role:', error);
 
       // Check if user was already removed
-      if (error.message && error.message.includes('not a member of this business')) {
+      if (error.message && (error.message.includes('not a member of this business') || error.message.includes('already been removed'))) {
         // Get user name before showing modal
         const removedMember = teamMembers.find(m => m.user_id === userId);
         setRemovedUserName(removedMember?.user_name || 'This user');
@@ -205,7 +205,7 @@ export default function TeamScreen() {
               console.error('Error removing user:', error);
 
               // Check if user was already removed
-              if (error.message && error.message.includes('not a member of this business')) {
+              if (error.message && (error.message.includes('not a member of this business') || error.message.includes('already been removed'))) {
                 // Get user name before showing modal
                 const removedMember = teamMembers.find(m => m.user_id === userId);
                 setRemovedUserName(removedMember?.user_name || 'This user');
