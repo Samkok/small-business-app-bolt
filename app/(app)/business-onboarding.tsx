@@ -7,7 +7,8 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  RefreshControl
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +19,7 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { storageService } from '@/src/services/storage';
-import { Building2, Briefcase, ArrowRight, LogOut, UserPlus } from 'lucide-react-native';
+import { Building2, Briefcase, ArrowRight, LogOut, UserPlus, RefreshCw } from 'lucide-react-native';
 
 export default function BusinessOnboardingScreen() {
   const [businessName, setBusinessName] = useState('');
@@ -26,11 +27,12 @@ export default function BusinessOnboardingScreen() {
   const [imageFile, setImageFile] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness } = useAuth();
+  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses } = useAuth();
   const hasRedirectedRef = useRef(false);
 
   const handleImageSelect = (file: any) => {
@@ -46,6 +48,41 @@ export default function BusinessOnboardingScreen() {
   const handleImageRemove = () => {
     setImageFile(null);
     setBusinessImageUrl('');
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      console.log('BusinessOnboarding: Manual refresh triggered');
+      const businesses = await refreshUserBusinesses();
+
+      // Check if user has been added to any businesses
+      if (businesses.length > 0) {
+        console.log('BusinessOnboarding: Businesses found after refresh:', businesses.length);
+
+        // Redirect to business selection page
+        Alert.alert(
+          'Welcome!',
+          businesses.length === 1
+            ? `You've been added to ${businesses[0].business_name}`
+            : `You've been added to ${businesses.length} businesses`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                router.replace('/(app)/business-selection');
+              }
+            }
+          ]
+        );
+      } else {
+        console.log('BusinessOnboarding: No businesses found after refresh');
+      }
+    } catch (error) {
+      console.error('BusinessOnboarding: Error refreshing businesses:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Auto-redirect when user is added to a business
@@ -164,6 +201,14 @@ export default function BusinessOnboardingScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={isDark ? '#f9fafb' : '#111827'}
+            colors={['#2563eb']}
+          />
+        }
       >
         <View style={styles.header}>
           <View style={[styles.iconContainer, { backgroundColor: '#2563eb20' }]}>
@@ -175,6 +220,13 @@ export default function BusinessOnboardingScreen() {
           <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
             Hello {userProfile?.full_name}! Let's set up your first business
           </Text>
+
+          <View style={[styles.refreshHint, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }]}>
+            <RefreshCw size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.refreshHintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Pull down to check if you've been added to a business
+            </Text>
+          </View>
         </View>
 
         <Card style={styles.card}>
@@ -214,8 +266,8 @@ export default function BusinessOnboardingScreen() {
             title="Create Business"
             onPress={handleCreateBusiness}
             loading={loading}
+            disabled={refreshing}
             style={styles.createButton}
-            icon={<ArrowRight size={20} color="#ffffff" />}
           />
 
           <View style={styles.alternativeActions}>
@@ -286,6 +338,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  refreshHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginTop: 16,
+    gap: 8,
+  },
+  refreshHintText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   card: {
     maxWidth: 500,
