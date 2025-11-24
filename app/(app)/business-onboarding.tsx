@@ -80,7 +80,7 @@ export default function BusinessOnboardingScreen() {
         ]
       );
     }
-  }, [userBusinesses, currentBusiness, router]);}
+  }, [userBusinesses, currentBusiness, router]);
 
   const handleCreateBusiness = async () => {
     if (!businessName.trim()) {
