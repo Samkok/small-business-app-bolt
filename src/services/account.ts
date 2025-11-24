@@ -1,4 +1,5 @@
 import { supabase, supabaseUrl } from '@/src/config/supabase';
+import { businessService } from './business';
 
 export interface OwnedBusiness {
   id: string;
@@ -87,29 +88,56 @@ export const accountService = {
 
   async deleteAccount(userId: string): Promise<void> {
     try {
+      console.log('[accountService.deleteAccount] Starting account deletion for user:', userId);
+
+      // Step 1: Delete all owned businesses using the secure Edge Function
       const ownedBusinesses = await this.getOwnedBusinesses(userId);
+      console.log(`[accountService.deleteAccount] Found ${ownedBusinesses.length} owned businesses to delete`);
 
       for (const business of ownedBusinesses) {
-        await this.deleteBusiness(business.id);
+        console.log(`[accountService.deleteAccount] Deleting business: ${business.id} (${business.business_name})`);
+        try {
+          // Use the secure businessService.deleteBusiness which calls the Edge Function
+          // This ensures proper authorization and audit logging
+          await businessService.deleteBusiness(business.id, userId);
+          console.log(`[accountService.deleteAccount] Successfully deleted business: ${business.id}`);
+        } catch (businessError) {
+          console.error(`[accountService.deleteAccount] Failed to delete business ${business.id}:`, businessError);
+          throw new Error(`Failed to delete business "${business.business_name}": ${businessError instanceof Error ? businessError.message : String(businessError)}`);
+        }
       }
 
+      // Step 2: Delete user's business role memberships
+      // Note: Owned business roles are already deleted by CASCADE when business was deleted
+      // This removes roles where user is a member (not owner) of other businesses
+      console.log('[accountService.deleteAccount] Deleting user business role memberships');
       const { error: rolesError } = await supabase
         .from('user_business_roles')
         .delete()
         .eq('user_id', userId);
 
-      if (rolesError) throw rolesError;
+      if (rolesError) {
+        console.error('[accountService.deleteAccount] Failed to delete user business roles:', rolesError);
+        throw new Error(`Failed to remove business memberships: ${rolesError.message}`);
+      }
 
+      // Step 3: Delete user profile
+      console.log('[accountService.deleteAccount] Deleting user profile');
       const { error: profileError } = await supabase
         .from('user_profiles')
         .delete()
         .eq('user_id', userId);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('[accountService.deleteAccount] Failed to delete user profile:', profileError);
+        throw new Error(`Failed to delete user profile: ${profileError.message}`);
+      }
 
+      // Step 4: Delete auth user using Edge Function
+      console.log('[accountService.deleteAccount] Deleting auth user via Edge Function');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('No active session');
+        throw new Error('No active session. Please sign in again.');
       }
 
       const functionUrl = `${supabaseUrl}/functions/v1/delete-auth-user`;
@@ -125,154 +153,13 @@ export const accountService = {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Failed to delete auth user:', errorData);
-        throw new Error(`Failed to delete auth user: ${errorData.error}`);
+        console.error('[accountService.deleteAccount] Failed to delete auth user:', errorData);
+        throw new Error(`Failed to delete auth user: ${errorData.error || 'Unknown error'}`);
       }
 
-      console.log('Account and auth user deleted successfully:', userId);
+      console.log('[accountService.deleteAccount] Account and auth user deleted successfully:', userId);
     } catch (error) {
-      console.error('Error deleting account:', error);
-      throw error;
-    }
-  },
-
-  async deleteBusiness(businessId: string): Promise<void> {
-    try {
-      const { data: sales } = await supabase
-        .from('sales')
-        .select('id')
-        .eq('business_id', businessId);
-
-      const saleIds = (sales as Array<{ id: string }> | null)?.map(s => s.id) || [];
-
-      if (saleIds.length > 0) {
-        const { error: saleActionsError } = await supabase
-          .from('sale_actions')
-          .delete()
-          .in('sale_id', saleIds);
-
-        if (saleActionsError) throw saleActionsError;
-      }
-
-      const { data: carts } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('business_id', businessId);
-
-      const cartIds = (carts as Array<{ id: string }> | null)?.map(c => c.id) || [];
-
-      const { error: salesError } = await supabase
-        .from('sales')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (salesError) throw salesError;
-
-      if (cartIds.length > 0) {
-        const { error: cartItemsError } = await supabase
-          .from('cart_items')
-          .delete()
-          .in('cart_id', cartIds);
-
-        if (cartItemsError) throw cartItemsError;
-      }
-
-      const { error: cartsError } = await supabase
-        .from('carts')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (cartsError) throw cartsError;
-
-      const { error: expensesError } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (expensesError) throw expensesError;
-
-      const { error: expenseCategoriesError } = await supabase
-        .from('expense_categories')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (expenseCategoriesError) throw expenseCategoriesError;
-
-      const { data: batches } = await supabase
-        .from('inventory_batches')
-        .select('id')
-        .eq('business_id', businessId);
-
-      const batchIds = (batches as Array<{ id: string }> | null)?.map(b => b.id) || [];
-
-      if (batchIds.length > 0) {
-        const { error: importCostsError } = await supabase
-          .from('import_costs')
-          .delete()
-          .in('batch_id', batchIds);
-
-        if (importCostsError) throw importCostsError;
-      }
-
-      const { error: inventoryImportsError } = await supabase
-        .from('inventory_imports')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (inventoryImportsError) throw inventoryImportsError;
-
-      const { error: inventoryBatchesError } = await supabase
-        .from('inventory_batches')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (inventoryBatchesError) throw inventoryBatchesError;
-
-      const { error: productHistoryError } = await supabase
-        .from('product_history')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (productHistoryError) throw productHistoryError;
-
-      const { error: customersError } = await supabase
-        .from('customers')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (customersError) throw customersError;
-
-      const { error: productsError } = await supabase
-        .from('products')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (productsError) throw productsError;
-
-      const { error: notificationsError } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (notificationsError) throw notificationsError;
-
-      const { error: businessMembersError } = await supabase
-        .from('user_business_roles')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (businessMembersError) throw businessMembersError;
-
-      const { error: businessError } = await supabase
-        .from('businesses')
-        .delete()
-        .eq('id', businessId);
-
-      if (businessError) throw businessError;
-
-      console.log('Business deleted successfully as part of account deletion:', businessId);
-    } catch (error) {
-      console.error('Error deleting business during account deletion:', error);
+      console.error('[accountService.deleteAccount] Error during account deletion:', error);
       throw error;
     }
   }
