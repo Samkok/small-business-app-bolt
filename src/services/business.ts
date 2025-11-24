@@ -79,12 +79,19 @@ export const businessService = {
         },
       });
 
-      console.log('Edge Function response:', JSON.stringify(response, null, 2));
+      console.log('Edge Function response status:', response.error ? 'ERROR' : 'SUCCESS');
+      console.log('Response data:', response.data);
+      console.log('Response error:', response.error);
 
       if (response.error) {
         console.error('Error calling delete-business function:', response.error);
-        console.error('Full error details:', JSON.stringify(response.error, null, 2));
 
+        // Log the actual response body to see the error message
+        if (response.data) {
+          console.error('Response data from function:', JSON.stringify(response.data, null, 2));
+        }
+
+        // Extract error message from response data (the actual error from the function)
         const errorMessage = response.data?.error || response.data?.message || response.error.message || 'Failed to delete business';
         throw new Error(errorMessage);
       }

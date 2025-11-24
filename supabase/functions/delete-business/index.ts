@@ -16,12 +16,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    console.log("[delete-business] Function invoked");
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("[delete-business] Missing environment variables");
       throw new Error("Missing environment variables");
     }
+
+    console.log("[delete-business] Environment variables loaded");
 
     // Create admin client with service role key (bypasses RLS)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -31,9 +36,12 @@ Deno.serve(async (req: Request) => {
       },
     });
 
+    console.log("[delete-business] Admin client created");
+
     // Verify authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
+      console.error("[delete-business] Missing authorization header");
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
         {
@@ -44,11 +52,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
+    console.log("[delete-business] Auth token received, verifying user...");
+
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
+      console.error("[delete-business] Auth verification failed:", authError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Unauthorized", details: authError?.message }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -56,10 +67,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(`[delete-business] User authenticated: ${user.id}`);
+
     // Parse request body
     const { businessId, userId } = await req.json();
+    console.log(`[delete-business] Request params - businessId: ${businessId}, userId: ${userId}`);
 
     if (!businessId || !userId) {
+      console.error("[delete-business] Missing businessId or userId");
       return new Response(
         JSON.stringify({ error: "Missing businessId or userId parameter" }),
         {
@@ -71,6 +86,7 @@ Deno.serve(async (req: Request) => {
 
     // Verify the authenticated user matches the userId parameter
     if (user.id !== userId) {
+      console.error(`[delete-business] User ID mismatch - token: ${user.id}, param: ${userId}`);
       return new Response(
         JSON.stringify({ error: "User ID mismatch" }),
         {
@@ -80,6 +96,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log("[delete-business] Checking business ownership...");
+
     // Check business ownership
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
@@ -88,7 +106,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (businessError) {
-      console.error("Error checking business ownership:", businessError);
+      console.error("[delete-business] Error checking business ownership:", businessError);
       return new Response(
         JSON.stringify({ error: "Failed to verify business ownership", details: businessError.message }),
         {
@@ -99,6 +117,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!business) {
+      console.error(`[delete-business] Business not found: ${businessId}`);
       return new Response(
         JSON.stringify({ error: "Business not found" }),
         {
@@ -108,7 +127,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(`[delete-business] Business found - owner: ${business.owner_user_id}`);
+
     if (business.owner_user_id !== userId) {
+      console.error(`[delete-business] Ownership mismatch - owner: ${business.owner_user_id}, requester: ${userId}`);
       return new Response(
         JSON.stringify({ error: "Unauthorized: Only the business owner can delete this business" }),
         {
@@ -117,6 +139,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    console.log(`[delete-business] Deleting business ${businessId}...`);
 
     // Delete the business (CASCADE will handle all related records automatically)
     // This is wrapped in a transaction automatically by PostgreSQL
@@ -127,12 +151,13 @@ Deno.serve(async (req: Request) => {
       .eq("owner_user_id", userId); // Double-check ownership in DELETE
 
     if (deleteError) {
-      console.error("Error deleting business:", deleteError);
+      console.error("[delete-business] Error deleting business:", deleteError);
       return new Response(
         JSON.stringify({ 
           error: "Failed to delete business", 
           details: deleteError.message,
-          hint: deleteError.hint || "Check database logs for more details"
+          hint: deleteError.hint || "Check database logs for more details",
+          code: deleteError.code
         }),
         {
           status: 500,
@@ -141,7 +166,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Business deleted successfully: ${businessId} by user ${userId}`);
+    console.log(`[delete-business] Business deleted successfully: ${businessId}`);
 
     return new Response(
       JSON.stringify({ 
@@ -155,7 +180,7 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error("Error in delete-business function:", error);
+    console.error("[delete-business] Unhandled error:", error);
     return new Response(
       JSON.stringify({ 
         error: "Internal server error", 
