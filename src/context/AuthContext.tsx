@@ -1420,15 +1420,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return; // Exit the function early on success
           } else {
-            console.log('No user profile found for user:', userId);
-            if (mounted.current) {
-              setUserProfile(null);
-              setUserBusinesses([]);
-              setCurrentBusiness(null);
-              setLoading(false);
-              setDataLoadingState('loaded');
+            console.log('No user profile found for user:', userId, '- attempting to create one');
+
+            // Auto-create profile for users who don't have one
+            // This handles edge cases where:
+            // 1. Auth user exists but profile was deleted (e.g., incomplete account deletion before CASCADE fix)
+            // 2. Account was created through external means without profile creation
+            // 3. Data inconsistency from previous bugs
+            try {
+              const { data: authUser, error: authError } = await supabase.auth.getUser();
+
+              if (authError || !authUser.user) {
+                console.error('Error getting auth user for profile creation:', authError);
+                throw authError || new Error('No auth user found');
+              }
+
+              const { error: createError } = await supabase
+                .from('user_profiles')
+                .insert({
+                  user_id: userId,
+                  full_name: authUser.user.email?.split('@')[0] || 'User',
+                  email: authUser.user.email || '',
+                });
+
+              if (createError) {
+                console.error('Error creating missing user profile:', createError);
+                throw createError;
+              }
+
+              console.log('Successfully created missing user profile for:', userId);
+
+              // Retry loading the profile by recursing (will only happen once since profile now exists)
+              return await loadAuthData(userId);
+            } catch (createError) {
+              console.error('Failed to create missing user profile:', createError);
+
+              // Fall back to setting everything to null
+              if (mounted.current) {
+                setUserProfile(null);
+                setUserBusinesses([]);
+                setCurrentBusiness(null);
+                setLoading(false);
+                setDataLoadingState('loaded');
+              }
+              return;
             }
-            return; // Exit the function early
           }
         } catch (retryError) {
           // Store the error for the final attempt
