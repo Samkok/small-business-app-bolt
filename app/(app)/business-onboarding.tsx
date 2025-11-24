@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,8 @@ export default function BusinessOnboardingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { createBusiness, userProfile, signOut } = useAuth();
+  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness } = useAuth();
+  const hasRedirectedRef = useRef(false);
 
   const handleImageSelect = (file: any) => {
     if (Platform.OS === 'web') {
@@ -46,6 +47,40 @@ export default function BusinessOnboardingScreen() {
     setImageFile(null);
     setBusinessImageUrl('');
   };
+
+  // Auto-redirect when user is added to a business
+  useEffect(() => {
+    // Prevent duplicate redirects
+    if (hasRedirectedRef.current) {
+      return;
+    }
+
+    // If user has businesses and a current business is set, redirect to main app
+    if (userBusinesses.length > 0 && currentBusiness) {
+      console.log('BusinessOnboarding: User has been added to a business, auto-redirecting to main app');
+      console.log('BusinessOnboarding: Business details:', {
+        businessCount: userBusinesses.length,
+        currentBusinessId: currentBusiness.id,
+        currentBusinessName: currentBusiness.business_name,
+      });
+
+      hasRedirectedRef.current = true;
+
+      // Show alert to notify user
+      Alert.alert(
+        'Welcome!',
+        `You've been added to ${currentBusiness.business_name}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace('/(app)/(tabs)');
+            }
+          }
+        ]
+      );
+    }
+  }, [userBusinesses, currentBusiness, router]);}
 
   const handleCreateBusiness = async () => {
     if (!businessName.trim()) {

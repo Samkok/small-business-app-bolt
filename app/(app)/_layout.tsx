@@ -91,7 +91,7 @@ export default function AppLayout() {
         return;
       }
     }
-  }, [loading, session, initialDataLoaded, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
+  }, [loading, session, initialDataLoaded, userBusinesses, currentBusiness, currentRoute, isInAppGroup, router]);
 
   // Show loading spinner while auth is loading OR while initial data hasn't been loaded yet
   if (loading || (session && !initialDataLoaded)) {

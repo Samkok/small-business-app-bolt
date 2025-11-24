@@ -442,6 +442,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
 
+        // Check for newly added businesses
+        for (const newId of currentBusinessIds) {
+          if (!lastBusinessIds.has(newId)) {
+            console.log('=== POLLING DETECTED NEW BUSINESS ===');
+            console.log('Business ID:', newId);
+
+            try {
+              // Fetch the new business details
+              const { data: newBusiness, error: fetchError } = await supabase
+                .from('businesses')
+                .select('*')
+                .eq('id', newId)
+                .single();
+
+              if (!fetchError && newBusiness) {
+                console.log('New business details:', newBusiness.business_name);
+
+                // Add to businesses list
+                setUserBusinesses(prev => {
+                  if (prev.some(b => b.id === newBusiness.id)) {
+                    return prev;
+                  }
+                  return [...prev, newBusiness];
+                });
+
+                // Update ref
+                if (!userBusinessesRef.current.some(b => b.id === newBusiness.id)) {
+                  userBusinessesRef.current = [...userBusinessesRef.current, newBusiness];
+                }
+
+                // Get role for this business
+                const role = roles.find((r: any) => r.business_id === newId);
+                if (role) {
+                  setUserBusinessRoles(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(newId, role.role as 'admin' | 'staff');
+                    return newMap;
+                  });
+                }
+
+                // Switch to the new business
+                console.log('[Polling] Switching to newly assigned business:', newBusiness.business_name);
+                await switchBusiness(newId);
+
+                // Navigate to main app and show welcome message
+                setTimeout(async () => {
+                  try {
+                    const { router } = await import('expo-router');
+                    router.replace('/(app)/(tabs)');
+
+                    setTimeout(() => {
+                      if (Platform.OS === 'web') {
+                        alert(`Welcome!\n\nYou've been added to ${newBusiness.business_name}`);
+                      } else {
+                        const { Alert } = require('react-native');
+                        Alert.alert(
+                          'Welcome!',
+                          `You've been added to ${newBusiness.business_name}`,
+                          [{ text: 'OK' }]
+                        );
+                      }
+                    }, 500);
+                  } catch (navError) {
+                    console.error('[Polling] Navigation error:', navError);
+                  }
+                }, 200);
+              }
+            } catch (error) {
+              console.error('[Polling] Error fetching new business:', error);
+            }
+          }
+        }
+
         // Check for removed businesses
         for (const oldId of lastBusinessIds) {
           if (!currentBusinessIds.has(oldId)) {
@@ -539,7 +612,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Polling fallback error:', error);
       }
-    }, 30000); // Poll every 30 seconds
+    }, 10000); // Poll every 10 seconds (reduced from 30s for faster detection)
   }, [user, selectBestAvailableBusiness, switchBusiness]);
 
   useEffect(() => {
@@ -724,7 +797,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    console.log('Setting up real-time subscription for user business roles', { userId: user.id });
+    console.log('=== REALTIME SETUP START ===');
+    console.log('Setting up real-time subscription for user business roles', {
+      userId: user.id,
+      sessionExists: !!session,
+      currentBusinessCount: userBusinessesRef.current.length
+    });
 
     // Clear any existing polling fallback
     if (pollingIntervalRef.current) {
@@ -739,10 +817,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setRealtimeStatus('connecting');
+    console.log('Real-time status set to: connecting');
 
     // Create a channel for user business roles changes
+    const channelName = `user_business_roles:${user.id}`;
+    console.log('Creating real-time channel:', channelName);
+
     const channel = supabase
-      .channel(`user_business_roles:${user.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -752,12 +834,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
-          console.log('Real-time update received:', payload);
+          console.log('=== REALTIME EVENT RECEIVED ===');
+          console.log('Event type:', payload.eventType);
+          console.log('Payload:', JSON.stringify(payload, null, 2));
 
           if (payload.eventType === 'INSERT') {
             // New business assigned to user
             const newBusinessId = (payload.new as any).business_id;
-            console.log('User assigned to new business:', newBusinessId);
+            const newRole = (payload.new as any).role;
+            console.log('=== NEW BUSINESS ASSIGNMENT DETECTED ===');
+            console.log('Business ID:', newBusinessId);
+            console.log('Role:', newRole);
+            console.log('Current segments:', segments);
+            console.log('Current business:', currentBusinessRef.current?.id || 'none');
 
             // Fetch the new business details
             const { data: newBusiness, error } = await supabase
@@ -783,27 +872,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
 
               console.log('New business added to user list:', newBusiness.business_name);
+              console.log('Updated business count:', userBusinessesRef.current.length + 1);
 
               // Manually update ref immediately to avoid race condition with switchBusiness
               if (!userBusinessesRef.current.some(b => b.id === newBusiness.id)) {
                 userBusinessesRef.current = [...userBusinessesRef.current, newBusiness];
+                console.log('Ref updated with new business');
               }
 
               // Check if we should auto-redirect user to the new business
+              console.log('Checking if should auto-redirect...');
+              console.log('autoRedirectRef.current:', autoRedirectRef.current);
+
               const shouldRedirect = shouldAutoRedirectOnAssignment(
                 segments,
                 !!currentBusinessRef.current
               );
 
+              console.log('shouldRedirect result:', shouldRedirect);
+
+              // ALWAYS switch to the new business first (updates currentBusinessRef)
+              // This ensures the user has access to the business they were just added to
+              console.log('Switching to newly assigned business:', newBusiness.business_name);
+              await switchBusiness(newBusinessId);
+
               if (shouldRedirect && !autoRedirectRef.current) {
                 // Prevent duplicate redirects
                 autoRedirectRef.current = true;
 
-                console.log('Auto-redirecting user to newly assigned business:', newBusiness.business_name);
+                console.log('=== AUTO-REDIRECT TRIGGERED ===');
+                console.log('Redirecting to business:', newBusiness.business_name);
+                console.log('Business ID:', newBusinessId);
 
                 try {
-                  // Switch to the new business
-                  await switchBusiness(newBusinessId);
 
                   // Show welcome message
                   Alert.alert(
@@ -828,7 +929,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   }, 2000);
                 }
               } else {
-                console.log('Not auto-redirecting - user is actively using app. Notification will be sent.');
+                console.log('=== AUTO-REDIRECT BLOCKED ===');
+                console.log('Reason: shouldRedirect =', shouldRedirect, ', autoRedirectRef.current =', autoRedirectRef.current);
+                console.log('User is actively using app. Notification will be sent instead.');
               }
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -998,10 +1101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       )
       .on('system', {}, (payload: any) => {
-        console.log('Realtime system event:', payload);
+        console.log('=== REALTIME SYSTEM EVENT ===');
+        console.log('Status:', payload.status);
+        console.log('Full payload:', JSON.stringify(payload, null, 2));
 
         if (payload.status === 'SUBSCRIBED') {
           console.log('✅ Realtime subscription connected successfully');
+          console.log('Channel:', channelName);
           setRealtimeStatus('connected');
 
           // Clear subscription timeout on successful connection
