@@ -44,7 +44,9 @@
     "alreadyHaveAccount": "Already have an account?",
     "invalidEmail": "Invalid email address",
     "passwordTooShort": "Password must be at least 6 characters",
-    "passwordsDontMatch": "Passwords don't match"
+    "passwordsDontMatch": "Passwords don't match",
+    "emailNotFound": "Email Not Found",
+    "emailAlreadyExists": "Email Already Exists"
   },
   "navigation": {
     "dashboard": "Dashboard",

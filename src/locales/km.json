@@ -44,7 +44,9 @@
     "alreadyHaveAccount": "មានគណនីរួចហើយ?",
     "invalidEmail": "អុីម៉ែលមិនត្រឹមត្រូវ",
     "passwordTooShort": "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ",
-    "passwordsDontMatch": "ពាក្យសម្ងាត់មិនដូចគ្នា"
+    "passwordsDontMatch": "ពាក្យសម្ងាត់មិនដូចគ្នា",
+    "emailNotFound": "រកមិនឃើញអុីម៉ែល",
+    "emailAlreadyExists": "អុីម៉ែលមានរួចហើយ"
   },
   "navigation": {
     "dashboard": "ផ្ទាំងគ្រប់គ្រង",

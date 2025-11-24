@@ -10,7 +10,7 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -21,12 +21,16 @@ import { loginRateLimiter, RateLimiter } from '@/src/lib/rateLimiter';
 import { getRememberMeCredentials, setRememberMeCredentials, clearRememberMeCredentials } from '@/src/lib/secureStorage';
 import { signInSchema } from '@/src/lib/validation';
 import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
+import { supabase } from '@/src/config/supabase';
+import { EmailNotFoundModal } from '@/src/components/auth/EmailNotFoundModal';
 
 export default function SignInScreen() {
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(params.email || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showEmailNotFoundModal, setShowEmailNotFoundModal] = useState(false);
   const { signIn } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
@@ -48,6 +52,26 @@ export default function SignInScreen() {
     loadSavedCredentials();
   }, []);
 
+  const checkEmailExists = async (emailToCheck: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('email', emailToCheck.toLowerCase())
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking email:', error);
+        return true;
+      }
+
+      return !!data;
+    } catch (error) {
+      console.error('Error checking email existence:', error);
+      return true;
+    }
+  };
+
   const handleSignIn = async () => {
     if (!email || !password) {
       Alert.alert(t('common.error'), 'Please fill in all fields');
@@ -61,8 +85,19 @@ export default function SignInScreen() {
       return;
     }
 
+    setLoading(true);
+
+    const emailExists = await checkEmailExists(validation.data.email);
+
+    if (!emailExists) {
+      setLoading(false);
+      setShowEmailNotFoundModal(true);
+      return;
+    }
+
     const rateLimitCheck = await loginRateLimiter.checkLimit(email.toLowerCase());
     if (!rateLimitCheck.allowed) {
+      setLoading(false);
       const blockDuration = rateLimitCheck.blockedUntil
         ? RateLimiter.formatBlockDuration(rateLimitCheck.blockedUntil - Date.now())
         : '30 minutes';
@@ -72,8 +107,6 @@ export default function SignInScreen() {
       );
       return;
     }
-
-    setLoading(true);
 
     try {
       const { error } = await signIn(validation.data.email, validation.data.password);
@@ -186,6 +219,12 @@ export default function SignInScreen() {
           </Card>
         </View>
       </TouchableWithoutFeedback>
+
+      <EmailNotFoundModal
+        visible={showEmailNotFoundModal}
+        email={email}
+        onClose={() => setShowEmailNotFoundModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

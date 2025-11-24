@@ -44,7 +44,9 @@
     "alreadyHaveAccount": "已有账户？",
     "invalidEmail": "邮箱格式无效",
     "passwordTooShort": "密码至少需要6个字符",
-    "passwordsDontMatch": "密码不匹配"
+    "passwordsDontMatch": "密码不匹配",
+    "emailNotFound": "邮箱未找到",
+    "emailAlreadyExists": "邮箱已存在"
   },
   "navigation": {
     "dashboard": "仪表板",
