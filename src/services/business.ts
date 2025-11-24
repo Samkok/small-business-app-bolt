@@ -61,151 +61,23 @@ export const businessService = {
   },
 
   async deleteBusiness(businessId: string, userId: string): Promise<void> {
-    const isOwner = await this.checkBusinessOwnership(businessId, userId);
-    if (!isOwner) {
-      throw new Error('Unauthorized: Only the business owner can delete this business');
-    }
-
     try {
-      // Fetch sale IDs first
-      const { data: sales } = await supabase
-        .from('sales')
-        .select('id')
-        .eq('business_id', businessId);
+      // Call the Edge Function to delete the business
+      // The Edge Function uses service role key to bypass RLS and ensures atomic deletion
+      // CASCADE constraints automatically delete all related data (sales, products, customers, etc.)
+      const { data, error } = await supabase.functions.invoke('delete-business', {
+        body: { businessId, userId },
+      });
 
-      const saleIds = sales?.map(s => s.id) || [];
-
-      // Delete sale actions if there are sales
-      if (saleIds.length > 0) {
-        const { error: saleActionsError } = await supabase
-          .from('sale_actions')
-          .delete()
-          .in('sale_id', saleIds);
-
-        if (saleActionsError) throw saleActionsError;
+      if (error) {
+        console.error('Error calling delete-business function:', error);
+        throw new Error(error.message || 'Failed to delete business');
       }
 
-      // Fetch cart IDs first
-      const { data: carts } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('business_id', businessId);
-
-      const cartIds = carts?.map(c => c.id) || [];
-
-      // Delete sales first (they reference carts)
-      const { error: salesError } = await supabase
-        .from('sales')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (salesError) throw salesError;
-
-      // Delete cart items if there are carts
-      if (cartIds.length > 0) {
-        const { error: cartItemsError } = await supabase
-          .from('cart_items')
-          .delete()
-          .in('cart_id', cartIds);
-
-        if (cartItemsError) throw cartItemsError;
+      if (data?.error) {
+        console.error('Error from delete-business function:', data.error);
+        throw new Error(data.error);
       }
-
-      // Now delete carts
-      const { error: cartsError } = await supabase
-        .from('carts')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (cartsError) throw cartsError;
-
-      const { error: expensesError } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (expensesError) throw expensesError;
-
-      const { error: expenseCategoriesError } = await supabase
-        .from('expense_categories')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (expenseCategoriesError) throw expenseCategoriesError;
-
-      // Fetch batch IDs first
-      const { data: batches } = await supabase
-        .from('inventory_batches')
-        .select('id')
-        .eq('business_id', businessId);
-
-      const batchIds = batches?.map(b => b.id) || [];
-
-      // Delete import costs if there are batches
-      if (batchIds.length > 0) {
-        const { error: importCostsError } = await supabase
-          .from('import_costs')
-          .delete()
-          .in('batch_id', batchIds);
-
-        if (importCostsError) throw importCostsError;
-      }
-
-      const { error: inventoryImportsError } = await supabase
-        .from('inventory_imports')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (inventoryImportsError) throw inventoryImportsError;
-
-      const { error: inventoryBatchesError } = await supabase
-        .from('inventory_batches')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (inventoryBatchesError) throw inventoryBatchesError;
-
-      const { error: productHistoryError } = await supabase
-        .from('product_history')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (productHistoryError) throw productHistoryError;
-
-      const { error: customersError } = await supabase
-        .from('customers')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (customersError) throw customersError;
-
-      const { error: productsError } = await supabase
-        .from('products')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (productsError) throw productsError;
-
-      const { error: notificationsError } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (notificationsError) throw notificationsError;
-
-      const { error: businessMembersError } = await supabase
-        .from('user_business_roles')
-        .delete()
-        .eq('business_id', businessId);
-
-      if (businessMembersError) throw businessMembersError;
-
-      const { error: businessError } = await supabase
-        .from('businesses')
-        .delete()
-        .eq('id', businessId);
-
-      if (businessError) throw businessError;
 
       console.log('Business deleted successfully:', businessId);
     } catch (error) {
