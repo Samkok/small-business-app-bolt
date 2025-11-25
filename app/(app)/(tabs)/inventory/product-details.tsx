@@ -91,10 +91,6 @@ export default function ProductDetailsScreen() {
     loadProductDetails(true);
   }, [productId, currentBusiness?.id]);
 
-  const handleImportStock = useCallback(() => {
-    router.push(`/inventory/import-form?productId=${productId}`);
-  }, [productId, router]);
-
   const handleShowInSales = useCallback(() => {
     router.push(`/inventory/product-sales?productId=${productId}&productName=${encodeURIComponent(product?.name || 'Product')}`);
   }, [productId, product?.name, router]);
@@ -365,14 +361,6 @@ export default function ProductDetailsScreen() {
               </Text>
             </View>
           </View>
-          
-          {!product.is_archived && (
-            <Button
-              title={t('inventory.importStock')}
-              onPress={handleImportStock}
-              style={styles.importButton}
-            />
-          )}
 
           {product.is_archived && (
             <Button
