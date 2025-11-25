@@ -21,8 +21,6 @@ import { loginRateLimiter, RateLimiter } from '@/src/lib/rateLimiter';
 import { getRememberMeCredentials, setRememberMeCredentials, clearRememberMeCredentials } from '@/src/lib/secureStorage';
 import { signInSchema } from '@/src/lib/validation';
 import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
-import { supabase } from '@/src/config/supabase';
-import { EmailNotFoundModal } from '@/src/components/auth/EmailNotFoundModal';
 
 export default function SignInScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
@@ -30,7 +28,6 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showEmailNotFoundModal, setShowEmailNotFoundModal] = useState(false);
   const { signIn } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
@@ -52,26 +49,6 @@ export default function SignInScreen() {
     loadSavedCredentials();
   }, []);
 
-  const checkEmailExists = async (emailToCheck: string): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('email', emailToCheck.toLowerCase())
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error checking email:', error);
-        return true;
-      }
-
-      return !!data;
-    } catch (error) {
-      console.error('Error checking email existence:', error);
-      return true;
-    }
-  };
-
   const handleSignIn = async () => {
     if (!email || !password) {
       Alert.alert(t('common.error'), 'Please fill in all fields');
@@ -86,14 +63,6 @@ export default function SignInScreen() {
     }
 
     setLoading(true);
-
-    const emailExists = await checkEmailExists(validation.data.email);
-
-    if (!emailExists) {
-      setLoading(false);
-      setShowEmailNotFoundModal(true);
-      return;
-    }
 
     const rateLimitCheck = await loginRateLimiter.checkLimit(email.toLowerCase());
     if (!rateLimitCheck.allowed) {
@@ -219,12 +188,6 @@ export default function SignInScreen() {
           </Card>
         </View>
       </TouchableWithoutFeedback>
-
-      <EmailNotFoundModal
-        visible={showEmailNotFoundModal}
-        email={email}
-        onClose={() => setShowEmailNotFoundModal(false)}
-      />
     </KeyboardAvoidingView>
   );
 }

@@ -18,8 +18,6 @@ import { useTheme } from '@/src/context/ThemeContext';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { supabase } from '@/src/config/supabase';
-import { EmailExistsModal } from '@/src/components/auth/EmailExistsModal';
 
 export default function SignUpScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
@@ -28,30 +26,9 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showEmailExistsModal, setShowEmailExistsModal] = useState(false);
   const { signUp } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
-
-  const checkEmailExists = async (emailToCheck: string): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('email', emailToCheck.toLowerCase())
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error checking email:', error);
-        return false;
-      }
-
-      return !!data;
-    } catch (error) {
-      console.error('Error checking email existence:', error);
-      return false;
-    }
-  };
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword || !fullName) {
@@ -82,14 +59,6 @@ export default function SignUpScreen() {
     }
 
     setLoading(true);
-
-    const emailExists = await checkEmailExists(validation.data.email);
-
-    if (emailExists) {
-      setLoading(false);
-      setShowEmailExistsModal(true);
-      return;
-    }
 
     const { error } = await signUp(validation.data.email, validation.data.password, validation.data.fullName);
     setLoading(false);
@@ -176,12 +145,6 @@ export default function SignUpScreen() {
           </Card>
         </View>
       </TouchableWithoutFeedback>
-
-      <EmailExistsModal
-        visible={showEmailExistsModal}
-        email={email}
-        onClose={() => setShowEmailExistsModal(false)}
-      />
     </KeyboardAvoidingView>
   );
 }

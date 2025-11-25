@@ -1546,7 +1546,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .insert({
                   user_id: userId,
                   full_name: authUser.user.email?.split('@')[0] || 'User',
-                  email: authUser.user.email || '',
                 });
 
               if (createError) {
@@ -1645,7 +1644,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .insert({
             user_id: data.user.id,
             full_name: fullName,
-            email: email,
           });
 
         if (profileError) {
