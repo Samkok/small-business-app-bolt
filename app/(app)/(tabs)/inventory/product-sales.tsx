@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart } from 'lucide-react-native';
@@ -38,6 +39,7 @@ export default function ProductSalesScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { t } = useTranslation();
+  const { openSaleDetails } = useSaleDetailsModal();
 
   const dateFilterOptions = [
     { value: 'this_month', label: t('dateRanges.thisMonth') },
@@ -275,7 +277,7 @@ export default function ProductSalesScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => router.push(`/sales/details/${item.id}`)}
+        onPress={() => openSaleDetails(item.id)}
       >
         <Card style={[
           styles.saleCard,
