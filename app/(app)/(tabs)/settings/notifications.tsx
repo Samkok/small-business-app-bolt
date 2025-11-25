@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -43,8 +44,10 @@ export default function NotificationsScreen() {
     deleteNotification,
   } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
+  const saleDetailsModal = useSaleDetailsModal();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -52,30 +55,30 @@ export default function NotificationsScreen() {
     }, [])
   );
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshAllBusinessNotifications();
     setRefreshing(false);
-  };
+  }, [refreshAllBusinessNotifications]);
 
-  const handleMarkAsRead = async (notificationId: string) => {
+  const handleMarkAsRead = useCallback(async (notificationId: string) => {
     try {
       await markAsRead(notificationId);
     } catch (error) {
       Alert.alert('Error', 'Failed to mark notification as read');
     }
-  };
+  }, [markAsRead]);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsReadAllBusinesses();
       Alert.alert('Success', 'All notifications marked as read');
     } catch (error) {
       Alert.alert('Error', 'Failed to mark all as read');
     }
-  };
+  }, [markAllAsReadAllBusinesses]);
 
-  const handleDelete = (notificationId: string) => {
+  const handleDelete = useCallback((notificationId: string) => {
     Alert.alert('Delete Notification', 'Are you sure you want to delete this notification?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -90,74 +93,120 @@ export default function NotificationsScreen() {
         },
       },
     ]);
-  };
+  }, [deleteNotification]);
 
-  const handleNotificationPress = async (notification: any) => {
-    if (!notification.is_read) {
-      handleMarkAsRead(notification.id);
-    }
-
-    // Validate business access before proceeding
+  const handleNotificationPress = useCallback(async (notification: any) => {
     const data = notification.data as any;
-    const businessName = data?.business_name || 'this business';
-    let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
 
-    // If business not found in current list, refresh and check with fresh data
-    if (!hasAccess) {
-      console.log('Business not in current list, refreshing...');
-      const freshBusinesses = await refreshUserBusinesses();
-      hasAccess = freshBusinesses.some(b => b.id === notification.business_id);
+    // Set loading state for this notification
+    setLoadingNotificationId(notification.id);
 
+    try {
+      // Validate business access first for all notification types
+      const businessName = data?.business_name || 'this business';
+      let hasAccess = userBusinesses.some(b => b.id === notification.business_id);
+
+      // If business not found in current list, refresh and check with fresh data
       if (!hasAccess) {
-        console.warn('User no longer has access to business:', notification.business_id);
-        Alert.alert(
-          'Access Denied',
-          `You no longer have access to ${businessName}. The owner may have removed you from the team.`,
-          [
-            {
-              text: 'OK',
-              onPress: async () => {
-                // Remove this notification from view
-                try {
-                  await deleteNotification(notification.id);
-                } catch (error) {
-                  console.error('Failed to delete notification:', error);
-                }
+        console.log('Business not in current list, refreshing...');
+        const freshBusinesses = await refreshUserBusinesses();
+        hasAccess = freshBusinesses.some(b => b.id === notification.business_id);
+
+        if (!hasAccess) {
+          console.warn('User no longer has access to business:', notification.business_id);
+          Alert.alert(
+            'Access Denied',
+            `You no longer have access to ${businessName}. The owner may have removed you from the team.`,
+            [
+              {
+                text: 'OK',
+                onPress: async () => {
+                  // Remove this notification from view
+                  try {
+                    await deleteNotification(notification.id);
+                  } catch (error) {
+                    console.error('Failed to delete notification:', error);
+                  }
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+          setLoadingNotificationId(null);
+          return;
+        }
+      }
+
+      // Handle sale notifications with optimized business checking
+      if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+        if (data?.sale_id) {
+          // Check if already on the correct business
+          if (currentBusiness?.id === notification.business_id) {
+            // Same business - directly open modal without business switching
+            if (!notification.is_read) {
+              handleMarkAsRead(notification.id);
+            }
+            // Open modal without notification object to skip business switching logic
+            await saleDetailsModal.openSaleDetails(data.sale_id);
+            setLoadingNotificationId(null);
+            return;
+          } else {
+            // Different business - switch first, then open modal
+            try {
+              await switchBusiness(notification.business_id);
+              await new Promise(resolve => setTimeout(resolve, 300));
+
+              if (!notification.is_read) {
+                handleMarkAsRead(notification.id);
+              }
+              // Open modal without notification object since we already switched
+              await saleDetailsModal.openSaleDetails(data.sale_id);
+              setLoadingNotificationId(null);
+              return;
+            } catch (error) {
+              console.error('Failed to switch business:', error);
+              Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+              setLoadingNotificationId(null);
+              return;
+            }
+          }
+        }
+        setLoadingNotificationId(null);
         return;
       }
-    }
 
-    // Switch business if needed
-    if (currentBusiness?.id !== notification.business_id) {
-      try {
-        await switchBusiness(notification.business_id);
-        await new Promise(resolve => setTimeout(resolve, 300));
-      } catch (error) {
-        console.error('Failed to switch business:', error);
-        Alert.alert('Error', 'Failed to switch to the business. Please try again.');
-        return;
+      // For other notifications, mark as read immediately
+      if (!notification.is_read) {
+        handleMarkAsRead(notification.id);
       }
-    }
 
-    // Navigate based on notification type
-    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-      if (data?.sale_id) {
-        router.push(`/(app)/(tabs)/sales/details/${data.sale_id}`);
+      // Switch business if needed for other notification types
+      if (currentBusiness?.id !== notification.business_id) {
+        try {
+          await switchBusiness(notification.business_id);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error('Failed to switch business:', error);
+          Alert.alert('Error', 'Failed to switch to the business. Please try again.');
+          setLoadingNotificationId(null);
+          return;
+        }
       }
-    } else if (notification.type === 'low_stock') {
-      router.push('/(app)/(tabs)/inventory/low-stock');
-    } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-      await handleRoleAssignedNotification(data);
-    } else if (notification.type === 'expense_added') {
-      router.push('/(app)/(tabs)/expenses');
-    }
-  };
 
-  const handleRoleAssignedNotification = async (data: any) => {
+      // Navigate based on notification type
+      if (notification.type === 'low_stock') {
+        router.push('/(app)/(tabs)/inventory/low-stock');
+      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+        await handleRoleAssignedNotification(data);
+      } else if (notification.type === 'expense_added') {
+        router.push('/(app)/(tabs)/expenses');
+      }
+    } finally {
+      // Clear loading state
+      setLoadingNotificationId(null);
+    }
+  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification, deleteNotification]);
+
+  const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {
       const businessId = data.business_id;
       const businessName = data.business_name || 'the business';
@@ -202,7 +251,7 @@ export default function NotificationsScreen() {
       console.error('Error handling role_assigned notification:', error);
       router.push('/(app)/(tabs)/');
     }
-  };
+  }, [switchBusiness, router, currentBusiness]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -222,15 +271,21 @@ export default function NotificationsScreen() {
     }
   };
 
-  const filteredNotifications =
-    filter === 'unread'
-      ? allBusinessNotifications.filter((n) => !n.is_read)
-      : allBusinessNotifications;
+  const filteredNotifications = useMemo(
+    () =>
+      filter === 'unread'
+        ? allBusinessNotifications.filter((n) => !n.is_read)
+        : allBusinessNotifications,
+    [filter, allBusinessNotifications]
+  );
 
-  const getBusinessName = (businessId: string) => {
-    const business = userBusinesses.find(b => b.id === businessId);
-    return business?.business_name || 'Unknown Business';
-  };
+  const getBusinessName = useCallback(
+    (businessId: string) => {
+      const business = userBusinesses.find((b) => b.id === businessId);
+      return business?.business_name || 'Unknown Business';
+    },
+    [userBusinesses]
+  );
 
   if (loading && !refreshing) {
     return (
@@ -341,6 +396,7 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               key={notification.id}
               onPress={() => handleNotificationPress(notification)}
+              disabled={loadingNotificationId === notification.id}
             >
               <Card
                 style={[
@@ -354,12 +410,17 @@ export default function NotificationsScreen() {
                       : isDark
                       ? '#1f2937'
                       : '#ffffff',
+                    opacity: loadingNotificationId === notification.id ? 0.6 : 1,
                   },
                 ]}
               >
                 <View style={styles.notificationHeader}>
                   <View style={styles.notificationIcon}>
-                    {getNotificationIcon(notification.type)}
+                    {loadingNotificationId === notification.id ? (
+                      <LoadingSpinner size="small" />
+                    ) : (
+                      getNotificationIcon(notification.type)
+                    )}
                   </View>
                   <View style={styles.notificationContent}>
                     <View style={styles.businessBadgeContainer}>

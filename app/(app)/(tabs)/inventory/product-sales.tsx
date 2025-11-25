@@ -12,11 +12,13 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { useTranslation } from '@/src/locales';
 
 export default function ProductSalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
@@ -36,9 +38,11 @@ export default function ProductSalesScreen() {
   const { productId, productName } = params;
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { t } = useTranslation();
+  const { openSaleDetails } = useSaleDetailsModal();
 
   const dateFilterOptions = [
-    { value: 'this_month', label: 'This Month' },
+    { value: 'this_month', label: t('dateRanges.thisMonth') },
     { value: 'three_months', label: 'Last 3 Months' },
     { value: 'six_months', label: 'Last 6 Months' },
     { value: 'custom', label: 'Custom Range' },
@@ -164,18 +168,83 @@ export default function ProductSalesScreen() {
     setShowCustomDatePicker(false);
   }, []);
 
+  // Helper to check if a sale is completely voided
+  const isSaleVoided = useCallback((sale: any): boolean => {
+    if (!sale.sale_actions || sale.sale_actions.length === 0) return false;
+    return sale.sale_actions.some((action: any) => action.action_type === 'void');
+  }, []);
+
+  // Helper to check if a sale has returns
+  const getSaleReturns = useCallback((sale: any): any[] => {
+    if (!sale.sale_actions || sale.sale_actions.length === 0) return [];
+    return sale.sale_actions.filter((action: any) => action.action_type === 'return');
+  }, []);
+
+  // Helper to get returned quantity for a specific product
+  const getReturnedQuantityForProduct = useCallback((sale: any, productId: string): number => {
+    const returns = getSaleReturns(sale);
+    let returnedQty = 0;
+
+    returns.forEach((returnAction: any) => {
+      if (returnAction.items_metadata) {
+        const returnedItems = returnAction.items_metadata;
+        const productReturn = returnedItems.find((item: any) => item.productId === productId);
+        if (productReturn) {
+          returnedQty += productReturn.quantity || 0;
+        }
+      }
+    });
+
+    return returnedQty;
+  }, [getSaleReturns]);
+
+  // Helper to get returned revenue for a specific product
+  const getReturnedRevenueForProduct = useCallback((sale: any, productId: string): number => {
+    const returns = getSaleReturns(sale);
+    let returnedRevenue = 0;
+
+    returns.forEach((returnAction: any) => {
+      if (returnAction.items_metadata) {
+        const returnedItems = returnAction.items_metadata;
+        const productReturn = returnedItems.find((item: any) => item.productId === productId);
+        if (productReturn) {
+          returnedRevenue += parseFloat(productReturn.adjustedAmount || 0);
+        }
+      }
+    });
+
+    return returnedRevenue;
+  }, [getSaleReturns]);
+
   const calculateStats = useCallback(() => {
-    const totalSales = sales.length;
+    // Filter out voided sales
+    const validSales = sales.filter(sale => !isSaleVoided(sale));
+
+    const totalSales = validSales.length;
     let totalQuantity = 0;
     let totalRevenue = 0;
 
-    sales.forEach(sale => {
+    validSales.forEach(sale => {
       const cartItems = sale.carts?.cart_items || [];
       const productItem = cartItems.find((item: any) => item.product_id === productId);
 
       if (productItem) {
-        totalQuantity += productItem.quantity;
-        totalRevenue += parseFloat(productItem.subtotal || 0);
+        // Get original quantities and revenue
+        const originalQuantity = productItem.quantity;
+        const originalRevenue = parseFloat(productItem.subtotal || 0);
+
+        // Subtract returned quantities and revenue (if any)
+        const returnedQuantity = getReturnedQuantityForProduct(sale, productId as string);
+        const returnedRevenue = getReturnedRevenueForProduct(sale, productId as string);
+
+        const netQuantity = originalQuantity - returnedQuantity;
+        const netRevenue = originalRevenue - returnedRevenue;
+
+        // Only add if net values are positive (sale not fully returned)
+        if (netQuantity > 0) {
+          totalQuantity += netQuantity;
+          totalRevenue += netRevenue;
+        }
       }
     });
 
@@ -183,7 +252,7 @@ export default function ProductSalesScreen() {
     const averageRevenue = totalSales > 0 ? totalRevenue / totalSales : 0;
 
     return { totalSales, totalQuantity, totalRevenue, averageQuantity, averageRevenue };
-  }, [sales, productId]);
+  }, [sales, productId, isSaleVoided, getReturnedQuantityForProduct, getReturnedRevenueForProduct]);
 
   const stats = calculateStats();
 
@@ -193,11 +262,27 @@ export default function ProductSalesScreen() {
 
     if (!productItem) return null;
 
+    // Check if sale is voided
+    const isVoided = isSaleVoided(item);
+
+    // Check if product was returned
+    const returnedQty = getReturnedQuantityForProduct(item, productId as string);
+    const isPartiallyReturned = returnedQty > 0 && returnedQty < productItem.quantity;
+    const isFullyReturned = returnedQty > 0 && returnedQty >= productItem.quantity;
+
+    // Calculate net values
+    const netQuantity = productItem.quantity - returnedQty;
+    const returnedRevenue = getReturnedRevenueForProduct(item, productId as string);
+    const netRevenue = parseFloat(productItem.subtotal) - returnedRevenue;
+
     return (
       <TouchableOpacity
-        onPress={() => router.push(`/sales/details/${item.id}`)}
+        onPress={() => openSaleDetails(item.id)}
       >
-        <Card style={styles.saleCard}>
+        <Card style={[
+          styles.saleCard,
+          (isVoided || isFullyReturned) && { opacity: 0.6, borderLeftWidth: 3, borderLeftColor: '#dc2626' }
+        ]}>
           <View style={styles.saleHeader}>
             <View style={styles.saleInfo}>
               <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -209,13 +294,29 @@ export default function ProductSalesScreen() {
             </View>
             <View style={[
               styles.statusBadge,
-              { backgroundColor: item.status === 'completed' ? '#10b98120' : '#dc262620' }
+              {
+                backgroundColor: isVoided
+                  ? '#dc262620'
+                  : isFullyReturned
+                  ? '#f59e0b20'
+                  : isPartiallyReturned
+                  ? '#3b82f620'
+                  : '#10b98120'
+              }
             ]}>
               <Text style={[
                 styles.statusText,
-                { color: item.status === 'completed' ? '#10b981' : '#dc2626' }
+                {
+                  color: isVoided
+                    ? '#dc2626'
+                    : isFullyReturned
+                    ? '#f59e0b'
+                    : isPartiallyReturned
+                    ? '#3b82f6'
+                    : '#10b981'
+                }
               ]}>
-                {item.status}
+                {isVoided ? 'VOIDED' : isFullyReturned ? 'RETURNED' : isPartiallyReturned ? 'PARTIAL' : 'COMPLETED'}
               </Text>
             </View>
           </View>
@@ -226,9 +327,25 @@ export default function ProductSalesScreen() {
               <Text style={[styles.saleDetailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                 Quantity:
               </Text>
-              <Text style={[styles.saleDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {productItem.quantity}
-              </Text>
+              <View style={styles.saleDetailValue}>
+                {(isVoided || isFullyReturned) ? (
+                  <Text style={{ textDecorationLine: 'line-through', color: '#dc2626' }}>
+                    {productItem.quantity}
+                  </Text>
+                ) : isPartiallyReturned ? (
+                  <Text style={[{ color: isDark ? '#f9fafb' : '#111827' }]}>
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9ca3af' }}>
+                      {productItem.quantity}
+                    </Text>
+                    <Text> → </Text>
+                    <Text style={{ fontWeight: '600' }}>{netQuantity}</Text>
+                  </Text>
+                ) : (
+                  <Text style={[{ color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {productItem.quantity}
+                  </Text>
+                )}
+              </View>
             </View>
 
             <View style={styles.saleDetailRow}>
@@ -246,10 +363,34 @@ export default function ProductSalesScreen() {
               <Text style={[styles.saleDetailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                 Subtotal:
               </Text>
-              <Text style={[styles.saleDetailValue, { color: '#2563eb', fontWeight: '600' }]}>
-                ${parseFloat(productItem.subtotal).toFixed(2)}
-              </Text>
+              <View style={styles.saleDetailValue}>
+                {(isVoided || isFullyReturned) ? (
+                  <Text style={{ textDecorationLine: 'line-through', color: '#dc2626', fontWeight: '600' }}>
+                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                  </Text>
+                ) : isPartiallyReturned ? (
+                  <Text>
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9ca3af', fontSize: 12 }}>
+                      ${parseFloat(productItem.subtotal).toFixed(2)}
+                    </Text>
+                    <Text> → </Text>
+                    <Text style={{ color: '#2563eb', fontWeight: '600' }}>${netRevenue.toFixed(2)}</Text>
+                  </Text>
+                ) : (
+                  <Text style={{ color: '#2563eb', fontWeight: '600' }}>
+                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                  </Text>
+                )}
+              </View>
             </View>
+
+            {isPartiallyReturned && (
+              <View style={[styles.returnInfo, { borderColor: '#3b82f6', backgroundColor: '#3b82f620' }]}>
+                <Text style={{ color: '#3b82f6', fontSize: 12 }}>
+                  ⚠️ {returnedQty} unit(s) returned (${returnedRevenue.toFixed(2)})
+                </Text>
+              </View>
+            )}
 
             {item.customers && (
               <View style={styles.customerInfo}>
@@ -265,7 +406,7 @@ export default function ProductSalesScreen() {
         </Card>
       </TouchableOpacity>
     );
-  }, [productId, isDark, router]);
+  }, [productId, isDark, router, isSaleVoided, getReturnedQuantityForProduct, getReturnedRevenueForProduct]);
 
   const renderEmptyComponent = useCallback(() => (
     <View style={styles.emptyState}>
@@ -364,7 +505,7 @@ export default function ProductSalesScreen() {
               ${stats.totalRevenue.toFixed(2)}
             </Text>
             <Text style={[styles.statsLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              Total Revenue
+              {t('financials.totalRevenue')}
             </Text>
           </Card>
 
@@ -616,6 +757,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 'auto',
+  },
+  returnInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderRadius: 4,
   },
   customerInfo: {
     flexDirection: 'row',

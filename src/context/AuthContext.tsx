@@ -5,7 +5,9 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, Alert } from 'react-native';
+import { useRouter, useSegments } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
@@ -132,6 +134,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // One week in milliseconds
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
+// Grace periods for app foreground transitions
+const SESSION_REFRESH_GRACE_PERIOD = 300 * 1000; // 1 minute for session refresh (performance)
+const SECURITY_CHECK_GRACE_PERIOD = 5 * 1000; // 5 seconds for business access check (security)
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mounted = useRef(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -152,10 +158,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const realtimeStatusRef = useRef<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const lastForegroundTimeRef = useRef<number>(Date.now());
+  const lastBackgroundTimeRef = useRef<number>(0);
+  const lastSecurityCheckTimeRef = useRef<number>(0);
+  const isFirstLaunchRef = useRef<boolean>(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<string>('active');
   const isRefreshingSessionRef = useRef<boolean>(false);
+  const autoRedirectRef = useRef<boolean>(false);
+  const isExplicitSignOutRef = useRef<boolean>(false);
+  const signedOutDueToInactivityRef = useRef<boolean>(false);
+
+  // Router context for auto-redirect on business assignment
+  const router = useRouter();
+  const segments = useSegments();
 
   // Derived state: initial data is loaded when we're not loading and data has been fetched
   const initialDataLoaded = dataLoadingState === 'loaded';
@@ -168,6 +185,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     realtimeStatusRef.current = realtimeStatus;
   }, [realtimeStatus]);
+
+  useEffect(() => {
+    isExplicitSignOutRef.current = isExplicitSignOut;
+  }, [isExplicitSignOut]);
+
+  useEffect(() => {
+    signedOutDueToInactivityRef.current = signedOutDueToInactivity;
+  }, [signedOutDueToInactivity]);
 
   // Helper function for selecting the best available business
   const selectBestAvailableBusiness = useCallback((
@@ -201,7 +226,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const business = userBusinessesRef.current.find(b => b.id === businessId);
     if (!business) {
-      console.error('Business not found:', businessId);
+      console.error('Business not found:', businessId, {
+        availableBusinesses: userBusinessesRef.current.map(b => ({ id: b.id, name: b.business_name })),
+        requestedId: businessId,
+        totalBusinesses: userBusinessesRef.current.length
+      });
       return;
     }
 
@@ -229,6 +258,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error updating business access history:', error);
     }
   }, [user]);
+
+  // Helper function to determine if we should auto-redirect when a business is assigned
+  const shouldAutoRedirectOnAssignment = useCallback((
+    routeSegments: string[],
+    hasCurrentBusiness: boolean
+  ): boolean => {
+    const currentRoute = routeSegments[routeSegments.length - 1];
+    const isInTabs = routeSegments.includes('(tabs)');
+
+    // Auto-redirect if on business-onboarding (user waiting for first business)
+    if (currentRoute === 'business-onboarding') {
+      console.log('Should auto-redirect: on business-onboarding page');
+      return true;
+    }
+
+    // Auto-redirect if on business-selection with no current business
+    if (currentRoute === 'business-selection' && !hasCurrentBusiness) {
+      console.log('Should auto-redirect: on business-selection with no current business');
+      return true;
+    }
+
+    // Edge case: in tabs but no current business (shouldn't happen, but handle it)
+    if (isInTabs && !hasCurrentBusiness) {
+      console.log('Should auto-redirect: in tabs but no current business');
+      return true;
+    }
+
+    // All other cases: don't redirect (user is actively using app)
+    console.log('Should NOT auto-redirect: user is actively using app', {
+      currentRoute,
+      isInTabs,
+      hasCurrentBusiness
+    });
+    return false;
+  }, []);
 
   // Helper function to refresh session when it might be stale
   const refreshSessionIfNeeded = useCallback(async (): Promise<boolean> => {
@@ -378,6 +442,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
 
+        // Check for newly added businesses
+        for (const newId of currentBusinessIds) {
+          if (!lastBusinessIds.has(newId)) {
+            console.log('=== POLLING DETECTED NEW BUSINESS ===');
+            console.log('Business ID:', newId);
+
+            try {
+              // Fetch the new business details
+              const { data: newBusiness, error: fetchError } = await supabase
+                .from('businesses')
+                .select('*')
+                .eq('id', newId)
+                .single();
+
+              if (!fetchError && newBusiness) {
+                console.log('New business details:', newBusiness.business_name);
+
+                // Add to businesses list
+                setUserBusinesses(prev => {
+                  if (prev.some(b => b.id === newBusiness.id)) {
+                    return prev;
+                  }
+                  return [...prev, newBusiness];
+                });
+
+                // Update ref
+                if (!userBusinessesRef.current.some(b => b.id === newBusiness.id)) {
+                  userBusinessesRef.current = [...userBusinessesRef.current, newBusiness];
+                }
+
+                // Get role for this business
+                const role = roles.find((r: any) => r.business_id === newId);
+                if (role) {
+                  setUserBusinessRoles(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(newId, role.role as 'admin' | 'staff');
+                    return newMap;
+                  });
+                }
+
+                // Switch to the new business
+                console.log('[Polling] Switching to newly assigned business:', newBusiness.business_name);
+                await switchBusiness(newId);
+
+                // Navigate to main app and show welcome message
+                setTimeout(async () => {
+                  try {
+                    const { router } = await import('expo-router');
+                    router.replace('/(app)/(tabs)');
+
+                    setTimeout(() => {
+                      if (Platform.OS === 'web') {
+                        alert(`Welcome!\n\nYou've been added to ${newBusiness.business_name}`);
+                      } else {
+                        const { Alert } = require('react-native');
+                        Alert.alert(
+                          'Welcome!',
+                          `You've been added to ${newBusiness.business_name}`,
+                          [{ text: 'OK' }]
+                        );
+                      }
+                    }, 500);
+                  } catch (navError) {
+                    console.error('[Polling] Navigation error:', navError);
+                  }
+                }, 200);
+              }
+            } catch (error) {
+              console.error('[Polling] Error fetching new business:', error);
+            }
+          }
+        }
+
         // Check for removed businesses
         for (const oldId of lastBusinessIds) {
           if (!currentBusinessIds.has(oldId)) {
@@ -475,7 +612,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Polling fallback error:', error);
       }
-    }, 30000); // Poll every 30 seconds
+    }, 10000); // Poll every 10 seconds (reduced from 30s for faster detection)
   }, [user, selectBestAvailableBusiness, switchBusiness]);
 
   useEffect(() => {
@@ -579,11 +716,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Handle sign out events
         if (event === 'SIGNED_OUT') {
-          console.log('AuthContext: SIGNED_OUT event received, explicit:', isExplicitSignOut);
+          console.log('AuthContext: SIGNED_OUT event received, explicit (ref):', isExplicitSignOutRef.current, 'previous inactivity flag (ref):', signedOutDueToInactivityRef.current);
 
-          if (!isExplicitSignOut) {
+          // Use refs instead of state to avoid stale closure issues
+          if (!isExplicitSignOutRef.current) {
             // If signed out but not explicitly by the user, it was due to inactivity
+            console.log('AuthContext: Inactivity sign-out detected, setting flag');
             setSignedOutDueToInactivity(true);
+            signedOutDueToInactivityRef.current = true;
+          } else {
+            // Explicit sign out - ensure flag stays false
+            console.log('AuthContext: Explicit sign-out detected, ensuring flag is false');
+            setSignedOutDueToInactivity(false);
+            signedOutDueToInactivityRef.current = false;
           }
 
           // Clear everything on sign out
@@ -597,22 +742,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setDataLoadingState('loaded');
           }
 
-          // Reset the explicit sign out flag
+          // Reset the explicit sign out flag (both state and ref)
           setIsExplicitSignOut(false);
+          isExplicitSignOutRef.current = false;
           return; // Don't process further
         }
 
         if (event === 'SIGNED_IN') {
-          // Reset the inactivity flag when user signs in
+          // Reset the inactivity flag when user signs in (both state and ref)
           setSignedOutDueToInactivity(false);
+          signedOutDueToInactivityRef.current = false;
 
           // Update last activity timestamp
           await updateLastActivityTimestamp();
         }
 
         // Reset the explicit sign out flag for other events
-        if (isExplicitSignOut) {
+        if (isExplicitSignOutRef.current) {
           setIsExplicitSignOut(false);
+          isExplicitSignOutRef.current = false;
         }
 
        if (mounted.current) {
@@ -649,7 +797,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    console.log('Setting up real-time subscription for user business roles', { userId: user.id });
+    console.log('=== REALTIME SETUP START ===');
+    console.log('Setting up real-time subscription for user business roles', {
+      userId: user.id,
+      sessionExists: !!session,
+      currentBusinessCount: userBusinessesRef.current.length
+    });
 
     // Clear any existing polling fallback
     if (pollingIntervalRef.current) {
@@ -664,10 +817,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setRealtimeStatus('connecting');
+    console.log('Real-time status set to: connecting');
 
     // Create a channel for user business roles changes
+    const channelName = `user_business_roles:${user.id}`;
+    console.log('Creating real-time channel:', channelName);
+
     const channel = supabase
-      .channel(`user_business_roles:${user.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -677,12 +834,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
-          console.log('Real-time update received:', payload);
+          console.log('=== REALTIME EVENT RECEIVED ===');
+          console.log('Event type:', payload.eventType);
+          console.log('Payload:', JSON.stringify(payload, null, 2));
 
           if (payload.eventType === 'INSERT') {
             // New business assigned to user
             const newBusinessId = (payload.new as any).business_id;
-            console.log('User assigned to new business:', newBusinessId);
+            const newRole = (payload.new as any).role;
+            console.log('=== NEW BUSINESS ASSIGNMENT DETECTED ===');
+            console.log('Business ID:', newBusinessId);
+            console.log('Role:', newRole);
+            console.log('Current segments:', segments);
+            console.log('Current business:', currentBusinessRef.current?.id || 'none');
 
             // Fetch the new business details
             const { data: newBusiness, error } = await supabase
@@ -708,6 +872,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
 
               console.log('New business added to user list:', newBusiness.business_name);
+              console.log('Updated business count:', userBusinessesRef.current.length + 1);
+
+              // Manually update ref immediately to avoid race condition with switchBusiness
+              if (!userBusinessesRef.current.some(b => b.id === newBusiness.id)) {
+                userBusinessesRef.current = [...userBusinessesRef.current, newBusiness];
+                console.log('Ref updated with new business');
+              }
+
+              // Check if we should auto-redirect user to the new business
+              console.log('Checking if should auto-redirect...');
+              console.log('autoRedirectRef.current:', autoRedirectRef.current);
+
+              const shouldRedirect = shouldAutoRedirectOnAssignment(
+                segments,
+                !!currentBusinessRef.current
+              );
+
+              console.log('shouldRedirect result:', shouldRedirect);
+
+              // ALWAYS switch to the new business first (updates currentBusinessRef)
+              // This ensures the user has access to the business they were just added to
+              console.log('Switching to newly assigned business:', newBusiness.business_name);
+              await switchBusiness(newBusinessId);
+
+              if (shouldRedirect && !autoRedirectRef.current) {
+                // Prevent duplicate redirects
+                autoRedirectRef.current = true;
+
+                console.log('=== AUTO-REDIRECT TRIGGERED ===');
+                console.log('Redirecting to business:', newBusiness.business_name);
+                console.log('Business ID:', newBusinessId);
+
+                try {
+
+                  // Show welcome message
+                  Alert.alert(
+                    'Welcome!',
+                    `You've been added to ${newBusiness.business_name}`,
+                    [{ text: 'OK' }]
+                  );
+
+                  // Haptic feedback for mobile
+                  if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+
+                  // Navigate to main app
+                  router.replace('/(app)/(tabs)');
+                } catch (redirectError) {
+                  console.error('Error during auto-redirect:', redirectError);
+                } finally {
+                  // Reset the flag after a short delay
+                  setTimeout(() => {
+                    autoRedirectRef.current = false;
+                  }, 2000);
+                }
+              } else {
+                console.log('=== AUTO-REDIRECT BLOCKED ===');
+                console.log('Reason: shouldRedirect =', shouldRedirect, ', autoRedirectRef.current =', autoRedirectRef.current);
+                console.log('User is actively using app. Notification will be sent instead.');
+              }
             }
           } else if (payload.eventType === 'UPDATE') {
             // User role changed in a business
@@ -876,10 +1101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       )
       .on('system', {}, (payload: any) => {
-        console.log('Realtime system event:', payload);
+        console.log('=== REALTIME SYSTEM EVENT ===');
+        console.log('Status:', payload.status);
+        console.log('Full payload:', JSON.stringify(payload, null, 2));
 
         if (payload.status === 'SUBSCRIBED') {
           console.log('✅ Realtime subscription connected successfully');
+          console.log('Channel:', channelName);
           setRealtimeStatus('connected');
 
           // Clear subscription timeout on successful connection
@@ -1006,6 +1234,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Lightweight check to verify user still has access to their businesses
+  const checkBusinessAccessSecurity = useCallback(async () => {
+    if (!userRef.current?.id) {
+      console.log('checkBusinessAccessSecurity: No user, skipping');
+      return;
+    }
+
+    try {
+      console.log('checkBusinessAccessSecurity: Performing lightweight business access check');
+
+      const { data: roles, error } = await supabase
+        .from('user_business_roles')
+        .select('business_id')
+        .eq('user_id', userRef.current.id);
+
+      if (error) {
+        console.warn('checkBusinessAccessSecurity: Error checking business access:', error.message);
+        return;
+      }
+
+      const currentBusinessIds = new Set((roles || []).map((r: any) => r.business_id));
+      const previousBusinessIds = new Set(userBusinessesRef.current.map(b => b.id));
+
+      // Check if user was removed from any business
+      const removedBusinessIds = Array.from(previousBusinessIds).filter(
+        id => !currentBusinessIds.has(id)
+      );
+
+      if (removedBusinessIds.length > 0) {
+        console.warn('checkBusinessAccessSecurity: User removed from businesses:', removedBusinessIds);
+
+        // Trigger refresh to handle the removal properly
+        await refreshUserBusinesses();
+      } else {
+        console.log('checkBusinessAccessSecurity: All business access verified');
+      }
+
+      lastSecurityCheckTimeRef.current = Date.now();
+    } catch (error) {
+      console.error('checkBusinessAccessSecurity: Unexpected error:', error);
+    }
+  }, []);
+
   // Check for session activity whenever the app comes to foreground
   useEffect(() => {
     const checkActivity = async () => {
@@ -1013,7 +1284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkSessionActivity(session);
       }
     };
-    
+
     // Add app state change listener for foreground/background transitions
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       const previousState = appStateRef.current;
@@ -1023,36 +1294,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (nextAppState === 'active' && previousState !== 'active') {
         // App is returning to foreground
-        console.log('App returning to foreground, refreshing session...');
+        const now = Date.now();
 
-        // Refresh session first before any other operations
-        if (session) {
-          const refreshSuccess = await refreshSessionIfNeeded();
+        // Calculate actual background duration (not time since last foreground)
+        const backgroundDuration = lastBackgroundTimeRef.current > 0
+          ? now - lastBackgroundTimeRef.current
+          : 0;
 
-          if (refreshSuccess) {
-            console.log('Session refreshed on foreground transition');
-          } else {
-            console.warn('Session refresh failed on foreground transition');
+        const timeSinceSecurityCheck = now - lastSecurityCheckTimeRef.current;
+        const isFirstLaunch = isFirstLaunchRef.current;
+
+        console.log('App returning to foreground', {
+          isFirstLaunch,
+          backgroundDuration: `${(backgroundDuration / 1000).toFixed(1)}s`,
+          timeSinceSecurityCheck: `${(timeSinceSecurityCheck / 1000).toFixed(1)}s`,
+          sessionRefreshGracePeriod: `${(SESSION_REFRESH_GRACE_PERIOD / 1000).toFixed(0)}s`,
+          securityCheckGracePeriod: `${(SECURITY_CHECK_GRACE_PERIOD / 1000).toFixed(0)}s`,
+          lastBackgroundTime: lastBackgroundTimeRef.current,
+          now: now
+        });
+
+        // Skip all checks on first app launch (when the app is initially opened)
+        if (isFirstLaunch) {
+          console.log('First app launch detected, skipping all checks');
+          isFirstLaunchRef.current = false;
+          lastForegroundTimeRef.current = now;
+
+          // Initialize last security check time
+          lastSecurityCheckTimeRef.current = now;
+
+          if (session) {
+            updateLastActivityTimestamp();
           }
+          return;
         }
 
-        // Then proceed with activity checks
-        checkActivity();
+        // SECURITY CHECK: Always verify business access frequently (5 second grace period)
+        // Only check if we have a valid background duration measurement
+        if (backgroundDuration > 0 && timeSinceSecurityCheck > SECURITY_CHECK_GRACE_PERIOD) {
+          console.log('Security check grace period exceeded, performing business access check');
+          await checkBusinessAccessSecurity();
+        } else if (backgroundDuration > 0) {
+          console.log('Security check grace period active, skipping business access check');
+        }
 
-        // Update last activity timestamp when app comes to foreground
+        // PERFORMANCE OPTIMIZATION: Only refresh session if background duration exceeded grace period
+        // This ensures we only reload when the app was actually in background for more than 1 minute
+        if (backgroundDuration > SESSION_REFRESH_GRACE_PERIOD) {
+          console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) exceeded grace period, refreshing session...`);
+
+          if (session) {
+            const refreshSuccess = await refreshSessionIfNeeded();
+
+            if (refreshSuccess) {
+              console.log('Session refreshed on foreground transition');
+            } else {
+              console.warn('Session refresh failed on foreground transition');
+            }
+          }
+
+          // Then proceed with activity checks
+          checkActivity();
+        } else if (backgroundDuration > 0) {
+          console.log(`Background duration (${(backgroundDuration / 1000).toFixed(1)}s) within grace period, skipping session refresh`);
+        }
+
+        // Always update timestamps and last activity
+        lastForegroundTimeRef.current = now;
         if (session) {
           updateLastActivityTimestamp();
         }
       } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App is going to background
-        console.log('App going to background');
+        // App is going to background - record the timestamp
+        const now = Date.now();
+        lastBackgroundTimeRef.current = now;
+        console.log('App going to background at:', new Date(now).toISOString());
       }
     });
-    
+
     return () => {
       subscription.remove();
     };
-  }, [session]);
+  }, [session, checkBusinessAccessSecurity]);
 
   const checkSessionActivity = async (currentSession: Session) => {
     try {
@@ -1121,21 +1444,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .from('user_profiles')
             .select('*')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
           console.log("Data return: ", data);
-            
+
           if (error) {
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
-            
+
             // If it's not the last attempt, wait with exponential backoff before retrying
             if (attempt < MAX_RETRIES - 1) {
               const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
               await new Promise(resolve => setTimeout(resolve, delayMs));
               continue;
             }
-            
+
             // On the last attempt, if there's an error, we'll handle it below
             throw error;
           }
@@ -1203,15 +1526,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return; // Exit the function early on success
           } else {
-            console.log('No user profile found for user:', userId);
-            if (mounted.current) {
-              setUserProfile(null);
-              setUserBusinesses([]);
-              setCurrentBusiness(null);
-              setLoading(false);
-              setDataLoadingState('loaded');
+            console.log('No user profile found for user:', userId, '- attempting to create one');
+
+            // Auto-create profile for users who don't have one
+            // This handles edge cases where:
+            // 1. Auth user exists but profile was deleted (e.g., incomplete account deletion before CASCADE fix)
+            // 2. Account was created through external means without profile creation
+            // 3. Data inconsistency from previous bugs
+            try {
+              const { data: authUser, error: authError } = await supabase.auth.getUser();
+
+              if (authError || !authUser.user) {
+                console.error('Error getting auth user for profile creation:', authError);
+                throw authError || new Error('No auth user found');
+              }
+
+              const { error: createError } = await supabase
+                .from('user_profiles')
+                .insert({
+                  user_id: userId,
+                  full_name: authUser.user.email?.split('@')[0] || 'User',
+                });
+
+              if (createError) {
+                console.error('Error creating missing user profile:', createError);
+                throw createError;
+              }
+
+              console.log('Successfully created missing user profile for:', userId);
+
+              // Retry loading the profile by recursing (will only happen once since profile now exists)
+              return await loadAuthData(userId);
+            } catch (createError) {
+              console.error('Failed to create missing user profile:', createError);
+
+              // Fall back to setting everything to null
+              if (mounted.current) {
+                setUserProfile(null);
+                setUserBusinesses([]);
+                setCurrentBusiness(null);
+                setLoading(false);
+                setDataLoadingState('loaded');
+              }
+              return;
             }
-            return; // Exit the function early
           }
         } catch (retryError) {
           // Store the error for the final attempt
@@ -1286,7 +1644,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .insert({
             user_id: data.user.id,
             full_name: fullName,
-            email: email,
           });
 
         if (profileError) {
@@ -1458,8 +1815,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     console.log('SignOut: Starting sign out process');
 
-    // Set flag to indicate this is an explicit sign out
+    // Clear inactivity flag (both state and ref)
+    setSignedOutDueToInactivity(false);
+    signedOutDueToInactivityRef.current = false;
+
+    // Set flag to indicate this is an explicit sign out (both state and ref)
     setIsExplicitSignOut(true);
+    isExplicitSignOutRef.current = true;
 
     // STEP 1: Clear storage BEFORE calling Supabase signOut API
     // This ensures the session is removed from persistent storage first

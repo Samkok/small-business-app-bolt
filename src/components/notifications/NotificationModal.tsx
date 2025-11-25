@@ -23,9 +23,11 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock, AlertCircle } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
+import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -57,7 +59,9 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const businessSwitch = useBusinessSwitch();
   const auth = useAuth();
+  const saleDetailsModal = useSaleDetailsModal();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
 
   const MODAL_HEIGHT = SCREEN_HEIGHT - insets.top - 60;
 
@@ -130,60 +134,79 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   }, [markAsRead]);
 
   const handleNotificationPress = useCallback(async (notification: Notification) => {
-    // Early validation: Check if user still has access to the business
-    const hasAccess = auth.userBusinesses.some(b => b.id === notification.business_id);
+    // Set loading state
+    setLoadingNotificationId(notification.id);
 
-    if (!hasAccess) {
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    try {
+      // Early validation: Check if user still has access to the business
+      const hasAccess = auth.userBusinesses.some(b => b.id === notification.business_id);
+
+      if (!hasAccess) {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+
+        const data = notification.data as any;
+        const businessName = data?.business_name || 'this business';
+
+        alert(`Access Denied\n\nYou no longer have access to ${businessName}. The owner may have removed you from the team.`);
+
+        // Delete the notification to prevent future clicks
+        try {
+          await deleteNotification(notification.id);
+        } catch (error) {
+          console.error('Failed to delete inaccessible notification:', error);
+        }
+
+        setLoadingNotificationId(null);
+        handleClose();
+        return;
       }
 
-      const data = notification.data as any;
-      const businessName = data?.business_name || 'this business';
-
-      alert(`Access Denied\n\nYou no longer have access to ${businessName}. The owner may have removed you from the team.`);
-
-      // Delete the notification to prevent future clicks
-      try {
-        await deleteNotification(notification.id);
-      } catch (error) {
-        console.error('Failed to delete inaccessible notification:', error);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
       handleClose();
-      return;
-    }
 
-    if (!notification.is_read) {
-      handleMarkAsRead(notification.id);
-    }
+      const data = notification.data as any;
 
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    handleClose();
-
-    const data = notification.data as any;
-
-    // Determine navigation target
-    let navigationTarget = '/(app)/(tabs)/';
-    if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
-      if (data?.sale_id) {
-        navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
+      // Handle sale notifications with modal (modal handles mark-as-read)
+      if (notification.type === 'sale_created' || notification.type === 'sale_voided') {
+        if (data?.sale_id) {
+          // Clear loading state immediately before closing and opening new modal
+          setTimeout(() => setLoadingNotificationId(null), 300);
+          // Small delay to let modal close animation finish
+          setTimeout(async () => {
+            await saleDetailsModal.openSaleDetails(data.sale_id as string, notification, markAsRead);
+          }, 250);
+          return;
+        }
       }
-    } else if (notification.type === 'low_stock') {
-      navigationTarget = '/(app)/(tabs)/inventory/low-stock';
-    } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
-      navigationTarget = '/(app)/(tabs)/';
-    } else if (notification.type === 'expense_added') {
-      navigationTarget = '/(app)/(tabs)/expenses';
-    }
 
-    setTimeout(async () => {
-      await businessSwitch.handleNotificationNavigation(notification, navigationTarget);
-    }, 300);
-  }, [handleMarkAsRead, handleClose, businessSwitch, auth.userBusinesses]);
+      // For other notifications, mark as read immediately
+      if (!notification.is_read) {
+        handleMarkAsRead(notification.id);
+      }
+
+      // Determine navigation target for other notifications
+      let navigationTarget = '/(app)/(tabs)/';
+      if (notification.type === 'low_stock') {
+        navigationTarget = '/(app)/(tabs)/inventory/low-stock';
+      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+        navigationTarget = '/(app)/(tabs)/';
+      } else if (notification.type === 'expense_added') {
+        navigationTarget = '/(app)/(tabs)/expenses';
+      }
+
+      setTimeout(async () => {
+        await businessSwitch.handleNotificationNavigation(notification, navigationTarget);
+      }, 250);
+    } finally {
+      // Clear loading state after a short delay
+      setTimeout(() => setLoadingNotificationId(null), 300);
+    }
+  }, [handleMarkAsRead, handleClose, businessSwitch, saleDetailsModal, auth.userBusinesses, markAsRead, deleteNotification]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -243,27 +266,36 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
     return date.toLocaleDateString();
   }, []);
 
-  const renderNotification = useCallback(({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      style={[
-        styles.notificationItem,
-        {
-          backgroundColor: item.is_read
-            ? (isDark ? '#1f2937' : '#f9fafb')
-            : (isDark ? '#374151' : '#ffffff'),
-          borderLeftColor: item.is_read ? '#6b7280' : '#2563eb',
-        },
-      ]}
-      onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.notificationHeader}>
-        <View style={[
-          styles.notificationIconContainer,
-          { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
-        ]}>
-          <Text style={styles.notificationIcon}>{getNotificationIcon(item.type)}</Text>
-        </View>
+  const renderNotification = useCallback(({ item }: { item: Notification }) => {
+    const isLoading = loadingNotificationId === item.id;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.notificationItem,
+          {
+            backgroundColor: item.is_read
+              ? (isDark ? '#1f2937' : '#f9fafb')
+              : (isDark ? '#374151' : '#ffffff'),
+            borderLeftColor: item.is_read ? '#6b7280' : '#2563eb',
+            opacity: isLoading ? 0.6 : 1,
+          },
+        ]}
+        onPress={() => handleNotificationPress(item)}
+        disabled={isLoading}
+        activeOpacity={0.7}
+      >
+        <View style={styles.notificationHeader}>
+          <View style={[
+            styles.notificationIconContainer,
+            { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+          ]}>
+            {isLoading ? (
+              <LoadingSpinner size="small" />
+            ) : (
+              <Text style={styles.notificationIcon}>{getNotificationIcon(item.type)}</Text>
+            )}
+          </View>
         <View style={styles.notificationContent}>
           <Text style={[styles.notificationTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {item.title}
@@ -288,7 +320,8 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  ), [isDark, deletingId, handleNotificationPress, handleDelete, getNotificationIcon, formatTimeAgo]);
+    );
+  }, [isDark, deletingId, loadingNotificationId, handleNotificationPress, handleDelete, getNotificationIcon, formatTimeAgo]);
 
   const keyExtractor = useCallback((item: Notification) => item.id, []);
 

@@ -157,6 +157,52 @@ export const reportsService = {
   },
 
   async getTopProducts(businessId: string, limit = 5, year?: number, month?: number) {
+    // Helper to check if a sale is completely voided
+    const isSaleVoided = (sale: any): boolean => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return false;
+      return sale.sale_actions.some((action: any) => action.action_type === 'void');
+    };
+
+    // Helper to get returned quantity for a specific product
+    const getReturnedQuantityForProduct = (sale: any, productId: string): number => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return 0;
+
+      let returnedQty = 0;
+      const returns = sale.sale_actions.filter((action: any) => action.action_type === 'return');
+
+      returns.forEach((returnAction: any) => {
+        if (returnAction.items_metadata) {
+          const returnedItems = returnAction.items_metadata;
+          const productReturn = returnedItems.find((item: any) => item.productId === productId);
+          if (productReturn) {
+            returnedQty += productReturn.quantity || 0;
+          }
+        }
+      });
+
+      return returnedQty;
+    };
+
+    // Helper to get returned revenue for a specific product
+    const getReturnedRevenueForProduct = (sale: any, productId: string): number => {
+      if (!sale.sale_actions || sale.sale_actions.length === 0) return 0;
+
+      let returnedRevenue = 0;
+      const returns = sale.sale_actions.filter((action: any) => action.action_type === 'return');
+
+      returns.forEach((returnAction: any) => {
+        if (returnAction.items_metadata) {
+          const returnedItems = returnAction.items_metadata;
+          const productReturn = returnedItems.find((item: any) => item.productId === productId);
+          if (productReturn) {
+            returnedRevenue += parseFloat(productReturn.adjustedAmount || 0);
+          }
+        }
+      });
+
+      return returnedRevenue;
+    };
+
     // Use provided year/month or default to current month
     const targetDate = year && month ? new Date(year, month - 1, 1) : new Date();
     const startOfMonthDate = startOfMonth(targetDate);
@@ -167,29 +213,40 @@ export const reportsService = {
     const endOfMonthStr = endOfMonthDate.toISOString();
 
     const { data, error } = await supabase
-      .from('cart_items')
+      .from('sales')
       .select(`
-        quantity,
-        products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level),
+        id,
+        business_id,
+        sale_date,
+        status,
+        sale_actions(
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          items_metadata
+        ),
         carts!inner(
-          sales!inner(
-            business_id,
-            sale_date,
-            status
+          id,
+          cart_items(
+            quantity,
+            product_id,
+            unit_price,
+            subtotal,
+            products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level)
           )
         )
       `)
-      .eq('carts.sales.business_id', businessId)
-      .eq('carts.sales.status', 'completed')
-      .gte('carts.sales.sale_date', startOfMonthStr)
-      .lte('carts.sales.sale_date', endOfMonthStr);
+      .eq('business_id', businessId)
+      .gte('sale_date', startOfMonthStr)
+      .lte('sale_date', endOfMonthStr);
 
     if (error) throw error;
 
-    // Group by product and sum quantities
-    const productSales: Record<string, { 
-      id: string; 
-      name: string; 
+    // Group by product and sum net quantities (excluding voided sales and subtracting returns)
+    const productSales: Record<string, {
+      id: string;
+      name: string;
       price: number;
       description?: string;
       image_url?: string;
@@ -197,43 +254,74 @@ export const reportsService = {
       current_stock: number;
       min_stock_level: number;
       cost_per_unit: number;
-      quantity: number; 
-      revenue: number; 
-      cost: number; 
-      profit: number 
+      quantity: number;
+      revenue: number;
+      cost: number;
+      profit: number
     }> = {};
-    
-    data.forEach(item => {
-      const productId = item.products?.id || 'unknown';
-      const productName = item.products?.name || 'Unknown';
-      const productPrice = item.products?.price || 0;
-      const productCost = item.products?.cost_per_unit || 0;
-      
-      if (!productSales[productId]) {
-        productSales[productId] = { 
-          id: productId,
-          name: productName, 
-          price: productPrice,
-          description: item.products?.description,
-          image_url: item.products?.image_url,
-          barcode: item.products?.barcode,
-          current_stock: item.products?.current_stock || 0,
-          min_stock_level: item.products?.min_stock_level || 0,
-          cost_per_unit: productCost,
-          quantity: 0, 
-          revenue: 0,
-          cost: 0,
-          profit: 0
-        };
+
+    data.forEach(sale => {
+      // Skip voided sales
+      if (isSaleVoided(sale)) {
+        return;
       }
-      
-      productSales[productId].quantity += item.quantity;
-      productSales[productId].revenue += item.quantity * productPrice;
-      productSales[productId].cost += item.quantity * productCost;
-      productSales[productId].profit += item.quantity * (productPrice - productCost);
+
+      // Get cart items from this sale
+      const cartItems = sale.carts?.cart_items || [];
+
+      // Process each product in this sale
+      cartItems.forEach((item: any) => {
+        const productId = item.product_id || item.products?.id || 'unknown';
+        const productName = item.products?.name || 'Unknown';
+        const productPrice = item.products?.price || 0;
+        const productCost = item.products?.cost_per_unit || 0;
+
+        // Initialize product entry if not exists
+        if (!productSales[productId]) {
+          productSales[productId] = {
+            id: productId,
+            name: productName,
+            price: productPrice,
+            description: item.products?.description,
+            image_url: item.products?.image_url,
+            barcode: item.products?.barcode,
+            current_stock: item.products?.current_stock || 0,
+            min_stock_level: item.products?.min_stock_level || 0,
+            cost_per_unit: productCost,
+            quantity: 0,
+            revenue: 0,
+            cost: 0,
+            profit: 0
+          };
+        }
+
+        // Calculate net quantity (original - returned)
+        const originalQuantity = item.quantity || 0;
+        const returnedQuantity = getReturnedQuantityForProduct(sale, productId);
+        const netQuantity = originalQuantity - returnedQuantity;
+
+        // Only add if net quantity is positive
+        if (netQuantity > 0) {
+          // Calculate net revenue
+          const originalRevenue = item.subtotal || (originalQuantity * productPrice);
+          const returnedRevenue = getReturnedRevenueForProduct(sale, productId);
+          const netRevenue = originalRevenue - returnedRevenue;
+
+          // Calculate net cost and profit
+          const netCost = netQuantity * productCost;
+          const netProfit = netRevenue - netCost;
+
+          // Add to totals
+          productSales[productId].quantity += netQuantity;
+          productSales[productId].revenue += netRevenue;
+          productSales[productId].cost += netCost;
+          productSales[productId].profit += netProfit;
+        }
+      });
     });
 
     return Object.values(productSales)
+      .filter(product => product.quantity > 0)
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, limit);
   },
@@ -1179,6 +1267,192 @@ export const reportsService = {
       };
     } catch (error) {
       console.error('Error getting delivery cost impact:', error);
+      throw error;
+    }
+  },
+
+  async getSalesHistoryReport(
+    businessId: string,
+    startDate: string,
+    endDate: string,
+    options?: {
+      status?: string;
+      paymentMethod?: string;
+      createdBy?: string;
+      offset?: number;
+      limit?: number;
+    }
+  ) {
+    if (!businessId) {
+      console.warn('reportsService.getSalesHistoryReport called without businessId');
+      return { sales: [], totalCount: 0, creators: [], stats: null };
+    }
+
+    const { status, paymentMethod, createdBy, offset = 0, limit = 20 } = options || {};
+
+    try {
+      // Build the query for sales with creator information
+      let query = supabase
+        .from('sales')
+        .select(`
+          id,
+          sale_date,
+          total_amount,
+          payment_method,
+          status,
+          notes,
+          created_by,
+          created_by_name,
+          created_at,
+          customers(id, name, phone),
+          carts(
+            id,
+            created_by_name,
+            total_amount,
+            discount_type,
+            discount_value,
+            delivery_cost
+          ),
+          sale_actions(
+            id,
+            action_type,
+            amount,
+            adjusted_amount,
+            reason,
+            created_at
+          )
+        `, { count: 'exact' })
+        .eq('business_id', businessId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .order('sale_date', { ascending: false });
+
+      // Apply filters
+      if (status && status !== 'all') {
+        query = query.eq('status', status);
+      }
+
+      if (paymentMethod && paymentMethod !== 'all') {
+        query = query.eq('payment_method', paymentMethod);
+      }
+
+      if (createdBy) {
+        query = query.eq('created_by', createdBy);
+      }
+
+      // Apply pagination
+      query = query.range(offset, offset + limit - 1);
+
+      const { data: sales, error, count } = await query;
+
+      if (error) throw error;
+
+      // Get unique creators for filter dropdown
+      const { data: creatorsData } = await supabase
+        .from('sales')
+        .select('created_by, created_by_name')
+        .eq('business_id', businessId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .not('created_by_name', 'is', null);
+
+      const uniqueCreators = creatorsData
+        ? Array.from(
+            new Map(
+              creatorsData.map(item => [item.created_by, item])
+            ).values()
+          ).map(creator => ({
+            id: creator.created_by,
+            name: creator.created_by_name
+          }))
+        : [];
+
+      // Calculate statistics
+      const totalSales = sales?.length || 0;
+      const totalRevenue = sales?.reduce((sum, sale) => {
+        if (sale.status === 'voided') return sum;
+        const returnedAmount = sale.sale_actions
+          ?.filter(action => action.action_type === 'return')
+          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
+        return sum + (sale.total_amount - returnedAmount);
+      }, 0) || 0;
+
+      const stats = {
+        totalSales,
+        totalRevenue,
+        averageSale: totalSales > 0 ? totalRevenue / totalSales : 0,
+      };
+
+      return {
+        sales: sales || [],
+        totalCount: count || 0,
+        creators: uniqueCreators,
+        stats,
+      };
+    } catch (error) {
+      console.error('Error getting sales history report:', error);
+      throw error;
+    }
+  },
+
+  async getSalesCreatorStats(
+    businessId: string,
+    startDate: string,
+    endDate: string
+  ) {
+    if (!businessId) return [];
+
+    try {
+      const { data: sales } = await supabase
+        .from('sales')
+        .select(`
+          created_by,
+          created_by_name,
+          total_amount,
+          status,
+          sale_actions(action_type, amount, adjusted_amount)
+        `)
+        .eq('business_id', businessId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .in('status', ['completed', 'partially_returned', 'voided']);
+
+      if (!sales) return [];
+
+      // Group by creator
+      const creatorStats = sales.reduce((acc, sale) => {
+        const creatorId = sale.created_by || 'unknown';
+        const creatorName = sale.created_by_name || 'Unknown User';
+
+        if (!acc[creatorId]) {
+          acc[creatorId] = {
+            id: creatorId,
+            name: creatorName,
+            totalSales: 0,
+            totalRevenue: 0,
+            completedSales: 0,
+            voidedSales: 0,
+          };
+        }
+
+        acc[creatorId].totalSales++;
+
+        if (sale.status === 'voided') {
+          acc[creatorId].voidedSales++;
+        } else {
+          acc[creatorId].completedSales++;
+          const returnedAmount = sale.sale_actions
+            ?.filter(action => action.action_type === 'return')
+            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
+          acc[creatorId].totalRevenue += (sale.total_amount - returnedAmount);
+        }
+
+        return acc;
+      }, {} as Record<string, any>);
+
+      return Object.values(creatorStats).sort((a: any, b: any) => b.totalRevenue - a.totalRevenue);
+    } catch (error) {
+      console.error('Error getting sales creator stats:', error);
       throw error;
     }
   }

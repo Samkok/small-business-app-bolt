@@ -24,6 +24,7 @@ import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
 import BarcodeScanner from '../inventory/BarcodeScanner';
+import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -69,6 +70,12 @@ export function InstantCheckoutModal() {
   const [discountValue, setDiscountValue] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showPostSaleModal, setShowPostSaleModal] = useState(false);
+  const [completedSaleInfo, setCompletedSaleInfo] = useState<{
+    saleId: string;
+    amount: number;
+    customerName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (session?.delivery_cost) {
@@ -250,25 +257,16 @@ export function InstantCheckoutModal() {
       });
 
       if (result.success) {
-        Alert.alert('Success', 'Sale completed successfully!', [
-          {
-            text: 'View Sale',
-            onPress: () => {
-              clearSession();
-              closeModal();
-              if (result.saleId) {
-                router.push(`/(app)/(tabs)/sales/details/${result.saleId}`);
-              }
-            },
-          },
-          {
-            text: 'New Sale',
-            onPress: () => {
-              clearSession();
-              closeModal();
-            },
-          },
-        ]);
+        const customerName = session.customer_id !== guestCustomer.id
+          ? session.customer_name || 'Customer'
+          : 'Guest Customer';
+
+        setCompletedSaleInfo({
+          saleId: result.saleId || '',
+          amount: summary.finalTotal,
+          customerName,
+        });
+        setShowPostSaleModal(true);
       } else {
         Alert.alert('Error', result.error || 'Failed to complete sale');
       }
@@ -324,6 +322,30 @@ export function InstantCheckoutModal() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDismissPostSale = () => {
+    setShowPostSaleModal(false);
+    setCompletedSaleInfo(null);
+    clearSession();
+    closeModal();
+  };
+
+  const handleViewSaleFromPost = () => {
+    const saleId = completedSaleInfo?.saleId;
+    setShowPostSaleModal(false);
+    setCompletedSaleInfo(null);
+    clearSession();
+    closeModal();
+    if (saleId) {
+      router.push(`/(app)/(tabs)/sales/details/${saleId}`);
+    }
+  };
+
+  const handleNewSaleFromPost = () => {
+    setShowPostSaleModal(false);
+    setCompletedSaleInfo(null);
+    clearSession();
   };
 
   const summary = getSessionSummary();
@@ -790,6 +812,19 @@ export function InstantCheckoutModal() {
           </View>
         </View>
       </Modal>
+
+      {/* Post-Sale Action Modal */}
+      {completedSaleInfo && (
+        <PostSaleActionModal
+          visible={showPostSaleModal}
+          saleId={completedSaleInfo.saleId}
+          saleAmount={completedSaleInfo.amount}
+          customerName={completedSaleInfo.customerName}
+          onDismiss={handleDismissPostSale}
+          onViewSale={handleViewSaleFromPost}
+          onNewSale={handleNewSaleFromPost}
+        />
+      )}
     </Modal>
   );
 }

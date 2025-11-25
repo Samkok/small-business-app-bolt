@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useLanguage } from '@/src/context/LanguageContext';
 import { Card } from '@/src/components/ui/Card';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLanguageNativeLabel } from '@/src/utils/language';
 import {
   User,
   Palette,
@@ -24,25 +25,42 @@ import {
   Users,
   FileText,
   Shield,
-  Bell
+  Bell,
+  Trash2,
+  TriangleAlert as AlertTriangle
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { UnauthorizedDeleteModal } from '@/src/components/business/UnauthorizedDeleteModal';
+import { DeleteBusinessModal } from '@/src/components/business/DeleteBusinessModal';
+import { DeleteAccountModal } from '@/src/components/account/DeleteAccountModal';
+import { useBusinessDeletion } from '@/src/hooks/useBusinessDeletion';
+import { useAccountDeletion } from '@/src/hooks/useAccountDeletion';
+import { businessService } from '@/src/services/business';
+import { accountService, AccountDeletePreview } from '@/src/services/account';
 
 export default function SettingsScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
   const { signOut, userProfile, currentBusiness, userBusinesses } = useAuth();
+  const { changeLanguage, currentLanguage } = useLanguage();
   const { unreadCount } = useNotifications();
   const router = useRouter();
+  const { deleteBusiness, isDeleting } = useBusinessDeletion();
+  const { deleteAccount } = useAccountDeletion();
+
+  const [showUnauthorizedModal, setShowUnauthorizedModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [accountPreview, setAccountPreview] = useState<AccountDeletePreview | null>(null);
 
   const handleLanguageChange = async (language: string) => {
     try {
-      await i18n.changeLanguage(language);
-      await AsyncStorage.setItem('language', language);
-      Alert.alert(t('common.success'), `Language changed to ${language}`);
+      await changeLanguage(language);
+      const languageName = getLanguageNativeLabel(language);
+      Alert.alert(t('common.success'), t('settings.languageChanged', { language: languageName }));
     } catch (error) {
-      Alert.alert(t('common.error'), 'Failed to change language');
+      Alert.alert(t('common.error'), t('settings.languageChangeFailed'));
     }
   };
 
@@ -53,12 +71,68 @@ export default function SettingsScreen() {
   const handleSignOut = () => {
     Alert.alert(
       t('auth.signOut'),
-      'Are you sure you want to sign out?',
+      t('settings.signOutConfirm'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('auth.signOut'), style: 'destructive', onPress: signOut },
       ]
     );
+  };
+
+  const handleDeleteBusiness = async () => {
+    if (!userProfile || !currentBusiness) return;
+
+    try {
+      const isOwner = await businessService.checkBusinessOwnership(
+        currentBusiness.id,
+        userProfile.user_id
+      );
+
+      if (!isOwner) {
+        setShowUnauthorizedModal(true);
+        return;
+      }
+
+      setShowDeleteModal(true);
+    } catch (error) {
+      console.error('Error checking business ownership:', error);
+      Alert.alert(t('common.error'), t('common.somethingWentWrong'));
+    }
+  };
+
+  const handleDeleteComplete = async () => {
+    if (!currentBusiness) return;
+
+    try {
+      await deleteBusiness(currentBusiness.id);
+      setShowDeleteModal(false);
+    } catch (error: any) {
+      console.error('Error in delete complete:', error);
+      Alert.alert(t('common.error'), error.message || t('deleteBusiness.errorMessage'));
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!userProfile) return;
+
+    try {
+      const preview = await accountService.getAccountDeletePreview(userProfile.user_id);
+      setAccountPreview(preview);
+      setShowDeleteAccountModal(true);
+    } catch (error) {
+      console.error('Error fetching account deletion preview:', error);
+      Alert.alert(t('common.error'), t('common.somethingWentWrong'));
+    }
+  };
+
+  const handleDeleteAccountComplete = async () => {
+    try {
+      await deleteAccount();
+      setShowDeleteAccountModal(false);
+    } catch (error: any) {
+      console.error('Error in delete account complete:', error);
+      Alert.alert(t('common.error'), error.message || t('deleteAccount.errorMessage'));
+    }
   };
 
   const SettingItem = ({ 
@@ -126,14 +200,14 @@ export default function SettingsScreen() {
               {userProfile?.full_name || 'User'}
             </Text>
             <Text style={[styles.profileBusiness, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {currentBusiness?.business_name || 'No Business Selected'}
+              {currentBusiness?.business_name || t('settings.noBusinessSelected')}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.switchBusinessButton}
               onPress={() => router.push('/business-selection')}
             >
               <Text style={styles.switchBusinessText}>
-                Manage Businesses
+                {t('settings.manageBusinesses')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -144,8 +218,8 @@ export default function SettingsScreen() {
         <View style={styles.notificationItemWrapper}>
           <SettingItem
             icon={<Bell size={20} color="#f59e0b" />}
-            title="Notifications"
-            subtitle="Manage your notification preferences"
+            title={t('settings.notifications')}
+            subtitle={t('settings.notificationsSubtitle')}
             onPress={() => router.push('/settings/notifications')}
           />
           {unreadCount > 0 && (
@@ -158,32 +232,32 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<User size={20} color="#2563eb" />}
           title={t('settings.profile')}
-          subtitle="Edit your personal and business information"
+          subtitle={t('settings.profileSubtitle')}
           onPress={() => router.push('/settings/profile')}
         />
 
         <SettingItem
           icon={<Building size={20} color="#8b5cf6" />}
-          title="Business Settings"
-          subtitle="Manage your business information"
+          title={t('settings.businessSettings')}
+          subtitle={t('settings.businessSubtitle')}
           onPress={() => router.push('/settings/business')}
         />
 
         <SettingItem
           icon={<Users size={20} color="#ea580c" />}
-          title="Team Members"
-          subtitle="Manage users and permissions"
+          title={t('settings.teamMembers')}
+          subtitle={t('settings.teamSubtitle')}
           onPress={() => router.push('/settings/team')}
         />
 
         <SettingItem
           icon={<Palette size={20} color="#059669" />}
           title={t('settings.theme')}
-          subtitle={`Current: ${theme}`}
+          subtitle={t('settings.currentTheme', { theme })}
           onPress={() => {
             Alert.alert(
               t('settings.theme'),
-              'Choose theme',
+              t('settings.chooseTheme'),
               [
                 { text: t('settings.light'), onPress: () => handleThemeChange('light') },
                 { text: t('settings.dark'), onPress: () => handleThemeChange('dark') },
@@ -197,11 +271,11 @@ export default function SettingsScreen() {
         <SettingItem
           icon={<Globe size={20} color="#8b5cf6" />}
           title={t('settings.language')}
-          subtitle={`Current: ${i18n.language}`}
+          subtitle={t('settings.currentLanguage', { language: getLanguageNativeLabel(currentLanguage) })}
           onPress={() => {
             Alert.alert(
               t('settings.language'),
-              'Choose language',
+              t('settings.chooseLanguage'),
               [
                 { text: t('settings.english'), onPress: () => handleLanguageChange('en') },
                 { text: t('settings.khmer'), onPress: () => handleLanguageChange('km') },
@@ -215,20 +289,75 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Legal
+          {t('settings.legal')}
         </Text>
         <SettingItem
           icon={<FileText size={20} color="#dc2626" />}
-          title="Terms and Conditions"
-          subtitle="Read our terms of service"
+          title={t('settings.terms')}
+          subtitle={t('settings.termsSubtitle')}
           onPress={() => router.push('/settings/terms')}
         />
         <SettingItem
           icon={<Shield size={20} color="#16a34a" />}
-          title="Privacy Policy"
-          subtitle="Learn how we protect your data"
+          title={t('settings.privacy')}
+          subtitle={t('settings.privacySubtitle')}
           onPress={() => router.push('/settings/privacy')}
         />
+      </View>
+
+      {/* Danger Zone */}
+      <View style={styles.section}>
+        <View style={styles.dangerZoneHeader}>
+          <AlertTriangle size={20} color="#dc2626" />
+          <Text style={[styles.dangerZoneTitle, { color: '#dc2626' }]}>
+            {t('settings.dangerZone')}
+          </Text>
+        </View>
+        <Card style={[styles.dangerZoneCard, { borderColor: '#dc2626', borderWidth: 1 }]}>
+          <TouchableOpacity onPress={handleDeleteBusiness}>
+            <View style={styles.dangerZoneItem}>
+              <View style={styles.dangerZoneContent}>
+                <View style={styles.dangerZoneLeft}>
+                  <View style={[styles.dangerIconContainer, { backgroundColor: '#fee2e2' }]}>
+                    <Trash2 size={20} color="#dc2626" />
+                  </View>
+                  <View style={styles.dangerZoneText}>
+                    <Text style={[styles.dangerZoneItemTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {t('settings.deleteBusiness')}
+                    </Text>
+                    <Text style={[styles.dangerZoneItemSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      {t('settings.deleteBusinessSubtitle')}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#dc2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.dangerZoneDivider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+
+          <TouchableOpacity onPress={handleDeleteAccount}>
+            <View style={styles.dangerZoneItem}>
+              <View style={styles.dangerZoneContent}>
+                <View style={styles.dangerZoneLeft}>
+                  <View style={[styles.dangerIconContainer, { backgroundColor: '#fee2e2' }]}>
+                    <Trash2 size={20} color="#dc2626" />
+                  </View>
+                  <View style={styles.dangerZoneText}>
+                    <Text style={[styles.dangerZoneItemTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {t('settings.deleteAccount')}
+                    </Text>
+                    <Text style={[styles.dangerZoneItemSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      {t('settings.deleteAccountSubtitle')}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#dc2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Card>
       </View>
 
       <View style={styles.section}>
@@ -239,6 +368,31 @@ export default function SettingsScreen() {
           style={styles.signOutButton}
         />
       </View>
+
+      <UnauthorizedDeleteModal
+        visible={showUnauthorizedModal}
+        onClose={() => setShowUnauthorizedModal(false)}
+      />
+
+      {currentBusiness && (
+        <DeleteBusinessModal
+          visible={showDeleteModal}
+          businessName={currentBusiness.business_name}
+          businessId={currentBusiness.id}
+          onClose={() => setShowDeleteModal(false)}
+          onComplete={handleDeleteComplete}
+        />
+      )}
+
+      {userProfile && accountPreview && (
+        <DeleteAccountModal
+          visible={showDeleteAccountModal}
+          userEmail={userProfile.email || ''}
+          preview={accountPreview}
+          onClose={() => setShowDeleteAccountModal(false)}
+          onComplete={handleDeleteAccountComplete}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -397,4 +551,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
   },
+  dangerZoneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  dangerZoneTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 8,
+  },
+  dangerZoneCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  dangerZoneItem: {
+    padding: 16,
+  },
+  dangerZoneContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dangerZoneLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dangerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  dangerZoneText: {
+    flex: 1,
+  },
+  dangerZoneItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dangerZoneItemSubtitle: {
+    fontSize: 12,
+  },
+  dangerZoneDivider: {
+    height: 1,
+    marginHorizontal: 16,
+  }
 });

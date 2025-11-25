@@ -22,6 +22,7 @@ import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
 import { productTransactionService } from '@/src/services/productTransactions';
+import { useTranslation } from '@/src/locales';
 
 export default function ProductDetailsScreen() {
   const [product, setProduct] = useState<any>(null);
@@ -37,6 +38,7 @@ export default function ProductDetailsScreen() {
   const { productId } = params;
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (productId) {
@@ -75,7 +77,7 @@ export default function ProductDetailsScreen() {
       setFinancialSummary(summaryData);
     } catch (error) {
       console.error('Error loading product details:', error);
-      Alert.alert('Error', 'Failed to load product details');
+      Alert.alert(t('common.error'), t('errors.loadFailed'));
     } finally {
       setLoading(false);
       if (isRefresh) {
@@ -89,10 +91,6 @@ export default function ProductDetailsScreen() {
     loadProductDetails(true);
   }, [productId, currentBusiness?.id]);
 
-  const handleImportStock = useCallback(() => {
-    router.push(`/inventory/import-form?productId=${productId}`);
-  }, [productId, router]);
-
   const handleShowInSales = useCallback(() => {
     router.push(`/inventory/product-sales?productId=${productId}&productName=${encodeURIComponent(product?.name || 'Product')}`);
   }, [productId, product?.name, router]);
@@ -101,12 +99,12 @@ export default function ProductDetailsScreen() {
     if (!product || !currentBusiness?.id) return;
 
     Alert.alert(
-      'Unarchive Product',
-      `Are you sure you want to unarchive "${product.name}"? It will be restored to your active products list.`,
+      t('inventory.unarchiveProduct'),
+      t('inventory.unarchiveProductMessage', { name: product.name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('actions.cancel'), style: 'cancel' },
         {
-          text: 'Unarchive',
+          text: t('actions.unarchive'),
           onPress: async () => {
             try {
               setUnarchiving(true);
@@ -115,11 +113,11 @@ export default function ProductDetailsScreen() {
 
               await productService.unarchiveProduct(product.id, user.id);
 
-              Alert.alert('Success', 'Product unarchived successfully. You can now find it in your active products list.');
+              Alert.alert(t('common.success'), t('inventory.unarchiveSuccess'));
               router.back();
             } catch (error) {
               console.error('Error unarchiving product:', error);
-              Alert.alert('Error', 'Failed to unarchive product. Please try again.');
+              Alert.alert(t('common.error'), t('inventory.unarchiveError'));
             } finally {
               setUnarchiving(false);
             }
@@ -139,16 +137,16 @@ export default function ProductDetailsScreen() {
       const summary = productTransactionService.getTransactionSummary(transactionCheck);
 
       const message = transactionCheck.hasTransactions
-        ? `This product has transaction history (${summary}) and will be archived instead of permanently deleted.\n\nArchived products are hidden from normal views but preserved for reporting. Continue?`
-        : 'This product has no transaction history and will be permanently deleted. This action cannot be undone. Continue?';
+        ? t('inventory.archiveProductMessage', { summary })
+        : t('inventory.deleteProductPermanentlyMessage');
 
       Alert.alert(
-        transactionCheck.hasTransactions ? 'Archive Product?' : 'Delete Product Permanently?',
+        transactionCheck.hasTransactions ? t('inventory.archiveProductTitle') : t('inventory.deleteProductPermanentlyTitle'),
         message,
         [
-          { text: 'Cancel', style: 'cancel', onPress: () => setDeleting(false) },
+          { text: t('actions.cancel'), style: 'cancel', onPress: () => setDeleting(false) },
           {
-            text: transactionCheck.hasTransactions ? 'Archive' : 'Delete',
+            text: transactionCheck.hasTransactions ? t('actions.archive') : t('actions.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -158,14 +156,14 @@ export default function ProductDetailsScreen() {
                 const result = await productService.deleteProduct(product.id, user.id);
 
                 const successMessage = result.type === 'archived'
-                  ? 'Product archived successfully. It has been hidden from the product list but remains in your records.'
-                  : 'Product deleted permanently.';
+                  ? t('inventory.productArchivedSuccess')
+                  : t('inventory.productDeletedSuccess');
 
-                Alert.alert('Success', successMessage);
+                Alert.alert(t('common.success'), successMessage);
                 router.back();
               } catch (error) {
                 console.error('Error deleting product:', error);
-                Alert.alert('Error', 'Failed to delete product. Please try again.');
+                Alert.alert(t('common.error'), t('inventory.deleteProductError'));
               } finally {
                 setDeleting(false);
               }
@@ -175,7 +173,7 @@ export default function ProductDetailsScreen() {
       );
     } catch (error) {
       console.error('Error checking product transactions:', error);
-      Alert.alert('Error', 'Failed to check product status. Please try again.');
+      Alert.alert(t('common.error'), t('errors.checkStatusFailed'));
       setDeleting(false);
     }
   }, [product, currentBusiness, router]);
@@ -199,7 +197,7 @@ export default function ProductDetailsScreen() {
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Product Details
+            {t('inventory.productDetails')}
           </Text>
           <View style={styles.headerRight} />
         </View>
@@ -225,17 +223,17 @@ export default function ProductDetailsScreen() {
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Product Not Found
+            {t('errors.productNotFound')}
           </Text>
           <View style={styles.headerRight} />
         </View>
         
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            The product you're looking for doesn't exist or has been deleted.
+            {t('errors.productNotFoundMessage')}
           </Text>
           <Button
-            title="Go Back"
+            title={t('actions.goBack')}
             onPress={() => router.back()}
             style={styles.errorButton}
           />
@@ -274,7 +272,7 @@ export default function ProductDetailsScreen() {
             onRefresh={handleRefresh}
             colors={['#2563eb']}
             tintColor="#2563eb"
-            title="Pull to refresh"
+            title={t('actions.refresh')}
             titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
@@ -314,14 +312,14 @@ export default function ProductDetailsScreen() {
               
               {product.barcode && (
                 <Text style={[styles.productBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                  Barcode: {product.barcode}
+                  {t('inventory.barcode')}: {product.barcode}
                 </Text>
               )}
 
               {product.is_archived && (
                 <View style={[styles.archivedBadge, { backgroundColor: '#6b7280' }]}>
                   <Archive size={14} color="#ffffff" />
-                  <Text style={styles.archivedText}>Archived Product</Text>
+                  <Text style={styles.archivedText}>{t('inventory.archivedProduct')}</Text>
                 </View>
               )}
             </View>
@@ -330,7 +328,7 @@ export default function ProductDetailsScreen() {
           {product.is_archived && product.archived_at && (
             <View style={[styles.archiveInfo, { backgroundColor: isDark ? '#374151' : '#f3f4f6', borderColor: isDark ? '#4b5563' : '#e5e7eb' }]}>
               <Text style={[styles.archiveInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Archived on {formatDate(product.archived_at)}
+                {t('inventory.archivedOn', { date: formatDate(product.archived_at) })}
               </Text>
             </View>
           )}
@@ -338,7 +336,7 @@ export default function ProductDetailsScreen() {
           <View style={styles.stockInfo}>
             <View style={styles.stockItem}>
               <Text style={[styles.stockLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Current Stock
+                {t('inventory.currentStock')}
               </Text>
               <Text style={[styles.stockValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 {product.current_stock}
@@ -347,7 +345,7 @@ export default function ProductDetailsScreen() {
             
             <View style={styles.stockItem}>
               <Text style={[styles.stockLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Min Stock Level
+                {t('inventory.minStockLevel')}
               </Text>
               <Text style={[styles.stockValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 {product.min_stock_level}
@@ -356,25 +354,17 @@ export default function ProductDetailsScreen() {
             
             <View style={styles.stockItem}>
               <Text style={[styles.stockLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Cost Per Unit
+                {t('inventory.costPerUnit')}
               </Text>
               <Text style={[styles.stockValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 ${product.cost_per_unit?.toFixed(2) || '0.00'}
               </Text>
             </View>
           </View>
-          
-          {!product.is_archived && (
-            <Button
-              title="Import Stock"
-              onPress={handleImportStock}
-              style={styles.importButton}
-            />
-          )}
 
           {product.is_archived && (
             <Button
-              title="Unarchive Product"
+              title={t('inventory.unarchiveProduct')}
               onPress={handleUnarchiveProduct}
               style={styles.importButton}
             />
@@ -386,7 +376,7 @@ export default function ProductDetailsScreen() {
           <View style={styles.sectionHeader}>
             <BarChart3 size={20} color="#2563eb" />
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Financial Summary
+              {t('financials.financialSummary')}
             </Text>
           </View>
           
@@ -399,7 +389,7 @@ export default function ProductDetailsScreen() {
                 {financialSummary?.quantitySold || 0}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Units Sold
+                {t('reports.unitsSold')}
               </Text>
             </View>
             
@@ -411,7 +401,7 @@ export default function ProductDetailsScreen() {
                 ${financialSummary?.totalRevenue?.toFixed(2) || '0.00'}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Revenue
+                {t('financials.totalRevenue')}
               </Text>
             </View>
             
@@ -423,7 +413,7 @@ export default function ProductDetailsScreen() {
                 ${financialSummary?.totalCOGS?.toFixed(2) || '0.00'}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total COGS
+                {t('financials.totalCOGS')}
               </Text>
             </View>
             
@@ -435,14 +425,14 @@ export default function ProductDetailsScreen() {
                 ${financialSummary?.totalProfit?.toFixed(2) || '0.00'}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Profit
+                {t('financials.totalProfit')}
               </Text>
             </View>
           </View>
           
           <View style={styles.profitMargin}>
             <Text style={[styles.profitMarginLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              Profit Margin:
+              {t('financials.profitMargin')}:
             </Text>
             <Text style={[
               styles.profitMarginValue, 
@@ -455,11 +445,11 @@ export default function ProductDetailsScreen() {
           </View>
           
           <Text style={[styles.periodNote, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-            Data shown for the last 6 months
+            {t('reports.dataLast6Months')}
           </Text>
 
           <Button
-            title="Show in Sales"
+            title={t('inventory.showInSales')}
             onPress={handleShowInSales}
             style={styles.showInSalesButton}
           />
@@ -470,7 +460,7 @@ export default function ProductDetailsScreen() {
           <View style={styles.sectionHeader}>
             <History size={20} color="#ea580c" />
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Import History
+              {t('inventory.importHistory')}
             </Text>
           </View>
           
@@ -504,7 +494,7 @@ export default function ProductDetailsScreen() {
                           : '#f59e0b' 
                       }
                     ]}>
-                      {importItem.status === 'completed' ? 'Completed' : 'Pending'}
+                      {importItem.status === 'completed' ? t('status.completed') : t('status.pending')}
                     </Text>
                   </View>
                 </View>
@@ -512,7 +502,7 @@ export default function ProductDetailsScreen() {
                 <View style={styles.importDetails}>
                   <View style={styles.importDetail}>
                     <Text style={[styles.importDetailLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Quantity:
+                      {t('inventory.quantity')}:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       {importItem.quantity}
@@ -521,7 +511,7 @@ export default function ProductDetailsScreen() {
                   
                   <View style={styles.importDetail}>
                     <Text style={[styles.importDetailLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Base Cost:
+                      {t('inventory.baseCost')}:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       {formatCurrency(importItem.base_unit_cost_per_item)}
@@ -530,7 +520,7 @@ export default function ProductDetailsScreen() {
                   
                   <View style={styles.importDetail}>
                     <Text style={[styles.importDetailLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Final Cost:
+                      {t('inventory.finalCost')}:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       {formatCurrency(importItem.final_unit_cost_per_item)}
@@ -539,7 +529,7 @@ export default function ProductDetailsScreen() {
                   
                   <View style={styles.importDetail}>
                     <Text style={[styles.importDetailLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Total Cost:
+                      {t('inventory.totalCost')}:
                     </Text>
                     <Text style={[styles.importDetailValue, { color: '#059669' }]}>
                       {formatCurrency(importItem.total_cost_for_item)}
@@ -549,7 +539,7 @@ export default function ProductDetailsScreen() {
                 
                 {importItem.notes && (
                   <Text style={[styles.importNotes, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Note: {importItem.notes}
+                    {t('common.note')}: {importItem.notes}
                   </Text>
                 )}
               </View>
@@ -558,7 +548,7 @@ export default function ProductDetailsScreen() {
             <View style={styles.emptyState}>
               <Info size={24} color={isDark ? '#6b7280' : '#9ca3af'} />
               <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                No import history found for this product
+                {t('empty.noImportHistory')}
               </Text>
             </View>
           )}
@@ -570,13 +560,13 @@ export default function ProductDetailsScreen() {
 
       {deleting && (
         <View style={styles.loadingOverlay}>
-          <LoadingSpinner text="Processing..." />
+          <LoadingSpinner text={t('common.processing')} />
         </View>
       )}
 
       {unarchiving && (
         <View style={styles.loadingOverlay}>
-          <LoadingSpinner text="Unarchiving product..." />
+          <LoadingSpinner text={t('inventory.unarchivingProduct')} />
         </View>
       )}
     </View>

@@ -1,16 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from '@/src/locales';
 
 export default function AppLayout() {
   const { session, loading, initialDataLoaded, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness } = useAuth();
   const { refreshCarts } = useCart();
   const router = useRouter();
   const segments = useSegments();
+  const { t } = useTranslation();
+  const alertShownRef = useRef(false);
 
   const currentRoute = segments[segments.length - 1];
   const isInAppGroup = segments.includes('(app)');
@@ -26,19 +29,31 @@ export default function AppLayout() {
   // Refresh carts when the app screen comes into focus
 
 
-  // Show inactivity alert when session expires
+  // Show inactivity alert when session expires (only once)
   useEffect(() => {
-    if (!loading && !session && signedOutDueToInactivity) {
+    if (!loading && !session && signedOutDueToInactivity && !alertShownRef.current) {
+      console.log('AppLayout: Showing inactivity alert');
+      alertShownRef.current = true;
+
       Alert.alert(
-        'Session Expired',
-        'Your session has expired due to inactivity. Please sign in again.',
+        t('alerts.sessionExpired'),
+        t('alerts.sessionExpiredMessage'),
         [
           {
             text: 'OK',
-            onPress: resetInactivitySignOutFlag
+            onPress: () => {
+              console.log('AppLayout: User dismissed inactivity alert');
+              resetInactivitySignOutFlag();
+              alertShownRef.current = false; // Reset for next time
+            }
           }
         ]
       );
+    }
+
+    // Reset the alert guard when user signs in
+    if (session) {
+      alertShownRef.current = false;
     }
   }, [loading, session, signedOutDueToInactivity, resetInactivitySignOutFlag]);
 
@@ -76,7 +91,7 @@ export default function AppLayout() {
         return;
       }
     }
-  }, [loading, session, initialDataLoaded, userBusinesses.length, currentBusiness, currentRoute, isInAppGroup, router]);
+  }, [loading, session, initialDataLoaded, userBusinesses, currentBusiness, currentRoute, isInAppGroup, router]);
 
   // Show loading spinner while auth is loading OR while initial data hasn't been loaded yet
   if (loading || (session && !initialDataLoaded)) {

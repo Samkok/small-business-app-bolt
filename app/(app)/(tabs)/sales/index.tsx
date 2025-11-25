@@ -95,27 +95,27 @@ export default function SalesScreen() {
   const { hasMismatch, mismatchedItems } = useBusinessMismatchDetector(sales, currentBusiness);
 
   const statusFilters = [
-    { value: 'all', label: 'All Sales' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'voided', label: 'Voided' },
-    { value: 'refunded', label: 'Refunded' },
-    { value: 'partially_returned', label: 'Partial Return' },
+    { value: 'all', label: t('sales.title') },
+    { value: 'completed', label: t('status.completed') },
+    { value: 'voided', label: t('status.voided') },
+    { value: 'refunded', label: t('sales.refund') },
+    { value: 'partially_returned', label: t('sales.return') },
   ];
 
   const paymentMethodFilters = [
-    { value: 'all', label: 'All Methods' },
-    { value: 'cash', label: 'Cash' },
-    { value: 'card', label: 'Card' },
-    { value: 'transfer', label: 'Transfer' },
-    { value: 'other', label: 'Other' },
+    { value: 'all', label: t('sales.paymentMethod') },
+    { value: 'cash', label: t('sales.cash') },
+    { value: 'card', label: t('sales.card') },
+    { value: 'transfer', label: t('sales.transfer') },
+    { value: 'other', label: t('customers.other') },
   ];
 
   const dateFilterOptions = [
-    { value: 'this_month', label: 'This Month' },
-    { value: 'three_months', label: 'Last 3 Months' },
-    { value: 'six_months', label: 'Last 6 Months' },
-    { value: 'custom', label: 'Custom Range' },
-    { value: 'all', label: 'All Time' },
+    { value: 'this_month', label: t('dateRanges.thisMonth') },
+    { value: 'three_months', label: t('dateRanges.last3Months') },
+    { value: 'six_months', label: t('dateRanges.last6Months') },
+    { value: 'custom', label: t('dateRanges.customRange') },
+    { value: 'all', label: t('dateRanges.allTime') },
   ];
 
   // Helper function to calculate dates without state updates
@@ -133,7 +133,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'This Month';
+        text = t('dateRanges.thisMonth');
         break;
       case 'three_months':
         start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -142,7 +142,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'Last 3 Months';
+        text = t('dateRanges.last3Months');
         break;
       case 'six_months':
         start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -151,7 +151,7 @@ export default function SalesScreen() {
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'Last 6 Months';
+        text = t('dateRanges.last6Months');
         break;
       case 'custom':
         start = customStart || new Date();
@@ -169,7 +169,7 @@ export default function SalesScreen() {
         end = now;
         end.setHours(23, 59, 59, 999); // Set to end of day
         
-        text = 'All Time';
+        text = t('dateRanges.allTime');
         break;
     }
     
@@ -260,7 +260,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), 'Failed to load data');
+      Alert.alert(t('common.error'), t('errors.loadFailed'));
       setLoading(false);
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
@@ -359,7 +359,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error loading sales data:', error);
-      Alert.alert(t('common.error'), 'Failed to load sales data');
+      Alert.alert(t('common.error'), t('sales.loadFailed'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -398,7 +398,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error refreshing data:', error);
-      Alert.alert(t('common.error'), 'Failed to refresh data');
+      Alert.alert(t('common.error'), t('sales.refreshFailed'));
     } finally {
       setRefreshing(false);
     }
@@ -422,10 +422,10 @@ export default function SalesScreen() {
             try {
               setDeletingCart(cartId);
               await deleteCart(cartId);
-              Alert.alert('Success', 'Cart deleted successfully');
+              Alert.alert(t('common.success'), t('sales.cartDeleted'));
             } catch (error) {
               console.error('Error deleting cart:', error);
-              Alert.alert('Error', 'Failed to delete cart');
+              Alert.alert(t('common.error'), t('sales.cartDeleteFailed'));
             } finally {
               setDeletingCart(null);
             }
@@ -445,7 +445,7 @@ export default function SalesScreen() {
 
   const handleExportSales = useCallback(async () => {
     if (!currentBusiness?.id) {
-      Alert.alert('Error', 'No business currentBusiness found');
+      Alert.alert(t('common.error'), t('sales.noBusinessFound'));
       return;
     }
 
@@ -476,8 +476,8 @@ export default function SalesScreen() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
-        Alert.alert('Success', 'Sales data exported successfully');
+
+        Alert.alert(t('common.success'), t('sales.exportSuccess'));
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
@@ -489,14 +489,14 @@ export default function SalesScreen() {
             dialogTitle: 'Export Sales Data',
             UTI: 'public.comma-separated-values-text'
           });
-          Alert.alert('Success', 'Sales data exported successfully');
+          Alert.alert(t('common.success'), t('sales.exportSuccess'));
         } else {
-          Alert.alert('Error', 'Sharing is not available on this device');
+          Alert.alert(t('common.error'), t('sales.sharingNotAvailable'));
         }
       }
     } catch (error) {
       console.error('Error exporting sales:', error);
-      Alert.alert('Error', 'Failed to export sales data');
+      Alert.alert(t('common.error'), t('sales.exportFailed'));
     }
   }, [currentBusiness?.id, startDate, endDate]);
 
@@ -559,7 +559,7 @@ export default function SalesScreen() {
         }
       );
 
-      Alert.alert('Success', 'Sale voided successfully');
+      Alert.alert(t('common.success'), t('sales.voidSuccess'));
       setShowVoidModal(false);
       setSaleToVoid(null);
 
@@ -651,7 +651,7 @@ export default function SalesScreen() {
           onStartShouldSetResponder={() => true}
         >
           <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Select Date Range
+            {t('sales.selectDateRange')}
           </Text>
           
           <View style={styles.dateFilterOptions}>
@@ -704,7 +704,7 @@ export default function SalesScreen() {
           onStartShouldSetResponder={() => true}
         >
           <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Select Custom Date Range
+            {t('sales.selectCustomDateRange')}
           </Text>
           
           <DateRangePicker
@@ -722,6 +722,7 @@ export default function SalesScreen() {
     <SaleCard
       sale={item}
       onVoid={handleVoidSale}
+      showCreator={true}
     />
   ), [handleVoidSale]);
 
@@ -729,20 +730,20 @@ export default function SalesScreen() {
     <Card style={styles.emptyState}>
       <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
       <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-        {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all' 
-          ? 'No sales found' 
-          : 'No sales yet'
+        {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all'
+          ? t('sales.noSalesFound')
+          : t('sales.noSalesYet')
         }
       </Text>
       <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-        {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all' 
-          ? 'Try adjusting your search or filter criteria'
-          : 'Create your first sale to get started'
+        {searchQuery || selectedStatus !== 'all' || selectedPaymentMethod !== 'all'
+          ? t('sales.tryAdjustingFilter')
+          : t('sales.createFirstSale')
         }
       </Text>
       {!searchQuery && selectedStatus === 'all' && selectedPaymentMethod === 'all' && (
         <Button
-          title="New Sale"
+          title={t('sales.newSale')}
           onPress={handleNewSale}
           style={styles.emptyButton}
         />
@@ -763,13 +764,13 @@ export default function SalesScreen() {
     <Card style={styles.emptyState}>
       <ShoppingCart size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
       <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-        No Active Carts
+        {t('empty.noData')}
       </Text>
       <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-        Start a new sale by selecting a customer and adding products
+        {t('sales.startNewSaleHint')}
       </Text>
       <Button
-        title="Start New Sale"
+        title={t('actions.startNewSale')}
         onPress={handleNewSale}
         style={styles.emptyButton}
       />
@@ -801,14 +802,14 @@ export default function SalesScreen() {
 
         <View style={styles.tabs}>
           <TabButton
-            title="Active Carts"
+            title={t('sales.activeCarts')}
             icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'carts'}
             onPress={() => setActiveTab('carts')}
             isDark={isDark}
           />
           <TabButton
-            title="Sales History"
+            title={t('sales.saleHistory')}
             icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
             isActive={activeTab === 'sales'}
             onPress={() => setActiveTab('sales')}
@@ -846,7 +847,7 @@ export default function SalesScreen() {
       {/* Tabs */}
       <View style={styles.tabs}>
         <TabButton
-          title="Active Carts"
+          title={t('sales.activeCarts')}
           icon={<ShoppingCart size={18} color={activeTab === 'carts' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'carts'}
           onPress={() => setActiveTab('carts')}
@@ -854,7 +855,7 @@ export default function SalesScreen() {
           isDark={isDark}
         />
         <TabButton
-          title="Sales History"
+          title={t('sales.saleHistory')}
           icon={<Receipt size={18} color={activeTab === 'sales' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />}
           isActive={activeTab === 'sales'}
           onPress={() => setActiveTab('sales')}
@@ -877,7 +878,7 @@ export default function SalesScreen() {
               onRefresh={handleRefresh}
               colors={['#2563eb']}
               tintColor="#2563eb"
-              title="Pull to refresh"
+              title={t('common.pullToRefresh')}
               titleColor={isDark ? '#f9fafb' : '#111827'}
             />
           }
@@ -895,7 +896,7 @@ export default function SalesScreen() {
               <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               <TextInput
                 style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                placeholder="Search sales..."
+                placeholder={t('sales.searchPlaceholder')}
                 placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -913,7 +914,7 @@ export default function SalesScreen() {
             <View style={styles.collapsibleTitle}>
               <TrendingUp size={20} color={isDark ? '#f9fafb' : '#111827'} style={{ marginRight: 8 }} />
               <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Sales Analytics
+                {t('sales.salesAnalytics')}
               </Text>
             </View>
             <TouchableOpacity onPress={toggleStatsCollapse} style={styles.collapseButton}>
@@ -943,7 +944,7 @@ export default function SalesScreen() {
                       ${todayRevenue.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Revenue
+                      {t('financials.todayRevenue')}
                     </Text>
                   </View>
                 </View>
@@ -957,7 +958,7 @@ export default function SalesScreen() {
                       ${totalRevenue.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Total Revenue
+                      {t('financials.totalRevenue')}
                     </Text>
                   </View>
                 </View>
@@ -971,7 +972,7 @@ export default function SalesScreen() {
                       {todaySales}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Today's Sales
+                      {t('financials.todaySales')}
                     </Text>
                   </View>
                 </View>
@@ -985,7 +986,7 @@ export default function SalesScreen() {
                       ${averageSale.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Average Sale
+                      {t('financials.averageSale')}
                     </Text>
                   </View>
                 </View>
@@ -1130,7 +1131,7 @@ export default function SalesScreen() {
       {/* Loading overlay for cart deletion */}
       {deletingCart && (
         <View style={styles.loadingOverlay}>
-          <LoadingSpinner text="Deleting cart..." />
+          <LoadingSpinner text={t('sales.deletingCart')} />
         </View>
       )}
 

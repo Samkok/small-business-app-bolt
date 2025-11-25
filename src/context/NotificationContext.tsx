@@ -10,6 +10,7 @@ import { useAuth } from './AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
+import { useSaleDetailsModal } from './SaleDetailsModalContext';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -52,6 +53,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const auth = useAuth();
   const router = useRouter();
   const businessSwitch = useBusinessSwitch();
+  const saleDetailsModal = useSaleDetailsModal();
   const notificationListener = useRef<Notifications.Subscription | undefined>();
   const responseListener = useRef<Notifications.Subscription | undefined>();
   const appState = useRef<string>(AppState.currentState);
@@ -68,6 +70,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(0);
       setAllBusinessUnreadCount(0);
       await BadgeSync.clearBadge();
+      setLoading(false);
+      return;
+    }
+
+    // Additional safety check - ensure we have valid user data
+    if (!auth.userProfile.user_id || auth.userProfile.user_id.length === 0) {
+      console.log('Skipping notification load - invalid user_id');
       setLoading(false);
       return;
     }
@@ -91,12 +100,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isAuthError = error?.message?.includes('JWT') ||
                           error?.message?.includes('expired') ||
                           error?.message?.includes('Invalid API key') ||
-                          error?.code === 'PGRST301';
+                          error?.message?.includes('refresh') ||
+                          error?.message?.includes('session') ||
+                          error?.code === 'PGRST301' ||
+                          error?.code === 'PGRST116';
 
       if (isAuthError) {
         console.log('Notification loading postponed - session is refreshing. Will retry automatically.');
       } else {
-        console.error('Error loading notifications:', error);
+        // Log detailed error information for debugging
+        console.error('Error loading notifications:', {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          userId: auth.userProfile?.user_id,
+          businessId: auth.currentBusiness?.id,
+        });
       }
     } finally {
       setLoading(false);
@@ -107,6 +127,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!auth.userProfile?.user_id) {
       setAllBusinessNotifications([]);
       setAllBusinessUnreadCount(0);
+      return;
+    }
+
+    // Additional safety check - ensure we have valid user data
+    if (!auth.userProfile.user_id || auth.userProfile.user_id.length === 0) {
+      console.log('Skipping all business notifications load - invalid user_id');
       return;
     }
 
@@ -124,17 +150,42 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isAuthError = error?.message?.includes('JWT') ||
                           error?.message?.includes('expired') ||
                           error?.message?.includes('Invalid API key') ||
-                          error?.code === 'PGRST301';
+                          error?.message?.includes('refresh') ||
+                          error?.message?.includes('session') ||
+                          error?.code === 'PGRST301' ||
+                          error?.code === 'PGRST116';
 
       if (isAuthError) {
         console.log('All business notifications loading postponed - session is refreshing.');
       } else {
-        console.error('Error loading all business notifications:', error);
+        // Log detailed error information for debugging
+        console.error('Error loading all business notifications:', {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          userId: auth.userProfile?.user_id,
+        });
       }
     }
   }, [auth.userProfile?.user_id, filterValidNotifications]);
 
   useEffect(() => {
+    // Check if we're in an auth flow (signin, signup, reset-password, forgot-password)
+    // Skip notification loading during these flows to prevent errors
+    if (typeof window !== 'undefined' && window.location) {
+      const pathname = window.location.pathname;
+      const isAuthFlow = pathname.includes('/signin') ||
+                        pathname.includes('/signup') ||
+                        pathname.includes('/reset-password') ||
+                        pathname.includes('/forgot-password');
+
+      if (isAuthFlow) {
+        console.log('Skipping notification load - in auth flow:', pathname);
+        return;
+      }
+    }
+
     loadNotifications();
     loadAllBusinessNotifications();
   }, [loadNotifications, loadAllBusinessNotifications]);
@@ -261,6 +312,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await pushNotificationService.setupNotificationChannels();
 
         const pushToken = await pushNotificationService.registerForPushNotifications();
+        console.log("Expo Push Notification: " + pushToken);
 
         if (pushToken && auth.userProfile?.user_id) {
           try {
@@ -333,13 +385,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           created_at: new Date().toISOString(),
         };
 
-        let navigationTarget = '/(app)/(tabs)/';
-
+        // Handle sale notifications with modal
         if (data.type === 'sale_created' || data.type === 'sale_voided') {
           if (data.sale_id) {
-            navigationTarget = `/(app)/(tabs)/sales/details/${data.sale_id}`;
+            await saleDetailsModal.openSaleDetails(data.sale_id as string, mockNotification);
           }
-        } else if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
+          return;
+        }
+
+        // Handle other notifications with navigation
+        let navigationTarget = '/(app)/(tabs)/';
+
+        if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
           navigationTarget = '/(app)/(tabs)/inventory/low-stock';
         } else if (data.type === 'role_assigned' || data.type === 'team_invite') {
           navigationTarget = '/(app)/(tabs)/';

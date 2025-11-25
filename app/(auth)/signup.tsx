@@ -11,7 +11,7 @@ import {
   Keyboard,
   Alert
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -20,7 +20,8 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 
 export default function SignUpScreen() {
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(params.email || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -58,6 +59,7 @@ export default function SignUpScreen() {
     }
 
     setLoading(true);
+
     const { error } = await signUp(validation.data.email, validation.data.password, validation.data.fullName);
     setLoading(false);
 
@@ -80,7 +82,7 @@ export default function SignUpScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Business Manager Pro
+              {t('app.name')}
             </Text>
             <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {t('auth.signUp')}
@@ -112,6 +114,7 @@ export default function SignUpScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              showPasswordToggle
               required
             />
 
@@ -120,6 +123,7 @@ export default function SignUpScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              showPasswordToggle
               required
             />
 

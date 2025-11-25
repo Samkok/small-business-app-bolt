@@ -651,6 +651,16 @@ export default function ReportsScreen() {
               Cash Flow Statement
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.statementButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+            onPress={() => router.push('/reports/sales-history')}
+          >
+            <FileText size={20} color="#8b5cf6" />
+            <Text style={[styles.statementButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {t('reports.salesHistory')}
+            </Text>
+          </TouchableOpacity>
         </Card>
       </View>
     );

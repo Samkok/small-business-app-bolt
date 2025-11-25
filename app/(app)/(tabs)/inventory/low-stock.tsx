@@ -23,6 +23,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
+import { useTranslation } from '@/src/locales';
 
 export default function LowStockScreen() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
@@ -37,6 +38,7 @@ export default function LowStockScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadLowStockProducts();
@@ -72,7 +74,7 @@ export default function LowStockScreen() {
     const stockRatio = product.current_stock / Math.max(product.min_stock_level, 1);
     if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: 'Out of Stock' };
     if (stockRatio <= 0.5) return { status: 'critical', color: '#ea580c', label: 'Critical' };
-    return { status: 'low', color: '#f59e0b', label: 'Low Stock' };
+    return { status: 'low', color: '#f59e0b', label: t('inventory.lowStock') };
   };
 
   const filterProductsByStatus = useCallback(() => {
@@ -148,7 +150,7 @@ export default function LowStockScreen() {
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Low Stock Alert
+            {t('inventory.lowStockAlert')}
           </Text>
           <TouchableOpacity
             style={styles.refreshButton}
@@ -215,7 +217,7 @@ export default function LowStockScreen() {
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Low Stock Alert
+          {t('inventory.lowStockAlert')}
         </Text>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -316,7 +318,7 @@ export default function LowStockScreen() {
                     {low}
                   </Text>
                   <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Low Stock
+                    {t('inventory.lowStock')}
                   </Text>
                 </View>
               </View>
@@ -402,7 +404,7 @@ export default function LowStockScreen() {
                   : 'Great job! All your products have sufficient stock levels.'}
               </Text>
               <Button
-                title="View All Products"
+                title={t('inventory.viewAllProducts')}
                 onPress={() => router.back()}
                 style={styles.emptyButton}
               />

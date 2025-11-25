@@ -2,8 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight } from 'lucide-react-native';
+import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface SaleCardProps {
   sale: {
@@ -14,11 +15,13 @@ interface SaleCardProps {
     status: string;
     sale_date: string;
     notes?: string;
+    created_by_name?: string;
     customers?: {
       name: string;
       phone?: string;
     };
     carts?: {
+      created_by_name?: string;
       cart_items?: Array<{
         quantity: number;
         products?: {
@@ -28,9 +31,10 @@ interface SaleCardProps {
     };
   };
   onVoid: (sale: any) => void;
+  showCreator?: boolean;
 }
 
-export const SaleCard = React.memo(function SaleCard({ sale, onVoid }: SaleCardProps) {
+export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator = false }: SaleCardProps) {
   const { isDark } = useTheme();
   const router = useRouter();
 
@@ -144,6 +148,15 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid }: SaleCardP
               {getPaymentMethodIcon(sale.payment_method)} {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
             </Text>
           </View>
+
+          {showCreator && (sale.created_by_name || sale.carts?.created_by_name) && (
+            <View style={styles.detailRow}>
+              <UserCheck size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.detailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                {getUserDisplayName(sale.created_by_name || sale.carts?.created_by_name)}
+              </Text>
+            </View>
+          )}
         </View>
         
         <View style={styles.footer}>

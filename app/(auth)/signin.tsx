@@ -10,7 +10,7 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -23,7 +23,8 @@ import { signInSchema } from '@/src/lib/validation';
 import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
 
 export default function SignInScreen() {
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(params.email || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,8 +62,11 @@ export default function SignInScreen() {
       return;
     }
 
+    setLoading(true);
+
     const rateLimitCheck = await loginRateLimiter.checkLimit(email.toLowerCase());
     if (!rateLimitCheck.allowed) {
+      setLoading(false);
       const blockDuration = rateLimitCheck.blockedUntil
         ? RateLimiter.formatBlockDuration(rateLimitCheck.blockedUntil - Date.now())
         : '30 minutes';
@@ -72,8 +76,6 @@ export default function SignInScreen() {
       );
       return;
     }
-
-    setLoading(true);
 
     try {
       const { error } = await signIn(validation.data.email, validation.data.password);
@@ -119,7 +121,7 @@ export default function SignInScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Business Manager Pro
+              {t('app.name')}
             </Text>
             <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               {t('auth.signIn')}
@@ -143,6 +145,7 @@ export default function SignInScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              showPasswordToggle
               required
             />
 
@@ -158,7 +161,7 @@ export default function SignInScreen() {
                   <Square size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                 )}
                 <Text style={[styles.rememberMeText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Remember me
+                  {t('actions.rememberMe')}
                 </Text>
               </TouchableOpacity>
 

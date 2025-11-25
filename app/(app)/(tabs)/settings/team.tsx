@@ -22,6 +22,7 @@ import { SkeletonTeamMemberCard, SkeletonLoader, SkeletonCard, SkeletonList } fr
 import { ArrowLeft, Users, UserPlus, User, Mail, ChevronDown, X, Shield, ShieldAlert } from 'lucide-react-native';
 import { teamMemberService, TeamMember } from '@/src/services/teamMembers';
 import { ActivityIndicator } from 'react-native';
+import { UserAlreadyRemovedModal } from '@/src/components/team/UserAlreadyRemovedModal';
 
 export default function TeamScreen() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -34,6 +35,8 @@ export default function TeamScreen() {
   const [inviting, setInviting] = useState(false);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [removingUser, setRemovingUser] = useState<string | null>(null);
+  const [showAlreadyRemovedModal, setShowAlreadyRemovedModal] = useState(false);
+  const [removedUserName, setRemovedUserName] = useState('');
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -138,20 +141,34 @@ export default function TeamScreen() {
 
   const handleChangeRole = async (userId: string, newRole: 'admin' | 'staff') => {
     if (!currentBusiness || !teamMemberService.canPerformAdminActions(currentUserRole)) return;
-    
+
     setChangingRole(userId);
     try {
       await teamMemberService.changeUserRole(currentBusiness.id, userId, newRole);
-      
+
       // Update local state
-      setTeamMembers(prev => 
-        prev.map(member => 
+      setTeamMembers(prev =>
+        prev.map(member =>
           member.user_id === userId ? { ...member, role: newRole } : member
         )
       );
-    } catch (error) {
+
+      Alert.alert('Success', `User role has been changed to ${newRole}`);
+    } catch (error: any) {
       console.error('Error changing user role:', error);
-      Alert.alert('Error', error.message || 'Failed to change user role');
+
+      // Check if user was already removed
+      if (error.message && (error.message.includes('not a member of this business') || error.message.includes('already been removed'))) {
+        // Get user name before showing modal
+        const removedMember = teamMembers.find(m => m.user_id === userId);
+        setRemovedUserName(removedMember?.user_name || 'This user');
+        setShowAlreadyRemovedModal(true);
+
+        // Refresh the team member list to show current state
+        loadTeamMembers();
+      } else {
+        Alert.alert('Error', error.message || 'Failed to change user role');
+      }
     } finally {
       setChangingRole(null);
     }
@@ -178,12 +195,28 @@ export default function TeamScreen() {
             setRemovingUser(userId);
             try {
               await teamMemberService.removeUser(currentBusiness.id, userId);
-              
+
               // Update local state
               setTeamMembers(prev => prev.filter(member => member.user_id !== userId));
-            } catch (error) {
+
+              // Show success message
+              Alert.alert('Success', 'User has been removed from the business');
+            } catch (error: any) {
               console.error('Error removing user:', error);
-              Alert.alert('Error', error.message || 'Failed to remove user');
+
+              // Check if user was already removed
+              if (error.message && (error.message.includes('not a member of this business') || error.message.includes('already been removed'))) {
+                // Get user name before showing modal
+                const removedMember = teamMembers.find(m => m.user_id === userId);
+                setRemovedUserName(removedMember?.user_name || 'This user');
+                setShowAlreadyRemovedModal(true);
+
+                // Refresh the team member list to show current state
+                loadTeamMembers();
+              } else {
+                // Show generic error for other issues
+                Alert.alert('Error', error.message || 'Failed to remove user');
+              }
             } finally {
               setRemovingUser(null);
             }
@@ -533,6 +566,16 @@ export default function TeamScreen() {
           </Card>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* User Already Removed Modal */}
+      <UserAlreadyRemovedModal
+        visible={showAlreadyRemovedModal}
+        userName={removedUserName}
+        onClose={() => {
+          setShowAlreadyRemovedModal(false);
+          setRemovedUserName('');
+        }}
+      />
     </View>
   );
 }

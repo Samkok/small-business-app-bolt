@@ -7,10 +7,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/src/context/AuthContext';
 import { ThemeProvider } from '@/src/context/ThemeContext';
+import { LanguageProvider } from '@/src/context/LanguageContext';
 import { CartProvider } from '@/src/context/CartContext';
 import { InstantCheckoutProvider } from '@/src/context/InstantCheckoutContext';
 import { NotificationProvider } from '@/src/context/NotificationContext';
 import { BusinessSwitchProvider } from '@/src/context/BusinessSwitchContext';
+import { SaleDetailsModalProvider } from '@/src/context/SaleDetailsModalContext';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -20,22 +22,26 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <AuthProvider>
-          <BusinessSwitchProvider>
-            <NotificationProvider>
-              <CartProvider>
-                <InstantCheckoutProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(app)" />
-                    <Stack.Screen name="+not-found" />
-                  </Stack>
-                  <StatusBar style="auto" />
-                </InstantCheckoutProvider>
-              </CartProvider>
-            </NotificationProvider>
-          </BusinessSwitchProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <BusinessSwitchProvider>
+              <SaleDetailsModalProvider>
+                <NotificationProvider>
+                  <CartProvider>
+                    <InstantCheckoutProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(app)" />
+                        <Stack.Screen name="+not-found" />
+                      </Stack>
+                      <StatusBar style="auto" />
+                    </InstantCheckoutProvider>
+                  </CartProvider>
+                </NotificationProvider>
+              </SaleDetailsModalProvider>
+            </BusinessSwitchProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );
