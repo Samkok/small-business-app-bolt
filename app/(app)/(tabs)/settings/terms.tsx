@@ -184,34 +184,34 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="8. Third-Party Services">
         <Paragraph>
-          7.1. Supabase Integration: The Application uses Supabase for database, authentication, and storage services. Supabase's terms and privacy policy also apply.
+          8.1. Supabase Integration: The Application uses Supabase for database, authentication, and storage services. Supabase's terms and privacy policy also apply.
         </Paragraph>
         <Paragraph>
-          7.2. Camera and File Access: The Application requests device permissions for barcode scanning and image uploads. These permissions are used solely for Application functionality.
+          8.2. Camera and File Access: The Application requests device permissions for barcode scanning and image uploads. These permissions are used solely for Application functionality.
         </Paragraph>
         <Paragraph>
-          7.3. No Payment Processing: The Application does not integrate with payment processors. All financial transactions occur outside the Application.
+          8.3. No Payment Processing: The Application does not integrate with payment processors. All financial transactions occur outside the Application.
         </Paragraph>
       </Section>
 
       <Section title="9. Intellectual Property Rights">
         <Paragraph>
-          8.1. Application Ownership: The Application, including its design, functionality, and code, is owned by BizManage and protected by copyright and intellectual property laws.
+          9.1. Application Ownership: The Application, including its design, functionality, and code, is owned by BizManage and protected by copyright and intellectual property laws.
         </Paragraph>
         <Paragraph>
-          8.2. License Grant: We grant you a limited, non-exclusive, non-transferable license to use the Application for your business purposes.
+          9.2. License Grant: We grant you a limited, non-exclusive, non-transferable license to use the Application for your business purposes.
         </Paragraph>
         <Paragraph>
-          8.3. User Data Rights: You retain all rights to your business data. We claim no ownership over your content.
+          9.3. User Data Rights: You retain all rights to your business data. We claim no ownership over your content.
         </Paragraph>
       </Section>
 
       <Section title="10. Limitation of Liability">
         <Paragraph>
-          9.1. Service "As-Is": The Application is provided "as-is" without warranties of any kind, express or implied.
+          10.1. Service "As-Is": The Application is provided "as-is" without warranties of any kind, express or implied.
         </Paragraph>
         <Paragraph>
-          9.2. Data Loss: While we implement security measures and backups, we are not liable for data loss, corruption, or unauthorized access resulting from:
+          10.2. Data Loss: While we implement security measures and backups, we are not liable for data loss, corruption, or unauthorized access resulting from:
         </Paragraph>
         <BulletPoint>User error or negligence</BulletPoint>
         <BulletPoint>Device malfunction or loss</BulletPoint>
@@ -311,13 +311,13 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="13. Modifications to Service">
         <Paragraph>
-          12.1. Updates: We may update, modify, or discontinue features of the Application at any time.
+          13.1. Updates: We may update, modify, or discontinue features of the Application at any time.
         </Paragraph>
         <Paragraph>
-          12.2. Terms Updates: We reserve the right to modify these Terms. Continued use after changes constitutes acceptance of updated Terms.
+          13.2. Terms Updates: We reserve the right to modify these Terms. Continued use after changes constitutes acceptance of updated Terms.
         </Paragraph>
         <Paragraph>
-          12.3. Notification: We will notify users of significant changes through the Application or via email.
+          13.3. Notification: We will notify users of significant changes through the Application or via email.
         </Paragraph>
       </Section>
 
@@ -329,13 +329,13 @@ export default function TermsAndConditionsScreen() {
 
       <Section title="15. Dispute Resolution">
         <Paragraph>
-          14.1. Informal Resolution: We encourage users to contact us first to resolve disputes informally.
+          15.1. Informal Resolution: We encourage users to contact us first to resolve disputes informally.
         </Paragraph>
         <Paragraph>
-          14.2. Arbitration: Any disputes shall be resolved through binding arbitration rather than in court, except where prohibited by law.
+          15.2. Arbitration: Any disputes shall be resolved through binding arbitration rather than in court, except where prohibited by law.
         </Paragraph>
         <Paragraph>
-          14.3. Class Action Waiver: You agree to resolve disputes individually and waive the right to participate in class actions.
+          15.3. Class Action Waiver: You agree to resolve disputes individually and waive the right to participate in class actions.
         </Paragraph>
       </Section>
 

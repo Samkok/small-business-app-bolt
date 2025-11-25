@@ -135,46 +135,46 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="6. Data Storage and Security">
         <Paragraph>
-          5.1. Storage Infrastructure: Your data is stored securely using Supabase cloud infrastructure with enterprise-grade security measures.
+          6.1. Storage Infrastructure: Your data is stored securely using Supabase cloud infrastructure with enterprise-grade security measures.
         </Paragraph>
         <Paragraph>
-          5.2. Encryption: Data is encrypted in transit using TLS/SSL protocols and at rest using industry-standard encryption.
+          6.2. Encryption: Data is encrypted in transit using TLS/SSL protocols and at rest using industry-standard encryption.
         </Paragraph>
         <Paragraph>
-          5.3. Row Level Security: Database access is controlled through Row Level Security (RLS) ensuring users can only access authorized business data.
+          6.3. Row Level Security: Database access is controlled through Row Level Security (RLS) ensuring users can only access authorized business data.
         </Paragraph>
         <Paragraph>
-          5.4. Session Management: User sessions expire after one week of inactivity to protect unauthorized access.
+          6.4. Session Management: User sessions expire after one week of inactivity to protect unauthorized access.
         </Paragraph>
         <Paragraph>
-          5.5. Authentication: We use Supabase Auth with secure password hashing and token-based authentication.
+          6.5. Authentication: We use Supabase Auth with secure password hashing and token-based authentication.
         </Paragraph>
       </Section>
 
       <Section title="7. Data Isolation and Multi-Tenancy">
         <Paragraph>
-          6.1. Business Isolation: Each business operates as a separate tenant with isolated data. Users cannot access data from businesses they are not authorized to view.
+          7.1. Business Isolation: Each business operates as a separate tenant with isolated data. Users cannot access data from businesses they are not authorized to view.
         </Paragraph>
         <Paragraph>
-          6.2. Role-Based Access: Access to business data is controlled by user roles (Admin, Staff) with different permission levels.
+          7.2. Role-Based Access: Access to business data is controlled by user roles (Admin, Staff) with different permission levels.
         </Paragraph>
         <Paragraph>
-          6.3. Cross-Business Security: Even if you belong to multiple businesses, data from one business cannot be accessed when working in another.
+          7.3. Cross-Business Security: Even if you belong to multiple businesses, data from one business cannot be accessed when working in another.
         </Paragraph>
       </Section>
 
       <Section title="8. Data Sharing and Disclosure">
         <Paragraph>
-          7.1. We DO NOT sell your personal or business data to third parties.
+          8.1. We DO NOT sell your personal or business data to third parties.
         </Paragraph>
         <Paragraph>
-          7.2. We may share information with:
+          8.2. We may share information with:
         </Paragraph>
         <BulletPoint>Supabase (our infrastructure provider) for hosting and authentication</BulletPoint>
         <BulletPoint>Team members within your authorized businesses</BulletPoint>
         <BulletPoint>Legal authorities when required by law</BulletPoint>
         <Paragraph>
-          7.3. Business Transfers: In case of merger, acquisition, or sale, your information may be transferred to the new entity.
+          8.3. Business Transfers: In case of merger, acquisition, or sale, your information may be transferred to the new entity.
         </Paragraph>
       </Section>
 
@@ -315,22 +315,22 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="13. Cookies and Tracking">
         <Paragraph>
-          12.1. Essential Cookies: We use cookies for authentication, session management, and Application functionality.
+          13.1. Essential Cookies: We use cookies for authentication, session management, and Application functionality.
         </Paragraph>
         <Paragraph>
-          12.2. Analytics: We may collect anonymous usage data to improve the Application.
+          13.2. Analytics: We may collect anonymous usage data to improve the Application.
         </Paragraph>
         <Paragraph>
-          12.3. Local Storage: The Application stores preferences (theme, language) locally on your device.
+          13.3. Local Storage: The Application stores preferences (theme, language) locally on your device.
         </Paragraph>
       </Section>
 
       <Section title="14. Third-Party Services">
         <Paragraph>
-          13.1. Supabase: Our primary infrastructure provider. Review Supabase's privacy policy at https://supabase.com/privacy
+          14.1. Supabase: Our primary infrastructure provider. Review Supabase's privacy policy at https://supabase.com/privacy
         </Paragraph>
         <Paragraph>
-          13.2. Device Permissions: The Application requests camera and file access permissions solely for barcode scanning and image uploads.
+          14.2. Device Permissions: The Application requests camera and file access permissions solely for barcode scanning and image uploads.
         </Paragraph>
       </Section>
 
