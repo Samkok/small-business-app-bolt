@@ -44,10 +44,10 @@ export default function PrivacyPolicyScreen() {
           Privacy Policy
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: November 16, 2025
+          Last Updated: November 25, 2025
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.0.1
+          Version 1.1.0
         </Text>
       </View>
 
@@ -188,17 +188,116 @@ export default function PrivacyPolicyScreen() {
         <BulletPoint>Export your business data</BulletPoint>
         <BulletPoint>Opt-out of non-essential communications</BulletPoint>
         <BulletPoint>Withdraw consent for data processing</BulletPoint>
+        <Paragraph>
+          9.1. Right to Delete Your Data: We provide two types of data deletion to respect your privacy rights:
+        </Paragraph>
+        <Paragraph>
+          9.2. Business Deletion: You can delete individual businesses you own. This permanently removes all business data including sales, customers, products, expenses, team member associations, and uploaded files. Business deletion is immediate, irreversible, and affects all team members who will lose access. Only business owners can delete businesses.
+        </Paragraph>
+        <Paragraph>
+          9.3. Account Deletion: You can permanently delete your entire account. This requires first deleting all businesses you own, then removes your user profile, authentication credentials, and all personal data. Account deletion is immediate and irreversible with no recovery or reactivation possible.
+        </Paragraph>
+        <Paragraph>
+          9.4. Pre-Deletion Recommendations: Before deleting any data, we strongly recommend:
+        </Paragraph>
+        <BulletPoint>Export all critical business data using our export features</BulletPoint>
+        <BulletPoint>Download financial reports and analytics</BulletPoint>
+        <BulletPoint>Save customer contact information separately</BulletPoint>
+        <BulletPoint>Backup product catalogs and inventory records</BulletPoint>
+        <BulletPoint>Notify team members of planned business deletion</BulletPoint>
+        <BulletPoint>Review legal data retention requirements for your jurisdiction</BulletPoint>
+        <BulletPoint>Consult tax and legal professionals if required</BulletPoint>
+        <Paragraph>
+          9.5. Deletion Limitations: We cannot delete certain data in specific circumstances:
+        </Paragraph>
+        <BulletPoint>Data subject to legal hold or court order</BulletPoint>
+        <BulletPoint>Records required for regulatory compliance</BulletPoint>
+        <BulletPoint>Anonymized analytics data (no personal identifiers)</BulletPoint>
+        <BulletPoint>Data needed for active dispute resolution</BulletPoint>
+        <BulletPoint>Fraud prevention records as legally required</BulletPoint>
+        <Paragraph>
+          9.6. How to Request Deletion:
+        </Paragraph>
+        <BulletPoint>Business Deletion: Settings → Business Settings → Delete Business</BulletPoint>
+        <BulletPoint>Account Deletion: Settings → Privacy → Delete Account</BulletPoint>
+        <BulletPoint>Both require owner authorization and explicit confirmation</BulletPoint>
+        <BulletPoint>Deletion executes immediately upon confirmation</BulletPoint>
       </Section>
 
-      <Section title="10. Data Retention">
+      <Section title="10. Data Retention and Deletion">
         <Paragraph>
-          9.1. Active Accounts: We retain your data as long as your account is active and you continue using the Application.
+          10.1. Active Account Retention: We retain your data as long as your account is active and you continue using the Application. There is no automatic deletion of inactive accounts; you must explicitly request account deletion.
         </Paragraph>
         <Paragraph>
-          9.2. Deleted Accounts: After account deletion, we may retain certain data for legal compliance, dispute resolution, or legitimate business purposes.
+          10.2. Business Deletion - Immediate Removal: When you delete a business, all associated data is immediately and permanently deleted from our active database systems. This includes all sales records, customer information, products, expenses, team member associations, notifications, and uploaded files. Deletion is executed using PostgreSQL CASCADE constraints ensuring complete automatic removal of all related data.
         </Paragraph>
         <Paragraph>
-          9.3. Backup Retention: Backups containing your data may persist for a limited period after deletion.
+          10.3. Account Deletion - Complete Removal: When you delete your account, we permanently remove your user profile, authentication credentials, all owned businesses (and their complete data), your membership in other businesses, uploaded personal files, and application preferences. Your account cannot be recovered or reactivated after deletion.
+        </Paragraph>
+        <Paragraph>
+          10.4. Data Deletion Scope: The following data is permanently deleted during business or account deletion: </Paragraph>
+        <BulletPoint>Business information, settings, and configuration</BulletPoint>
+        <BulletPoint>Complete sales history and transaction records</BulletPoint>
+        <BulletPoint>Customer database and contact information</BulletPoint>
+        <BulletPoint>Product catalog, inventory, and stock levels</BulletPoint>
+        <BulletPoint>Expense records, categories, and financial data</BulletPoint>
+        <BulletPoint>Financial reports, analytics, and insights</BulletPoint>
+        <BulletPoint>Team member relationships and permissions</BulletPoint>
+        <BulletPoint>Cart data and pending orders</BulletPoint>
+        <BulletPoint>All uploaded images, logos, and documents</BulletPoint>
+        <BulletPoint>Notification history and preferences</BulletPoint>
+        <BulletPoint>User profile and authentication credentials (account deletion)</BulletPoint>
+        <Paragraph>
+          10.5. Immediate vs Eventual Deletion Timeline:
+        </Paragraph>
+        <BulletPoint>Primary database records: Deleted immediately (within seconds)</BulletPoint>
+        <BulletPoint>Storage files (images, documents): Deletion initiated immediately</BulletPoint>
+        <BulletPoint>CDN cached files: May persist up to 7 days until cache expires</BulletPoint>
+        <BulletPoint>Database backups: Retained up to 30 days for disaster recovery</BulletPoint>
+        <BulletPoint>Analytics logs: Anonymized within 90 days</BulletPoint>
+        <Paragraph>
+          10.6. Backup Retention Policy: Our infrastructure maintains automated database backups for disaster recovery purposes only. After you delete data, it may remain in backups for up to 30 days before automatic purging. These backups are not accessible to users, staff, or through any recovery service. Backups are solely for system-wide disaster recovery and cannot be used to restore individual user data after deletion.
+        </Paragraph>
+        <Paragraph>
+          10.7. Legal Retention Requirements: In limited circumstances, we may retain certain data longer than our standard retention period when required by law, such as:
+        </Paragraph>
+        <BulletPoint>Tax records as required by jurisdiction (typically 7 years)</BulletPoint>
+        <BulletPoint>Audit trails for fraud prevention and investigation</BulletPoint>
+        <BulletPoint>Records subject to court orders or legal holds</BulletPoint>
+        <BulletPoint>Data required for active dispute resolution</BulletPoint>
+        <BulletPoint>Anonymized data for regulatory compliance reporting</BulletPoint>
+        <Paragraph>
+          10.8. What We Cannot Delete: Some data cannot be deleted even upon request:
+        </Paragraph>
+        <BulletPoint>Anonymized analytics data with no personal identifiers</BulletPoint>
+        <BulletPoint>Aggregated statistics used for service improvement</BulletPoint>
+        <BulletPoint>Data subject to active legal proceedings</BulletPoint>
+        <BulletPoint>Records required by law enforcement or regulators</BulletPoint>
+        <BulletPoint>Fraud prevention data as legally mandated</BulletPoint>
+      </Section>
+
+
+      <Section title="10A. Data Deletion Process and Guarantees">
+        <Paragraph>
+          10A.1. Business Deletion Process: Only the business owner can initiate business deletion. The Application displays a comprehensive preview showing all data that will be deleted (sales count, expenses, customers, products, carts, team members). Deletion requires explicit two-factor confirmation to prevent accidental data loss. Once confirmed, deletion executes immediately with no delay or grace period.
+        </Paragraph>
+        <Paragraph>
+          10A.2. Account Deletion Process: Account deletion is initiated from Privacy Settings. The Application shows a preview of all data to be deleted including all owned businesses and their data. You must delete all owned businesses before account deletion can proceed. Final confirmation requires password verification. Deletion executes immediately upon confirmation, permanently removing authentication credentials and user profile.
+        </Paragraph>
+        <Paragraph>
+          10A.3. Automatic CASCADE Deletion: Our database uses PostgreSQL CASCADE constraints to ensure complete data removal. When a business is deleted, all related records (sales, customers, products, expenses, team members, carts, notifications) are automatically deleted in a single atomic transaction. This guarantees no orphaned data remains in the system and ensures complete privacy protection.
+        </Paragraph>
+        <Paragraph>
+          10A.4. Storage File Deletion: All uploaded files (images, logos, documents) are deleted from cloud storage via secure API calls. File deletion is initiated immediately upon business or account deletion. Files are removed from our CDN cache, though cached copies may persist for up to 7 days until global cache purge completes. Permanent deletion is confirmed by our storage provider.
+        </Paragraph>
+        <Paragraph>
+          10A.5. Team Member Notification: When a business is deleted, all team members are automatically notified of the deletion and their removal from the business. Team members' personal accounts and data remain intact; only their association with the deleted business is removed. Team members do not lose access to other businesses they belong to.
+        </Paragraph>
+        <Paragraph>
+          10A.6. Deletion Irreversibility: All deletions are PERMANENT and IRREVERSIBLE. There is no undo option, no grace period, no recovery service, and no way to restore deleted data. Once deletion is confirmed, data is immediately removed from active systems. We strongly recommend exporting all critical data before initiating any deletion.
+        </Paragraph>
+        <Paragraph>
+          10A.7. No Recovery Service: BizManage does not provide data recovery, backup restoration, or any service to retrieve deleted data. While automated backups exist for disaster recovery, they are not accessible to users or staff and cannot be used for individual data restoration. Do not rely on backups for data recovery after deletion.
         </Paragraph>
       </Section>
 
@@ -252,6 +351,8 @@ export default function PrivacyPolicyScreen() {
         <BulletPoint>Creating regular backups of your business data</BulletPoint>
         <BulletPoint>Consulting appropriate professionals for all tax, accounting, and legal compliance matters</BulletPoint>
         <BulletPoint>Verifying all reports and calculations before using them for any official purpose</BulletPoint>
+        <BulletPoint>Exporting and backing up all critical data before deleting any business or account</BulletPoint>
+        <BulletPoint>Understanding legal data retention requirements before initiating deletion</BulletPoint>
       </Section>
 
       <Section title="17. GDPR Compliance (EU Users)">
@@ -262,6 +363,9 @@ export default function PrivacyPolicyScreen() {
         <BulletPoint>Right to data portability in machine-readable format</BulletPoint>
         <BulletPoint>Right to object to automated decision-making</BulletPoint>
         <BulletPoint>Right to lodge complaints with supervisory authorities</BulletPoint>
+        <Paragraph>
+          17.1. Right to Erasure (GDPR Article 17): We fully comply with GDPR erasure requirements. Your data is deleted without undue delay upon request. Complete removal from active systems occurs immediately. Database backups are retained for a maximum of 30 days for disaster recovery, after which they are automatically purged. Exceptions apply only for legal compliance obligations, fraud prevention as required by law, or active legal proceedings. There is no charge for deletion requests. Account deletion confirmation is not provided as the account no longer exists after deletion.
+        </Paragraph>
       </Section>
 
       <Section title="18. CCPA Compliance (California Users)">
@@ -272,6 +376,9 @@ export default function PrivacyPolicyScreen() {
         <BulletPoint>Right to delete personal information</BulletPoint>
         <BulletPoint>Right to opt-out of sale (we do not sell data)</BulletPoint>
         <BulletPoint>Right to non-discrimination for exercising privacy rights</BulletPoint>
+        <Paragraph>
+          18.1. Right to Delete Personal Information (CCPA Section 1798.105): All deletion requests are honored free of charge and completed immediately upon confirmation (well within the legally required 45-day maximum). You will not face discrimination for exercising your deletion rights. Exceptions apply only for legal compliance requirements, fraud prevention, and business necessity as defined by CCPA. The deletion scope is clearly communicated before confirmation, and all related data is permanently removed using CASCADE deletion.
+        </Paragraph>
       </Section>
 
       <Section title="19. Changes to Privacy Policy">
