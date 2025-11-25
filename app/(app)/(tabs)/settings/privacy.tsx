@@ -53,7 +53,7 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="1. Introduction">
         <Paragraph>
-          Business Manager Pro ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile and web application.
+          BizManage ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile and web application.
         </Paragraph>
       </Section>
 
@@ -395,7 +395,7 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="21. Consent">
         <Paragraph>
-          By using Business Manager Pro, you consent to the collection, use, and processing of your information as described in this Privacy Policy.
+          By using BizManage, you consent to the collection, use, and processing of your information as described in this Privacy Policy.
         </Paragraph>
       </Section>
 
