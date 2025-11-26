@@ -1,0 +1,32 @@
+name: Deploy Android to Play Store
+
+on:
+  workflow_dispatch:  # manual trigger only
+
+jobs:
+  build-and-submit-android:
+    name: Build and Submit Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 📦 Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 📂 Install dependencies
+        run: npm install
+
+      - name: Build & Submit to Google Play
+        run: |
+          eas build -p android --profile production --non-interactive \
+          --submit
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}

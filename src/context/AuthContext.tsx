@@ -169,6 +169,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const autoRedirectRef = useRef<boolean>(false);
   const isExplicitSignOutRef = useRef<boolean>(false);
   const signedOutDueToInactivityRef = useRef<boolean>(false);
+  const recentlyAuthenticatedRef = useRef<boolean>(false);
+  const lastAuthenticationTimeRef = useRef<number>(0);
 
   // Router context for auto-redirect on business assignment
   const router = useRouter();
@@ -753,8 +755,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSignedOutDueToInactivity(false);
           signedOutDueToInactivityRef.current = false;
 
-          // Update last activity timestamp
-          await updateLastActivityTimestamp();
+          // Set flag to indicate user just authenticated
+          recentlyAuthenticatedRef.current = true;
+          lastAuthenticationTimeRef.current = Date.now();
+
+          // CRITICAL: Immediately clear any old timestamps from previous sessions
+          // and set a fresh timestamp to prevent race conditions
+          console.log('SIGNED_IN: Clearing old timestamp and setting fresh one');
+          try {
+            // Remove old timestamp first to clear stale data
+            await AsyncStorage.removeItem('lastActivityTimestamp');
+            // Set new timestamp with current time
+            await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
+            console.log('SIGNED_IN: Fresh timestamp set successfully');
+          } catch (error) {
+            console.error('SIGNED_IN: Error setting fresh timestamp:', error);
+          }
+
+          // Clear the recently authenticated flag after 60 seconds
+          setTimeout(() => {
+            recentlyAuthenticatedRef.current = false;
+            console.log('Recently authenticated grace period ended');
+          }, 60000);
         }
 
         // Reset the explicit sign out flag for other events
@@ -1380,19 +1402,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkSessionActivity = async (currentSession: Session) => {
     try {
       console.log('Checking session activity');
+
+      // CRITICAL FIX: Don't sign out if user just authenticated (grace period: 60 seconds)
+      const timeSinceAuthentication = Date.now() - lastAuthenticationTimeRef.current;
+      if (recentlyAuthenticatedRef.current || timeSinceAuthentication < 60000) {
+        console.log('User recently authenticated, skipping inactivity check', {
+          recentlyAuthenticated: recentlyAuthenticatedRef.current,
+          timeSinceAuth: `${(timeSinceAuthentication / 1000).toFixed(1)}s`,
+          gracePeriod: '60s'
+        });
+        // Ensure timestamp exists for next check
+        const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
+        if (!lastActivity) {
+          console.log('No timestamp found during grace period, creating one');
+          await updateLastActivityTimestamp();
+        }
+        return;
+      }
+
       const lastActivity = await AsyncStorage.getItem('lastActivityTimestamp');
-      
+
       if (lastActivity) {
         const lastActivityTime = parseInt(lastActivity, 10);
         const currentTime = Date.now();
-        
+
+        // Additional safety: Don't sign out if timestamp was just updated (within last 5 seconds)
+        // This prevents race conditions where timestamp is being written
+        const timeSinceLastActivity = currentTime - lastActivityTime;
+        if (timeSinceLastActivity < 5000) {
+          console.log('Timestamp recently updated, skipping inactivity check', {
+            timeSinceLastActivity: `${(timeSinceLastActivity / 1000).toFixed(1)}s`
+          });
+          return;
+        }
+
         // If inactive for more than one week, sign out
-        if (currentTime - lastActivityTime > INACTIVITY_TIMEOUT) {
-          console.log('Session expired due to inactivity');
+        if (timeSinceLastActivity > INACTIVITY_TIMEOUT) {
+          console.log('Session expired due to inactivity', {
+            lastActivityTime: new Date(lastActivityTime).toISOString(),
+            inactiveDuration: `${(timeSinceLastActivity / (24 * 60 * 60 * 1000)).toFixed(1)} days`,
+            threshold: '7 days'
+          });
           setSignedOutDueToInactivity(true);
           await supabase.auth.signOut();
         } else {
-          console.log('Session is still active, last activity:', new Date(lastActivityTime).toISOString());
+          console.log('Session is still active', {
+            lastActivity: new Date(lastActivityTime).toISOString(),
+            inactiveDuration: `${(timeSinceLastActivity / (60 * 60 * 1000)).toFixed(1)} hours`
+          });
         }
       } else {
         // If no last activity timestamp exists, create one
