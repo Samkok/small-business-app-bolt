@@ -12,11 +12,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
+import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
 
 export default function CheckoutScreen() {
@@ -25,12 +27,14 @@ export default function CheckoutScreen() {
   const [notes, setNotes] = useState('');
   const [saleDate, setSaleDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { getCart, getCartSummary, completeSale } = useCart();
+  const { salesCountData, showPaywall } = useSubscription();
 
   // Get cart and summary
   const cart = getCart(cartId as string);
@@ -74,20 +78,24 @@ export default function CheckoutScreen() {
       }
 
       const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes);
-      
+
       if (result.success) {
         Alert.alert(
           'Sale Completed',
           'The sale has been successfully completed!',
           [
-            { 
-              text: 'OK', 
+            {
+              text: 'OK',
               onPress: () => router.replace('/sales')
             }
           ]
         );
       } else {
-        Alert.alert('Error', result.error || 'Failed to complete sale');
+        if (result.error?.includes('free limit') || result.error?.includes('upgrade')) {
+          setShowUpgradePrompt(true);
+        } else {
+          Alert.alert('Error', result.error || 'Failed to complete sale');
+        }
       }
     } catch (error) {
       console.error('Error completing sale:', error);
@@ -96,6 +104,11 @@ export default function CheckoutScreen() {
       setProcessing(false);
     }
   }, [currentBusiness?.id, cartId, cart, paymentMethod, saleDate, notes, completeSale, router]);
+
+  const handleUpgradeFromPrompt = useCallback(() => {
+    setShowUpgradePrompt(false);
+    showPaywall();
+  }, [showPaywall]);
 
   if (!cart || !cartSummary) {
     return (
@@ -360,6 +373,15 @@ export default function CheckoutScreen() {
           </Card>
         </View>
       </Modal>
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        onUpgrade={handleUpgradeFromPrompt}
+        salesCount={salesCountData.salesCount}
+        message="You've reached the free limit. Upgrade to continue creating sales."
+      />
     </View>
   );
 }

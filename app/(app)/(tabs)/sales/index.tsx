@@ -40,11 +40,16 @@ import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckout
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
+import { WarningBanner } from '@/src/components/subscription/WarningBanner';
+import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
 import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
+import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SALES_PER_PAGE = 10;
+const WARNING_BANNER_DISMISSED_KEY = 'warning_banner_dismissed_';
 
 export default function SalesScreen() {
   const [sales, setSales] = useState<any[]>([]);
@@ -62,6 +67,8 @@ export default function SalesScreen() {
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidingInProgress, setVoidingInProgress] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [warningBannerDismissed, setWarningBannerDismissed] = useState(false);
 
   // Analytics states
   const [analytics, setAnalytics] = useState({
@@ -245,6 +252,44 @@ export default function SalesScreen() {
       useNativeDriver: false,
     }).start();
   }, [statsCollapsed, collapseAnim]);
+
+  useEffect(() => {
+    const loadWarningBannerState = async () => {
+      if (!currentBusiness?.id) return;
+      try {
+        const key = `${WARNING_BANNER_DISMISSED_KEY}${currentBusiness.id}`;
+        const dismissed = await AsyncStorage.getItem(key);
+        setWarningBannerDismissed(dismissed === 'true');
+      } catch (error) {
+        console.error('Error loading warning banner state:', error);
+      }
+    };
+    loadWarningBannerState();
+  }, [currentBusiness?.id, salesCountData.salesCount]);
+
+  const handleDismissWarning = useCallback(async () => {
+    if (!currentBusiness?.id) return;
+    try {
+      const key = `${WARNING_BANNER_DISMISSED_KEY}${currentBusiness.id}`;
+      await AsyncStorage.setItem(key, 'true');
+      setWarningBannerDismissed(true);
+    } catch (error) {
+      console.error('Error dismissing warning banner:', error);
+    }
+  }, [currentBusiness?.id]);
+
+  const handleUpgradeFromPrompt = useCallback(() => {
+    setShowUpgradePrompt(false);
+    showPaywall();
+  }, [showPaywall]);
+
+  const shouldShowWarningBanner = useCallback(() => {
+    if (salesCountData.isAtLimit || canAccessFeature || warningBannerDismissed) {
+      return false;
+    }
+    const percentageUsed = (salesCountData.salesCount / FREE_TIER_LIMIT) * 100;
+    return percentageUsed >= 80;
+  }, [salesCountData, canAccessFeature, warningBannerDismissed]);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -440,8 +485,12 @@ export default function SalesScreen() {
   }, [deleteCart]);
 
   const handleNewSale = useCallback(() => {
+    if (salesCountData.isAtLimit && !canAccessFeature) {
+      setShowUpgradePrompt(true);
+      return;
+    }
     router.push('/sales/customer-selection');
-  }, [router]);
+  }, [router, salesCountData.isAtLimit, canAccessFeature]);
 
   const handleCartPress = useCallback((cartId: string) => {
     router.push(`/sales/cart/${cartId}`);
@@ -834,20 +883,45 @@ export default function SalesScreen() {
           onUpgrade={showPaywall}
         />
       )}
+      {!salesCountData.isAtLimit && shouldShowWarningBanner() && (
+        <WarningBanner
+          salesCount={salesCountData.salesCount}
+          remainingSales={salesCountData.remainingSales}
+          totalLimit={FREE_TIER_LIMIT}
+          onUpgrade={showPaywall}
+          onDismiss={handleDismissWarning}
+          dismissible={true}
+        />
+      )}
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {t('sales.title')}
         </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
-            onPress={openInstantCheckoutModal}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+              }
+            ]}
+            onPress={salesCountData.isAtLimit && !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+            disabled={salesCountData.isAtLimit && !canAccessFeature}
           >
             <Zap size={24} color="#ffffff" />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#2563eb',
+                marginLeft: 8,
+                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+              }
+            ]}
             onPress={handleNewSale}
+            disabled={salesCountData.isAtLimit && !canAccessFeature}
           >
             <Plus size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -1176,6 +1250,15 @@ export default function SalesScreen() {
         visible={isPaywallVisible}
         onClose={hidePaywall}
         canClose={true}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        onUpgrade={handleUpgradeFromPrompt}
+        salesCount={salesCountData.salesCount}
+        message="You've reached the free limit. Upgrade to continue creating sales and unlock all features."
       />
     </View>
   );

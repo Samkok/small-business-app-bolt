@@ -14,6 +14,7 @@ import {
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { instantCheckoutService } from '@/src/services/instantCheckout';
 import { useRouter } from 'expo-router';
 import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode } from 'lucide-react-native';
@@ -23,6 +24,7 @@ import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
+import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 
@@ -56,6 +58,7 @@ export function InstantCheckoutModal() {
   } = useInstantCheckout();
 
   const router = useRouter();
+  const { salesCountData, canAccessFeature, showPaywall } = useSubscription();
   const [completing, setCompleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
@@ -71,6 +74,7 @@ export function InstantCheckoutModal() {
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -236,6 +240,11 @@ export function InstantCheckoutModal() {
       return;
     }
 
+    if (salesCountData.isAtLimit && !canAccessFeature) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
     if (!session.payment_method) {
       Alert.alert('Error', 'Please select a payment method');
       return;
@@ -346,6 +355,11 @@ export function InstantCheckoutModal() {
     setShowPostSaleModal(false);
     setCompletedSaleInfo(null);
     clearSession();
+  };
+
+  const handleUpgradeFromPrompt = () => {
+    setShowUpgradePrompt(false);
+    showPaywall();
   };
 
   const summary = getSessionSummary();
@@ -825,6 +839,15 @@ export function InstantCheckoutModal() {
           onNewSale={handleNewSaleFromPost}
         />
       )}
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        onUpgrade={handleUpgradeFromPrompt}
+        salesCount={salesCountData.salesCount}
+        message="You've reached the free limit. Upgrade to continue creating sales."
+      />
     </Modal>
   );
 }
