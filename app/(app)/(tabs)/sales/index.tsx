@@ -59,7 +59,7 @@ export default function SalesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('carts');
+  const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('sales');
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateFilterTypeModal, setShowDateFilterTypeModal] = useState(false);
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
