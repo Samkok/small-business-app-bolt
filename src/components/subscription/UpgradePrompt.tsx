@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Lock, TrendingUp } from 'lucide-react-native';
@@ -41,7 +40,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
@@ -50,115 +49,107 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
           activeOpacity={1}
           onPress={onClose}
         />
-        <View style={[
-          styles.bottomSheet,
-          isDark && styles.bottomSheetDark,
-          { paddingBottom: Math.max(24, insets.bottom + 24) }
-        ]}>
-          <View style={[styles.dragHandle, isDark && styles.dragHandleDark]} />
-
+        <View style={[styles.modal, isDark && styles.modalDark]}>
           <TouchableOpacity
-            style={[styles.closeButton, isDark && styles.closeButtonDark]}
+            style={[
+              styles.closeButton,
+              isDark && styles.closeButtonDark,
+              { top: Math.max(16, insets.top + 16) }
+            ]}
             onPress={onClose}
           >
             <X size={20} color={isDark ? '#ffffff' : '#000000'} />
           </TouchableOpacity>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.iconContainer, isDark && styles.iconContainerDark]}>
-              <Lock size={40} color="#f59e0b" />
-            </View>
+          <View style={[styles.iconContainer, isDark && styles.iconContainerDark]}>
+            <Lock size={40} color="#f59e0b" />
+          </View>
 
-            <Text style={[styles.title, isDark && styles.titleDark]}>
-              Upgrade to Continue
-            </Text>
+          <Text style={[styles.title, isDark && styles.titleDark]}>
+            Upgrade to Continue
+          </Text>
 
-            <View style={[styles.statsContainer, isDark && styles.statsContainerDark]}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, isDark && styles.statValueDark]}>
-                  {salesCount}
-                </Text>
-                <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
-                  Sales Created
-                </Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, isDark && styles.statValueDark]}>
-                  {FREE_TIER_LIMIT}
-                </Text>
-                <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
-                  Free Limit
-                </Text>
-              </View>
-            </View>
-
-            <Text style={[styles.message, isDark && styles.messageDark]}>
-              {message || `You've reached the free limit of ${FREE_TIER_LIMIT} sales. Upgrade to BizManage Pro to unlock unlimited sales and full access to all features.`}
-            </Text>
-
-            <View style={styles.benefitsContainer}>
-              <View style={styles.benefitRow}>
-                <TrendingUp size={20} color="#10b981" />
-                <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                  Unlimited sales transactions
-                </Text>
-              </View>
-              <View style={styles.benefitRow}>
-                <TrendingUp size={20} color="#10b981" />
-                <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                  Full access to all features
-                </Text>
-              </View>
-              <View style={styles.benefitRow}>
-                <TrendingUp size={20} color="#10b981" />
-                <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                  Advanced reporting and analytics
-                </Text>
-              </View>
-            </View>
-
-            {(monthlyProduct || yearlyProduct) && (
-              <View style={[styles.pricingContainer, isDark && styles.pricingContainerDark]}>
-                {monthlyProduct && (
-                  <View style={styles.priceRow}>
-                    <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
-                      Monthly
-                    </Text>
-                    <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
-                      {monthlyProduct.localizedPrice || monthlyProduct.price}
-                    </Text>
-                  </View>
-                )}
-                {yearlyProduct && (
-                  <View style={styles.priceRow}>
-                    <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
-                      Yearly
-                    </Text>
-                    <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
-                      {yearlyProduct.localizedPrice || yearlyProduct.price}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            <Button
-              title="Upgrade to Pro"
-              onPress={onUpgrade}
-              style={styles.upgradeButton}
-            />
-
-            <TouchableOpacity onPress={onClose} style={styles.laterButton}>
-              <Text style={[styles.laterText, isDark && styles.laterTextDark]}>
-                Maybe Later
+          <View style={[styles.statsContainer, isDark && styles.statsContainerDark]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, isDark && styles.statValueDark]}>
+                {salesCount}
               </Text>
-            </TouchableOpacity>
-          </ScrollView>
+              <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
+                Sales Created
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, isDark && styles.statValueDark]}>
+                {FREE_TIER_LIMIT}
+              </Text>
+              <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
+                Free Limit
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.message, isDark && styles.messageDark]}>
+            {message || `You've reached the free limit of ${FREE_TIER_LIMIT} sales. Upgrade to BizManage Pro to unlock unlimited sales and full access to all features.`}
+          </Text>
+
+          <View style={styles.benefitsContainer}>
+            <View style={styles.benefitRow}>
+              <TrendingUp size={20} color="#10b981" />
+              <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
+                Unlimited sales transactions
+              </Text>
+            </View>
+            <View style={styles.benefitRow}>
+              <TrendingUp size={20} color="#10b981" />
+              <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
+                Full access to all features
+              </Text>
+            </View>
+            <View style={styles.benefitRow}>
+              <TrendingUp size={20} color="#10b981" />
+              <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
+                Advanced reporting and analytics
+              </Text>
+            </View>
+          </View>
+
+          {(monthlyProduct || yearlyProduct) && (
+            <View style={[styles.pricingContainer, isDark && styles.pricingContainerDark]}>
+              {monthlyProduct && (
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
+                    Monthly
+                  </Text>
+                  <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
+                    {monthlyProduct.localizedPrice || monthlyProduct.price}
+                  </Text>
+                </View>
+              )}
+              {yearlyProduct && (
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
+                    Yearly
+                  </Text>
+                  <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
+                    {yearlyProduct.localizedPrice || yearlyProduct.price}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          <Button
+            title="Upgrade to Pro"
+            onPress={onUpgrade}
+            style={styles.upgradeButton}
+          />
+
+          <TouchableOpacity onPress={onClose} style={styles.laterButton}>
+            <Text style={[styles.laterText, isDark && styles.laterTextDark]}>
+              Maybe Later
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -169,40 +160,24 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  bottomSheet: {
+  modal: {
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 24,
-    maxHeight: '90%',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 10,
+    elevation: 5,
   },
-  bottomSheetDark: {
+  modalDark: {
     backgroundColor: '#1f2937',
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#d1d5db',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  dragHandleDark: {
-    backgroundColor: '#4b5563',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 8,
   },
   closeButton: {
     position: 'absolute',
