@@ -17,7 +17,6 @@ if (Platform.OS !== 'web') {
 
 const IOS_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
 const ANDROID_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
-const POLLING_INTERVAL_MS = 3 * 60 * 1000;
 
 export interface SubscriptionProduct {
   productId: string;
@@ -79,8 +78,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
 
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
 
   const initializeIAP = useCallback(async () => {
@@ -165,41 +164,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, [user?.id, currentBusiness?.id]);
 
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    if (!user?.id || !isAppActiveRef.current) {
-      return;
-    }
-
-    console.log('[SubscriptionContext] Starting polling for subscription status');
-
-    pollingIntervalRef.current = setInterval(async () => {
-      if (!isAppActiveRef.current) {
-        return;
-      }
-
-      console.log('[SubscriptionContext] Polling subscription status');
-      await refreshSubscriptionStatus(true);
-      if (currentBusiness?.id) {
-        await refreshSalesCount();
-        await checkFeatureAccess(true);
-      }
-    }, POLLING_INTERVAL_MS);
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
-
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      console.log('[SubscriptionContext] Stopping polling');
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  }, []);
-
   const setupRealtimeSubscription = useCallback(() => {
-    if (!user?.id || Platform.OS === 'web') {
+    if (!user?.id) {
       return;
     }
 
@@ -214,14 +180,42 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'user_subscriptions',
           filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
           console.log('[SubscriptionContext] Received realtime update:', payload);
+
+          if (payload.new) {
+            const newStatus = payload.new as any;
+            const isExpired = newStatus.subscription_expiration_date &&
+              new Date(newStatus.subscription_expiration_date) < new Date();
+            const actuallySubscribed = newStatus.subscription_status === 'active' && !isExpired;
+
+            setSubscriptionStatus({
+              isSubscribed: actuallySubscribed,
+              subscriptionStatus: isExpired ? 'expired' : newStatus.subscription_status,
+              productId: newStatus.subscription_product_id,
+              expirationDate: newStatus.subscription_expiration_date,
+              platform: newStatus.platform
+            });
+            setIsSubscribed(actuallySubscribed);
+          }
+
           await subscriptionService.clearSubscriptionCache();
+          await refreshSubscriptionStatus(true);
+          if (currentBusiness?.id) {
+            await checkFeatureAccess(true);
+          }
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'subscription_updated' },
+        async (payload) => {
+          console.log('[SubscriptionContext] Received broadcast:', payload);
           await refreshSubscriptionStatus(true);
           if (currentBusiness?.id) {
             await checkFeatureAccess(true);
@@ -230,16 +224,70 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       )
       .subscribe((status) => {
         console.log('[SubscriptionContext] Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[SubscriptionContext] ✓ Connected to realtime');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[SubscriptionContext] ✗ Realtime connection error');
+        }
       });
 
     realtimeChannelRef.current = channel;
   }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, checkFeatureAccess]);
+
+  const setupSalesCountRealtime = useCallback(() => {
+    if (!user?.id || !currentBusiness?.id) {
+      return;
+    }
+
+    if (salesCountChannelRef.current) {
+      salesCountChannelRef.current.unsubscribe();
+    }
+
+    console.log('[SubscriptionContext] Setting up sales count realtime');
+
+    const channel = supabase
+      .channel(`sales-count-${user.id}-${currentBusiness.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_sales_counts',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          console.log('[SubscriptionContext] Sales count changed:', payload);
+          if (payload.new && (payload.new as any).business_id === currentBusiness.id) {
+            const newCount = (payload.new as any).sales_count;
+            setSalesCountData({
+              salesCount: newCount,
+              remainingSales: Math.max(0, FREE_TIER_LIMIT - newCount),
+              isAtLimit: newCount >= FREE_TIER_LIMIT
+            });
+            await checkFeatureAccess(true);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[SubscriptionContext] Sales count realtime status:', status);
+      });
+
+    salesCountChannelRef.current = channel;
+  }, [user?.id, currentBusiness?.id, checkFeatureAccess]);
 
   const cleanupRealtimeSubscription = useCallback(() => {
     if (realtimeChannelRef.current) {
       console.log('[SubscriptionContext] Cleaning up realtime subscription');
       realtimeChannelRef.current.unsubscribe();
       realtimeChannelRef.current = null;
+    }
+  }, []);
+
+  const cleanupSalesCountRealtime = useCallback(() => {
+    if (salesCountChannelRef.current) {
+      console.log('[SubscriptionContext] Cleaning up sales count realtime');
+      salesCountChannelRef.current.unsubscribe();
+      salesCountChannelRef.current = null;
     }
   }, []);
 
@@ -272,6 +320,15 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           if (success) {
             await refreshSubscriptionStatus();
             await checkFeatureAccess();
+
+            if (realtimeChannelRef.current) {
+              await realtimeChannelRef.current.send({
+                type: 'broadcast',
+                event: 'subscription_updated',
+                payload: { userId: user!.id, status: 'active' }
+              });
+            }
+
             return true;
           }
         }
@@ -385,10 +442,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           refreshSalesCount();
           checkFeatureAccess(true);
         }
-        startPolling();
       } else {
-        console.log('[SubscriptionContext] App became inactive, stopping polling');
-        stopPolling();
+        console.log('[SubscriptionContext] App became inactive');
       }
     };
 
@@ -397,19 +452,22 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       subscription.remove();
     };
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess, startPolling, stopPolling]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
 
   useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
-      startPolling();
       setupRealtimeSubscription();
+
+      if (currentBusiness?.id) {
+        setupSalesCountRealtime();
+      }
     }
 
     return () => {
-      stopPolling();
       cleanupRealtimeSubscription();
+      cleanupSalesCountRealtime();
     };
-  }, [user?.id, startPolling, stopPolling, setupRealtimeSubscription, cleanupRealtimeSubscription]);
+  }, [user?.id, currentBusiness?.id, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
 
   useEffect(() => {
     if (isInitialized) {

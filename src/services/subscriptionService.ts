@@ -324,12 +324,32 @@ export const subscriptionService = {
     productId: string | null;
   }> {
     try {
-      console.log('Receipt validation called:', { platform, receiptLength: receipt.length });
+      console.log('Validating receipt with backend:', { platform, receiptLength: receipt.length });
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data, error } = await supabase.functions.invoke('validate-subscription', {
+        body: {
+          receipt,
+          platform,
+          userId: userData.user.id,
+        },
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
+      }
+
+      console.log('Receipt validation result:', data);
 
       return {
-        isValid: true,
-        expiresDate: null,
-        productId: platform === 'ios' ? 'bizmanage.pro.month' : null
+        isValid: data.isValid,
+        expiresDate: data.expiresDate ? new Date(data.expiresDate) : null,
+        productId: data.productId,
       };
     } catch (error) {
       console.error('Error validating receipt:', error);
