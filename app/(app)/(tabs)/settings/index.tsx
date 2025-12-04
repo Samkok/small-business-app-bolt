@@ -11,6 +11,7 @@ import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useLanguage } from '@/src/context/LanguageContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Button } from '@/src/components/ui/Button';
@@ -27,7 +28,8 @@ import {
   Shield,
   Bell,
   Trash2,
-  TriangleAlert as AlertTriangle
+  TriangleAlert as AlertTriangle,
+  Crown
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
@@ -45,6 +47,7 @@ export default function SettingsScreen() {
   const { signOut, userProfile, currentBusiness, userBusinesses } = useAuth();
   const { changeLanguage, currentLanguage } = useLanguage();
   const { unreadCount } = useNotifications();
+  const { isSubscribed, salesCountData } = useSubscription();
   const router = useRouter();
   const { deleteBusiness, isDeleting } = useBusinessDeletion();
   const { deleteAccount } = useAccountDeletion();
@@ -237,6 +240,13 @@ export default function SettingsScreen() {
         />
 
         <SettingItem
+          icon={<Crown size={20} color={isSubscribed ? "#f59e0b" : "#9ca3af"} />}
+          title="Subscription"
+          subtitle={isSubscribed ? "BizManage Pro - Active" : `${salesCountData.salesCount}/50 sales used`}
+          onPress={() => router.push('/settings/subscription')}
+        />
+
+        <SettingItem
           icon={<Building size={20} color="#8b5cf6" />}
           title={t('settings.businessSettings')}
           subtitle={t('settings.businessSubtitle')}
@@ -286,6 +296,20 @@ export default function SettingsScreen() {
           }}
         />
       </View>
+
+      {__DEV__ && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            Developer Tools
+          </Text>
+          <SettingItem
+            icon={<Crown size={20} color="#ef4444" />}
+            title="Debug Subscription"
+            subtitle="Test subscription states and sales counts"
+            onPress={() => router.push('/settings/debug-subscription')}
+          />
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>

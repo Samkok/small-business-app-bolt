@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { cartService } from '@/src/services/carts';
 import { productService } from '@/src/services/products';
 import { salesService } from '@/src/services/sales';
+import { subscriptionService } from '@/src/services/subscriptionService';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 
 // Types
@@ -494,9 +495,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'No business currentBusiness found' };
     }
 
+    if (!user?.id) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
     try {
+      const hasAccess = await subscriptionService.canAccessFeature(user.id, currentBusiness.id);
+
+      if (!hasAccess) {
+        return {
+          success: false,
+          error: 'You\'ve reached the free limit. Please upgrade to continue.'
+        };
+      }
+
       const cart = carts.find(c => c.id === cartId);
-      // Complete the sale on the server
       const sale = await salesService.completeSale({
         cart_id: cartId,
         customer_id: cart?.customer_id || '',
@@ -506,16 +519,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         business_id: currentBusiness.id,
         created_by: user.id
       });
-      
-      // Update local state to remove the completed cart
+
+      await subscriptionService.incrementSalesCount(user.id, currentBusiness.id);
+
       setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
-      
+
       return { success: true, saleId: sale.id };
     } catch (error) {
       console.error('Error completing sale:', error);
       return { success: false, error: 'Failed to complete sale' };
     }
-  }, [currentBusiness, carts]);
+  }, [currentBusiness, carts, user]);
 
   const value = {
     carts,

@@ -606,6 +606,73 @@ export interface Database {
           created_at?: string;
         };
       };
+      user_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          subscription_status: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_product_id?: string;
+          subscription_start_date?: string;
+          subscription_expiration_date?: string;
+          receipt_data?: string;
+          last_validated_at?: string;
+          platform?: 'ios' | 'android' | 'web';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          subscription_status?: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_product_id?: string;
+          subscription_start_date?: string;
+          subscription_expiration_date?: string;
+          receipt_data?: string;
+          last_validated_at?: string;
+          platform?: 'ios' | 'android' | 'web';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          subscription_status?: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_product_id?: string;
+          subscription_start_date?: string;
+          subscription_expiration_date?: string;
+          receipt_data?: string;
+          last_validated_at?: string;
+          platform?: 'ios' | 'android' | 'web';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      user_sales_counts: {
+        Row: {
+          user_id: string;
+          business_id: string;
+          sales_count: number;
+          last_counted_at?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          business_id: string;
+          sales_count?: number;
+          last_counted_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          business_id?: string;
+          sales_count?: number;
+          last_counted_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -647,6 +714,31 @@ export interface Database {
           business_id_param: string;
         };
         Returns: boolean;
+      };
+      get_or_create_sales_count: {
+        Args: {
+          p_user_id: string;
+          p_business_id: string;
+        };
+        Returns: number;
+      };
+      increment_sales_count: {
+        Args: {
+          p_user_id: string;
+          p_business_id: string;
+        };
+        Returns: number;
+      };
+      get_subscription_status: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: {
+          is_subscribed: boolean;
+          subscription_status: string;
+          product_id: string;
+          expiration_date: string;
+        }[];
       };
     };
     Enums: {

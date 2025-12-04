@@ -20,6 +20,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -37,6 +38,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
+import { Paywall } from '@/src/components/subscription/Paywall';
+import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
 import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
@@ -89,6 +92,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
+  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible } = useSubscription();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -824,6 +828,12 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+      {salesCountData.isAtLimit && !canAccessFeature && (
+        <ReadOnlyBanner
+          salesCount={salesCountData.salesCount}
+          onUpgrade={showPaywall}
+        />
+      )}
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {t('sales.title')}
@@ -1160,6 +1170,13 @@ export default function SalesScreen() {
 
       {/* Instant Checkout Modal */}
       <InstantCheckoutModal />
+
+      {/* Subscription Paywall */}
+      <Paywall
+        visible={isPaywallVisible}
+        onClose={hidePaywall}
+        canClose={true}
+      />
     </View>
   );
 }
