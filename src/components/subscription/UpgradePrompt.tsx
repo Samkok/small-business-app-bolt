@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
+  Dimensions,
+  TouchableWithoutFeedback
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolate
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Lock, TrendingUp } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
 import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.75;
 
 interface UpgradePromptProps {
   visible: boolean;
@@ -33,37 +47,106 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   const { products } = useSubscription();
   const insets = useSafeAreaInsets();
 
+  const translateY = useSharedValue(0);
+  const context = useSharedValue({ y: 0 });
+  const [isSheetVisible, setIsSheetVisible] = useState(false);
+
   const monthlyProduct = products.find(p => p.type === 'monthly');
   const yearlyProduct = products.find(p => p.type === 'yearly');
+
+  useEffect(() => {
+    if (visible) {
+      setIsSheetVisible(true);
+      translateY.value = withSpring(MAX_TRANSLATE_Y, {
+        damping: 50,
+        stiffness: 400
+      });
+    } else {
+      translateY.value = withTiming(0, { duration: 250 }, () => {
+        runOnJS(setIsSheetVisible)(false);
+      });
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    translateY.value = withTiming(0, { duration: 250 });
+    setTimeout(onClose, 250);
+  };
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value };
+    })
+    .onUpdate((event) => {
+      const newTranslateY = context.value.y + event.translationY;
+      translateY.value = Math.min(0, Math.max(newTranslateY, MAX_TRANSLATE_Y));
+    })
+    .onEnd((event) => {
+      if (event.translationY > 100) {
+        translateY.value = withTiming(0, { duration: 250 });
+        runOnJS(handleClose)();
+      } else {
+        translateY.value = withSpring(MAX_TRANSLATE_Y, {
+          damping: 50,
+          stiffness: 400
+        });
+      }
+    });
+
+  const rBottomSheetStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
+
+  const rBackdropStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      translateY.value,
+      [MAX_TRANSLATE_Y, 0],
+      [1, 0],
+      Extrapolate.CLAMP
+    );
+    return {
+      opacity,
+    };
+  });
+
+  if (!isSheetVisible) return null;
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={onClose}
-        />
-        <View style={[styles.modal, isDark && styles.modalDark]}>
-          <TouchableOpacity
-            style={[
-              styles.closeButton,
-              isDark && styles.closeButtonDark,
-              { top: Math.max(16, insets.top + 16) }
-            ]}
-            onPress={onClose}
-          >
-            <X size={20} color={isDark ? '#ffffff' : '#000000'} />
-          </TouchableOpacity>
+      <View style={styles.modalContainer}>
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <Animated.View style={[styles.backdrop, rBackdropStyle]} />
+        </TouchableWithoutFeedback>
 
-          <View style={[styles.iconContainer, isDark && styles.iconContainerDark]}>
-            <Lock size={40} color="#f59e0b" />
-          </View>
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={[styles.bottomSheetContainer, rBottomSheetStyle]}>
+            <View style={[styles.bottomSheet, isDark && styles.bottomSheetDark]}>
+              <View style={styles.dragIndicatorContainer}>
+                <View style={[styles.dragIndicator, isDark && styles.dragIndicatorDark]} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.closeButton, isDark && styles.closeButtonDark]}
+                onPress={handleClose}
+              >
+                <X size={20} color={isDark ? '#ffffff' : '#000000'} />
+              </TouchableOpacity>
+
+              <View style={[
+                styles.content,
+                { paddingBottom: Math.max(24, insets.bottom + 24) }
+              ]}>
+                <View style={[styles.iconContainer, isDark && styles.iconContainerDark]}>
+                  <Lock size={36} color="#f59e0b" />
+                </View>
 
           <Text style={[styles.title, isDark && styles.titleDark]}>
             Upgrade to Continue
@@ -145,47 +228,69 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
             style={styles.upgradeButton}
           />
 
-          <TouchableOpacity onPress={onClose} style={styles.laterButton}>
-            <Text style={[styles.laterText, isDark && styles.laterTextDark]}>
-              Maybe Later
-            </Text>
-          </TouchableOpacity>
-        </View>
+                <TouchableOpacity onPress={handleClose} style={styles.laterButton}>
+                  <Text style={[styles.laterText, isDark && styles.laterTextDark]}>
+                    Maybe Later
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        </GestureDetector>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-end',
   },
-  modal: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  bottomSheetContainer: {
+    height: SCREEN_HEIGHT,
     width: '100%',
-    maxWidth: 400,
+    position: 'absolute',
+    top: SCREEN_HEIGHT,
+  },
+  bottomSheet: {
+    height: '100%',
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowRadius: 16,
     elevation: 5,
   },
-  modalDark: {
+  bottomSheetDark: {
     backgroundColor: '#1f2937',
+  },
+  dragIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+  },
+  dragIndicatorDark: {
+    backgroundColor: '#4b5563',
   },
   closeButton: {
     position: 'absolute',
     top: 16,
     right: 16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
@@ -194,10 +299,14 @@ const styles = StyleSheet.create({
   closeButtonDark: {
     backgroundColor: '#374151',
   },
+  content: {
+    padding: 24,
+    paddingTop: 8,
+  },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#fef3c7',
     justifyContent: 'center',
     alignItems: 'center',

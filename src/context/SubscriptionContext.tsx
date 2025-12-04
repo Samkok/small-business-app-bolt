@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 import { useAuth } from './AuthContext';
+import { Paywall } from '@/src/components/subscription/Paywall';
 
 let IAP: any = null;
 if (Platform.OS !== 'web') {
@@ -323,6 +324,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   return (
     <SubscriptionContext.Provider value={value}>
       {children}
+      <Paywall
+        visible={isPaywallVisible}
+        onClose={hidePaywall}
+        canClose={true}
+      />
     </SubscriptionContext.Provider>
   );
 };

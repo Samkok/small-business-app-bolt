@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,29 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions,
+  TouchableWithoutFeedback,
+  Platform
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolate
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Check, Zap, TrendingUp, Users, BarChart3, Cloud, Headphones } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.9;
 
 interface PaywallProps {
   visible: boolean;
@@ -25,9 +40,14 @@ interface PaywallProps {
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
   const { isDark } = useTheme();
   const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
+  const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  const translateY = useSharedValue(0);
+  const context = useSharedValue({ y: 0 });
+  const [isSheetVisible, setIsSheetVisible] = useState(false);
 
   const monthlyProduct = products.find(p => p.type === 'monthly');
   const yearlyProduct = products.find(p => p.type === 'yearly');
@@ -40,6 +60,64 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     { icon: Cloud, title: 'Cloud Sync & Backup', description: 'Automatic data backup and sync' },
     { icon: Headphones, title: 'Priority Support', description: 'Get help when you need it' }
   ];
+
+  useEffect(() => {
+    if (visible) {
+      setIsSheetVisible(true);
+      translateY.value = withSpring(MAX_TRANSLATE_Y, {
+        damping: 50,
+        stiffness: 400
+      });
+    } else {
+      translateY.value = withTiming(0, { duration: 250 }, () => {
+        runOnJS(setIsSheetVisible)(false);
+      });
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    if (!canClose) return;
+    translateY.value = withTiming(0, { duration: 250 });
+    setTimeout(onClose, 250);
+  };
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value };
+    })
+    .onUpdate((event) => {
+      const newTranslateY = context.value.y + event.translationY;
+      translateY.value = Math.min(0, Math.max(newTranslateY, MAX_TRANSLATE_Y));
+    })
+    .onEnd((event) => {
+      if (event.translationY > 100 && canClose) {
+        translateY.value = withTiming(0, { duration: 250 });
+        runOnJS(handleClose)();
+      } else {
+        translateY.value = withSpring(MAX_TRANSLATE_Y, {
+          damping: 50,
+          stiffness: 400
+        });
+      }
+    });
+
+  const rBottomSheetStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
+
+  const rBackdropStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      translateY.value,
+      [MAX_TRANSLATE_Y, 0],
+      [1, 0],
+      Extrapolate.CLAMP
+    );
+    return {
+      opacity,
+    };
+  });
 
   const handlePurchase = async (productId: string) => {
     try {
@@ -111,44 +189,59 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     }
   };
 
+  if (!isSheetVisible) return null;
+
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={canClose ? onClose : undefined}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={canClose ? handleClose : undefined}
     >
-      <LinearGradient
-        colors={isDark ? ['#1a1a2e', '#16213e'] : ['#ffffff', '#f0f4f8']}
-        style={styles.gradient}
-      >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {canClose && (
-            <TouchableOpacity
-              style={[styles.closeButton, isDark && styles.closeButtonDark]}
-              onPress={onClose}
-            >
-              <X size={24} color={isDark ? '#ffffff' : '#000000'} />
-            </TouchableOpacity>
-          )}
+      <View style={styles.modalContainer}>
+        <TouchableWithoutFeedback onPress={canClose ? handleClose : undefined}>
+          <Animated.View style={[styles.backdrop, rBackdropStyle]} />
+        </TouchableWithoutFeedback>
 
-          <View style={styles.header}>
-            <View style={[styles.badge, isDark && styles.badgeDark]}>
-              <Zap size={20} color="#f59e0b" />
-              <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>PREMIUM</Text>
-            </View>
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={[styles.bottomSheetContainer, rBottomSheetStyle]}>
+            <View style={[styles.bottomSheet, isDark && styles.bottomSheetDark]}>
+              <View style={styles.dragIndicatorContainer}>
+                <View style={[styles.dragIndicator, isDark && styles.dragIndicatorDark]} />
+              </View>
 
-            <Text style={[styles.title, isDark && styles.titleDark]}>
-              Upgrade to BizManage Pro
-            </Text>
-            <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-              Unlock unlimited sales and full access to all features
-            </Text>
-          </View>
+              {canClose && (
+                <TouchableOpacity
+                  style={[styles.closeButton, isDark && styles.closeButtonDark]}
+                  onPress={handleClose}
+                >
+                  <X size={20} color={isDark ? '#ffffff' : '#000000'} />
+                </TouchableOpacity>
+              )}
+
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={[
+                  styles.contentContainer,
+                  { paddingBottom: Math.max(24, insets.bottom + 24) }
+                ]}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                <View style={styles.header}>
+                  <View style={[styles.badge, isDark && styles.badgeDark]}>
+                    <Zap size={18} color="#f59e0b" />
+                    <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>PREMIUM</Text>
+                  </View>
+
+                  <Text style={[styles.title, isDark && styles.titleDark]}>
+                    Upgrade to BizManage Pro
+                  </Text>
+                  <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
+                    Unlock unlimited sales and full access to all features
+                  </Text>
+                </View>
 
           <View style={styles.plansContainer}>
             <TouchableOpacity
@@ -262,32 +355,65 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
             <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
               Auto-renewable. Cancel anytime. Terms apply.
             </Text>
-          </View>
-        </ScrollView>
-      </LinearGradient>
+                </View>
+              </ScrollView>
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  gradient: {
+  modalContainer: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
-  container: {
-    flex: 1,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  contentContainer: {
-    padding: 20,
-    paddingTop: 60,
-    paddingBottom: 40,
+  bottomSheetContainer: {
+    height: SCREEN_HEIGHT,
+    width: '100%',
+    position: 'absolute',
+    top: SCREEN_HEIGHT,
+  },
+  bottomSheet: {
+    height: '100%',
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  bottomSheetDark: {
+    backgroundColor: '#1f2937',
+  },
+  dragIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+  },
+  dragIndicatorDark: {
+    backgroundColor: '#4b5563',
   },
   closeButton: {
     position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
@@ -296,9 +422,16 @@ const styles = StyleSheet.create({
   closeButtonDark: {
     backgroundColor: '#374151',
   },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 20,
+    paddingTop: 8,
+  },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   badge: {
     flexDirection: 'row',
@@ -323,7 +456,7 @@ const styles = StyleSheet.create({
     color: '#fcd34d',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
     textAlign: 'center',
@@ -333,10 +466,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6b7280',
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    lineHeight: 22,
   },
   subtitleDark: {
     color: '#9ca3af',
@@ -344,7 +478,7 @@ const styles = StyleSheet.create({
   plansContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 30,
+    marginBottom: 24,
   },
   planCard: {
     flex: 1,
@@ -423,13 +557,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   featuresContainer: {
-    marginBottom: 30,
+    marginBottom: 24,
   },
   featuresTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   featuresTitleDark: {
     color: '#ffffff',
@@ -437,16 +571,17 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 14,
     gap: 12,
   },
   featureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#d1fae5',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   featureIconDark: {
     backgroundColor: '#064e3b',
@@ -455,24 +590,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   featureTitleDark: {
     color: '#ffffff',
   },
   featureDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   featureDescriptionDark: {
     color: '#9ca3af',
   },
   actionsContainer: {
-    gap: 16,
+    gap: 12,
+    marginTop: 8,
   },
   subscribeButton: {
     marginBottom: 0,
