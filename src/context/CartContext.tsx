@@ -500,15 +500,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const hasAccess = await subscriptionService.canAccessFeature(user.id, currentBusiness.id);
+      console.log('[CartContext] Validating feature access for sale completion');
+      const hasAccess = await subscriptionService.validateFeatureAccessForCriticalOperation(user.id, currentBusiness.id);
 
       if (!hasAccess) {
+        console.log('[CartContext] Access denied - limit reached or subscription expired');
         return {
           success: false,
           error: 'You\'ve reached the free limit. Please upgrade to continue.'
         };
       }
 
+      console.log('[CartContext] Access validated, completing sale');
       const cart = carts.find(c => c.id === cartId);
       const sale = await salesService.completeSale({
         cart_id: cartId,

@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 export const FREE_TIER_LIMIT = 50;
+const CACHE_TTL_MS = 2 * 60 * 1000;
 
 export interface SubscriptionStatus {
   isSubscribed: boolean;
@@ -16,6 +17,11 @@ export interface SalesCountData {
   salesCount: number;
   remainingSales: number;
   isAtLimit: boolean;
+}
+
+interface CachedSubscriptionData {
+  status: SubscriptionStatus;
+  cachedAt: number;
 }
 
 const SUBSCRIPTION_CACHE_KEY = 'subscription_status';
@@ -88,11 +94,25 @@ export const subscriptionService = {
     }
   },
 
-  async getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
+  async getSubscriptionStatus(userId: string, forceRefresh = false): Promise<SubscriptionStatus> {
     try {
-      const cachedStatus = await this.getCachedSubscriptionStatus();
-      if (cachedStatus) {
-        return cachedStatus;
+      if (!forceRefresh) {
+        const cachedData = await this.getCachedSubscriptionStatus();
+        if (cachedData) {
+          const { status, cachedAt } = cachedData;
+          const now = Date.now();
+          const cacheAge = now - cachedAt;
+
+          if (cacheAge < CACHE_TTL_MS) {
+            const isExpiredClientSide = this.isSubscriptionExpired(status);
+            if (isExpiredClientSide && status.isSubscribed) {
+              console.log('[SubscriptionService] Cache indicates expired subscription, forcing refresh');
+              return await this.getSubscriptionStatus(userId, true);
+            }
+            return status;
+          }
+          console.log('[SubscriptionService] Cache expired, fetching fresh data');
+        }
       }
 
       const { data, error } = await supabase
@@ -184,14 +204,35 @@ export const subscriptionService = {
     }
   },
 
-  async canAccessFeature(userId: string, businessId: string): Promise<boolean> {
+  isSubscriptionExpired(status: SubscriptionStatus): boolean {
+    if (!status.expirationDate) {
+      return false;
+    }
+
+    try {
+      const expirationDate = new Date(status.expirationDate);
+      const now = new Date();
+      return now > expirationDate;
+    } catch (error) {
+      console.error('Error checking subscription expiration:', error);
+      return false;
+    }
+  },
+
+  async canAccessFeature(userId: string, businessId: string, forceRefresh = false): Promise<boolean> {
     try {
       const [subscription, salesCount] = await Promise.all([
-        this.getSubscriptionStatus(userId),
+        this.getSubscriptionStatus(userId, forceRefresh),
         this.getSalesCount(userId, businessId)
       ]);
 
-      if (subscription.isSubscribed) {
+      const isExpired = this.isSubscriptionExpired(subscription);
+      if (isExpired && subscription.isSubscribed) {
+        console.log('[SubscriptionService] Subscription expired, refreshing status');
+        return await this.canAccessFeature(userId, businessId, true);
+      }
+
+      if (subscription.isSubscribed && !isExpired) {
         return true;
       }
 
@@ -202,19 +243,34 @@ export const subscriptionService = {
     }
   },
 
+  async validateFeatureAccessForCriticalOperation(userId: string, businessId: string): Promise<boolean> {
+    try {
+      await this.clearSubscriptionCache();
+      return await this.canAccessFeature(userId, businessId, true);
+    } catch (error) {
+      console.error('Error validating feature access for critical operation:', error);
+      return false;
+    }
+  },
+
   async cacheSubscriptionStatus(status: SubscriptionStatus): Promise<void> {
     try {
+      const cacheData: CachedSubscriptionData = {
+        status,
+        cachedAt: Date.now()
+      };
+
       if (Platform.OS === 'web') {
-        localStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(status));
+        localStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cacheData));
       } else {
-        await SecureStore.setItemAsync(SUBSCRIPTION_CACHE_KEY, JSON.stringify(status));
+        await SecureStore.setItemAsync(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cacheData));
       }
     } catch (error) {
       console.error('Error caching subscription status:', error);
     }
   },
 
-  async getCachedSubscriptionStatus(): Promise<SubscriptionStatus | null> {
+  async getCachedSubscriptionStatus(): Promise<CachedSubscriptionData | null> {
     try {
       let cached: string | null;
       if (Platform.OS === 'web') {
@@ -224,7 +280,11 @@ export const subscriptionService = {
       }
 
       if (cached) {
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        if (parsed.cachedAt && parsed.status) {
+          return parsed as CachedSubscriptionData;
+        }
+        return { status: parsed, cachedAt: Date.now() };
       }
       return null;
     } catch (error) {

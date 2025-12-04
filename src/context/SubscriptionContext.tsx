@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { Paywall } from '@/src/components/subscription/Paywall';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 let IAP: any = null;
 if (Platform.OS !== 'web') {
@@ -15,6 +17,7 @@ if (Platform.OS !== 'web') {
 
 const IOS_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
 const ANDROID_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
+const POLLING_INTERVAL_MS = 3 * 60 * 1000;
 
 export interface SubscriptionProduct {
   productId: string;
@@ -76,6 +79,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
 
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const isAppActiveRef = useRef(true);
+
   const initializeIAP = useCallback(async () => {
     if (Platform.OS === 'web' || !IAP) {
       setIsInitialized(true);
@@ -112,13 +119,21 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, []);
 
-  const refreshSubscriptionStatus = useCallback(async () => {
+  const refreshSubscriptionStatus = useCallback(async (forceRefresh = false) => {
     if (!user?.id) return;
 
     try {
-      const status = await subscriptionService.getSubscriptionStatus(user.id);
-      setSubscriptionStatus(status);
-      setIsSubscribed(status.isSubscribed);
+      const status = await subscriptionService.getSubscriptionStatus(user.id, forceRefresh);
+
+      const isExpired = subscriptionService.isSubscriptionExpired(status);
+      const actuallySubscribed = status.isSubscribed && !isExpired;
+
+      setSubscriptionStatus({
+        ...status,
+        isSubscribed: actuallySubscribed,
+        subscriptionStatus: isExpired ? 'expired' : status.subscriptionStatus
+      });
+      setIsSubscribed(actuallySubscribed);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
     }
@@ -135,20 +150,98 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, [user?.id, currentBusiness?.id]);
 
-  const checkFeatureAccess = useCallback(async () => {
+  const checkFeatureAccess = useCallback(async (forceRefresh = false) => {
     if (!user?.id || !currentBusiness?.id) {
       setCanAccessFeature(false);
       return;
     }
 
     try {
-      const hasAccess = await subscriptionService.canAccessFeature(user.id, currentBusiness.id);
+      const hasAccess = await subscriptionService.canAccessFeature(user.id, currentBusiness.id, forceRefresh);
       setCanAccessFeature(hasAccess);
     } catch (error) {
       console.error('Error checking feature access:', error);
       setCanAccessFeature(false);
     }
   }, [user?.id, currentBusiness?.id]);
+
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    console.log('[SubscriptionContext] Starting polling for subscription status');
+
+    pollingIntervalRef.current = setInterval(async () => {
+      if (!isAppActiveRef.current) {
+        return;
+      }
+
+      console.log('[SubscriptionContext] Polling subscription status');
+      await refreshSubscriptionStatus(true);
+      if (currentBusiness?.id) {
+        await refreshSalesCount();
+        await checkFeatureAccess(true);
+      }
+    }, POLLING_INTERVAL_MS);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      console.log('[SubscriptionContext] Stopping polling');
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  const setupRealtimeSubscription = useCallback(() => {
+    if (!user?.id || Platform.OS === 'web') {
+      return;
+    }
+
+    if (realtimeChannelRef.current) {
+      realtimeChannelRef.current.unsubscribe();
+    }
+
+    console.log('[SubscriptionContext] Setting up realtime subscription');
+
+    const channel = supabase
+      .channel(`subscription-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_subscriptions',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          console.log('[SubscriptionContext] Received realtime update:', payload);
+          await subscriptionService.clearSubscriptionCache();
+          await refreshSubscriptionStatus(true);
+          if (currentBusiness?.id) {
+            await checkFeatureAccess(true);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[SubscriptionContext] Realtime subscription status:', status);
+      });
+
+    realtimeChannelRef.current = channel;
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, checkFeatureAccess]);
+
+  const cleanupRealtimeSubscription = useCallback(() => {
+    if (realtimeChannelRef.current) {
+      console.log('[SubscriptionContext] Cleaning up realtime subscription');
+      realtimeChannelRef.current.unsubscribe();
+      realtimeChannelRef.current = null;
+    }
+  }, []);
 
   const purchaseSubscription = useCallback(async (productId: string): Promise<boolean> => {
     if (Platform.OS === 'web' || !IAP) {
@@ -282,12 +375,20 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && user?.id) {
-        refreshSubscriptionStatus();
+      const isActive = nextAppState === 'active';
+      isAppActiveRef.current = isActive;
+
+      if (isActive && user?.id) {
+        console.log('[SubscriptionContext] App became active, refreshing data');
+        refreshSubscriptionStatus(true);
         if (currentBusiness?.id) {
           refreshSalesCount();
-          checkFeatureAccess();
+          checkFeatureAccess(true);
         }
+        startPolling();
+      } else {
+        console.log('[SubscriptionContext] App became inactive, stopping polling');
+        stopPolling();
       }
     };
 
@@ -296,7 +397,19 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       subscription.remove();
     };
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess, startPolling, stopPolling]);
+
+  useEffect(() => {
+    if (user?.id && isAppActiveRef.current) {
+      startPolling();
+      setupRealtimeSubscription();
+    }
+
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [user?.id, startPolling, stopPolling, setupRealtimeSubscription, cleanupRealtimeSubscription]);
 
   useEffect(() => {
     if (isInitialized) {

@@ -4,6 +4,7 @@ import { productService } from './products';
 import { customerService } from './customers';
 import { cartService } from './carts';
 import { salesService } from './sales';
+import { subscriptionService } from './subscriptionService';
 import { logger, ValidationError, DatabaseError } from '../lib';
 import { InstantCheckoutSession, InstantCheckoutItem } from '../context/InstantCheckoutContext';
 
@@ -95,6 +96,16 @@ export const instantCheckoutService = {
       return {
         success: false,
         error: stockCheck.errors.join(', '),
+      };
+    }
+
+    console.log('[InstantCheckout] Validating feature access for instant checkout');
+    const hasAccess = await subscriptionService.validateFeatureAccessForCriticalOperation(userId, businessId);
+    if (!hasAccess) {
+      console.log('[InstantCheckout] Access denied - limit reached or subscription expired');
+      return {
+        success: false,
+        error: 'You\'ve reached the free limit. Please upgrade to continue.'
       };
     }
 
