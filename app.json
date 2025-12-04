@@ -11,9 +11,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.businessmanager.pro",
-      "entitlements": {
-        "com.apple.developer.in-app-purchases": []
-      },
       "usesPushNotifications": true,
       "infoPlist": {
         "NSCameraUsageDescription": "We use your camera so you can scan the barcode and take photos for your products, business profile, and user profile directly in the app.",
