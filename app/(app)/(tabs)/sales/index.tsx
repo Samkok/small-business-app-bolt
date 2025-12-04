@@ -99,7 +99,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
-  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible } = useSubscription();
+  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed } = useSubscription();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -284,12 +284,12 @@ export default function SalesScreen() {
   }, [showPaywall]);
 
   const shouldShowWarningBanner = useCallback(() => {
-    if (salesCountData.isAtLimit || canAccessFeature || warningBannerDismissed) {
+    if (salesCountData.isAtLimit || isSubscribed || warningBannerDismissed) {
       return false;
     }
     const percentageUsed = (salesCountData.salesCount / FREE_TIER_LIMIT) * 100;
     return percentageUsed >= 80;
-  }, [salesCountData, canAccessFeature, warningBannerDismissed]);
+  }, [salesCountData, isSubscribed, warningBannerDismissed]);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
