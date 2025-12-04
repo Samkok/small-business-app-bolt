@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
-import * as IAP from 'react-native-iap';
 import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 import { useAuth } from './AuthContext';
+
+let IAP: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    IAP = require('react-native-iap');
+  } catch (error) {
+    console.warn('react-native-iap not available:', error);
+  }
+}
 
 const IOS_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
 const ANDROID_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
@@ -68,7 +76,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [canAccessFeature, setCanAccessFeature] = useState(true);
 
   const initializeIAP = useCallback(async () => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !IAP) {
       setIsInitialized(true);
       setIsLoading(false);
       return;
@@ -142,8 +150,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user?.id, currentBusiness?.id]);
 
   const purchaseSubscription = useCallback(async (productId: string): Promise<boolean> => {
-    if (Platform.OS === 'web') {
-      console.log('IAP not supported on web');
+    if (Platform.OS === 'web' || !IAP) {
+      console.log('IAP not supported on this platform');
       return false;
     }
 
@@ -188,8 +196,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user, refreshSubscriptionStatus, checkFeatureAccess]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS === 'web') {
-      console.log('IAP not supported on web');
+    if (Platform.OS === 'web' || !IAP) {
+      console.log('IAP not supported on this platform');
       return false;
     }
 
@@ -248,8 +256,12 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     initializeIAP();
 
     return () => {
-      if (Platform.OS !== 'web') {
-        IAP.endConnection();
+      if (Platform.OS !== 'web' && IAP) {
+        try {
+          IAP.endConnection();
+        } catch (error) {
+          console.warn('Error ending IAP connection:', error);
+        }
       }
     };
   }, [initializeIAP]);
