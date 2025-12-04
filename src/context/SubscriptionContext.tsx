@@ -39,6 +39,7 @@ interface SubscriptionContextType {
   restorePurchases: () => Promise<boolean>;
   refreshSubscriptionStatus: () => Promise<void>;
   refreshSalesCount: () => Promise<void>;
+  refreshProducts: () => Promise<void>;
   showPaywall: () => void;
   hidePaywall: () => void;
   isPaywallVisible: boolean;
@@ -76,41 +77,148 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
 
+  const fetchProductsWithRetry = useCallback(async (productIds: string[], maxRetries = 3): Promise<SubscriptionProduct[]> => {
+    console.log(`[IAP] 🔍 Fetching products with retry logic. Product IDs:`, productIds);
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const delay = attempt === 0 ? 0 : Math.pow(2, attempt - 1) * 1000;
+
+        if (delay > 0) {
+          console.log(`[IAP] ⏳ Retry attempt ${attempt + 1}/${maxRetries} - waiting ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        console.log(`[IAP] 📡 Calling getSubscriptions (attempt ${attempt + 1}/${maxRetries})...`);
+        const productsData = await IAP.getSubscriptions({ skus: productIds });
+
+        console.log(`[IAP] 📦 Raw products received:`, JSON.stringify(productsData, null, 2));
+        console.log(`[IAP] 📊 Products count:`, productsData?.length || 0);
+
+        if (!productsData || productsData.length === 0) {
+          console.warn(`[IAP] ⚠️ Empty products array on attempt ${attempt + 1}/${maxRetries}`);
+          if (attempt === maxRetries - 1) {
+            console.error(`[IAP] ❌ All retry attempts exhausted. No products fetched.`);
+            return [];
+          }
+          continue;
+        }
+
+        const formattedProducts: SubscriptionProduct[] = productsData.map(product => {
+          const formatted = {
+            productId: product.productId,
+            title: product.title || '',
+            description: product.description || '',
+            price: product.price || '',
+            localizedPrice: product.localizedPrice || '',
+            currency: product.currency || 'USD',
+            type: product.productId.includes('yearly') ? 'yearly' as const : 'monthly' as const,
+          };
+
+          console.log(`[IAP] 💰 Formatted product:`, {
+            productId: formatted.productId,
+            title: formatted.title,
+            localizedPrice: formatted.localizedPrice,
+            price: formatted.price,
+            type: formatted.type
+          });
+
+          return formatted;
+        });
+
+        console.log(`[IAP] ✅ Successfully fetched ${formattedProducts.length} products`);
+        return formattedProducts;
+
+      } catch (error) {
+        console.error(`[IAP] ❌ Error fetching products (attempt ${attempt + 1}/${maxRetries}):`, error);
+        if (attempt === maxRetries - 1) {
+          console.error(`[IAP] ❌ All retry attempts failed`);
+          throw error;
+        }
+      }
+    }
+
+    return [];
+  }, []);
+
   const initializeIAP = useCallback(async () => {
     if (Platform.OS === 'web' || !IAP) {
+      console.log('[IAP] ℹ️ Running on web or IAP not available, skipping initialization');
       setIsInitialized(true);
       setIsLoading(false);
       return;
     }
 
+    console.log('[IAP] 🚀 Starting IAP initialization...');
+    console.log('[IAP] 📱 Platform:', Platform.OS);
+
     try {
+      setIsLoading(true);
+
+      console.log('[IAP] 🔌 Connecting to store...');
       const connectionResult = await IAP.initConnection();
-      console.log('IAP connection result:', connectionResult);
+      console.log('[IAP] ✅ Store connection result:', connectionResult);
+
+      console.log('[IAP] ⏳ Waiting 500ms for StoreKit to fully initialize...');
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       if (Platform.OS === 'android') {
+        console.log('[IAP] 🧹 Flushing failed Android purchases...');
         await IAP.flushFailedPurchasesCachedAsPendingAndroid();
       }
 
       const productIds = Platform.OS === 'ios' ? IOS_PRODUCT_IDS : ANDROID_PRODUCT_IDS;
-      const productsData = await IAP.getSubscriptions({ skus: productIds });
+      console.log('[IAP] 📋 Product IDs to fetch:', productIds);
 
-      const formattedProducts: SubscriptionProduct[] = productsData.map(product => ({
-        productId: product.productId,
-        title: product.title || '',
-        description: product.description || '',
-        price: product.price || '',
-        localizedPrice: product.localizedPrice || '',
-        currency: product.currency || 'USD',
-        type: product.productId.includes('yearly') ? 'yearly' : 'monthly',
-      }));
+      const formattedProducts = await fetchProductsWithRetry(productIds);
 
-      setProducts(formattedProducts);
+      if (formattedProducts.length > 0) {
+        console.log('[IAP] 🎉 Products successfully loaded and set!');
+        setProducts(formattedProducts);
+      } else {
+        console.warn('[IAP] ⚠️ No products loaded after all retries');
+        setProducts([]);
+      }
+
       setIsInitialized(true);
+      setIsLoading(false);
+
     } catch (error) {
-      console.error('Error initializing IAP:', error);
+      console.error('[IAP] ❌ Fatal error initializing IAP:', error);
+      console.error('[IAP] ❌ Error details:', JSON.stringify(error, null, 2));
+      setProducts([]);
       setIsInitialized(true);
+      setIsLoading(false);
     }
-  }, []);
+  }, [fetchProductsWithRetry]);
+
+  const refreshProducts = useCallback(async () => {
+    if (Platform.OS === 'web' || !IAP) {
+      console.log('[IAP] ℹ️ Cannot refresh products on web or without IAP');
+      return;
+    }
+
+    console.log('[IAP] 🔄 Manually refreshing products...');
+
+    try {
+      setIsLoading(true);
+
+      const productIds = Platform.OS === 'ios' ? IOS_PRODUCT_IDS : ANDROID_PRODUCT_IDS;
+      const formattedProducts = await fetchProductsWithRetry(productIds);
+
+      if (formattedProducts.length > 0) {
+        console.log('[IAP] ✅ Products refreshed successfully!');
+        setProducts(formattedProducts);
+      } else {
+        console.warn('[IAP] ⚠️ No products loaded during refresh');
+      }
+
+    } catch (error) {
+      console.error('[IAP] ❌ Error refreshing products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchProductsWithRetry]);
 
   const refreshSubscriptionStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -298,12 +406,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     };
   }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
 
-  useEffect(() => {
-    if (isInitialized) {
-      setIsLoading(false);
-    }
-  }, [isInitialized]);
-
   const value: SubscriptionContextType = {
     isSubscribed,
     subscriptionStatus,
@@ -316,6 +418,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     restorePurchases,
     refreshSubscriptionStatus,
     refreshSalesCount,
+    refreshProducts,
     showPaywall,
     hidePaywall,
     isPaywallVisible,

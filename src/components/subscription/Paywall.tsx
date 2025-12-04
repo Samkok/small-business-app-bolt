@@ -39,7 +39,7 @@ interface PaywallProps {
 
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
   const { isDark } = useTheme();
-  const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
+  const { products, purchaseSubscription, restorePurchases, isLoading, refreshProducts } = useSubscription();
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [purchasing, setPurchasing] = useState(false);
@@ -243,7 +243,27 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                   </Text>
                 </View>
 
-          <View style={styles.plansContainer}>
+                {(isLoading || products.length === 0) && (
+                  <View style={[styles.loadingContainer, isDark && styles.loadingContainerDark]}>
+                    <ActivityIndicator size="large" color="#3b82f6" />
+                    <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+                      {isLoading ? 'Loading subscription options...' : 'Unable to load pricing'}
+                    </Text>
+                    {!isLoading && products.length === 0 && (
+                      <TouchableOpacity
+                        style={[styles.retryButton, isDark && styles.retryButtonDark]}
+                        onPress={refreshProducts}
+                      >
+                        <Text style={[styles.retryButtonText, isDark && styles.retryButtonTextDark]}>
+                          Retry
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+          {products.length > 0 && (
+            <View style={styles.plansContainer}>
             <TouchableOpacity
               style={[
                 styles.planCard,
@@ -297,6 +317,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               )}
             </TouchableOpacity>
           </View>
+          )}
 
           <View style={styles.featuresContainer}>
             <Text style={[styles.featuresTitle, isDark && styles.featuresTitleDark]}>
@@ -633,5 +654,43 @@ const styles = StyleSheet.create({
   },
   legalTextDark: {
     color: '#6b7280',
+  },
+  loadingContainer: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 16,
+  },
+  loadingContainerDark: {
+    backgroundColor: '#374151',
+  },
+  loadingText: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  loadingTextDark: {
+    color: '#9ca3af',
+  },
+  retryButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  retryButtonDark: {
+    backgroundColor: '#2563eb',
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  retryButtonTextDark: {
+    color: '#ffffff',
   },
 });
