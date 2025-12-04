@@ -170,6 +170,7 @@
   },
   "sales": {
     "title": "销售",
+    "salesUsed": "已使用销售",
     "newSale": "新销售",
     "selectCustomer": "选择客户",
     "addToCart": "添加到购物车",
@@ -464,6 +465,7 @@
   },
   "sales": {
     "title": "销售",
+    "salesUsed": "已使用销售",
     "newSale": "新销售",
     "selectCustomer": "选择客户",
     "addToCart": "添加到购物车",

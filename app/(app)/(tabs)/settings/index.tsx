@@ -241,8 +241,8 @@ export default function SettingsScreen() {
 
         <SettingItem
           icon={<Crown size={20} color={isSubscribed ? "#f59e0b" : "#9ca3af"} />}
-          title="Subscription"
-          subtitle={isSubscribed ? "BizManage Pro - Active" : `${salesCountData.salesCount}/50 sales used`}
+          title={t('subscription.title')}
+          subtitle={isSubscribed ? `${t('subscription.proPlan')} - ${t('subscription.active')}` : `${salesCountData.salesCount}/50 ${t('sales.salesUsed')}`}
           onPress={() => router.push('/settings/subscription')}
         />
 
