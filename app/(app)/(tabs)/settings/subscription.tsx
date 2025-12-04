@@ -10,6 +10,7 @@ import {
   Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -21,6 +22,7 @@ import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { user } = useAuth();
   const {
@@ -41,22 +43,22 @@ export default function SubscriptionScreen() {
 
       if (success) {
         Alert.alert(
-          'Success',
-          'Your subscription has been restored!',
-          [{ text: 'OK' }]
+          t('common.success'),
+          t('subscription.alerts.restoreSuccessMessage'),
+          [{ text: t('common.ok') }]
         );
       } else {
         Alert.alert(
-          'No Subscription Found',
-          'We couldn\'t find any active subscription to restore.',
-          [{ text: 'OK' }]
+          t('subscription.alerts.noSubscriptionFoundTitle'),
+          t('subscription.alerts.noSubscriptionFoundMessage'),
+          [{ text: t('common.ok') }]
         );
       }
     } catch (error) {
       Alert.alert(
-        'Error',
-        'Failed to restore purchases. Please try again.',
-        [{ text: 'OK' }]
+        t('subscription.alerts.restoreErrorTitle'),
+        t('subscription.alerts.restoreErrorMessage'),
+        [{ text: t('common.ok') }]
       );
     } finally {
       setRestoring(false);
@@ -76,7 +78,7 @@ export default function SubscriptionScreen() {
           <ArrowLeft size={24} color={isDark ? '#ffffff' : '#000000'} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>
-          Subscription
+          {t('subscription.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -95,12 +97,12 @@ export default function SubscriptionScreen() {
               <View style={styles.proHeader}>
                 <View style={styles.proBadge}>
                   <Crown size={20} color="#fbbf24" />
-                  <Text style={styles.proText}>BizManage Pro</Text>
+                  <Text style={styles.proText}>{t('subscription.proPlan')}</Text>
                 </View>
-                <Text style={styles.activeText}>Active</Text>
+                <Text style={styles.activeText}>{t('subscription.active')}</Text>
               </View>
               <Text style={styles.proDescription}>
-                You have unlimited access to all features
+                {t('subscription.unlimitedAccess')}
               </Text>
             </LinearGradient>
 
@@ -111,10 +113,10 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.detailContent}>
                   <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
-                    Subscription Type
+                    {t('subscription.subscriptionType')}
                   </Text>
                   <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {subscriptionStatus.productId?.includes('yearly') ? 'Yearly' : 'Monthly'}
+                    {subscriptionStatus.productId?.includes('yearly') ? t('subscription.yearly') : t('subscription.monthly')}
                   </Text>
                 </View>
               </View>
@@ -126,7 +128,7 @@ export default function SubscriptionScreen() {
                   </View>
                   <View style={styles.detailContent}>
                     <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
-                      Renews On
+                      {t('subscription.renewsOn')}
                     </Text>
                     <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
                       {new Date(subscriptionStatus.expirationDate).toLocaleDateString()}
@@ -141,17 +143,17 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.detailContent}>
                   <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
-                    Total Sales
+                    {t('subscription.totalSales')}
                   </Text>
                   <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {salesCountData.salesCount} sales
+                    {t('subscription.salesCount', { count: salesCountData.salesCount })}
                   </Text>
                 </View>
               </View>
             </Card>
 
             <Button
-              title="Manage Subscription"
+              title={t('subscription.manageSubscription')}
               onPress={handleManageSubscription}
               style={styles.manageButton}
             />
@@ -161,11 +163,11 @@ export default function SubscriptionScreen() {
             <Card style={styles.freeCard}>
               <View style={styles.freeHeader}>
                 <Text style={[styles.freeTitle, isDark && styles.freeTitleDark]}>
-                  Free Plan
+                  {t('subscription.freePlan')}
                 </Text>
                 <View style={[styles.freeBadge, isDark && styles.freeBadgeDark]}>
                   <Text style={[styles.freeBadgeText, isDark && styles.freeBadgeTextDark]}>
-                    Active
+                    {t('subscription.active')}
                   </Text>
                 </View>
               </View>
@@ -173,7 +175,7 @@ export default function SubscriptionScreen() {
               <View style={styles.progressSection}>
                 <View style={styles.progressHeader}>
                   <Text style={[styles.progressLabel, isDark && styles.progressLabelDark]}>
-                    Sales Usage
+                    {t('subscription.salesUsage')}
                   </Text>
                   <Text style={[styles.progressCount, isDark && styles.progressCountDark]}>
                     {salesCountData.salesCount} / {FREE_TIER_LIMIT}
@@ -192,8 +194,8 @@ export default function SubscriptionScreen() {
                 </View>
                 <Text style={[styles.progressText, isDark && styles.progressTextDark]}>
                   {salesCountData.isAtLimit
-                    ? 'Limit reached. Upgrade to continue.'
-                    : `${salesCountData.remainingSales} sales remaining`}
+                    ? t('subscription.limitReached')
+                    : t('subscription.salesRemaining', { count: salesCountData.remainingSales })}
                 </Text>
               </View>
             </Card>
@@ -202,14 +204,14 @@ export default function SubscriptionScreen() {
               <View style={styles.upgradeHeader}>
                 <Zap size={24} color="#f59e0b" />
                 <Text style={[styles.upgradeTitle, isDark && styles.upgradeTitleDark]}>
-                  Upgrade to Pro
+                  {t('subscription.upgradeToPro')}
                 </Text>
               </View>
               <Text style={[styles.upgradeDescription, isDark && styles.upgradeDescriptionDark]}>
-                Unlock unlimited sales, advanced reporting, and all premium features
+                {t('subscription.upgradeToProFullDescription')}
               </Text>
               <Button
-                title="See Plans"
+                title={t('subscription.seePlans')}
                 onPress={showPaywall}
                 style={styles.upgradeButton}
               />
@@ -226,7 +228,7 @@ export default function SubscriptionScreen() {
                 <>
                   <RefreshCw size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                   <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
-                    Restore Purchases
+                    {t('subscription.restorePurchases')}
                   </Text>
                 </>
               )}

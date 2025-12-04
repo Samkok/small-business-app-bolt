@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, X } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 
@@ -17,6 +18,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   onDismiss,
   dismissible = false
 }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -36,10 +38,10 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
         <AlertCircle size={20} color="#f59e0b" />
         <View style={styles.textContainer}>
           <Text style={[styles.title, isDark && styles.titleDark]}>
-            Free limit reached
+            {t('subscription.freeLimitReached')}
           </Text>
           <Text style={[styles.message, isDark && styles.messageDark]}>
-            Upgrade to unlock unlimited sales
+            {t('subscription.upgradeMessage')}
           </Text>
         </View>
       </View>
@@ -49,7 +51,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
           onPress={onUpgrade}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.upgradeText}>Upgrade</Text>
+          <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
         </TouchableOpacity>
         {dismissible && onDismiss && (
           <TouchableOpacity

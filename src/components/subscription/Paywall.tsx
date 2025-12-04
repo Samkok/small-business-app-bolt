@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { X, Check, Zap, TrendingUp, Users, BarChart3, Cloud, Headphones } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -38,6 +39,7 @@ interface PaywallProps {
 }
 
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -53,12 +55,12 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
   const yearlyProduct = products.find(p => p.type === 'yearly');
 
   const features = [
-    { icon: Zap, title: 'Unlimited Sales', description: 'Create unlimited sales transactions' },
-    { icon: TrendingUp, title: 'Unlimited Businesses', description: 'Manage multiple businesses' },
-    { icon: Users, title: 'Unlimited Team Members', description: 'Invite unlimited users' },
-    { icon: BarChart3, title: 'Advanced Reporting', description: 'Full access to reports and analytics' },
-    { icon: Cloud, title: 'Cloud Sync & Backup', description: 'Automatic data backup and sync' },
-    { icon: Headphones, title: 'Priority Support', description: 'Get help when you need it' }
+    { icon: Zap, title: t('subscription.features.unlimitedSales'), description: t('subscription.features.unlimitedSalesDesc') },
+    { icon: TrendingUp, title: t('subscription.features.unlimitedBusinesses'), description: t('subscription.features.unlimitedBusinessesDesc') },
+    { icon: Users, title: t('subscription.features.unlimitedUsers'), description: t('subscription.features.unlimitedUsersDesc') },
+    { icon: BarChart3, title: t('subscription.features.advancedReporting'), description: t('subscription.features.advancedReportingDesc') },
+    { icon: Cloud, title: t('subscription.features.cloudSync'), description: t('subscription.features.cloudSyncDesc') },
+    { icon: Headphones, title: t('subscription.features.prioritySupport'), description: t('subscription.features.prioritySupportDesc') }
   ];
 
   useEffect(() => {
@@ -126,28 +128,28 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
 
       if (success) {
         Alert.alert(
-          'Success!',
-          'Your subscription is now active. Enjoy unlimited access to BizManage Pro!',
+          t('subscription.alerts.purchaseSuccessTitle'),
+          t('subscription.alerts.purchaseSuccessMessage'),
           [
             {
-              text: 'Continue',
+              text: t('common.done'),
               onPress: onClose
             }
           ]
         );
       } else {
         Alert.alert(
-          'Purchase Failed',
-          'Unable to complete your purchase. Please try again.',
-          [{ text: 'OK' }]
+          t('subscription.alerts.purchaseFailedTitle'),
+          t('subscription.alerts.purchaseFailedMessage'),
+          [{ text: t('common.ok') }]
         );
       }
     } catch (error) {
       console.error('Purchase error:', error);
       Alert.alert(
-        'Error',
-        'An error occurred during purchase. Please try again.',
-        [{ text: 'OK' }]
+        t('subscription.alerts.purchaseErrorTitle'),
+        t('subscription.alerts.purchaseErrorMessage'),
+        [{ text: t('common.ok') }]
       );
     } finally {
       setPurchasing(false);
@@ -161,28 +163,28 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
 
       if (success) {
         Alert.alert(
-          'Purchases Restored',
-          'Your subscription has been restored successfully!',
+          t('subscription.alerts.restoreSuccessTitle'),
+          t('subscription.alerts.restoreSuccessMessage'),
           [
             {
-              text: 'Continue',
+              text: t('common.done'),
               onPress: onClose
             }
           ]
         );
       } else {
         Alert.alert(
-          'No Purchases Found',
-          'We couldn\'t find any previous purchases to restore.',
-          [{ text: 'OK' }]
+          t('subscription.alerts.noPurchasesFoundTitle'),
+          t('subscription.alerts.noPurchasesFoundMessage'),
+          [{ text: t('common.ok') }]
         );
       }
     } catch (error) {
       console.error('Restore error:', error);
       Alert.alert(
-        'Error',
-        'An error occurred while restoring purchases. Please try again.',
-        [{ text: 'OK' }]
+        t('subscription.alerts.restoreErrorTitle'),
+        t('subscription.alerts.restoreErrorMessage'),
+        [{ text: t('common.ok') }]
       );
     } finally {
       setRestoring(false);
@@ -232,14 +234,14 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 <View style={styles.header}>
                   <View style={[styles.badge, isDark && styles.badgeDark]}>
                     <Zap size={18} color="#f59e0b" />
-                    <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>PREMIUM</Text>
+                    <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>{t('subscription.premium')}</Text>
                   </View>
 
                   <Text style={[styles.title, isDark && styles.titleDark]}>
-                    Upgrade to BizManage Pro
+                    {t('subscription.upgradeToBizManagePro')}
                   </Text>
                   <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-                    Unlock unlimited sales and full access to all features
+                    {t('subscription.unlockUnlimitedSales')}
                   </Text>
                 </View>
 
@@ -254,11 +256,11 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
             >
               {monthlyProduct && (
                 <>
-                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>Monthly</Text>
+                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>{t('subscription.monthly')}</Text>
                   <Text style={[styles.planPrice, isDark && styles.planPriceDark]}>
                     {monthlyProduct.localizedPrice}
                   </Text>
-                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>per month</Text>
+                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>{t('subscription.perMonth')}</Text>
                 </>
               )}
               {selectedPlan === 'monthly' && (
@@ -278,16 +280,16 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               onPress={() => setSelectedPlan('yearly')}
             >
               <View style={styles.bestValueBadge}>
-                <Text style={styles.bestValueText}>BEST VALUE</Text>
+                <Text style={styles.bestValueText}>{t('subscription.bestValue')}</Text>
               </View>
               {yearlyProduct && (
                 <>
-                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>Yearly</Text>
+                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>{t('subscription.yearly')}</Text>
                   <Text style={[styles.planPrice, isDark && styles.planPriceDark]}>
                     {yearlyProduct.localizedPrice}
                   </Text>
-                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>per year</Text>
-                  <Text style={styles.savings}>Save up to 20%</Text>
+                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>{t('subscription.perYear')}</Text>
+                  <Text style={styles.savings}>{t('subscription.saveUpTo20')}</Text>
                 </>
               )}
               {selectedPlan === 'yearly' && (
@@ -300,7 +302,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
 
           <View style={styles.featuresContainer}>
             <Text style={[styles.featuresTitle, isDark && styles.featuresTitleDark]}>
-              What's Included
+              {t('subscription.whatsIncluded')}
             </Text>
             {features.map((feature, index) => (
               <View key={index} style={styles.featureRow}>
@@ -323,8 +325,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
             <Button
               title={
                 purchasing
-                  ? 'Processing...'
-                  : `Subscribe ${selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'}`
+                  ? t('subscription.processing')
+                  : selectedPlan === 'monthly' ? t('subscription.subscribingMonthly') : t('subscription.subscribingYearly')
               }
               onPress={() => {
                 const productId = selectedPlan === 'monthly'
@@ -347,13 +349,13 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
               ) : (
                 <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
-                  Restore Purchase
+                  {t('subscription.restorePurchase')}
                 </Text>
               )}
             </TouchableOpacity>
 
             <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
-              Auto-renewable. Cancel anytime. Terms apply.
+              {t('subscription.autoRenewable')}
             </Text>
                 </View>
               </ScrollView>

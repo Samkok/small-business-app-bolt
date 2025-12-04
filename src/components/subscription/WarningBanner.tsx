@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, X } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 
@@ -21,6 +22,7 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
   onDismiss,
   dismissible = true
 }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -65,12 +67,12 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
         <AlertTriangle size={20} color={colors.icon} />
         <View style={styles.textContainer}>
           <Text style={[styles.title, { color: colors.title }]}>
-            {isHighWarning ? 'Almost at free limit' : 'Approaching free limit'}
+            {isHighWarning ? t('subscription.almostAtFreeLimit') : t('subscription.approachingFreeLimit')}
           </Text>
           <Text style={[styles.message, { color: colors.text }]}>
             {remainingSales === 1
-              ? `Only 1 sale remaining (${salesCount}/${totalLimit})`
-              : `${remainingSales} sales remaining (${salesCount}/${totalLimit})`}
+              ? t('subscription.onlyOneSaleRemaining', { current: salesCount, limit: totalLimit })
+              : t('subscription.salesRemainingCount', { remaining: remainingSales, current: salesCount, limit: totalLimit })}
           </Text>
         </View>
       </View>
@@ -83,7 +85,7 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
           onPress={onUpgrade}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.upgradeText}>Upgrade</Text>
+          <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
         </TouchableOpacity>
         {dismissible && onDismiss && (
           <TouchableOpacity

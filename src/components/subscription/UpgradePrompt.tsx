@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { X, Lock, TrendingUp } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -43,6 +44,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   salesCount,
   message
 }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { products } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -149,7 +151,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
                 </View>
 
           <Text style={[styles.title, isDark && styles.titleDark]}>
-            Upgrade to Continue
+            {t('subscription.upgradeToContinue')}
           </Text>
 
           <View style={[styles.statsContainer, isDark && styles.statsContainerDark]}>
@@ -158,7 +160,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
                 {salesCount}
               </Text>
               <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
-                Sales Created
+                {t('subscription.salesCreated')}
               </Text>
             </View>
             <View style={styles.statDivider} />
@@ -167,32 +169,32 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
                 {FREE_TIER_LIMIT}
               </Text>
               <Text style={[styles.statLabel, isDark && styles.statLabelDark]}>
-                Free Limit
+                {t('subscription.freeLimit')}
               </Text>
             </View>
           </View>
 
           <Text style={[styles.message, isDark && styles.messageDark]}>
-            {message || `You've reached the free limit of ${FREE_TIER_LIMIT} sales. Upgrade to BizManage Pro to unlock unlimited sales and full access to all features.`}
+            {message || t('subscription.alerts.upgradePromptMessage', { limit: FREE_TIER_LIMIT })}
           </Text>
 
           <View style={styles.benefitsContainer}>
             <View style={styles.benefitRow}>
               <TrendingUp size={20} color="#10b981" />
               <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                Unlimited sales transactions
+                {t('subscription.features.unlimitedTransactions')}
               </Text>
             </View>
             <View style={styles.benefitRow}>
               <TrendingUp size={20} color="#10b981" />
               <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                Full access to all features
+                {t('subscription.features.fullAccessFeatures')}
               </Text>
             </View>
             <View style={styles.benefitRow}>
               <TrendingUp size={20} color="#10b981" />
               <Text style={[styles.benefitText, isDark && styles.benefitTextDark]}>
-                Advanced reporting and analytics
+                {t('subscription.features.advancedAnalytics')}
               </Text>
             </View>
           </View>
@@ -202,7 +204,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
               {monthlyProduct && (
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
-                    Monthly
+                    {t('subscription.monthly')}
                   </Text>
                   <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
                     {monthlyProduct.localizedPrice || monthlyProduct.price}
@@ -212,7 +214,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
               {yearlyProduct && (
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
-                    Yearly
+                    {t('subscription.yearly')}
                   </Text>
                   <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
                     {yearlyProduct.localizedPrice || yearlyProduct.price}
@@ -223,14 +225,14 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
           )}
 
           <Button
-            title="Upgrade to Pro"
+            title={t('subscription.upgradeToPro')}
             onPress={onUpgrade}
             style={styles.upgradeButton}
           />
 
                 <TouchableOpacity onPress={handleClose} style={styles.laterButton}>
                   <Text style={[styles.laterText, isDark && styles.laterTextDark]}>
-                    Maybe Later
+                    {t('subscription.maybeLater')}
                   </Text>
                 </TouchableOpacity>
               </View>
