@@ -9,6 +9,7 @@ import {
 import { X, Lock, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
 import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 
@@ -28,6 +29,10 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   message
 }) => {
   const { isDark } = useTheme();
+  const { products } = useSubscription();
+
+  const monthlyProduct = products.find(p => p.type === 'monthly');
+  const yearlyProduct = products.find(p => p.type === 'yearly');
 
   return (
     <Modal
@@ -102,6 +107,31 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
               </Text>
             </View>
           </View>
+
+          {(monthlyProduct || yearlyProduct) && (
+            <View style={[styles.pricingContainer, isDark && styles.pricingContainerDark]}>
+              {monthlyProduct && (
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
+                    Monthly
+                  </Text>
+                  <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
+                    {monthlyProduct.localizedPrice || monthlyProduct.price}
+                  </Text>
+                </View>
+              )}
+              {yearlyProduct && (
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
+                    Yearly
+                  </Text>
+                  <Text style={[styles.priceValue, isDark && styles.priceValueDark]}>
+                    {yearlyProduct.localizedPrice || yearlyProduct.price}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
 
           <Button
             title="Upgrade to Pro"
@@ -243,6 +273,37 @@ const styles = StyleSheet.create({
   },
   benefitTextDark: {
     color: '#ffffff',
+  },
+  pricingContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  pricingContainerDark: {
+    backgroundColor: '#111827',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  priceLabelDark: {
+    color: '#ffffff',
+  },
+  priceValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f59e0b',
+  },
+  priceValueDark: {
+    color: '#f59e0b',
   },
   upgradeButton: {
     marginBottom: 12,
