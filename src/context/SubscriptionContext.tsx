@@ -4,6 +4,7 @@ import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMI
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { Paywall } from '@/src/components/subscription/Paywall';
+import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 let IAP: any = null;
@@ -76,6 +77,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
+  const [isUnauthorizedModalVisible, setIsUnauthorizedModalVisible] = useState(false);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
@@ -396,11 +398,25 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user, refreshSubscriptionStatus, checkFeatureAccess]);
 
   const showPaywall = useCallback(() => {
-    setIsPaywallVisible(true);
-  }, []);
+    if (!currentBusiness) {
+      return;
+    }
+
+    const isOwner = user?.id === currentBusiness.owner_user_id;
+
+    if (isOwner) {
+      setIsPaywallVisible(true);
+    } else {
+      setIsUnauthorizedModalVisible(true);
+    }
+  }, [user?.id, currentBusiness]);
 
   const hidePaywall = useCallback(() => {
     setIsPaywallVisible(false);
+  }, []);
+
+  const hideUnauthorizedModal = useCallback(() => {
+    setIsUnauthorizedModalVisible(false);
   }, []);
 
   useEffect(() => {
@@ -499,6 +515,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         visible={isPaywallVisible}
         onClose={hidePaywall}
         canClose={true}
+      />
+      <UnauthorizedUpgradeModal
+        visible={isUnauthorizedModalVisible}
+        onClose={hideUnauthorizedModal}
       />
     </SubscriptionContext.Provider>
   );

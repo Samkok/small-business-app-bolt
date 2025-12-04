@@ -28,7 +28,8 @@
     "pullToRefresh": "下拉刷新",
     "ok": "确定",
     "retry": "重试",
-    "somethingWentWrong": "出现问题。请重试。"
+    "somethingWentWrong": "出现问题。请重试。",
+    "understood": "明白了"
   },
   "auth": {
     "signIn": "登录",
@@ -692,6 +693,11 @@
       "purchaseErrorTitle": "错误",
       "purchaseErrorMessage": "购买过程中发生错误。请重试。",
       "upgradePromptMessage": "您已达到{{limit}}笔销售的免费限额。升级到 BizManage Pro 以解锁无限销售和所有功能的访问权限。"
+    },
+    "unauthorizedUpgrade": {
+      "title": "需要所有者权限",
+      "message": "只有企业所有者可以升级到 BizManage Pro。",
+      "info": "此企业归其他人所有。如果您需要使用高级功能，请要求企业所有者进行升级。"
     }
   }
 }

@@ -33,7 +33,8 @@
     "filters": "Filters",
     "all": "All",
     "reset": "Reset",
-    "apply": "Apply"
+    "apply": "Apply",
+    "understood": "Understood"
   },
   "auth": {
     "signIn": "Sign In",
@@ -701,6 +702,11 @@
       "purchaseErrorTitle": "Error",
       "purchaseErrorMessage": "An error occurred during purchase. Please try again.",
       "upgradePromptMessage": "You've reached the free limit of {{limit}} sales. Upgrade to BizManage Pro to unlock unlimited sales and full access to all features."
+    },
+    "unauthorizedUpgrade": {
+      "title": "Owner Permission Required",
+      "message": "Only the business owner can upgrade to BizManage Pro.",
+      "info": "This business is owned by someone else. Please ask the business owner to upgrade if you need access to premium features."
     }
   }
 }
