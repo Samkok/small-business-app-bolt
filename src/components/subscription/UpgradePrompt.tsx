@@ -6,6 +6,7 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Lock, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -30,6 +31,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
 }) => {
   const { isDark } = useTheme();
   const { products } = useSubscription();
+  const insets = useSafeAreaInsets();
 
   const monthlyProduct = products.find(p => p.type === 'monthly');
   const yearlyProduct = products.find(p => p.type === 'yearly');
@@ -49,7 +51,11 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
         />
         <View style={[styles.modal, isDark && styles.modalDark]}>
           <TouchableOpacity
-            style={[styles.closeButton, isDark && styles.closeButtonDark]}
+            style={[
+              styles.closeButton,
+              isDark && styles.closeButtonDark,
+              { top: Math.max(16, insets.top + 16) }
+            ]}
             onPress={onClose}
           >
             <X size={20} color={isDark ? '#ffffff' : '#000000'} />
