@@ -174,9 +174,18 @@ export const instantCheckoutService = {
       };
     } catch (error) {
       logger.error('Failed to complete instant checkout', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to complete checkout';
+
+      if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
+        return {
+          success: false,
+          error: 'SUBSCRIPTION_LIMIT_REACHED',
+        };
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to complete checkout',
+        error: errorMessage,
       };
     }
   },
