@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap } from 'lucide-react-native';
+import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -24,7 +24,7 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, currentBusiness } = useAuth();
   const {
     isSubscribed,
     subscriptionStatus,
@@ -35,6 +35,8 @@ export default function SubscriptionScreen() {
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
+
+  const isOwner = user?.id === currentBusiness?.owner_user_id;
 
   const handleRestore = async () => {
     try {
@@ -107,37 +109,41 @@ export default function SubscriptionScreen() {
             </LinearGradient>
 
             <Card style={styles.detailsCard}>
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <Calendar size={20} color="#3b82f6" />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
-                    {t('subscription.subscriptionType')}
-                  </Text>
-                  <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {subscriptionStatus.productId?.includes('yearly') ? t('subscription.yearly') : t('subscription.monthly')}
-                  </Text>
-                </View>
-              </View>
+              {isOwner && (
+                <>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIcon}>
+                      <Calendar size={20} color="#3b82f6" />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
+                        {t('subscription.subscriptionType')}
+                      </Text>
+                      <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
+                        {subscriptionStatus.productId?.includes('yearly') ? t('subscription.yearly') : t('subscription.monthly')}
+                      </Text>
+                    </View>
+                  </View>
 
-              {subscriptionStatus.expirationDate && (
-                <View style={[styles.detailRow, styles.detailRowBorder]}>
-                  <View style={styles.detailIcon}>
-                    <CreditCard size={20} color="#3b82f6" />
-                  </View>
-                  <View style={styles.detailContent}>
-                    <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
-                      {t('subscription.renewsOn')}
-                    </Text>
-                    <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                      {new Date(subscriptionStatus.expirationDate).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </View>
+                  {subscriptionStatus.expirationDate && (
+                    <View style={[styles.detailRow, styles.detailRowBorder]}>
+                      <View style={styles.detailIcon}>
+                        <CreditCard size={20} color="#3b82f6" />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
+                          {t('subscription.renewsOn')}
+                        </Text>
+                        <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
+                          {new Date(subscriptionStatus.expirationDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </>
               )}
 
-              <View style={[styles.detailRow, styles.detailRowBorder]}>
+              <View style={[styles.detailRow, isOwner && subscriptionStatus.expirationDate && styles.detailRowBorder]}>
                 <View style={styles.detailIcon}>
                   <TrendingUp size={20} color="#10b981" />
                 </View>
@@ -152,11 +158,25 @@ export default function SubscriptionScreen() {
               </View>
             </Card>
 
-            <Button
-              title={t('subscription.manageSubscription')}
-              onPress={handleManageSubscription}
-              style={styles.manageButton}
-            />
+            {isOwner ? (
+              <Button
+                title={t('subscription.manageSubscription')}
+                onPress={handleManageSubscription}
+                style={styles.manageButton}
+              />
+            ) : (
+              <Card style={styles.infoCard}>
+                <View style={styles.infoHeader}>
+                  <Info size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                  <Text style={[styles.infoTitle, isDark && styles.infoTitleDark]}>
+                    {t('subscription.ownerOnly.title')}
+                  </Text>
+                </View>
+                <Text style={[styles.infoDescription, isDark && styles.infoDescriptionDark]}>
+                  {t('subscription.ownerOnly.managementMessage')}
+                </Text>
+              </Card>
+            )}
           </>
         ) : (
           <>
@@ -200,39 +220,55 @@ export default function SubscriptionScreen() {
               </View>
             </Card>
 
-            <Card style={styles.upgradeCard}>
-              <View style={styles.upgradeHeader}>
-                <Zap size={24} color="#f59e0b" />
-                <Text style={[styles.upgradeTitle, isDark && styles.upgradeTitleDark]}>
-                  {t('subscription.upgradeToPro')}
-                </Text>
-              </View>
-              <Text style={[styles.upgradeDescription, isDark && styles.upgradeDescriptionDark]}>
-                {t('subscription.upgradeToProFullDescription')}
-              </Text>
-              <Button
-                title={t('subscription.seePlans')}
-                onPress={showPaywall}
-                style={styles.upgradeButton}
-              />
-            </Card>
-
-            <TouchableOpacity
-              style={styles.restoreButton}
-              onPress={handleRestore}
-              disabled={restoring}
-            >
-              {restoring ? (
-                <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#3b82f6'} />
-              ) : (
-                <>
-                  <RefreshCw size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                  <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
-                    {t('subscription.restorePurchases')}
+            {isOwner ? (
+              <>
+                <Card style={styles.upgradeCard}>
+                  <View style={styles.upgradeHeader}>
+                    <Zap size={24} color="#f59e0b" />
+                    <Text style={[styles.upgradeTitle, isDark && styles.upgradeTitleDark]}>
+                      {t('subscription.upgradeToPro')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.upgradeDescription, isDark && styles.upgradeDescriptionDark]}>
+                    {t('subscription.upgradeToProFullDescription')}
                   </Text>
-                </>
-              )}
-            </TouchableOpacity>
+                  <Button
+                    title={t('subscription.seePlans')}
+                    onPress={showPaywall}
+                    style={styles.upgradeButton}
+                  />
+                </Card>
+
+                <TouchableOpacity
+                  style={styles.restoreButton}
+                  onPress={handleRestore}
+                  disabled={restoring}
+                >
+                  {restoring ? (
+                    <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#3b82f6'} />
+                  ) : (
+                    <>
+                      <RefreshCw size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
+                        {t('subscription.restorePurchases')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Card style={styles.infoCard}>
+                <View style={styles.infoHeader}>
+                  <Info size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                  <Text style={[styles.infoTitle, isDark && styles.infoTitleDark]}>
+                    {t('subscription.ownerOnly.title')}
+                  </Text>
+                </View>
+                <Text style={[styles.infoDescription, isDark && styles.infoDescriptionDark]}>
+                  {t('subscription.ownerOnly.upgradeMessage')}
+                </Text>
+              </Card>
+            )}
           </>
         )}
       </ScrollView>
@@ -469,5 +505,30 @@ const styles = StyleSheet.create({
   },
   restoreTextDark: {
     color: '#60a5fa',
+  },
+  infoCard: {
+    marginTop: 16,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  infoTitleDark: {
+    color: '#ffffff',
+  },
+  infoDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+  },
+  infoDescriptionDark: {
+    color: '#9ca3af',
   },
 });

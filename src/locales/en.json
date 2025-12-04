@@ -707,6 +707,11 @@
       "title": "Owner Permission Required",
       "message": "Only the business owner can upgrade to BizManage Pro.",
       "info": "This business is owned by someone else. Please ask the business owner to upgrade if you need access to premium features."
+    },
+    "ownerOnly": {
+      "title": "Owner-Only Feature",
+      "managementMessage": "Only the business owner can manage subscription settings. Contact the owner if you need to make changes.",
+      "upgradeMessage": "Only the business owner can upgrade the subscription. Contact the owner if you need access to premium features."
     }
   }
 }
