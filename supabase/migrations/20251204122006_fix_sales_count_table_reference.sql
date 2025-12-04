@@ -1,17 +1,20 @@
 /*
-  # Add Sales Subscription Validation
-
+  # Fix Sales Count Table Reference
+  
   1. Changes
-    - Creates a database function to validate subscription limits before sales creation
-    - Adds a trigger to automatically check subscription limits on sale insertion
-    - Ensures no user can bypass the free tier limit at the database level
-
-  2. Security
-    - Prevents sales creation if user exceeds free tier limit without active subscription
-    - Database-level enforcement ensures no bypass through frontend or API
+    - Drops and recreates the check_sales_subscription_limit function with correct table name
+    - The function was referencing 'user_business_sales_count' but the table is 'user_sales_counts'
+  
+  2. Impact
+    - Fixes the error preventing sales from being created
+    - Ensures subscription limit validation works correctly
 */
 
--- Function to check if user can create a sale based on subscription status
+-- Drop the existing function and trigger
+DROP TRIGGER IF EXISTS check_sales_limit_trigger ON sales;
+DROP FUNCTION IF EXISTS check_sales_subscription_limit();
+
+-- Recreate function with correct table name
 CREATE OR REPLACE FUNCTION check_sales_subscription_limit()
 RETURNS TRIGGER
 SECURITY DEFINER
@@ -59,8 +62,7 @@ BEGIN
 END;
 $$;
 
--- Create trigger to run before sale insertion
-DROP TRIGGER IF EXISTS check_sales_limit_trigger ON sales;
+-- Recreate trigger
 CREATE TRIGGER check_sales_limit_trigger
   BEFORE INSERT ON sales
   FOR EACH ROW
