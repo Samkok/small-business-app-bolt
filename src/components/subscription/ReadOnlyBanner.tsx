@@ -25,7 +25,11 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
       style={[
         styles.container,
         isDark && styles.containerDark,
-        { paddingLeft: Math.max(16, insets.left + 8), paddingRight: Math.max(16, insets.right + 8) }
+        {
+          paddingTop: Math.max(12, insets.top + 12),
+          paddingLeft: Math.max(16, insets.left + 8),
+          paddingRight: Math.max(16, insets.right + 8)
+        }
       ]}
     >
       <View style={styles.content}>
