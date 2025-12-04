@@ -41,7 +41,6 @@ import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutM
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
 import { WarningBanner } from '@/src/components/subscription/WarningBanner';
-import { ExpiredSubscriptionBanner } from '@/src/components/subscription/ExpiredSubscriptionBanner';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
@@ -878,18 +877,12 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      {subscriptionStatus.subscriptionStatus === 'expired' && (
-        <ExpiredSubscriptionBanner
-          onUpgrade={showPaywall}
-        />
-      )}
-      {subscriptionStatus.subscriptionStatus !== 'expired' && salesCountData.isAtLimit && !canAccessFeature && (
+      {salesCountData.isAtLimit && !canAccessFeature ? (
         <ReadOnlyBanner
           salesCount={salesCountData.salesCount}
           onUpgrade={showPaywall}
         />
-      )}
-      {subscriptionStatus.subscriptionStatus !== 'expired' && !salesCountData.isAtLimit && shouldShowWarningBanner() && (
+      ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
@@ -898,7 +891,16 @@ export default function SalesScreen() {
           onDismiss={handleDismissWarning}
           dismissible={true}
         />
-      )}
+      ) : !salesCountData.isAtLimit && shouldShowWarningBanner() ? (
+        <WarningBanner
+          salesCount={salesCountData.salesCount}
+          remainingSales={salesCountData.remainingSales}
+          totalLimit={FREE_TIER_LIMIT}
+          onUpgrade={showPaywall}
+          onDismiss={handleDismissWarning}
+          dismissible={true}
+        />
+      ) : null}
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {t('sales.title')}
