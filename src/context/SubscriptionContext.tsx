@@ -83,6 +83,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
+  const isReconnectingRef = useRef(false);
 
   const initializeIAP = useCallback(async () => {
     if (Platform.OS === 'web' || !IAP) {
@@ -167,12 +171,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user?.id, currentBusiness?.id]);
 
   const setupRealtimeSubscription = useCallback(() => {
-    if (!user?.id) {
+    if (!user?.id || !isAppActiveRef.current) {
       return;
     }
 
     if (realtimeChannelRef.current) {
       realtimeChannelRef.current.unsubscribe();
+      realtimeChannelRef.current = null;
     }
 
     console.log('[SubscriptionContext] Setting up realtime subscription');
@@ -228,8 +233,34 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         console.log('[SubscriptionContext] Realtime subscription status:', status);
         if (status === 'SUBSCRIBED') {
           console.log('[SubscriptionContext] ✓ Connected to realtime');
+          reconnectAttemptsRef.current = 0;
+          isReconnectingRef.current = false;
         } else if (status === 'CHANNEL_ERROR') {
           console.error('[SubscriptionContext] ✗ Realtime connection error');
+
+          if (!isReconnectingRef.current && isAppActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+            isReconnectingRef.current = true;
+            reconnectAttemptsRef.current += 1;
+
+            const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
+            console.log(`[SubscriptionContext] Attempting reconnection ${reconnectAttemptsRef.current}/${maxReconnectAttempts} in ${backoffDelay}ms`);
+
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+            }
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (isAppActiveRef.current && user?.id) {
+                console.log('[SubscriptionContext] Reconnecting realtime subscription...');
+                isReconnectingRef.current = false;
+                setupRealtimeSubscription();
+              }
+            }, backoffDelay);
+          } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+            console.error('[SubscriptionContext] Max reconnection attempts reached');
+          }
+        } else if (status === 'CLOSED') {
+          console.log('[SubscriptionContext] Realtime connection closed');
         }
       });
 
@@ -237,12 +268,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, checkFeatureAccess]);
 
   const setupSalesCountRealtime = useCallback(() => {
-    if (!user?.id || !currentBusiness?.id) {
+    if (!user?.id || !currentBusiness?.id || !isAppActiveRef.current) {
       return;
     }
 
     if (salesCountChannelRef.current) {
       salesCountChannelRef.current.unsubscribe();
+      salesCountChannelRef.current = null;
     }
 
     console.log('[SubscriptionContext] Setting up sales count realtime');
@@ -272,17 +304,43 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       )
       .subscribe((status) => {
         console.log('[SubscriptionContext] Sales count realtime status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[SubscriptionContext] ✓ Sales count connected to realtime');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[SubscriptionContext] ✗ Sales count realtime connection error');
+
+          if (isAppActiveRef.current && user?.id && currentBusiness?.id) {
+            const backoffDelay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttemptsRef.current, 4)), 30000);
+            console.log(`[SubscriptionContext] Reconnecting sales count in ${backoffDelay}ms`);
+
+            setTimeout(() => {
+              if (isAppActiveRef.current && user?.id && currentBusiness?.id) {
+                console.log('[SubscriptionContext] Reconnecting sales count realtime...');
+                setupSalesCountRealtime();
+              }
+            }, backoffDelay);
+          }
+        } else if (status === 'CLOSED') {
+          console.log('[SubscriptionContext] Sales count realtime connection closed');
+        }
       });
 
     salesCountChannelRef.current = channel;
   }, [user?.id, currentBusiness?.id, checkFeatureAccess]);
 
   const cleanupRealtimeSubscription = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     if (realtimeChannelRef.current) {
       console.log('[SubscriptionContext] Cleaning up realtime subscription');
       realtimeChannelRef.current.unsubscribe();
       realtimeChannelRef.current = null;
     }
+
+    isReconnectingRef.current = false;
   }, []);
 
   const cleanupSalesCountRealtime = useCallback(() => {
@@ -449,17 +507,32 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       const isActive = nextAppState === 'active';
+      const wasActive = isAppActiveRef.current;
       isAppActiveRef.current = isActive;
 
-      if (isActive && user?.id) {
-        console.log('[SubscriptionContext] App became active, refreshing data');
+      if (isActive && !wasActive && user?.id) {
+        console.log('[SubscriptionContext] App became active, refreshing data and reconnecting realtime');
+
+        reconnectAttemptsRef.current = 0;
+
         refreshSubscriptionStatus(true);
         if (currentBusiness?.id) {
           refreshSalesCount();
           checkFeatureAccess(true);
         }
-      } else {
-        console.log('[SubscriptionContext] App became inactive');
+
+        setTimeout(() => {
+          if (isAppActiveRef.current) {
+            setupRealtimeSubscription();
+            if (currentBusiness?.id) {
+              setupSalesCountRealtime();
+            }
+          }
+        }, 500);
+      } else if (!isActive && wasActive) {
+        console.log('[SubscriptionContext] App became inactive, cleaning up realtime connections');
+        cleanupRealtimeSubscription();
+        cleanupSalesCountRealtime();
       }
     };
 
@@ -468,7 +541,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       subscription.remove();
     };
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
 
   useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
