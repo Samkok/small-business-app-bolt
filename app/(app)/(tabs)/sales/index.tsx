@@ -41,6 +41,7 @@ import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutM
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
 import { WarningBanner } from '@/src/components/subscription/WarningBanner';
+import { ExpiredSubscriptionBanner } from '@/src/components/subscription/ExpiredSubscriptionBanner';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
@@ -99,7 +100,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
-  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed } = useSubscription();
+  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus } = useSubscription();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -877,13 +878,18 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      {salesCountData.isAtLimit && !canAccessFeature && (
+      {subscriptionStatus.subscriptionStatus === 'expired' && (
+        <ExpiredSubscriptionBanner
+          onUpgrade={showPaywall}
+        />
+      )}
+      {subscriptionStatus.subscriptionStatus !== 'expired' && salesCountData.isAtLimit && !canAccessFeature && (
         <ReadOnlyBanner
           salesCount={salesCountData.salesCount}
           onUpgrade={showPaywall}
         />
       )}
-      {!salesCountData.isAtLimit && shouldShowWarningBanner() && (
+      {subscriptionStatus.subscriptionStatus !== 'expired' && !salesCountData.isAtLimit && shouldShowWarningBanner() && (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
