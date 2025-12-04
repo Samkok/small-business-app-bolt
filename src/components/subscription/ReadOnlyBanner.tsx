@@ -35,7 +35,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
       ]}
     >
       <View style={styles.content}>
-        <AlertCircle size={20} color="#f59e0b" />
+        <AlertCircle size={20} color="#ef4444" />
         <View style={styles.textContainer}>
           <Text style={[styles.title, isDark && styles.titleDark]}>
             {t('subscription.freeLimitReached')}
@@ -69,18 +69,18 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: '#fee2e2',
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#fde68a',
+    borderBottomColor: '#fecaca',
     gap: 12,
   },
   containerDark: {
-    backgroundColor: '#78350f',
-    borderBottomColor: '#92400e',
+    backgroundColor: '#7f1d1d',
+    borderBottomColor: '#991b1b',
   },
   content: {
     flexDirection: 'row',
@@ -94,18 +94,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#92400e',
+    color: '#991b1b',
     marginBottom: 2,
   },
   titleDark: {
-    color: '#fcd34d',
+    color: '#fca5a5',
   },
   message: {
     fontSize: 12,
-    color: '#92400e',
+    color: '#7f1d1d',
   },
   messageDark: {
-    color: '#fde68a',
+    color: '#fecaca',
   },
   actions: {
     flexDirection: 'row',
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   upgradeButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#ef4444',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeButtonDark: {
-    backgroundColor: '#fbbf24',
+    backgroundColor: '#dc2626',
   },
   upgradeText: {
     fontSize: 14,

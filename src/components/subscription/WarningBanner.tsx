@@ -29,26 +29,13 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
   const percentageUsed = (salesCount / totalLimit) * 100;
   const isHighWarning = percentageUsed >= 90;
 
-  const getWarningColors = () => {
-    if (isHighWarning) {
-      return {
-        background: isDark ? '#7f1d1d' : '#fee2e2',
-        border: isDark ? '#991b1b' : '#fecaca',
-        icon: '#ef4444',
-        text: isDark ? '#fca5a5' : '#991b1b',
-        title: isDark ? '#fecaca' : '#7f1d1d',
-      };
-    }
-    return {
-      background: isDark ? '#78350f' : '#fef3c7',
-      border: isDark ? '#92400e' : '#fde68a',
-      icon: '#f59e0b',
-      text: isDark ? '#fde68a' : '#92400e',
-      title: isDark ? '#fcd34d' : '#78350f',
-    };
+  const colors = {
+    background: isDark ? '#78350f' : '#fef3c7',
+    border: isDark ? '#92400e' : '#fde68a',
+    icon: '#f59e0b',
+    text: isDark ? '#fde68a' : '#92400e',
+    title: isDark ? '#fcd34d' : '#78350f',
   };
-
-  const colors = getWarningColors();
 
   return (
     <View
@@ -78,10 +65,7 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
       </View>
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[
-            styles.upgradeButton,
-            { backgroundColor: isHighWarning ? '#ef4444' : '#f59e0b' }
-          ]}
+          style={styles.upgradeButton}
           onPress={onUpgrade}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -133,6 +117,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   upgradeButton: {
+    backgroundColor: '#f59e0b',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
