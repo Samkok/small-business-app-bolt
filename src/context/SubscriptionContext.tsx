@@ -117,8 +117,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 3;
   const isReconnectingRef = useRef(false);
+  const realtimeDisabledRef = useRef(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const initializeIAP = useCallback(async () => {
     console.log("[SubscriptionContext] InitializeIAP Start Here");
@@ -222,17 +224,42 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, [user?.id, currentBusiness?.id]);
 
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingIntervalRef.current = setInterval(async () => {
+      if (isAppActiveRef.current && user?.id) {
+        await refreshSubscriptionStatus(true);
+        await refreshTierInfo();
+        if (currentBusiness?.id) {
+          await refreshSalesCount();
+          await checkFeatureAccess(true);
+        }
+      }
+    }, 30000);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, refreshSalesCount, checkFeatureAccess]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
   const setupRealtimeSubscription = useCallback(() => {
-    if (!user?.id || !isAppActiveRef.current) {
+    if (!user?.id || !isAppActiveRef.current || realtimeDisabledRef.current) {
       return;
     }
 
     if (realtimeChannelRef.current) {
-      realtimeChannelRef.current.unsubscribe();
+      try {
+        realtimeChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
       realtimeChannelRef.current = null;
     }
-
-    console.log('[SubscriptionContext] Setting up realtime subscription');
 
     const channel = supabase
       .channel(`subscription-changes-${user.id}`)
@@ -245,8 +272,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
-          console.log('[SubscriptionContext] Received realtime update:', payload);
-
           if (payload.new) {
             const newStatus = payload.new as any;
             const isExpired = newStatus.subscription_expiration_date &&
@@ -274,8 +299,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       .on(
         'broadcast',
         { event: 'subscription_updated' },
-        async (payload) => {
-          console.log('[SubscriptionContext] Received broadcast:', payload);
+        async () => {
           await refreshSubscriptionStatus(true);
           await refreshTierInfo();
           if (currentBusiness?.id) {
@@ -284,54 +308,49 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         }
       )
       .subscribe((status) => {
-        console.log('[SubscriptionContext] Realtime subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('[SubscriptionContext] ✓ Connected to realtime');
           reconnectAttemptsRef.current = 0;
           isReconnectingRef.current = false;
+          stopPolling();
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('[SubscriptionContext] ✗ Realtime connection error');
-
-          if (!isReconnectingRef.current && isAppActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          if (!isReconnectingRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
             isReconnectingRef.current = true;
             reconnectAttemptsRef.current += 1;
 
-            const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
-            console.log(`[SubscriptionContext] Attempting reconnection ${reconnectAttemptsRef.current}/${maxReconnectAttempts} in ${backoffDelay}ms`);
+            const backoffDelay = Math.min(2000 * reconnectAttemptsRef.current, 8000);
 
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current);
             }
 
             reconnectTimeoutRef.current = setTimeout(() => {
-              if (isAppActiveRef.current && user?.id) {
-                console.log('[SubscriptionContext] Reconnecting realtime subscription...');
+              if (isAppActiveRef.current && user?.id && !realtimeDisabledRef.current) {
                 isReconnectingRef.current = false;
                 setupRealtimeSubscription();
               }
             }, backoffDelay);
           } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-            console.error('[SubscriptionContext] Max reconnection attempts reached');
+            realtimeDisabledRef.current = true;
+            startPolling();
           }
-        } else if (status === 'CLOSED') {
-          console.log('[SubscriptionContext] Realtime connection closed');
         }
       });
 
     realtimeChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess, startPolling, stopPolling]);
 
   const setupSalesCountRealtime = useCallback(() => {
-    if (!user?.id || !currentBusiness?.id || !isAppActiveRef.current) {
+    if (!user?.id || !currentBusiness?.id || !isAppActiveRef.current || realtimeDisabledRef.current) {
       return;
     }
 
     if (salesCountChannelRef.current) {
-      salesCountChannelRef.current.unsubscribe();
+      try {
+        salesCountChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
       salesCountChannelRef.current = null;
     }
-
-    console.log('[SubscriptionContext] Setting up sales count realtime');
 
     const channel = supabase
       .channel(`sales-count-${user.id}-${currentBusiness.id}`)
@@ -344,7 +363,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
-          console.log('[SubscriptionContext] Sales count changed:', payload);
           if (payload.new && (payload.new as any).business_id === currentBusiness.id) {
             await refreshSalesCount();
             await refreshTierInfo();
@@ -353,25 +371,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         }
       )
       .subscribe((status) => {
-        console.log('[SubscriptionContext] Sales count realtime status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('[SubscriptionContext] ✓ Sales count connected to realtime');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[SubscriptionContext] ✗ Sales count realtime connection error');
-
-          if (isAppActiveRef.current && user?.id && currentBusiness?.id) {
-            const backoffDelay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttemptsRef.current, 4)), 30000);
-            console.log(`[SubscriptionContext] Reconnecting sales count in ${backoffDelay}ms`);
-
-            setTimeout(() => {
-              if (isAppActiveRef.current && user?.id && currentBusiness?.id) {
-                console.log('[SubscriptionContext] Reconnecting sales count realtime...');
-                setupSalesCountRealtime();
-              }
-            }, backoffDelay);
-          }
-        } else if (status === 'CLOSED') {
-          console.log('[SubscriptionContext] Sales count realtime connection closed');
+        if (status !== 'SUBSCRIBED' && status !== 'CHANNEL_ERROR') {
         }
       });
 
@@ -385,18 +385,23 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
 
     if (realtimeChannelRef.current) {
-      console.log('[SubscriptionContext] Cleaning up realtime subscription');
-      realtimeChannelRef.current.unsubscribe();
+      try {
+        realtimeChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
       realtimeChannelRef.current = null;
     }
 
+    stopPolling();
     isReconnectingRef.current = false;
-  }, []);
+  }, [stopPolling]);
 
   const cleanupSalesCountRealtime = useCallback(() => {
     if (salesCountChannelRef.current) {
-      console.log('[SubscriptionContext] Cleaning up sales count realtime');
-      salesCountChannelRef.current.unsubscribe();
+      try {
+        salesCountChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
       salesCountChannelRef.current = null;
     }
   }, []);
@@ -556,6 +561,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     initializeIAP();
 
     return () => {
+      stopPolling();
       if (Platform.OS !== 'web' && IAP) {
         try {
           IAP.endConnection();
@@ -564,7 +570,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         }
       }
     };
-  }, [initializeIAP]);
+  }, [initializeIAP, stopPolling]);
 
   useEffect(() => {
     if (user?.id) {
@@ -587,9 +593,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       isAppActiveRef.current = isActive;
 
       if (isActive && !wasActive && user?.id) {
-        console.log('[SubscriptionContext] App became active, refreshing data and reconnecting realtime');
-
         reconnectAttemptsRef.current = 0;
+        realtimeDisabledRef.current = false;
 
         refreshSubscriptionStatus(true);
         refreshTierInfo();
@@ -607,7 +612,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           }
         }, 500);
       } else if (!isActive && wasActive) {
-        console.log('[SubscriptionContext] App became inactive, cleaning up realtime connections');
         cleanupRealtimeSubscription();
         cleanupSalesCountRealtime();
       }
