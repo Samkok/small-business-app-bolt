@@ -333,12 +333,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         async (payload) => {
           console.log('[SubscriptionContext] Sales count changed:', payload);
           if (payload.new && (payload.new as any).business_id === currentBusiness.id) {
-            const newCount = (payload.new as any).sales_count;
-            setSalesCountData({
-              salesCount: newCount,
-              remainingSales: Math.max(0, FREE_TIER_LIMIT - newCount),
-              isAtLimit: newCount >= FREE_TIER_LIMIT
-            });
+            await refreshSalesCount();
+            await refreshTierInfo();
             await checkFeatureAccess(true);
           }
         }
@@ -367,7 +363,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       });
 
     salesCountChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, checkFeatureAccess, refreshSalesCount, refreshTierInfo]);
 
   const cleanupRealtimeSubscription = useCallback(() => {
     if (reconnectTimeoutRef.current) {

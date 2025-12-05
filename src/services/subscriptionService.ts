@@ -7,6 +7,36 @@ const CACHE_TTL_MS = 2 * 60 * 1000;
 
 export type SubscriptionTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
+function getTierFromProductId(productId: string | undefined): SubscriptionTier {
+  if (!productId) return 'free';
+
+  const lowerProductId = productId.toLowerCase();
+
+  if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
+    return 'pro_plus';
+  } else if (lowerProductId.includes('max')) {
+    return 'max';
+  } else if (lowerProductId.includes('pro')) {
+    return 'pro';
+  }
+
+  return 'free';
+}
+
+function getMaxOwnedBusinessesFromTier(tier: SubscriptionTier): number | null {
+  switch (tier) {
+    case 'pro':
+      return 1;
+    case 'pro_plus':
+      return 3;
+    case 'max':
+      return 999999;
+    case 'free':
+    default:
+      return null;
+  }
+}
+
 export interface SubscriptionStatus {
   isSubscribed: boolean;
   subscriptionStatus: 'active' | 'expired' | 'cancelled' | 'trial';
@@ -317,6 +347,9 @@ export const subscriptionService = {
         .limit(1)
         .maybeSingle();
 
+      const tier = getTierFromProductId(productId);
+      const maxOwnedBusinesses = getMaxOwnedBusinessesFromTier(tier);
+
       const subscriptionData = {
         user_id: userId,
         subscription_status: status,
@@ -325,6 +358,8 @@ export const subscriptionService = {
         receipt_data: receiptData,
         last_validated_at: new Date().toISOString(),
         platform: Platform.OS as 'ios' | 'android' | 'web',
+        tier: tier,
+        max_owned_businesses: maxOwnedBusinesses,
         updated_at: new Date().toISOString()
       };
 
