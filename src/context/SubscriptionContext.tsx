@@ -114,6 +114,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const isReconnectingRef = useRef(false);
 
   const initializeIAP = useCallback(async () => {
+    console.log("InitializeIAP Start Here");
     if (Platform.OS === 'web' || !IAP) {
       setIsInitialized(true);
       setIsLoading(false);
