@@ -20,7 +20,7 @@ export default function DebugSubscriptionScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { user, currentBusiness } = useAuth();
-  const { salesCountData, subscriptionStatus, refreshSubscriptionStatus, refreshSalesCount } = useSubscription();
+  const { salesCountData, subscriptionStatus, tierInfo, ownedBusinessCount, refreshSubscriptionStatus, refreshSalesCount, refreshTierInfo } = useSubscription();
   const [processing, setProcessing] = useState(false);
 
   if (!__DEV__) {
@@ -37,7 +37,7 @@ export default function DebugSubscriptionScreen() {
     try {
       setProcessing(true);
       await action();
-      await Promise.all([refreshSubscriptionStatus(), refreshSalesCount()]);
+      await Promise.all([refreshSubscriptionStatus(), refreshSalesCount(), refreshTierInfo()]);
       Alert.alert('Success', successMessage);
     } catch (error) {
       Alert.alert('Error', 'Failed to execute action');
@@ -60,17 +60,45 @@ export default function DebugSubscriptionScreen() {
     );
   };
 
-  const simulateActiveMonthly = () => {
+  const simulateProMonthly = () => {
     handleAction(
       () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.pro.month'),
-      'Simulated active monthly subscription'
+      'Simulated Pro tier (1 business)'
     );
   };
 
-  const simulateActiveYearly = () => {
+  const simulateProYearly = () => {
     handleAction(
       () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.pro.yearly'),
-      'Simulated active yearly subscription'
+      'Simulated Pro tier (1 business) - Yearly'
+    );
+  };
+
+  const simulateProPlusMonthly = () => {
+    handleAction(
+      () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.pro_plus.month'),
+      'Simulated Pro Plus tier (3 businesses)'
+    );
+  };
+
+  const simulateProPlusYearly = () => {
+    handleAction(
+      () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.pro_plus.yearly'),
+      'Simulated Pro Plus tier (3 businesses) - Yearly'
+    );
+  };
+
+  const simulateMaxMonthly = () => {
+    handleAction(
+      () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.max.month'),
+      'Simulated Max tier (unlimited businesses)'
+    );
+  };
+
+  const simulateMaxYearly = () => {
+    handleAction(
+      () => debugSubscription.simulateSubscription(user!.id, 'active', 'bizmanage.max.yearly'),
+      'Simulated Max tier (unlimited businesses) - Yearly'
     );
   };
 
@@ -140,10 +168,26 @@ export default function DebugSubscriptionScreen() {
           </Text>
           <View style={styles.stateItem}>
             <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
-              Sales Count:
+              Sales Count (Current):
             </Text>
             <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
               {salesCountData.salesCount}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Total Sales (All):
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {salesCountData.totalSalesAllBusinesses || 0}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Subscription Tier:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {tierInfo.tier}
             </Text>
           </View>
           <View style={styles.stateItem}>
@@ -152,6 +196,14 @@ export default function DebugSubscriptionScreen() {
             </Text>
             <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
               {subscriptionStatus.subscriptionStatus}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Owned Businesses:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {ownedBusinessCount} / {tierInfo.maxOwnedBusinesses === 999999 ? '∞' : (tierInfo.maxOwnedBusinesses || '∞')}
             </Text>
           </View>
           {subscriptionStatus.productId && (
@@ -186,20 +238,62 @@ export default function DebugSubscriptionScreen() {
 
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Simulate Subscription
+            Pro Tier (1 Business)
           </Text>
           <Button
-            title="Active Monthly Subscription"
-            onPress={simulateActiveMonthly}
+            title="Pro Monthly"
+            onPress={simulateProMonthly}
             disabled={processing}
             style={styles.button}
           />
           <Button
-            title="Active Yearly Subscription"
-            onPress={simulateActiveYearly}
+            title="Pro Yearly"
+            onPress={simulateProYearly}
             disabled={processing}
             style={styles.button}
           />
+        </Card>
+
+        <Card style={styles.actionsCard}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Pro Plus Tier (3 Businesses)
+          </Text>
+          <Button
+            title="Pro Plus Monthly"
+            onPress={simulateProPlusMonthly}
+            disabled={processing}
+            style={styles.button}
+          />
+          <Button
+            title="Pro Plus Yearly"
+            onPress={simulateProPlusYearly}
+            disabled={processing}
+            style={styles.button}
+          />
+        </Card>
+
+        <Card style={styles.actionsCard}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Max Tier (Unlimited Businesses)
+          </Text>
+          <Button
+            title="Max Monthly"
+            onPress={simulateMaxMonthly}
+            disabled={processing}
+            style={styles.button}
+          />
+          <Button
+            title="Max Yearly"
+            onPress={simulateMaxYearly}
+            disabled={processing}
+            style={styles.button}
+          />
+        </Card>
+
+        <Card style={styles.actionsCard}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Other States
+          </Text>
           <Button
             title="Expired Subscription"
             onPress={simulateExpired}

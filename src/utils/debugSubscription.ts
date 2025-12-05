@@ -44,15 +44,45 @@ export const debugSubscription = {
         ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
         : new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
 
-      await subscriptionService.updateSubscription(
-        userId,
-        status,
-        productId || 'bizmanage.pro.month',
-        status === 'active' ? expirationDate : undefined,
-        'debug_receipt_data'
-      );
+      const finalProductId = productId || 'bizmanage.pro.month';
 
-      console.log(`[DEBUG] Simulated subscription: ${status}, product: ${productId}`);
+      let tier = 'free';
+      let maxOwnedBusinesses = null;
+
+      if (finalProductId.includes('pro_plus')) {
+        tier = 'pro_plus';
+        maxOwnedBusinesses = 3;
+      } else if (finalProductId.includes('max')) {
+        tier = 'max';
+        maxOwnedBusinesses = 999999;
+      } else if (finalProductId.includes('pro')) {
+        tier = 'pro';
+        maxOwnedBusinesses = 1;
+      }
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        .upsert({
+          user_id: userId,
+          subscription_status: status,
+          subscription_product_id: finalProductId,
+          tier: tier,
+          max_owned_businesses: maxOwnedBusinesses,
+          subscription_expiration_date: status === 'active' ? expirationDate.toISOString() : null,
+          receipt_data: 'debug_receipt_data',
+          last_validated_at: new Date().toISOString(),
+          platform: 'ios',
+          subscription_start_date: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) throw error;
+
+      await subscriptionService.clearSubscriptionCache();
+
+      console.log(`[DEBUG] Simulated subscription: ${status}, product: ${finalProductId}, tier: ${tier}`);
     } catch (error) {
       console.error('[DEBUG] Error simulating subscription:', error);
     }
@@ -93,16 +123,24 @@ export const debugSubscription = {
     }
 
     try {
-      const [subscription, salesCount, canAccess] = await Promise.all([
+      const [subscription, salesCount, totalSales, tierInfo, ownedBusinessCount, canAccess, canCreateSale] = await Promise.all([
         subscriptionService.getSubscriptionStatus(userId),
         subscriptionService.getSalesCount(userId, businessId),
-        subscriptionService.canAccessFeature(userId, businessId)
+        subscriptionService.getTotalSalesCount(userId),
+        subscriptionService.getTierInfo(userId),
+        subscriptionService.getOwnedBusinessCount(userId),
+        subscriptionService.canAccessFeature(userId, businessId),
+        subscriptionService.canCreateSale(userId, businessId)
       ]);
 
       console.log('[DEBUG] Subscription State:', {
         subscription,
+        tierInfo,
         salesCount,
+        totalSales,
+        ownedBusinessCount,
         canAccess,
+        canCreateSale,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
