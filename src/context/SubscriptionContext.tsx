@@ -115,6 +115,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
   const initializeIAP = useCallback(async () => {
     console.log("InitializeIAP Start Here");
+    const connectionResult = await IAP.initConnection();
+    console.log('IAP connection result:', connectionResult);
     if (Platform.OS === 'web' || !IAP) {
       setIsInitialized(true);
       setIsLoading(false);
