@@ -619,6 +619,7 @@
     "monthly": "ប្រចាំខែ",
     "yearly": "ប្រចាំឆ្នាំ",
     "bestValue": "តម្លៃល្អបំផុត",
+    "mostPopular": "ពេញនិយមបំផុត",
     "active": "សកម្ម",
     "expired": "ផុតកំណត់",
     "cancelled": "បានបោះបង់",
@@ -665,6 +666,25 @@
     "maybeLater": "ប្រហែលនៅពេលក្រោយ",
     "onlyOneSaleRemaining": "នៅសល់តែ 1 ការលក់ ({{current}}/{{limit}})",
     "salesRemainingCount": "{{remaining}} ការលក់នៅសល់ ({{current}}/{{limit}})",
+    "choosePlan": "ជ្រើសរើសផែនការរបស់អ្នក",
+    "selectPlan": "ជ្រើសរើសផែនការ",
+    "tiers": {
+      "pro": {
+        "name": "Pro",
+        "tagline": "ល្អឥតខ្ចោះសម្រាប់អ្នកចាប់ផ្តើម",
+        "businessLimit": "១ អាជីវកម្ម"
+      },
+      "proPlus": {
+        "name": "Pro Plus",
+        "tagline": "ល្អបំផុតសម្រាប់ក្រុមកំពុងរីកចម្រើន",
+        "businessLimit": "៣ អាជីវកម្ម"
+      },
+      "max": {
+        "name": "Max",
+        "tagline": "ការគ្រប់គ្រងអាជីវកម្មចុងក្រោយ",
+        "businessLimit": "អាជីវកម្មគ្មានដែនកំណត់"
+      }
+    },
     "features": {
       "unlimitedSales": "ការលក់គ្មានដែនកំណត់",
       "unlimitedSalesDesc": "បង្កើតប្រតិបត្តិការលក់គ្មានដែនកំណត់",
@@ -678,9 +698,17 @@
       "cloudSyncDesc": "បម្រុងទុក និងធ្វើសមកាលកម្មទិន្នន័យដោយស្វ័យប្រវត្តិ",
       "prioritySupport": "ជំនួយអាទិភាព",
       "prioritySupportDesc": "ទទួលបានជំនួយនៅពេលអ្នកត្រូវការ",
+      "premiumSupport": "ជំនួយពិសេស",
+      "premiumSupportDesc": "ជំនួយអាទិភាព 24/7",
       "unlimitedTransactions": "ប្រតិបត្តិការលក់គ្មានដែនកំណត់",
       "fullAccessFeatures": "ការចូលប្រើគ្រប់លក្ខណៈពិសេសទាំងអស់",
-      "advancedAnalytics": "របាយការណ៍ និងការវិភាគកម្រិតខ្ពស់"
+      "advancedAnalytics": "របាយការណ៍ និងការវិភាគកម្រិតខ្ពស់",
+      "oneBusinessOwned": "១ អាជីវកម្មផ្ទាល់ខ្លួន",
+      "threeBusinessesOwned": "៣ អាជីវកម្មផ្ទាល់ខ្លួន",
+      "unlimitedBusinessesOwned": "អាជីវកម្មផ្ទាល់ខ្លួនគ្មានដែនកំណត់",
+      "basicReporting": "របាយការណ៍មូលដ្ឋាន",
+      "teamCollaboration": "កិច្ចសហប្រតិបត្តិការក្រុម",
+      "customFeatures": "លក្ខណៈពិសេសផ្ទាល់ខ្លួន"
     },
     "alerts": {
       "restoreSuccessTitle": "ការទិញត្រូវបានស្តារ",

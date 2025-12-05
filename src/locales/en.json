@@ -629,6 +629,7 @@
     "monthly": "Monthly",
     "yearly": "Yearly",
     "bestValue": "BEST VALUE",
+    "mostPopular": "MOST POPULAR",
     "active": "Active",
     "expired": "Expired",
     "cancelled": "Cancelled",
@@ -675,6 +676,25 @@
     "maybeLater": "Maybe Later",
     "onlyOneSaleRemaining": "Only 1 sale remaining ({{current}}/{{limit}})",
     "salesRemainingCount": "{{remaining}} sales remaining ({{current}}/{{limit}})",
+    "choosePlan": "Choose Your Plan",
+    "selectPlan": "Select Plan",
+    "tiers": {
+      "pro": {
+        "name": "Pro",
+        "tagline": "Perfect for starters",
+        "businessLimit": "1 Business"
+      },
+      "proPlus": {
+        "name": "Pro Plus",
+        "tagline": "Best for growing teams",
+        "businessLimit": "3 Businesses"
+      },
+      "max": {
+        "name": "Max",
+        "tagline": "Ultimate business control",
+        "businessLimit": "Unlimited Businesses"
+      }
+    },
     "features": {
       "unlimitedSales": "Unlimited Sales",
       "unlimitedSalesDesc": "Create unlimited sales transactions",
@@ -688,9 +708,17 @@
       "cloudSyncDesc": "Automatic data backup and sync",
       "prioritySupport": "Priority Support",
       "prioritySupportDesc": "Get help when you need it",
+      "premiumSupport": "Premium Support",
+      "premiumSupportDesc": "24/7 priority support",
       "unlimitedTransactions": "Unlimited sales transactions",
       "fullAccessFeatures": "Full access to all features",
-      "advancedAnalytics": "Advanced reporting and analytics"
+      "advancedAnalytics": "Advanced reporting and analytics",
+      "oneBusinessOwned": "1 owned business",
+      "threeBusinessesOwned": "3 owned businesses",
+      "unlimitedBusinessesOwned": "Unlimited owned businesses",
+      "basicReporting": "Basic Reporting",
+      "teamCollaboration": "Team Collaboration",
+      "customFeatures": "Custom Features"
     },
     "alerts": {
       "restoreSuccessTitle": "Purchases Restored",

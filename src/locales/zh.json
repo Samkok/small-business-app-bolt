@@ -620,6 +620,7 @@
     "monthly": "月度",
     "yearly": "年度",
     "bestValue": "最超值",
+    "mostPopular": "最受欢迎",
     "active": "已激活",
     "expired": "已过期",
     "cancelled": "已取消",
@@ -666,6 +667,25 @@
     "maybeLater": "稍后再说",
     "onlyOneSaleRemaining": "仅剩1笔销售 ({{current}}/{{limit}})",
     "salesRemainingCount": "剩余{{remaining}}笔销售 ({{current}}/{{limit}})",
+    "choosePlan": "选择您的计划",
+    "selectPlan": "选择计划",
+    "tiers": {
+      "pro": {
+        "name": "Pro",
+        "tagline": "适合初学者",
+        "businessLimit": "1个业务"
+      },
+      "proPlus": {
+        "name": "Pro Plus",
+        "tagline": "最适合成长中的团队",
+        "businessLimit": "3个业务"
+      },
+      "max": {
+        "name": "Max",
+        "tagline": "终极业务控制",
+        "businessLimit": "无限业务"
+      }
+    },
     "features": {
       "unlimitedSales": "无限销售",
       "unlimitedSalesDesc": "创建无限销售交易",
@@ -679,9 +699,17 @@
       "cloudSyncDesc": "自动数据备份和同步",
       "prioritySupport": "优先支持",
       "prioritySupportDesc": "随时获得帮助",
+      "premiumSupport": "高级支持",
+      "premiumSupportDesc": "24/7优先支持",
       "unlimitedTransactions": "无限销售交易",
       "fullAccessFeatures": "全面访问所有功能",
-      "advancedAnalytics": "高级报告和分析"
+      "advancedAnalytics": "高级报告和分析",
+      "oneBusinessOwned": "1个自有业务",
+      "threeBusinessesOwned": "3个自有业务",
+      "unlimitedBusinessesOwned": "无限自有业务",
+      "basicReporting": "基础报告",
+      "teamCollaboration": "团队协作",
+      "customFeatures": "自定义功能"
     },
     "alerts": {
       "restoreSuccessTitle": "购买已恢复",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,13 +24,15 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { X, Check, Zap, TrendingUp, Users, BarChart3, Cloud, Headphones } from 'lucide-react-native';
+import { X, Check, Zap, Building2, Users, TrendingUp, Headphones, Crown } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.9;
+const CARD_WIDTH = SCREEN_WIDTH * 0.75;
+const CARD_SPACING = 16;
 
 interface PaywallProps {
   visible: boolean;
@@ -38,29 +40,82 @@ interface PaywallProps {
   canClose?: boolean;
 }
 
+type TierType = 'pro' | 'pro_plus' | 'max';
+type BillingPeriod = 'monthly' | 'yearly';
+
+interface TierConfig {
+  id: TierType;
+  name: string;
+  tagline: string;
+  businessLimit: string;
+  features: string[];
+  icon: typeof Building2;
+}
+
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
   const insets = useSafeAreaInsets();
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const [selectedTier, setSelectedTier] = useState<TierType>('pro_plus');
+  const [billingPeriods, setBillingPeriods] = useState<Record<TierType, BillingPeriod>>({
+    pro: 'yearly',
+    pro_plus: 'yearly',
+    max: 'yearly'
+  });
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(1);
 
   const translateY = useSharedValue(0);
   const context = useSharedValue({ y: 0 });
   const [isSheetVisible, setIsSheetVisible] = useState(false);
 
-  const monthlyProduct = products.find(p => p.type === 'monthly');
-  const yearlyProduct = products.find(p => p.type === 'yearly');
-
-  const features = [
-    { icon: Zap, title: t('subscription.features.unlimitedSales'), description: t('subscription.features.unlimitedSalesDesc') },
-    { icon: TrendingUp, title: t('subscription.features.unlimitedBusinesses'), description: t('subscription.features.unlimitedBusinessesDesc') },
-    { icon: Users, title: t('subscription.features.unlimitedUsers'), description: t('subscription.features.unlimitedUsersDesc') },
-    { icon: BarChart3, title: t('subscription.features.advancedReporting'), description: t('subscription.features.advancedReportingDesc') },
-    { icon: Cloud, title: t('subscription.features.cloudSync'), description: t('subscription.features.cloudSyncDesc') },
-    { icon: Headphones, title: t('subscription.features.prioritySupport'), description: t('subscription.features.prioritySupportDesc') }
+  const tiers: TierConfig[] = [
+    {
+      id: 'pro',
+      name: t('subscription.tiers.pro.name'),
+      tagline: t('subscription.tiers.pro.tagline'),
+      businessLimit: t('subscription.tiers.pro.businessLimit'),
+      features: [
+        t('subscription.features.oneBusinessOwned'),
+        t('subscription.features.unlimitedSales'),
+        t('subscription.features.basicReporting'),
+        t('subscription.features.cloudSync'),
+      ],
+      icon: Building2,
+    },
+    {
+      id: 'pro_plus',
+      name: t('subscription.tiers.proPlus.name'),
+      tagline: t('subscription.tiers.proPlus.tagline'),
+      businessLimit: t('subscription.tiers.proPlus.businessLimit'),
+      features: [
+        t('subscription.features.threeBusinessesOwned'),
+        t('subscription.features.unlimitedSales'),
+        t('subscription.features.advancedReporting'),
+        t('subscription.features.teamCollaboration'),
+        t('subscription.features.prioritySupport'),
+      ],
+      icon: TrendingUp,
+    },
+    {
+      id: 'max',
+      name: t('subscription.tiers.max.name'),
+      tagline: t('subscription.tiers.max.tagline'),
+      businessLimit: t('subscription.tiers.max.businessLimit'),
+      features: [
+        t('subscription.features.unlimitedBusinessesOwned'),
+        t('subscription.features.unlimitedSales'),
+        t('subscription.features.advancedReporting'),
+        t('subscription.features.teamCollaboration'),
+        t('subscription.features.premiumSupport'),
+        t('subscription.features.customFeatures'),
+      ],
+      icon: Crown,
+    },
   ];
 
   useEffect(() => {
@@ -70,6 +125,12 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
         damping: 50,
         stiffness: 400
       });
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: (CARD_WIDTH + CARD_SPACING) * 1,
+          animated: true
+        });
+      }, 300);
     } else {
       translateY.value = withTiming(0, { duration: 250 }, () => {
         runOnJS(setIsSheetVisible)(false);
@@ -121,10 +182,38 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     };
   });
 
-  const handlePurchase = async (productId: string) => {
+  const handleScroll = (event: any) => {
+    const scrollX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(scrollX / (CARD_WIDTH + CARD_SPACING));
+    if (index !== currentIndex && index >= 0 && index < tiers.length) {
+      setCurrentIndex(index);
+      setSelectedTier(tiers[index].id);
+    }
+  };
+
+  const toggleBillingPeriod = (tierId: TierType) => {
+    setBillingPeriods(prev => ({
+      ...prev,
+      [tierId]: prev[tierId] === 'monthly' ? 'yearly' : 'monthly'
+    }));
+  };
+
+  const handlePurchase = async () => {
+    const productId = `${selectedTier}_${billingPeriods[selectedTier]}`;
+    const product = products.find(p => p.productId === productId);
+
+    if (!product) {
+      Alert.alert(
+        t('subscription.alerts.purchaseErrorTitle'),
+        'Product not found. Please try again.',
+        [{ text: t('common.ok') }]
+      );
+      return;
+    }
+
     try {
       setPurchasing(true);
-      const success = await purchaseSubscription(productId);
+      const success = await purchaseSubscription(product.productId);
 
       if (success) {
         Alert.alert(
@@ -191,6 +280,126 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     }
   };
 
+  const renderTierCard = (tier: TierConfig, index: number) => {
+    const isSelected = selectedTier === tier.id;
+    const isCentered = currentIndex === index;
+    const billingPeriod = billingPeriods[tier.id];
+    const Icon = tier.icon;
+
+    const monthlyProduct = products.find(p => p.productId === `${tier.id}_monthly`);
+    const yearlyProduct = products.find(p => p.productId === `${tier.id}_yearly`);
+    const currentProduct = billingPeriod === 'monthly' ? monthlyProduct : yearlyProduct;
+
+    return (
+      <View
+        key={tier.id}
+        style={[
+          styles.tierCard,
+          isDark && styles.tierCardDark,
+          isCentered && styles.tierCardCentered,
+          isCentered && isDark && styles.tierCardCenteredDark,
+        ]}
+      >
+        {tier.id === 'pro_plus' && (
+          <View style={styles.mostPopularBadge}>
+            <Zap size={14} color="#ffffff" />
+            <Text style={styles.mostPopularText}>{t('subscription.mostPopular')}</Text>
+          </View>
+        )}
+
+        <View style={[styles.tierIconContainer, isDark && styles.tierIconContainerDark]}>
+          <Icon size={32} color={tier.id === 'pro_plus' ? '#f59e0b' : '#3b82f6'} />
+        </View>
+
+        <Text style={[styles.tierName, isDark && styles.tierNameDark]}>
+          {tier.name}
+        </Text>
+        <Text style={[styles.tierTagline, isDark && styles.tierTaglineDark]}>
+          {tier.tagline}
+        </Text>
+
+        <View style={[styles.businessLimitBadge, isDark && styles.businessLimitBadgeDark]}>
+          <Building2 size={16} color={isDark ? '#60a5fa' : '#3b82f6'} />
+          <Text style={[styles.businessLimitText, isDark && styles.businessLimitTextDark]}>
+            {tier.businessLimit}
+          </Text>
+        </View>
+
+        <View style={styles.billingToggle}>
+          <TouchableOpacity
+            style={[
+              styles.billingOption,
+              isDark && styles.billingOptionDark,
+              billingPeriod === 'monthly' && styles.billingOptionSelected,
+              billingPeriod === 'monthly' && isDark && styles.billingOptionSelectedDark
+            ]}
+            onPress={() => toggleBillingPeriod(tier.id)}
+          >
+            <Text style={[
+              styles.billingOptionText,
+              isDark && styles.billingOptionTextDark,
+              billingPeriod === 'monthly' && styles.billingOptionTextSelected
+            ]}>
+              {t('subscription.monthly')}
+            </Text>
+            {monthlyProduct && (
+              <Text style={[
+                styles.billingPrice,
+                isDark && styles.billingPriceDark,
+                billingPeriod === 'monthly' && styles.billingPriceSelected
+              ]}>
+                {monthlyProduct.localizedPrice}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.billingOption,
+              isDark && styles.billingOptionDark,
+              billingPeriod === 'yearly' && styles.billingOptionSelected,
+              billingPeriod === 'yearly' && isDark && styles.billingOptionSelectedDark
+            ]}
+            onPress={() => toggleBillingPeriod(tier.id)}
+          >
+            <View style={styles.billingOptionHeader}>
+              <Text style={[
+                styles.billingOptionText,
+                isDark && styles.billingOptionTextDark,
+                billingPeriod === 'yearly' && styles.billingOptionTextSelected
+              ]}>
+                {t('subscription.yearly')}
+              </Text>
+              <View style={styles.saveBadge}>
+                <Text style={styles.saveText}>{t('subscription.saveUpTo20')}</Text>
+              </View>
+            </View>
+            {yearlyProduct && (
+              <Text style={[
+                styles.billingPrice,
+                isDark && styles.billingPriceDark,
+                billingPeriod === 'yearly' && styles.billingPriceSelected
+              ]}>
+                {yearlyProduct.localizedPrice}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.featuresSection}>
+          {tier.features.map((feature, idx) => (
+            <View key={idx} style={styles.featureItem}>
+              <Check size={16} color="#10b981" strokeWidth={3} />
+              <Text style={[styles.featureText, isDark && styles.featureTextDark]}>
+                {feature}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   if (!isSheetVisible) return null;
 
   return (
@@ -222,143 +431,85 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 </TouchableOpacity>
               )}
 
-              <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={[
-                  styles.contentContainer,
-                  { paddingBottom: Math.max(24, insets.bottom + 24) }
-                ]}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-              >
-                <View style={styles.header}>
-                  <View style={[styles.badge, isDark && styles.badgeDark]}>
-                    <Zap size={18} color="#f59e0b" />
-                    <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>{t('subscription.premium')}</Text>
-                  </View>
-
-                  <Text style={[styles.title, isDark && styles.titleDark]}>
-                    {t('subscription.upgradeToBizManagePro')}
-                  </Text>
-                  <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-                    {t('subscription.unlockUnlimitedSales')}
+              <View style={styles.header}>
+                <View style={[styles.badge, isDark && styles.badgeDark]}>
+                  <Zap size={18} color="#f59e0b" />
+                  <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>
+                    {t('subscription.premium')}
                   </Text>
                 </View>
 
-          <View style={styles.plansContainer}>
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                isDark && styles.planCardDark,
-                selectedPlan === 'monthly' && styles.planCardSelected
-              ]}
-              onPress={() => setSelectedPlan('monthly')}
-            >
-              {monthlyProduct && (
-                <>
-                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>{t('subscription.monthly')}</Text>
-                  <Text style={[styles.planPrice, isDark && styles.planPriceDark]}>
-                    {monthlyProduct.localizedPrice}
-                  </Text>
-                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>{t('subscription.perMonth')}</Text>
-                </>
-              )}
-              {selectedPlan === 'monthly' && (
-                <View style={styles.checkmark}>
-                  <Check size={20} color="#ffffff" />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                isDark && styles.planCardDark,
-                selectedPlan === 'yearly' && styles.planCardSelected,
-                styles.planCardBest
-              ]}
-              onPress={() => setSelectedPlan('yearly')}
-            >
-              <View style={styles.bestValueBadge}>
-                <Text style={styles.bestValueText}>{t('subscription.bestValue')}</Text>
-              </View>
-              {yearlyProduct && (
-                <>
-                  <Text style={[styles.planType, isDark && styles.planTypeDark]}>{t('subscription.yearly')}</Text>
-                  <Text style={[styles.planPrice, isDark && styles.planPriceDark]}>
-                    {yearlyProduct.localizedPrice}
-                  </Text>
-                  <Text style={[styles.planPeriod, isDark && styles.planPeriodDark]}>{t('subscription.perYear')}</Text>
-                  <Text style={styles.savings}>{t('subscription.saveUpTo20')}</Text>
-                </>
-              )}
-              {selectedPlan === 'yearly' && (
-                <View style={styles.checkmark}>
-                  <Check size={20} color="#ffffff" />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.featuresContainer}>
-            <Text style={[styles.featuresTitle, isDark && styles.featuresTitleDark]}>
-              {t('subscription.whatsIncluded')}
-            </Text>
-            {features.map((feature, index) => (
-              <View key={index} style={styles.featureRow}>
-                <View style={[styles.featureIcon, isDark && styles.featureIconDark]}>
-                  <feature.icon size={20} color="#10b981" />
-                </View>
-                <View style={styles.featureContent}>
-                  <Text style={[styles.featureTitle, isDark && styles.featureTitleDark]}>
-                    {feature.title}
-                  </Text>
-                  <Text style={[styles.featureDescription, isDark && styles.featureDescriptionDark]}>
-                    {feature.description}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.actionsContainer}>
-            <Button
-              title={
-                purchasing
-                  ? t('subscription.processing')
-                  : selectedPlan === 'monthly' ? t('subscription.subscribingMonthly') : t('subscription.subscribingYearly')
-              }
-              onPress={() => {
-                const productId = selectedPlan === 'monthly'
-                  ? monthlyProduct?.productId
-                  : yearlyProduct?.productId;
-                if (productId) {
-                  handlePurchase(productId);
-                }
-              }}
-              disabled={purchasing || restoring || isLoading || !products.length}
-              style={styles.subscribeButton}
-            />
-
-            <TouchableOpacity
-              onPress={handleRestore}
-              disabled={purchasing || restoring || isLoading}
-              style={styles.restoreButton}
-            >
-              {restoring ? (
-                <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
-              ) : (
-                <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
-                  {t('subscription.restorePurchase')}
+                <Text style={[styles.title, isDark && styles.titleDark]}>
+                  {t('subscription.choosePlan')}
                 </Text>
-              )}
-            </TouchableOpacity>
+                <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
+                  {t('subscription.unlockUnlimitedSales')}
+                </Text>
+              </View>
 
-            <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
-              {t('subscription.autoRenewable')}
-            </Text>
-                </View>
+              <ScrollView
+                ref={scrollViewRef}
+                horizontal
+                pagingEnabled={false}
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_WIDTH + CARD_SPACING}
+                decelerationRate="fast"
+                contentContainerStyle={[
+                  styles.carouselContainer,
+                  { paddingHorizontal: (SCREEN_WIDTH - CARD_WIDTH) / 2 }
+                ]}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+              >
+                {tiers.map((tier, index) => renderTierCard(tier, index))}
               </ScrollView>
+
+              <View style={styles.dotsContainer}>
+                {tiers.map((tier, index) => (
+                  <View
+                    key={tier.id}
+                    style={[
+                      styles.dot,
+                      isDark && styles.dotDark,
+                      currentIndex === index && styles.dotActive
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <View style={[
+                styles.actionsContainer,
+                { paddingBottom: Math.max(24, insets.bottom + 24) }
+              ]}>
+                <Button
+                  title={
+                    purchasing
+                      ? t('subscription.processing')
+                      : t('subscription.selectPlan')
+                  }
+                  onPress={handlePurchase}
+                  disabled={purchasing || restoring || isLoading || !products.length}
+                  style={styles.subscribeButton}
+                />
+
+                <TouchableOpacity
+                  onPress={handleRestore}
+                  disabled={purchasing || restoring || isLoading}
+                  style={styles.restoreButton}
+                >
+                  {restoring ? (
+                    <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
+                  ) : (
+                    <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
+                      {t('subscription.restorePurchase')}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
+                  {t('subscription.autoRenewable')}
+                </Text>
+              </View>
             </View>
           </Animated.View>
         </GestureDetector>
@@ -424,16 +575,10 @@ const styles = StyleSheet.create({
   closeButtonDark: {
     backgroundColor: '#374151',
   },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-    paddingTop: 8,
-  },
   header: {
     alignItems: 'center',
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   badge: {
     flexDirection: 'row',
@@ -477,140 +622,214 @@ const styles = StyleSheet.create({
   subtitleDark: {
     color: '#9ca3af',
   },
-  plansContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+  carouselContainer: {
+    gap: CARD_SPACING,
+    paddingVertical: 20,
   },
-  planCard: {
-    flex: 1,
+  tierCard: {
+    width: CARD_WIDTH,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     borderWidth: 2,
     borderColor: '#e5e7eb',
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  planCardDark: {
+  tierCardDark: {
     backgroundColor: '#1f2937',
     borderColor: '#374151',
   },
-  planCardSelected: {
+  tierCardCentered: {
+    transform: [{ scale: 1.05 }],
     borderColor: '#3b82f6',
-    backgroundColor: '#eff6ff',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  planCardBest: {
-    position: 'relative',
+  tierCardCenteredDark: {
+    borderColor: '#60a5fa',
   },
-  bestValueBadge: {
+  mostPopularBadge: {
     position: 'absolute',
     top: -12,
-    backgroundColor: '#10b981',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    alignSelf: 'center',
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  bestValueText: {
-    fontSize: 10,
+  mostPopularText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#ffffff',
     letterSpacing: 0.5,
   },
-  checkmark: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#3b82f6',
+  tierIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
-  planType: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
+  tierIconContainerDark: {
+    backgroundColor: '#1e3a8a',
   },
-  planTypeDark: {
-    color: '#ffffff',
-  },
-  planPrice: {
-    fontSize: 32,
+  tierName: {
+    fontSize: 22,
     fontWeight: '700',
     color: '#111827',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  planPriceDark: {
+  tierNameDark: {
     color: '#ffffff',
   },
-  planPeriod: {
+  tierTagline: {
     fontSize: 14,
     color: '#6b7280',
-    marginTop: 4,
+    textAlign: 'center',
+    marginBottom: 16,
   },
-  planPeriodDark: {
+  tierTaglineDark: {
     color: '#9ca3af',
   },
-  savings: {
-    fontSize: 12,
+  businessLimitBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+    marginBottom: 20,
+  },
+  businessLimitBadgeDark: {
+    backgroundColor: '#1e3a8a',
+  },
+  businessLimitText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#10b981',
-    marginTop: 8,
+    color: '#1e40af',
   },
-  featuresContainer: {
-    marginBottom: 24,
+  businessLimitTextDark: {
+    color: '#93c5fd',
   },
-  featuresTitle: {
-    fontSize: 18,
+  billingToggle: {
+    gap: 8,
+    marginBottom: 20,
+  },
+  billingOption: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+  },
+  billingOptionDark: {
+    backgroundColor: '#374151',
+    borderColor: '#4b5563',
+  },
+  billingOptionSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+  },
+  billingOptionSelectedDark: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#60a5fa',
+  },
+  billingOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  billingOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  billingOptionTextDark: {
+    color: '#9ca3af',
+  },
+  billingOptionTextSelected: {
+    color: '#1e40af',
+  },
+  saveBadge: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  saveText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  billingPrice: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 14,
   },
-  featuresTitleDark: {
+  billingPriceDark: {
     color: '#ffffff',
   },
-  featureRow: {
+  billingPriceSelected: {
+    color: '#1e40af',
+  },
+  featuresSection: {
+    gap: 10,
+  },
+  featureItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    gap: 12,
-  },
-  featureIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#d1fae5',
-    justifyContent: 'center',
     alignItems: 'center',
-    flexShrink: 0,
+    gap: 8,
   },
-  featureIconDark: {
-    backgroundColor: '#064e3b',
-  },
-  featureContent: {
+  featureText: {
+    fontSize: 13,
+    color: '#374151',
     flex: 1,
   },
-  featureTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
+  featureTextDark: {
+    color: '#d1d5db',
   },
-  featureTitleDark: {
-    color: '#ffffff',
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 20,
   },
-  featureDescription: {
-    fontSize: 13,
-    color: '#6b7280',
-    lineHeight: 18,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#d1d5db',
   },
-  featureDescriptionDark: {
-    color: '#9ca3af',
+  dotDark: {
+    backgroundColor: '#4b5563',
+  },
+  dotActive: {
+    backgroundColor: '#3b82f6',
+    width: 24,
   },
   actionsContainer: {
     gap: 12,
-    marginTop: 8,
+    paddingHorizontal: 20,
   },
   subscribeButton: {
     marginBottom: 0,
