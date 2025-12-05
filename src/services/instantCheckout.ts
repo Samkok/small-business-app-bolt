@@ -4,6 +4,7 @@ import { productService } from './products';
 import { customerService } from './customers';
 import { cartService } from './carts';
 import { salesService } from './sales';
+import { subscriptionService } from './subscriptionService';
 import { logger, ValidationError, DatabaseError } from '../lib';
 import { InstantCheckoutSession, InstantCheckoutItem } from '../context/InstantCheckoutContext';
 
@@ -98,6 +99,16 @@ export const instantCheckoutService = {
       };
     }
 
+    console.log('[InstantCheckout] Validating feature access for instant checkout');
+    const hasAccess = await subscriptionService.validateFeatureAccessForCriticalOperation(userId, businessId);
+    if (!hasAccess) {
+      console.log('[InstantCheckout] Access denied - limit reached or subscription expired');
+      return {
+        success: false,
+        error: 'You\'ve reached the free limit. Please upgrade to continue.'
+      };
+    }
+
     try {
       const customerId = session.customer_id || guestCustomerId;
 
@@ -174,9 +185,18 @@ export const instantCheckoutService = {
       };
     } catch (error) {
       logger.error('Failed to complete instant checkout', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to complete checkout';
+
+      if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
+        return {
+          success: false,
+          error: 'SUBSCRIPTION_LIMIT_REACHED',
+        };
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to complete checkout',
+        error: errorMessage,
       };
     }
   },

@@ -14,6 +14,7 @@ A comprehensive mobile business management application built with React Native, 
 
 ### Technical Features
 - **Authentication**: Secure email/password login with Supabase Auth
+- **Subscriptions**: Tiered subscription plans with in-app purchases (iOS/Android)
 - **Multi-Language Support**: English, Khmer (Cambodian), and Chinese (Simplified)
 - **Dark/Light Theme**: Persistent theme preferences with system detection
 - **Offline Support**: Optimistic updates and data synchronization
@@ -180,6 +181,31 @@ npx tsc --noEmit
 # E2E testing setup
 # Add Detox or Maestro configuration
 ```
+
+## 💳 In-App Purchases (IAP)
+
+The app includes a sophisticated subscription system that works across all environments:
+
+### Quick Start
+- **Development**: Mock IAP works automatically - just run `npm start`
+- **Testing**: Build with `eas build --profile preview` for sandbox testing
+- **Production**: Build with `eas build --profile production` for live stores
+
+### Subscription Tiers
+- **Free**: 50 total sales, 1 business
+- **Pro** ($4.99/month or $47.99/year): Unlimited sales, 1 business
+- **Pro Plus** ($9.99/month or $95.99/year): Unlimited sales, 3 businesses
+- **Max** ($19.99/month or $191.99/year): Unlimited sales & businesses
+
+### Documentation
+- **Quick Start**: `IAP_QUICKSTART.md` - Get started in 3 steps
+- **Complete Guide**: `IAP_ENVIRONMENT_GUIDE.md` - Full environment setup
+- **Mock IAP**: `MOCK_IAP_SETUP.md` - Development testing details
+
+### How It Works
+The app automatically detects the environment and switches between:
+- **Mock IAP**: Fast development testing in Expo Go
+- **Real IAP**: Production builds with App Store/Play Store integration
 
 ## 📖 Usage Guide
 

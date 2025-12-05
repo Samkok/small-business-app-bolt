@@ -14,6 +14,7 @@ import {
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { instantCheckoutService } from '@/src/services/instantCheckout';
 import { useRouter } from 'expo-router';
 import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode } from 'lucide-react-native';
@@ -23,6 +24,7 @@ import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
+import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 
@@ -56,6 +58,7 @@ export function InstantCheckoutModal() {
   } = useInstantCheckout();
 
   const router = useRouter();
+  const { salesCountData, canAccessFeature, showPaywall, refreshSalesCount } = useSubscription();
   const [completing, setCompleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
@@ -71,6 +74,7 @@ export function InstantCheckoutModal() {
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -249,6 +253,14 @@ export function InstantCheckoutModal() {
 
     setCompleting(true);
     try {
+      await refreshSalesCount();
+
+      if (salesCountData.isAtLimit && !canAccessFeature) {
+        setShowUpgradePrompt(true);
+        setCompleting(false);
+        return;
+      }
+
       const result = await instantCheckoutService.completeInstantCheckout({
         session,
         businessId: currentBusiness.id,
@@ -257,6 +269,8 @@ export function InstantCheckoutModal() {
       });
 
       if (result.success) {
+        await refreshSalesCount();
+
         const customerName = session.customer_id !== guestCustomer.id
           ? session.customer_name || 'Customer'
           : 'Guest Customer';
@@ -268,11 +282,23 @@ export function InstantCheckoutModal() {
         });
         setShowPostSaleModal(true);
       } else {
-        Alert.alert('Error', result.error || 'Failed to complete sale');
+        if (result.error === 'SUBSCRIPTION_LIMIT_REACHED') {
+          await refreshSalesCount();
+          setShowUpgradePrompt(true);
+        } else {
+          Alert.alert('Error', result.error || 'Failed to complete sale');
+        }
       }
     } catch (error) {
       console.error('Failed to complete sale:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+
+      if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
+        await refreshSalesCount();
+        setShowUpgradePrompt(true);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setCompleting(false);
     }
@@ -346,6 +372,11 @@ export function InstantCheckoutModal() {
     setShowPostSaleModal(false);
     setCompletedSaleInfo(null);
     clearSession();
+  };
+
+  const handleUpgradeFromPrompt = () => {
+    setShowUpgradePrompt(false);
+    showPaywall();
   };
 
   const summary = getSessionSummary();
@@ -825,6 +856,15 @@ export function InstantCheckoutModal() {
           onNewSale={handleNewSaleFromPost}
         />
       )}
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        onUpgrade={handleUpgradeFromPrompt}
+        salesCount={salesCountData.salesCount}
+        message="You've reached the free limit. Upgrade to continue creating sales."
+      />
     </Modal>
   );
 }

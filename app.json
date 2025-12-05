@@ -63,7 +63,8 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "react-native-iap"
     ],
     "experiments": {
       "typedRoutes": true

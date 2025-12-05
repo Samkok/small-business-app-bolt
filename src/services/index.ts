@@ -11,3 +11,5 @@ export { exportService } from './exportService';
 export { importService } from './importService';
 export { batchImportService } from './batchImport';
 export { productTransactionService } from './productTransactions';
+export { subscriptionService } from './subscriptionService';
+export { iapService } from './iapService';

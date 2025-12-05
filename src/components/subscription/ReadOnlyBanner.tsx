@@ -1,0 +1,140 @@
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { AlertCircle, X } from 'lucide-react-native';
+import { useTheme } from '@/src/context/ThemeContext';
+
+interface ReadOnlyBannerProps {
+  salesCount: number;
+  onUpgrade: () => void;
+  onDismiss?: () => void;
+  dismissible?: boolean;
+}
+
+export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
+  salesCount,
+  onUpgrade,
+  onDismiss,
+  dismissible = false
+}) => {
+  const { t } = useTranslation();
+  const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.container,
+        isDark && styles.containerDark,
+        {
+          paddingTop: Math.max(12, insets.top + 12),
+          paddingLeft: Math.max(16, insets.left + 8),
+          paddingRight: Math.max(16, insets.right + 8)
+        }
+      ]}
+    >
+      <View style={styles.content}>
+        <AlertCircle size={20} color="#ef4444" />
+        <View style={styles.textContainer}>
+          <Text style={[styles.title, isDark && styles.titleDark]}>
+            {t('subscription.freeLimitReached')}
+          </Text>
+          <Text style={[styles.message, isDark && styles.messageDark]}>
+            {t('subscription.upgradeMessage')}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.upgradeButton, isDark && styles.upgradeButtonDark]}
+          onPress={onUpgrade}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
+        </TouchableOpacity>
+        {dismissible && onDismiss && (
+          <TouchableOpacity
+            onPress={onDismiss}
+            style={styles.dismissButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#fee2e2',
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fecaca',
+    gap: 12,
+  },
+  containerDark: {
+    backgroundColor: '#7f1d1d',
+    borderBottomColor: '#991b1b',
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  textContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#991b1b',
+    marginBottom: 2,
+  },
+  titleDark: {
+    color: '#fca5a5',
+  },
+  message: {
+    fontSize: 12,
+    color: '#7f1d1d',
+  },
+  messageDark: {
+    color: '#fecaca',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  upgradeButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minHeight: 44,
+    minWidth: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  upgradeButtonDark: {
+    backgroundColor: '#dc2626',
+  },
+  upgradeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  dismissButton: {
+    padding: 12,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

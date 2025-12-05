@@ -3,6 +3,7 @@ import { Database } from '../types/database';
 import { cartService } from './carts';
 import { productService } from './products';
 import { businessAccessGuard } from '../utils/businessAccessGuard';
+import { subscriptionService } from './subscriptionService';
 
 type Sale = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
@@ -12,6 +13,15 @@ type Business = Database['public']['Tables']['businesses']['Row'];
 
 export const salesService = {
   async completeSale(saleData: Omit<SaleInsert, 'total_amount' | 'subtotal_before_discount' | 'sale_discount_amount'>) {
+    if (!saleData.created_by || !saleData.business_id) {
+      throw new Error('User ID and Business ID are required');
+    }
+
+    const canAccess = await subscriptionService.canAccessFeature(saleData.created_by, saleData.business_id);
+    if (!canAccess) {
+      throw new Error('SUBSCRIPTION_LIMIT_REACHED');
+    }
+
     // Get cart summary with discount details
     const cartSummary = await cartService.getCartSummary(saleData.cart_id);
     const cart = await cartService.getCart(saleData.cart_id);
@@ -41,6 +51,8 @@ export const salesService = {
       const newStock = Math.max(0, product.current_stock - item.quantity);
       await productService.updateStock(item.product_id, newStock);
     }
+
+    await subscriptionService.incrementSalesCount(saleData.created_by, saleData.business_id);
 
     return sale;
   },

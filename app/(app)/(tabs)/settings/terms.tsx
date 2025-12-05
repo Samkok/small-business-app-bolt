@@ -44,10 +44,10 @@ export default function TermsAndConditionsScreen() {
           Terms and Conditions
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: November 25, 2025
+          Last Updated: December 4, 2025
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.1.0
+          Version 1.2.0
         </Text>
       </View>
 
@@ -67,6 +67,9 @@ export default function TermsAndConditionsScreen() {
         <BulletPoint>Expense tracking and categorization</BulletPoint>
         <BulletPoint>Business analytics and reporting</BulletPoint>
         <BulletPoint>Multi-business and team collaboration features</BulletPoint>
+        <Paragraph>
+          The Application is available in two subscription tiers: Free Tier (with usage limits) and Premium Subscription (with unlimited access). See Section 20 for complete details on subscription plans and limitations.
+        </Paragraph>
       </Section>
 
       <Section title="3. User Accounts and Registration">
@@ -107,6 +110,9 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
         <Paragraph>
           4.5. Data Isolation: Each business's data is isolated using Row Level Security (RLS). Users can only access data from businesses they are authorized to view.
+        </Paragraph>
+        <Paragraph>
+          4.6. Subscription Data: We collect and store subscription-related data including your subscription status (free tier, premium, trial, expired, cancelled), sales count per business for limit enforcement, and subscription purchase receipts. Payment processing is handled exclusively by Apple App Store or Google Play Store, and we do not store or have access to your payment card information. Subscription status information is cached locally on your device for performance optimization.
         </Paragraph>
       </Section>
 
@@ -229,6 +235,12 @@ export default function TermsAndConditionsScreen() {
         <Paragraph>
           10.6. Deletion Liability: We are not liable for any consequences resulting from business or account deletion, including but not limited to: loss of business data, disruption of business operations, inability to fulfill regulatory requirements, loss of customer relationships, financial losses, or any other damages arising from deletion. You acknowledge that deletion is your decision and accept full responsibility for ensuring appropriate data backups and compliance with legal obligations before deletion.
         </Paragraph>
+        <Paragraph>
+          10.7. Subscription Limits: We are not liable for any business interruptions, lost sales, missed opportunities, or financial losses resulting from reaching free tier limits or subscription expiration. You are responsible for monitoring your usage and maintaining an active subscription if your business requires unlimited access. Subscription enforcement mechanisms are in place for operational sustainability, and we reserve the right to enforce these limits through technical, UI, and database-level restrictions.
+        </Paragraph>
+        <Paragraph>
+          10.8. Payment Processing: We are not liable for any issues with subscription payments, billing disputes, or payment processing errors handled by third-party app store providers (Apple App Store, Google Play Store). All billing inquiries must be directed to the respective app store platform where your subscription was purchased.
+        </Paragraph>
       </Section>
 
       <Section title="11. Data Backup and Security">
@@ -319,6 +331,9 @@ export default function TermsAndConditionsScreen() {
         <Paragraph>
           13.3. Notification: We will notify users of significant changes through the Application or via email.
         </Paragraph>
+        <Paragraph>
+          13.4. Subscription Plan Changes: We reserve the right to modify subscription plans, pricing, features, and free tier limits at any time. Changes to subscription benefits or limits will apply to new subscriptions immediately and to existing subscriptions upon renewal. We will provide advance notice of material changes to subscription terms when reasonably possible.
+        </Paragraph>
       </Section>
 
       <Section title="14. Multi-Language Support">
@@ -357,7 +372,86 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
       </Section>
 
-      <Section title="19. Acknowledgment">
+      <Section title="19. Subscription Plans and Billing">
+        <Paragraph>
+          19.1. Subscription Tiers: BizManage offers two subscription tiers:
+        </Paragraph>
+        <BulletPoint>Free Tier: Limited to 50 completed sales transactions per business with access to all core features</BulletPoint>
+        <BulletPoint>Premium Subscription: Unlimited sales transactions and full access to all features without restrictions</BulletPoint>
+        <Paragraph>
+          19.2. Free Tier Sales Limit: Each business created in the Application has an independent sales count that increments with each completed sale transaction. The free tier allows up to 50 completed sales per business. Once this limit is reached, you must upgrade to a Premium Subscription to continue processing new sales for that business. The sales limit applies to completed sales only; voided sales, returned sales, and abandoned carts count toward the limit based on their original transaction status.
+        </Paragraph>
+        <Paragraph>
+          19.3. Multi-Business Sales Counting: If you own or participate in multiple businesses, each business maintains its own independent sales count. A business with 50 sales will be restricted, while other businesses under the limit remain unrestricted. However, your subscription status applies globally across all businesses you own. If you have a Premium Subscription, all businesses you own have unlimited sales access.
+        </Paragraph>
+        <Paragraph>
+          19.4. Sales Count Enforcement: Sales counts are enforced at multiple levels for accuracy and system integrity:
+        </Paragraph>
+        <BulletPoint>Frontend validation prevents sale creation when limit is reached</BulletPoint>
+        <BulletPoint>Backend API validation verifies subscription status before processing</BulletPoint>
+        <BulletPoint>Database triggers update sales counts in real-time after transactions</BulletPoint>
+        <BulletPoint>Database-level CHECK constraints prevent unauthorized sales creation</BulletPoint>
+        <Paragraph>
+          19.5. Subscription Status Types: Your subscription can have one of the following statuses:
+        </Paragraph>
+        <BulletPoint>Trial: Default status for new users, subject to free tier limits</BulletPoint>
+        <BulletPoint>Active: Premium subscription is active, unlimited access granted</BulletPoint>
+        <BulletPoint>Expired: Premium subscription has expired, reverts to free tier limits</BulletPoint>
+        <BulletPoint>Cancelled: Premium subscription was cancelled, may have grace period before reverting to free tier</BulletPoint>
+        <Paragraph>
+          19.6. Upgrade Process: When you reach the 50-sale limit on the free tier, the Application will display an upgrade prompt with options to subscribe to Premium through your device's app store (Apple App Store for iOS, Google Play Store for Android). You can also proactively upgrade before reaching the limit through the Subscription Settings screen.
+        </Paragraph>
+        <Paragraph>
+          19.7. Subscription Benefits: Premium Subscription includes:
+        </Paragraph>
+        <BulletPoint>Unlimited sales transactions across all businesses you own</BulletPoint>
+        <BulletPoint>No restrictions on business operations or feature access</BulletPoint>
+        <BulletPoint>Priority support for technical issues</BulletPoint>
+        <BulletPoint>Access to premium features as they become available</BulletPoint>
+        <Paragraph>
+          19.8. Billing and Payment: All subscription purchases, billing, and payment processing are handled exclusively by Apple App Store or Google Play Store depending on your device platform. We do not process payments directly. Subscription pricing, billing cycles (monthly or annual), and payment methods are managed by the respective app store. All billing inquiries, refund requests, and payment disputes must be directed to Apple or Google support.
+        </Paragraph>
+        <Paragraph>
+          19.9. Auto-Renewal: Premium Subscriptions purchased through app stores automatically renew at the end of each billing period unless you cancel before the renewal date. You can manage your subscription, including cancellation, through your device's app store subscription settings. Cancellation takes effect at the end of the current billing period.
+        </Paragraph>
+        <Paragraph>
+          19.10. Subscription Validation: The Application validates your subscription status with the app store at regular intervals and when performing restricted actions (such as creating sales after reaching the free tier limit). Subscription status is cached locally for performance but periodically refreshed from the app store servers to ensure accuracy.
+        </Paragraph>
+        <Paragraph>
+          19.11. Grace Period and Expiration: When a Premium Subscription expires (due to payment failure, cancellation, or non-renewal), your account immediately reverts to free tier status. If any of your businesses have exceeded the 50-sale limit, you will be unable to create new sales for those businesses until you renew your Premium Subscription. All existing data remains accessible regardless of subscription status.
+        </Paragraph>
+        <Paragraph>
+          19.12. Team Member Subscriptions: Subscription status is individual and applies to the user account, not to businesses or teams. As a business owner, your subscription status determines sales limits for businesses you own. Team members (Admin, Staff) invited to your business are not affected by your subscription status; their access is governed by their own subscription status for businesses they own. If you are a team member in someone else's business, that business's limits are determined by the business owner's subscription status, not yours.
+        </Paragraph>
+        <Paragraph>
+          19.13. Refund Policy: Refunds for subscription purchases are governed by the app store's refund policies (Apple App Store or Google Play Store). We do not control or process refunds. If you believe you are entitled to a refund, contact the app store where you made the purchase. Refund eligibility, processing time, and approval are determined solely by the app store provider.
+        </Paragraph>
+        <Paragraph>
+          19.14. Fair Use and Anti-Abuse: You agree not to attempt to circumvent or bypass subscription limits or enforcement mechanisms. Prohibited activities include but are not limited to:
+        </Paragraph>
+        <BulletPoint>Creating multiple accounts to exploit free tier limits</BulletPoint>
+        <BulletPoint>Manipulating sales data to reset or artificially lower sales counts</BulletPoint>
+        <BulletPoint>Using technical means to bypass subscription validation</BulletPoint>
+        <BulletPoint>Sharing accounts to avoid subscription fees</BulletPoint>
+        <BulletPoint>Exploiting bugs or vulnerabilities to bypass limits</BulletPoint>
+        <Paragraph>
+          Violation of these anti-abuse policies may result in immediate account suspension or termination without refund.
+        </Paragraph>
+        <Paragraph>
+          19.15. Historical Data Access: Regardless of your subscription status (free tier or premium, active or expired), you retain full access to all historical data including past sales, customers, products, expenses, and reports. Subscription limits only restrict the creation of new sales transactions; they do not limit your ability to view, export, or analyze existing data.
+        </Paragraph>
+        <Paragraph>
+          19.16. Free Tier Justification: The free tier with a 50-sale limit is provided to allow new users to evaluate the Application and for small-scale businesses with minimal transaction volumes. For businesses requiring unlimited transaction processing, the Premium Subscription is designed to support operational sustainability and continued development of the Application.
+        </Paragraph>
+        <Paragraph>
+          19.17. Price Changes: We reserve the right to change subscription pricing at any time. Price changes will apply to new subscriptions immediately and to existing subscriptions at their next renewal date. We will make reasonable efforts to notify you of price changes in advance through the Application or via email.
+        </Paragraph>
+        <Paragraph>
+          19.18. Subscription Data Portability: Subscription status and purchase information are tied to your app store account (Apple ID or Google Account). If you switch devices or platforms (e.g., from iOS to Android), subscriptions do not transfer between app stores. You would need to purchase a new subscription on the new platform. Your business data is platform-independent and will remain accessible when you sign in on any supported device.
+        </Paragraph>
+      </Section>
+
+      <Section title="20. Acknowledgment">
         <Paragraph>
           By using BizManage, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
         </Paragraph>
