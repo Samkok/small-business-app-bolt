@@ -18,19 +18,19 @@ if (Platform.OS !== 'web') {
 
 const IOS_PRODUCT_IDS = [
   'bizmanage.pro.month',
-  'bizmanage.pro.yearly',
+  'bizmanage.pro.year',
   'bizmanage.pro_plus.month',
-  'bizmanage.pro_plus.yearly',
+  'bizmanage.pro_plus.year',
   'bizmanage.max.month',
-  'bizmanage.max.yearly'
+  'bizmanage.max.year'
 ];
 const ANDROID_PRODUCT_IDS = [
   'bizmanage.pro.month',
-  'bizmanage.pro.yearly',
+  'bizmanage.pro.year',
   'bizmanage.pro_plus.month',
-  'bizmanage.pro_plus.yearly',
+  'bizmanage.pro_plus.year',
   'bizmanage.max.month',
-  'bizmanage.max.yearly'
+  'bizmanage.max.year'
 ];
 
 export interface SubscriptionProduct {
