@@ -1,6 +1,7 @@
 import { supabase } from '@/src/config/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { productIdMapper } from '@/src/utils/productIdMapper';
 
 export const FREE_TIER_LIMIT = 50;
 const CACHE_TTL_MS = 2 * 60 * 1000;
@@ -9,18 +10,7 @@ export type SubscriptionTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
 function getTierFromProductId(productId: string | undefined): SubscriptionTier {
   if (!productId) return 'free';
-
-  const lowerProductId = productId.toLowerCase();
-
-  if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
-    return 'pro_plus';
-  } else if (lowerProductId.includes('max')) {
-    return 'max';
-  } else if (lowerProductId.includes('pro')) {
-    return 'pro';
-  }
-
-  return 'free';
+  return productIdMapper.getTierFromProductId(productId);
 }
 
 function getMaxOwnedBusinessesFromTier(tier: SubscriptionTier): number | null {

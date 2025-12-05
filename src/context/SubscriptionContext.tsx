@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { productIdMapper } from '@/src/utils/productIdMapper';
 
 let IAP: any = null;
 if (Platform.OS !== 'web') {
@@ -137,7 +138,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         price: product.price || '',
         localizedPrice: product.localizedPrice || '',
         currency: product.currency || 'USD',
-        type: product.productId.includes('yearly') ? 'yearly' : 'monthly',
+        type: productIdMapper.detectPeriod(product.productId),
       }));
 
       setProducts(formattedProducts);

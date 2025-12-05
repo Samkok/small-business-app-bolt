@@ -131,7 +131,7 @@ export default function SubscriptionScreen() {
                         {t('subscription.subscriptionType')}
                       </Text>
                       <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                        {subscriptionStatus.productId?.includes('yearly') ? t('subscription.yearly') : t('subscription.monthly')}
+                        {subscriptionStatus.productId?.includes('year') ? t('subscription.yearly') : t('subscription.monthly')}
                       </Text>
                     </View>
                   </View>

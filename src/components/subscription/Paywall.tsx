@@ -28,6 +28,7 @@ import { X, Check, Zap, Building2, Users, TrendingUp, Headphones, Crown } from '
 import { useTheme } from '@/src/context/ThemeContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
+import { productIdMapper, type TierType, type BillingPeriod } from '@/src/utils/productIdMapper';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.9;
@@ -39,9 +40,6 @@ interface PaywallProps {
   onClose: () => void;
   canClose?: boolean;
 }
-
-type TierType = 'pro' | 'pro_plus' | 'max';
-type BillingPeriod = 'monthly' | 'yearly';
 
 interface TierConfig {
   id: TierType;
@@ -199,7 +197,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
   };
 
   const handlePurchase = async () => {
-    const productId = `${selectedTier}_${billingPeriods[selectedTier]}`;
+    const billingPeriod = billingPeriods[selectedTier];
+    const productId = productIdMapper.toAppStoreFormat(selectedTier, billingPeriod);
     const product = products.find(p => p.productId === productId);
 
     if (!product) {
@@ -286,8 +285,10 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     const billingPeriod = billingPeriods[tier.id];
     const Icon = tier.icon;
 
-    const monthlyProduct = products.find(p => p.productId === `${tier.id}_monthly`);
-    const yearlyProduct = products.find(p => p.productId === `${tier.id}_yearly`);
+    const monthlyProductId = productIdMapper.toAppStoreFormat(tier.id, 'monthly');
+    const yearlyProductId = productIdMapper.toAppStoreFormat(tier.id, 'yearly');
+    const monthlyProduct = products.find(p => p.productId === monthlyProductId);
+    const yearlyProduct = products.find(p => p.productId === yearlyProductId);
     const currentProduct = billingPeriod === 'monthly' ? monthlyProduct : yearlyProduct;
 
     return (
