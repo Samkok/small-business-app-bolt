@@ -1,8 +1,10 @@
 # Mock IAP Setup - Quick Reference
 
+> **Note**: This has been enhanced with a unified IAP service. See `IAP_ENVIRONMENT_GUIDE.md` for complete environment documentation.
+
 ## What Was Implemented
 
-A complete Mock In-App Purchase (IAP) system that automatically activates when `react-native-iap` is not available (like in Expo Go).
+A complete Mock In-App Purchase (IAP) system that automatically activates when `react-native-iap` is not available (like in Expo Go) or when running in development mode.
 
 ## Key Features
 
@@ -14,18 +16,28 @@ A complete Mock In-App Purchase (IAP) system that automatically activates when `
 
 ## Files Created
 
-1. **`src/services/mockIapService.ts`** (New)
+1. **`src/services/mockIapService.ts`**
    - Implements mock IAP API compatible with `react-native-iap`
    - Handles purchase, restore, and product listing
    - Validates mock receipts with proper expiration dates
 
-2. **`src/services/mockSubscriptionStorage.ts`** (New)
+2. **`src/services/iapService.ts`** (New - Unified Service)
+   - Automatically detects environment and switches between mock/real IAP
+   - Provides single interface for all IAP operations
+   - Handles platform-specific logic
+
+3. **`src/services/mockSubscriptionStorage.ts`**
    - Utilities for mock mode persistence
    - Storage helpers for development flags
 
-3. **`MOCK_IAP_GUIDE.md`** (New)
+4. **`MOCK_IAP_GUIDE.md`**
    - Comprehensive developer documentation
    - Usage examples and troubleshooting
+
+5. **`IAP_ENVIRONMENT_GUIDE.md`** (New)
+   - Complete environment documentation
+   - Development, preview, and production build instructions
+   - Troubleshooting for all environments
 
 ## Files Modified
 
@@ -96,13 +108,16 @@ User Action (Purchase)
     ↓
 SubscriptionContext
     ↓
-Detects IAP availability
+iapService (Unified)
     ↓
-    ├─→ Real IAP Available
+Environment Detection
+    ↓
+    ├─→ Standalone Build/Production
     │   └─→ react-native-iap
     │       └─→ Apple/Google Servers
+    │           └─→ Supabase (validation)
     │
-    └─→ No IAP (Expo Go)
+    └─→ Expo Go/Development
         └─→ mockIapService
             └─→ Supabase (Direct)
 ```

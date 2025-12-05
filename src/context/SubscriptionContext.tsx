@@ -7,21 +7,7 @@ import { Paywall } from '@/src/components/subscription/Paywall';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { productIdMapper } from '@/src/utils/productIdMapper';
-import { mockIapService, isMockIapEnabled } from '@/src/services/mockIapService';
-
-let IAP: any = null;
-let useMockIAP = false;
-
-if (Platform.OS !== 'web') {
-  try {
-    IAP = require('react-native-iap');
-    console.log('[SubscriptionContext] Using real react-native-iap');
-  } catch (error) {
-    console.warn('[SubscriptionContext] react-native-iap not available, using mock IAP');
-    useMockIAP = true;
-    IAP = mockIapService;
-  }
-}
+import { iapService } from '@/src/services/iapService';
 
 const IOS_PRODUCT_IDS = [
   'bizmanage.pro.month',
@@ -124,22 +110,22 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
   const initializeIAP = useCallback(async () => {
     console.log("[SubscriptionContext] InitializeIAP Start Here");
-    if (Platform.OS === 'web' || !IAP) {
+    if (Platform.OS === 'web') {
       setIsInitialized(true);
       setIsLoading(false);
       return;
     }
 
     try {
-      const connectionResult = await IAP.initConnection();
+      const connectionResult = await iapService.initConnection();
       console.log('[SubscriptionContext] IAP connection result:', connectionResult);
 
-      if (Platform.OS === 'android' && !useMockIAP) {
-        await IAP.flushFailedPurchasesCachedAsPendingAndroid();
+      if (Platform.OS === 'android') {
+        await iapService.flushFailedPurchasesCachedAsPendingAndroid();
       }
 
       const productIds = Platform.OS === 'ios' ? IOS_PRODUCT_IDS : ANDROID_PRODUCT_IDS;
-      const productsData = await IAP.getSubscriptions({ skus: productIds });
+      const productsData = await iapService.getSubscriptions({ skus: productIds });
 
       const formattedProducts: SubscriptionProduct[] = productsData.map(product => ({
         productId: product.productId,
@@ -154,7 +140,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       setProducts(formattedProducts);
       setIsInitialized(true);
 
-      if (useMockIAP) {
+      if (iapService.isMockMode()) {
         console.log('[SubscriptionContext] Mock IAP initialized with', formattedProducts.length, 'products');
       }
     } catch (error) {
@@ -407,28 +393,21 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   const purchaseSubscription = useCallback(async (productId: string): Promise<boolean> => {
-    if (Platform.OS === 'web' || !IAP) {
-      console.log('[SubscriptionContext] IAP not supported on this platform');
+    if (Platform.OS === 'web') {
+      console.log('[SubscriptionContext] IAP not supported on web');
       return false;
     }
 
     try {
       setIsLoading(true);
 
-      const purchase = await IAP.requestSubscription({ sku: productId });
+      const purchase = await iapService.requestSubscription({ sku: productId });
 
       if (purchase && purchase.transactionReceipt) {
-        let validation;
-
-        if (useMockIAP) {
-          console.log('[SubscriptionContext] Validating mock receipt');
-          validation = await mockIapService.validateMockReceipt(purchase.transactionReceipt);
-        } else {
-          validation = await subscriptionService.validateReceiptWithBackend(
-            purchase.transactionReceipt,
-            Platform.OS as 'ios' | 'android'
-          );
-        }
+        const validation = await iapService.validateReceipt(
+          purchase.transactionReceipt,
+          Platform.OS as 'ios' | 'android'
+        );
 
         if (validation.isValid) {
           const success = await subscriptionService.updateSubscription(
@@ -452,7 +431,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
               });
             }
 
-            if (useMockIAP) {
+            if (iapService.isMockMode()) {
               console.log('[SubscriptionContext] Mock subscription activated successfully');
             }
 
@@ -474,15 +453,15 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, [user, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS === 'web' || !IAP) {
-      console.log('[SubscriptionContext] IAP not supported on this platform');
+    if (Platform.OS === 'web') {
+      console.log('[SubscriptionContext] IAP not supported on web');
       return false;
     }
 
     try {
       setIsLoading(true);
 
-      const purchases = await IAP.getAvailablePurchases();
+      const purchases = await iapService.getAvailablePurchases();
 
       if (purchases && purchases.length > 0) {
         const latestPurchase = purchases.sort((a, b) =>
@@ -490,17 +469,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         )[0];
 
         if (latestPurchase.transactionReceipt) {
-          let validation;
-
-          if (useMockIAP) {
-            console.log('[SubscriptionContext] Restoring mock subscription');
-            validation = await mockIapService.validateMockReceipt(latestPurchase.transactionReceipt);
-          } else {
-            validation = await subscriptionService.validateReceiptWithBackend(
-              latestPurchase.transactionReceipt,
-              Platform.OS as 'ios' | 'android'
-            );
-          }
+          const validation = await iapService.validateReceipt(
+            latestPurchase.transactionReceipt,
+            Platform.OS as 'ios' | 'android'
+          );
 
           if (validation.isValid) {
             const success = await subscriptionService.updateSubscription(
@@ -516,7 +488,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
               await refreshTierInfo();
               await checkFeatureAccess();
 
-              if (useMockIAP) {
+              if (iapService.isMockMode()) {
                 console.log('[SubscriptionContext] Mock subscription restored successfully');
               }
 
@@ -562,9 +534,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
     return () => {
       stopPolling();
-      if (Platform.OS !== 'web' && IAP) {
+      if (Platform.OS !== 'web') {
         try {
-          IAP.endConnection();
+          iapService.endConnection();
         } catch (error) {
           console.warn('Error ending IAP connection:', error);
         }
@@ -655,7 +627,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     canAccessFeature,
     tierInfo,
     ownedBusinessCount,
-    isMockMode: useMockIAP,
+    isMockMode: iapService.isMockMode(),
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,
