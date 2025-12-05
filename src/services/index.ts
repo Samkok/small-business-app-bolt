@@ -12,3 +12,5 @@ export { importService } from './importService';
 export { batchImportService } from './batchImport';
 export { productTransactionService } from './productTransactions';
 export { subscriptionService } from './subscriptionService';
+export { mockIapService, isMockIapEnabled } from './mockIapService';
+export { mockSubscriptionStorage } from './mockSubscriptionStorage';

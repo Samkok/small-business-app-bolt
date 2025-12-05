@@ -33,7 +33,8 @@ export default function SubscriptionScreen() {
     restorePurchases,
     showPaywall,
     tierInfo,
-    ownedBusinessCount
+    ownedBusinessCount,
+    isMockMode
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
@@ -92,6 +93,21 @@ export default function SubscriptionScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        {isMockMode && (
+          <Card style={styles.mockCard}>
+            <View style={styles.mockCardHeader}>
+              <Info size={20} color="#3b82f6" />
+              <Text style={[styles.mockCardTitle, isDark && styles.mockCardTitleDark]}>
+                Development Mode Active
+              </Text>
+            </View>
+            <Text style={[styles.mockCardText, isDark && styles.mockCardTextDark]}>
+              Mock IAP is active. Subscriptions are simulated for testing in Expo Go.
+              Build the app with EAS to test real payments.
+            </Text>
+          </Card>
+        )}
+
         {isSubscribed ? (
           <>
             <LinearGradient
@@ -319,6 +335,35 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
+  },
+  mockCard: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+  },
+  mockCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  mockCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  mockCardTitleDark: {
+    color: '#93c5fd',
+  },
+  mockCardText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#1e40af',
+  },
+  mockCardTextDark: {
+    color: '#93c5fd',
   },
   proCard: {
     borderRadius: 16,
