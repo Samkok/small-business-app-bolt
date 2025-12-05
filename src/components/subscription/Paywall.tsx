@@ -53,7 +53,7 @@ interface TierConfig {
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { products, purchaseSubscription, restorePurchases, isLoading, isMockMode } = useSubscription();
+  const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -433,14 +433,6 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               )}
 
               <View style={styles.header}>
-                {isMockMode && (
-                  <View style={[styles.mockBadge, isDark && styles.mockBadgeDark]}>
-                    <Text style={[styles.mockBadgeText, isDark && styles.mockBadgeTextDark]}>
-                      DEV MODE - Mock IAP Active
-                    </Text>
-                  </View>
-                )}
-
                 <View style={[styles.badge, isDark && styles.badgeDark]}>
                   <Zap size={18} color="#f59e0b" />
                   <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>
@@ -588,25 +580,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     paddingHorizontal: 20,
-  },
-  mockBadge: {
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  mockBadgeDark: {
-    backgroundColor: '#1e3a8a',
-  },
-  mockBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1e40af',
-    textAlign: 'center',
-  },
-  mockBadgeTextDark: {
-    color: '#93c5fd',
   },
   badge: {
     flexDirection: 'row',

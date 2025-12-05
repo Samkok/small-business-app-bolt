@@ -220,20 +220,20 @@ export default function DebugSubscriptionScreen() {
           )}
         </Card>
 
-        <Card style={[styles.stateCard, iapDiagnostics.useMock ? styles.iapMockCard : styles.iapRealCard]}>
+        <Card style={[styles.stateCard, !iapDiagnostics.isAvailable ? styles.iapUnavailableCard : styles.iapAvailableCard]}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
             IAP Configuration
           </Text>
           <View style={styles.stateItem}>
             <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
-              IAP Mode:
+              IAP Status:
             </Text>
             <Text style={[
               styles.stateValue,
               isDark && styles.stateValueDark,
-              iapDiagnostics.useMock ? styles.mockModeText : styles.realModeText
+              !iapDiagnostics.isAvailable ? styles.unavailableText : styles.availableText
             ]}>
-              {iapDiagnostics.useMock ? '🧪 MOCK' : '✅ REAL'}
+              {iapDiagnostics.isAvailable ? '✅ AVAILABLE' : '❌ NOT AVAILABLE'}
             </Text>
           </View>
           <View style={styles.stateItem}>
@@ -270,23 +270,23 @@ export default function DebugSubscriptionScreen() {
           </View>
           <View style={styles.stateItem}>
             <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
-              IAP Available:
+              react-native-iap loaded:
             </Text>
             <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
               {iapDiagnostics.isRealIAPAvailable ? 'Yes' : 'No'}
             </Text>
           </View>
-          {iapDiagnostics.useMock && (
+          {!iapDiagnostics.isAvailable && (
             <View style={styles.iapWarning}>
               <Text style={[styles.iapWarningText, isDark && styles.iapWarningTextDark]}>
-                Mock IAP is active. To use real IAP, build with EAS and install on device.
+                IAP not available. Build with EAS and install on a device to enable subscriptions.
               </Text>
             </View>
           )}
-          {!iapDiagnostics.useMock && (
+          {iapDiagnostics.isAvailable && (
             <View style={styles.iapSuccess}>
               <Text style={[styles.iapSuccessText, isDark && styles.iapSuccessTextDark]}>
-                Real IAP is active. Purchases will connect to App Store/Play Store.
+                IAP is available. Purchases will connect to App Store/Play Store.
               </Text>
             </View>
           )}
@@ -497,19 +497,19 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     backgroundColor: '#ef4444',
   },
-  iapMockCard: {
+  iapUnavailableCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: '#ef4444',
   },
-  iapRealCard: {
+  iapAvailableCard: {
     borderLeftWidth: 4,
     borderLeftColor: '#10b981',
   },
-  mockModeText: {
-    color: '#f59e0b',
+  unavailableText: {
+    color: '#ef4444',
     fontWeight: '700',
   },
-  realModeText: {
+  availableText: {
     color: '#10b981',
     fontWeight: '700',
   },

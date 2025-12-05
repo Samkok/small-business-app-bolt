@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { mockIapService } from './mockIapService';
 
 let RealIAP: any = null;
 let isRealIAPAvailable = false;
@@ -43,9 +42,9 @@ export interface IAPServiceInterface {
     expiresDate: Date | null;
     productId: string | null;
   }>;
-  isMockMode(): boolean;
+  isAvailable(): boolean;
   getDiagnosticInfo(): {
-    useMock: boolean;
+    isAvailable: boolean;
     appOwnership: string | null;
     executionContext: string;
     platform: string;
@@ -54,15 +53,13 @@ export interface IAPServiceInterface {
   };
 }
 
-function shouldUseMockIAP(): boolean {
+function isIAPAvailable(): boolean {
   if (Platform.OS === 'web') {
-    console.log('[IAPService] Platform is web, IAP not applicable');
     return false;
   }
 
   if (!isRealIAPAvailable) {
-    console.warn('[IAPService] ⚠️ Using mock IAP: react-native-iap package not available');
-    return true;
+    return false;
   }
 
   const appOwnership = Constants.appOwnership;
@@ -77,49 +74,49 @@ function shouldUseMockIAP(): boolean {
   });
 
   if (appOwnership === 'standalone') {
-    console.log('[IAPService] ✅ Using REAL IAP: Running in standalone/production build (appOwnership=standalone)');
-    return false;
-  }
-
-  if (appOwnership === 'expo') {
-    console.log('[IAPService] 🧪 Using mock IAP: Running in Expo Go (appOwnership=expo)');
+    console.log('[IAPService] ✅ IAP AVAILABLE: Running in standalone/production build');
     return true;
   }
 
-  if (executionContext === 'bareWorkflow' || executionContext === 'standalone') {
-    console.log('[IAPService] ✅ Using REAL IAP: Running in bare workflow build');
+  if (appOwnership === 'expo') {
+    console.log('[IAPService] ❌ IAP NOT AVAILABLE: Running in Expo Go');
     return false;
   }
 
-  console.log('[IAPService] 🧪 Using mock IAP: Running in development environment');
-  return true;
+  if (executionContext === 'bareWorkflow' || executionContext === 'standalone') {
+    console.log('[IAPService] ✅ IAP AVAILABLE: Running in bare workflow build');
+    return true;
+  }
+
+  console.log('[IAPService] ❌ IAP NOT AVAILABLE: Running in development environment');
+  return false;
 }
 
-class UnifiedIAPService implements IAPServiceInterface {
-  private useMock: boolean;
+class RealIAPService implements IAPServiceInterface {
+  private available: boolean;
 
   constructor() {
-    this.useMock = shouldUseMockIAP();
-    if (this.useMock) {
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('[IAPService] 🧪 MOCK MODE ACTIVE');
-      console.log('[IAPService] This is for testing in Expo Go/Dev builds');
-      console.log('[IAPService] Real IAP will work in EAS production builds');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    } else {
+    this.available = isIAPAvailable();
+    if (this.available) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('[IAPService] ✅ REAL IAP MODE ACTIVE');
       console.log('[IAPService] Connected to App Store/Play Store');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } else {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[IAPService] ❌ IAP NOT AVAILABLE');
+      console.log('[IAPService] Subscription features disabled');
+      console.log('[IAPService] Build with EAS to enable IAP');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
 
-  isMockMode(): boolean {
-    return this.useMock;
+  isAvailable(): boolean {
+    return this.available;
   }
 
   getDiagnosticInfo(): {
-    useMock: boolean;
+    isAvailable: boolean;
     appOwnership: string | null;
     executionContext: string;
     platform: string;
@@ -127,7 +124,7 @@ class UnifiedIAPService implements IAPServiceInterface {
     isRealIAPAvailable: boolean;
   } {
     return {
-      useMock: this.useMock,
+      isAvailable: this.available,
       appOwnership: Constants.appOwnership,
       executionContext: Constants.executionContext,
       platform: Platform.OS,
@@ -137,43 +134,46 @@ class UnifiedIAPService implements IAPServiceInterface {
   }
 
   async initConnection(): Promise<boolean> {
-    if (this.useMock) {
-      return await mockIapService.initConnection();
+    if (!this.available) {
+      console.log('[IAPService] IAP not available, skipping initialization');
+      return false;
     }
     return await RealIAP.initConnection();
   }
 
   async endConnection(): Promise<void> {
-    if (this.useMock) {
-      return await mockIapService.endConnection();
+    if (!this.available) {
+      return;
     }
     return await RealIAP.endConnection();
   }
 
   async getSubscriptions(params: { skus: string[] }): Promise<IAPProduct[]> {
-    if (this.useMock) {
-      return await mockIapService.getSubscriptions(params);
+    if (!this.available) {
+      console.log('[IAPService] IAP not available, returning empty products');
+      return [];
     }
     return await RealIAP.getSubscriptions(params);
   }
 
   async requestSubscription(params: { sku: string }): Promise<IAPPurchase> {
-    if (this.useMock) {
-      return await mockIapService.requestSubscription(params);
+    if (!this.available) {
+      throw new Error('IAP not available. Build with EAS to enable in-app purchases.');
     }
     return await RealIAP.requestSubscription(params);
   }
 
   async getAvailablePurchases(): Promise<IAPPurchase[]> {
-    if (this.useMock) {
-      return await mockIapService.getAvailablePurchases();
+    if (!this.available) {
+      console.log('[IAPService] IAP not available, returning empty purchases');
+      return [];
     }
     return await RealIAP.getAvailablePurchases();
   }
 
   async flushFailedPurchasesCachedAsPendingAndroid(): Promise<void> {
-    if (this.useMock) {
-      return await mockIapService.flushFailedPurchasesCachedAsPendingAndroid();
+    if (!this.available) {
+      return;
     }
     if (Platform.OS === 'android') {
       return await RealIAP.flushFailedPurchasesCachedAsPendingAndroid();
@@ -185,8 +185,8 @@ class UnifiedIAPService implements IAPServiceInterface {
     expiresDate: Date | null;
     productId: string | null;
   }> {
-    if (this.useMock) {
-      return await mockIapService.validateMockReceipt(receipt);
+    if (!this.available) {
+      throw new Error('IAP not available for receipt validation');
     }
 
     const { subscriptionService } = require('./subscriptionService');
@@ -194,4 +194,4 @@ class UnifiedIAPService implements IAPServiceInterface {
   }
 }
 
-export const iapService = new UnifiedIAPService();
+export const iapService = new RealIAPService();

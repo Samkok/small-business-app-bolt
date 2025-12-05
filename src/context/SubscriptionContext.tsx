@@ -46,7 +46,7 @@ interface SubscriptionContextType {
   canAccessFeature: boolean;
   tierInfo: TierInfo;
   ownedBusinessCount: number;
-  isMockMode: boolean;
+  isIAPAvailable: boolean;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -140,8 +140,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       setProducts(formattedProducts);
       setIsInitialized(true);
 
-      if (iapService.isMockMode()) {
-        console.log('[SubscriptionContext] Mock IAP initialized with', formattedProducts.length, 'products');
+      if (!iapService.isAvailable()) {
+        console.log('[SubscriptionContext] IAP not available - subscription features disabled');
+      } else {
+        console.log('[SubscriptionContext] Real IAP initialized with', formattedProducts.length, 'products');
       }
     } catch (error) {
       console.error('[SubscriptionContext] Error initializing IAP:', error);
@@ -431,10 +433,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
               });
             }
 
-            if (iapService.isMockMode()) {
-              console.log('[SubscriptionContext] Mock subscription activated successfully');
-            }
-
             return true;
           }
         }
@@ -487,10 +485,6 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
               await refreshSubscriptionStatus();
               await refreshTierInfo();
               await checkFeatureAccess();
-
-              if (iapService.isMockMode()) {
-                console.log('[SubscriptionContext] Mock subscription restored successfully');
-              }
 
               return true;
             }
@@ -627,7 +621,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     canAccessFeature,
     tierInfo,
     ownedBusinessCount,
-    isMockMode: iapService.isMockMode(),
+    isIAPAvailable: iapService.isAvailable(),
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,
