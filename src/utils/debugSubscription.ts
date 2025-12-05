@@ -60,23 +60,44 @@ export const debugSubscription = {
         maxOwnedBusinesses = 1;
       }
 
-      const { error } = await supabase
+      const existingSubscription = await supabase
         .from('user_subscriptions')
-        .upsert({
-          user_id: userId,
-          subscription_status: status,
-          subscription_product_id: finalProductId,
-          tier: tier,
-          max_owned_businesses: maxOwnedBusinesses,
-          subscription_expiration_date: status === 'active' ? expirationDate.toISOString() : null,
-          receipt_data: 'debug_receipt_data',
-          last_validated_at: new Date().toISOString(),
-          platform: 'ios',
-          subscription_start_date: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const subscriptionData = {
+        user_id: userId,
+        subscription_status: status,
+        subscription_product_id: finalProductId,
+        tier: tier,
+        max_owned_businesses: maxOwnedBusinesses,
+        subscription_expiration_date: status === 'active' ? expirationDate.toISOString() : null,
+        receipt_data: 'debug_receipt_data',
+        last_validated_at: new Date().toISOString(),
+        platform: 'ios' as const,
+        updated_at: new Date().toISOString()
+      };
+
+      let error;
+
+      if (existingSubscription.data) {
+        const result = await supabase
+          .from('user_subscriptions')
+          .update(subscriptionData)
+          .eq('id', existingSubscription.data.id);
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from('user_subscriptions')
+          .insert({
+            ...subscriptionData,
+            subscription_start_date: new Date().toISOString()
+          });
+        error = result.error;
+      }
 
       if (error) throw error;
 
