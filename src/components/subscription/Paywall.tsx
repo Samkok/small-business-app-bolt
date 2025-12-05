@@ -191,10 +191,10 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
     }
   };
 
-  const toggleBillingPeriod = (tierId: TierType) => {
+  const setBillingPeriod = (tierId: TierType, period: BillingPeriod) => {
     setBillingPeriods(prev => ({
       ...prev,
-      [tierId]: prev[tierId] === 'monthly' ? 'yearly' : 'monthly'
+      [tierId]: period
     }));
   };
 
@@ -333,7 +333,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               billingPeriod === 'monthly' && styles.billingOptionSelected,
               billingPeriod === 'monthly' && isDark && styles.billingOptionSelectedDark
             ]}
-            onPress={() => toggleBillingPeriod(tier.id)}
+            onPress={() => setBillingPeriod(tier.id, 'monthly')}
           >
             <Text style={[
               styles.billingOptionText,
@@ -360,7 +360,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               billingPeriod === 'yearly' && styles.billingOptionSelected,
               billingPeriod === 'yearly' && isDark && styles.billingOptionSelectedDark
             ]}
-            onPress={() => toggleBillingPeriod(tier.id)}
+            onPress={() => setBillingPeriod(tier.id, 'yearly')}
           >
             <View style={styles.billingOptionHeader}>
               <Text style={[
