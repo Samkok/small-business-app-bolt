@@ -15,6 +15,7 @@ import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { debugSubscription } from '@/src/utils/debugSubscription';
+import { iapService } from '@/src/services/iapService';
 
 export default function DebugSubscriptionScreen() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function DebugSubscriptionScreen() {
   const { user, currentBusiness } = useAuth();
   const { salesCountData, subscriptionStatus, tierInfo, ownedBusinessCount, refreshSubscriptionStatus, refreshSalesCount, refreshTierInfo } = useSubscription();
   const [processing, setProcessing] = useState(false);
+  const iapDiagnostics = iapService.getDiagnosticInfo();
 
   if (!__DEV__) {
     router.back();
@@ -213,6 +215,78 @@ export default function DebugSubscriptionScreen() {
               </Text>
               <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
                 {subscriptionStatus.productId}
+              </Text>
+            </View>
+          )}
+        </Card>
+
+        <Card style={[styles.stateCard, iapDiagnostics.useMock ? styles.iapMockCard : styles.iapRealCard]}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            IAP Configuration
+          </Text>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              IAP Mode:
+            </Text>
+            <Text style={[
+              styles.stateValue,
+              isDark && styles.stateValueDark,
+              iapDiagnostics.useMock ? styles.mockModeText : styles.realModeText
+            ]}>
+              {iapDiagnostics.useMock ? '🧪 MOCK' : '✅ REAL'}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              App Ownership:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {iapDiagnostics.appOwnership || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Execution Context:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {iapDiagnostics.executionContext}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Platform:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {iapDiagnostics.platform}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Dev Mode:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {iapDiagnostics.isDev ? 'Yes' : 'No'}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              IAP Available:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {iapDiagnostics.isRealIAPAvailable ? 'Yes' : 'No'}
+            </Text>
+          </View>
+          {iapDiagnostics.useMock && (
+            <View style={styles.iapWarning}>
+              <Text style={[styles.iapWarningText, isDark && styles.iapWarningTextDark]}>
+                Mock IAP is active. To use real IAP, build with EAS and install on device.
+              </Text>
+            </View>
+          )}
+          {!iapDiagnostics.useMock && (
+            <View style={styles.iapSuccess}>
+              <Text style={[styles.iapSuccessText, isDark && styles.iapSuccessTextDark]}>
+                Real IAP is active. Purchases will connect to App Store/Play Store.
               </Text>
             </View>
           )}
@@ -422,5 +496,49 @@ const styles = StyleSheet.create({
   dangerButton: {
     marginBottom: 0,
     backgroundColor: '#ef4444',
+  },
+  iapMockCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  iapRealCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  mockModeText: {
+    color: '#f59e0b',
+    fontWeight: '700',
+  },
+  realModeText: {
+    color: '#10b981',
+    fontWeight: '700',
+  },
+  iapWarning: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+  },
+  iapWarningText: {
+    fontSize: 13,
+    color: '#92400e',
+    lineHeight: 18,
+  },
+  iapWarningTextDark: {
+    color: '#fbbf24',
+  },
+  iapSuccess: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+  },
+  iapSuccessText: {
+    fontSize: 13,
+    color: '#065f46',
+    lineHeight: 18,
+  },
+  iapSuccessTextDark: {
+    color: '#34d399',
   },
 });

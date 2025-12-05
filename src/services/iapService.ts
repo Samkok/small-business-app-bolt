@@ -44,25 +44,54 @@ export interface IAPServiceInterface {
     productId: string | null;
   }>;
   isMockMode(): boolean;
+  getDiagnosticInfo(): {
+    useMock: boolean;
+    appOwnership: string | null;
+    executionContext: string;
+    platform: string;
+    isDev: boolean;
+    isRealIAPAvailable: boolean;
+  };
 }
 
 function shouldUseMockIAP(): boolean {
   if (Platform.OS === 'web') {
+    console.log('[IAPService] Platform is web, IAP not applicable');
     return false;
   }
 
   if (!isRealIAPAvailable) {
-    console.log('[IAPService] Using mock IAP: react-native-iap not available');
+    console.warn('[IAPService] ⚠️ Using mock IAP: react-native-iap package not available');
     return true;
   }
 
+  const appOwnership = Constants.appOwnership;
   const executionContext = Constants.executionContext;
-  if (executionContext === 'bareWorkflow' || executionContext === 'standalone') {
-    console.log('[IAPService] Using real IAP: running in standalone build');
+
+  console.log('[IAPService] 🔍 Detection info:', {
+    appOwnership,
+    executionContext,
+    isRealIAPAvailable,
+    platform: Platform.OS,
+    __DEV__,
+  });
+
+  if (appOwnership === 'standalone') {
+    console.log('[IAPService] ✅ Using REAL IAP: Running in standalone/production build (appOwnership=standalone)');
     return false;
   }
 
-  console.log('[IAPService] Using mock IAP: running in Expo Go or dev environment');
+  if (appOwnership === 'expo') {
+    console.log('[IAPService] 🧪 Using mock IAP: Running in Expo Go (appOwnership=expo)');
+    return true;
+  }
+
+  if (executionContext === 'bareWorkflow' || executionContext === 'standalone') {
+    console.log('[IAPService] ✅ Using REAL IAP: Running in bare workflow build');
+    return false;
+  }
+
+  console.log('[IAPService] 🧪 Using mock IAP: Running in development environment');
   return true;
 }
 
@@ -71,11 +100,40 @@ class UnifiedIAPService implements IAPServiceInterface {
 
   constructor() {
     this.useMock = shouldUseMockIAP();
-    console.log(`[IAPService] Initialized with ${this.useMock ? 'mock' : 'real'} IAP`);
+    if (this.useMock) {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[IAPService] 🧪 MOCK MODE ACTIVE');
+      console.log('[IAPService] This is for testing in Expo Go/Dev builds');
+      console.log('[IAPService] Real IAP will work in EAS production builds');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } else {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[IAPService] ✅ REAL IAP MODE ACTIVE');
+      console.log('[IAPService] Connected to App Store/Play Store');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 
   isMockMode(): boolean {
     return this.useMock;
+  }
+
+  getDiagnosticInfo(): {
+    useMock: boolean;
+    appOwnership: string | null;
+    executionContext: string;
+    platform: string;
+    isDev: boolean;
+    isRealIAPAvailable: boolean;
+  } {
+    return {
+      useMock: this.useMock,
+      appOwnership: Constants.appOwnership,
+      executionContext: Constants.executionContext,
+      platform: Platform.OS,
+      isDev: __DEV__,
+      isRealIAPAvailable,
+    };
   }
 
   async initConnection(): Promise<boolean> {
