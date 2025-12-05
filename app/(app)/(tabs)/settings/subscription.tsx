@@ -31,7 +31,9 @@ export default function SubscriptionScreen() {
     salesCountData,
     isLoading,
     restorePurchases,
-    showPaywall
+    showPaywall,
+    tierInfo,
+    ownedBusinessCount
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
@@ -99,13 +101,22 @@ export default function SubscriptionScreen() {
               <View style={styles.proHeader}>
                 <View style={styles.proBadge}>
                   <Crown size={20} color="#fbbf24" />
-                  <Text style={styles.proText}>{t('subscription.proPlan')}</Text>
+                  <Text style={styles.proText}>
+                    {tierInfo.tier === 'pro' && t('subscription.proPlan')}
+                    {tierInfo.tier === 'pro_plus' && 'Pro Plus Plan'}
+                    {tierInfo.tier === 'max' && 'Max Plan'}
+                  </Text>
                 </View>
                 <Text style={styles.activeText}>{t('subscription.active')}</Text>
               </View>
               <Text style={styles.proDescription}>
                 {t('subscription.unlimitedAccess')}
               </Text>
+              {tierInfo.maxOwnedBusinesses && (
+                <Text style={styles.proLimitInfo}>
+                  {ownedBusinessCount} / {tierInfo.maxOwnedBusinesses === 999999 ? '∞' : tierInfo.maxOwnedBusinesses} businesses owned
+                </Text>
+              )}
             </LinearGradient>
 
             <Card style={styles.detailsCard}>
@@ -198,7 +209,7 @@ export default function SubscriptionScreen() {
                     {t('subscription.salesUsage')}
                   </Text>
                   <Text style={[styles.progressCount, isDark && styles.progressCountDark]}>
-                    {salesCountData.salesCount} / {FREE_TIER_LIMIT}
+                    {salesCountData.totalSalesAllBusinesses || salesCountData.salesCount} / {FREE_TIER_LIMIT}
                   </Text>
                 </View>
                 <View style={[styles.progressBar, isDark && styles.progressBarDark]}>
@@ -216,6 +227,9 @@ export default function SubscriptionScreen() {
                   {salesCountData.isAtLimit
                     ? t('subscription.limitReached')
                     : t('subscription.salesRemaining', { count: salesCountData.remainingSales })}
+                </Text>
+                <Text style={[styles.progressNote, isDark && styles.progressNoteDark]}>
+                  Total across all businesses
                 </Text>
               </View>
             </Card>
@@ -341,6 +355,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     opacity: 0.9,
   },
+  proLimitInfo: {
+    fontSize: 14,
+    color: '#ffffff',
+    opacity: 0.8,
+    marginTop: 8,
+  },
   detailsCard: {
     marginBottom: 16,
   },
@@ -461,6 +481,15 @@ const styles = StyleSheet.create({
   },
   progressTextDark: {
     color: '#9ca3af',
+  },
+  progressNote: {
+    fontSize: 11,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  progressNoteDark: {
+    color: '#6b7280',
   },
   upgradeCard: {
     marginBottom: 16,

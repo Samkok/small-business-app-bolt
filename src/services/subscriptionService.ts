@@ -5,18 +5,30 @@ import { Platform } from 'react-native';
 export const FREE_TIER_LIMIT = 50;
 const CACHE_TTL_MS = 2 * 60 * 1000;
 
+export type SubscriptionTier = 'free' | 'pro' | 'pro_plus' | 'max';
+
 export interface SubscriptionStatus {
   isSubscribed: boolean;
   subscriptionStatus: 'active' | 'expired' | 'cancelled' | 'trial';
   productId?: string;
   expirationDate?: string;
   platform?: 'ios' | 'android' | 'web';
+  tier?: SubscriptionTier;
+  maxOwnedBusinesses?: number;
 }
 
 export interface SalesCountData {
   salesCount: number;
   remainingSales: number;
   isAtLimit: boolean;
+  totalSalesAllBusinesses?: number;
+}
+
+export interface TierInfo {
+  tier: SubscriptionTier;
+  maxOwnedBusinesses: number | null;
+  subscriptionStatus: string;
+  expirationDate: string | null;
 }
 
 interface CachedSubscriptionData {
@@ -28,6 +40,129 @@ const SUBSCRIPTION_CACHE_KEY = 'subscription_status';
 const SALES_COUNT_CACHE_KEY = 'sales_count_cache';
 
 export const subscriptionService = {
+  async getTierInfo(userId: string): Promise<TierInfo> {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_subscription_tier', {
+          p_user_id: userId
+        });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return {
+          tier: 'free',
+          maxOwnedBusinesses: null,
+          subscriptionStatus: 'trial',
+          expirationDate: null
+        };
+      }
+
+      const tierData = data[0];
+      return {
+        tier: tierData.tier as SubscriptionTier,
+        maxOwnedBusinesses: tierData.max_owned_businesses,
+        subscriptionStatus: tierData.subscription_status,
+        expirationDate: tierData.expiration_date
+      };
+    } catch (error) {
+      console.error('Error getting tier info:', error);
+      return {
+        tier: 'free',
+        maxOwnedBusinesses: null,
+        subscriptionStatus: 'trial',
+        expirationDate: null
+      };
+    }
+  },
+
+  async getTotalSalesCount(userId: string): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_total_sales_count', {
+          p_user_id: userId
+        });
+
+      if (error) throw error;
+      return data || 0;
+    } catch (error) {
+      console.error('Error getting total sales count:', error);
+      return 0;
+    }
+  },
+
+  async canCreateSale(userId: string, businessId: string): Promise<{
+    canCreate: boolean;
+    reason: string | null;
+    currentCount: number;
+    limitReached: boolean;
+  }> {
+    try {
+      const { data, error } = await supabase
+        .rpc('can_user_create_sale', {
+          p_user_id: userId,
+          p_business_id: businessId
+        });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return {
+          canCreate: false,
+          reason: 'UNKNOWN_ERROR',
+          currentCount: 0,
+          limitReached: false
+        };
+      }
+
+      const result = data[0];
+      return {
+        canCreate: result.can_create,
+        reason: result.reason,
+        currentCount: result.current_count,
+        limitReached: result.limit_reached
+      };
+    } catch (error) {
+      console.error('Error checking if user can create sale:', error);
+      return {
+        canCreate: false,
+        reason: 'ERROR',
+        currentCount: 0,
+        limitReached: false
+      };
+    }
+  },
+
+  async getOwnedBusinessCount(userId: string): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_owned_business_count', {
+          p_user_id: userId
+        });
+
+      if (error) throw error;
+      return data || 0;
+    } catch (error) {
+      console.error('Error getting owned business count:', error);
+      return 0;
+    }
+  },
+
+  async canCreateBusiness(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .rpc('can_user_create_business', {
+          p_user_id: userId
+        });
+
+      if (error) throw error;
+      return data || false;
+    } catch (error) {
+      console.error('Error checking if user can create business:', error);
+      return false;
+    }
+  },
+
   async getSalesCount(userId: string, businessId: string): Promise<number> {
     try {
       const { data, error } = await supabase
@@ -75,21 +210,37 @@ export const subscriptionService = {
 
   async getSalesCountData(userId: string, businessId: string): Promise<SalesCountData> {
     try {
-      const salesCount = await this.getSalesCount(userId, businessId);
-      const remainingSales = Math.max(0, FREE_TIER_LIMIT - salesCount);
-      const isAtLimit = salesCount >= FREE_TIER_LIMIT;
+      const [salesCount, totalSales, tierInfo] = await Promise.all([
+        this.getSalesCount(userId, businessId),
+        this.getTotalSalesCount(userId),
+        this.getTierInfo(userId)
+      ]);
+
+      if (tierInfo.tier === 'free') {
+        const remainingSales = Math.max(0, FREE_TIER_LIMIT - totalSales);
+        const isAtLimit = totalSales >= FREE_TIER_LIMIT;
+
+        return {
+          salesCount,
+          remainingSales,
+          isAtLimit,
+          totalSalesAllBusinesses: totalSales
+        };
+      }
 
       return {
         salesCount,
-        remainingSales,
-        isAtLimit
+        remainingSales: 999999,
+        isAtLimit: false,
+        totalSalesAllBusinesses: totalSales
       };
     } catch (error) {
       console.error('Error getting sales count data:', error);
       return {
         salesCount: 0,
         remainingSales: FREE_TIER_LIMIT,
-        isAtLimit: false
+        isAtLimit: false,
+        totalSalesAllBusinesses: 0
       };
     }
   },
@@ -221,22 +372,8 @@ export const subscriptionService = {
 
   async canAccessFeature(userId: string, businessId: string, forceRefresh = false): Promise<boolean> {
     try {
-      const [subscription, salesCount] = await Promise.all([
-        this.getSubscriptionStatus(userId, forceRefresh),
-        this.getSalesCount(userId, businessId)
-      ]);
-
-      const isExpired = this.isSubscriptionExpired(subscription);
-      if (isExpired && subscription.isSubscribed) {
-        console.log('[SubscriptionService] Subscription expired, refreshing status');
-        return await this.canAccessFeature(userId, businessId, true);
-      }
-
-      if (subscription.isSubscribed && !isExpired) {
-        return true;
-      }
-
-      return salesCount < FREE_TIER_LIMIT;
+      const result = await this.canCreateSale(userId, businessId);
+      return result.canCreate;
     } catch (error) {
       console.error('Error checking feature access:', error);
       return false;

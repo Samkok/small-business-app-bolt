@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
-import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, SubscriptionTier } from '@/src/services/subscriptionService';
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { Paywall } from '@/src/components/subscription/Paywall';
@@ -16,8 +16,22 @@ if (Platform.OS !== 'web') {
   }
 }
 
-const IOS_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
-const ANDROID_PRODUCT_IDS = ['bizmanage.pro.month', 'bizmanage.pro.yearly'];
+const IOS_PRODUCT_IDS = [
+  'bizmanage.pro.month',
+  'bizmanage.pro.yearly',
+  'bizmanage.pro_plus.month',
+  'bizmanage.pro_plus.yearly',
+  'bizmanage.max.month',
+  'bizmanage.max.yearly'
+];
+const ANDROID_PRODUCT_IDS = [
+  'bizmanage.pro.month',
+  'bizmanage.pro.yearly',
+  'bizmanage.pro_plus.month',
+  'bizmanage.pro_plus.yearly',
+  'bizmanage.max.month',
+  'bizmanage.max.yearly'
+];
 
 export interface SubscriptionProduct {
   productId: string;
@@ -37,11 +51,14 @@ interface SubscriptionContextType {
   isLoading: boolean;
   isInitialized: boolean;
   canAccessFeature: boolean;
+  tierInfo: TierInfo;
+  ownedBusinessCount: number;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
   refreshSubscriptionStatus: () => Promise<void>;
   refreshSalesCount: () => Promise<void>;
+  refreshTierInfo: () => Promise<void>;
   showPaywall: () => void;
   hidePaywall: () => void;
   isPaywallVisible: boolean;
@@ -73,6 +90,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     remainingSales: FREE_TIER_LIMIT,
     isAtLimit: false,
   });
+  const [tierInfo, setTierInfo] = useState<TierInfo>({
+    tier: 'free',
+    maxOwnedBusinesses: null,
+    subscriptionStatus: 'trial',
+    expirationDate: null
+  });
+  const [ownedBusinessCount, setOwnedBusinessCount] = useState(0);
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -155,6 +179,21 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, [user?.id, currentBusiness?.id]);
 
+  const refreshTierInfo = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const [tierData, ownedCount] = await Promise.all([
+        subscriptionService.getTierInfo(user.id),
+        subscriptionService.getOwnedBusinessCount(user.id)
+      ]);
+      setTierInfo(tierData);
+      setOwnedBusinessCount(ownedCount);
+    } catch (error) {
+      console.error('Error refreshing tier info:', error);
+    }
+  }, [user?.id]);
+
   const checkFeatureAccess = useCallback(async (forceRefresh = false) => {
     if (!user?.id || !currentBusiness?.id) {
       setCanAccessFeature(false);
@@ -213,6 +252,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
           await subscriptionService.clearSubscriptionCache();
           await refreshSubscriptionStatus(true);
+          await refreshTierInfo();
           if (currentBusiness?.id) {
             await checkFeatureAccess(true);
           }
@@ -224,6 +264,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         async (payload) => {
           console.log('[SubscriptionContext] Received broadcast:', payload);
           await refreshSubscriptionStatus(true);
+          await refreshTierInfo();
           if (currentBusiness?.id) {
             await checkFeatureAccess(true);
           }
@@ -265,7 +306,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       });
 
     realtimeChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const setupSalesCountRealtime = useCallback(() => {
     if (!user?.id || !currentBusiness?.id || !isAppActiveRef.current) {
@@ -379,6 +420,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
           if (success) {
             await refreshSubscriptionStatus();
+            await refreshTierInfo();
             await checkFeatureAccess();
 
             if (realtimeChannelRef.current) {
@@ -404,7 +446,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     } finally {
       setIsLoading(false);
     }
-  }, [user, refreshSubscriptionStatus, checkFeatureAccess]);
+  }, [user, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web' || !IAP) {
@@ -439,6 +481,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
             if (success) {
               await refreshSubscriptionStatus();
+              await refreshTierInfo();
               await checkFeatureAccess();
               return true;
             }
@@ -453,7 +496,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     } finally {
       setIsLoading(false);
     }
-  }, [user, refreshSubscriptionStatus, checkFeatureAccess]);
+  }, [user, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const showPaywall = useCallback(() => {
     if (!currentBusiness) {
@@ -494,8 +537,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   useEffect(() => {
     if (user?.id) {
       refreshSubscriptionStatus();
+      refreshTierInfo();
     }
-  }, [user?.id, refreshSubscriptionStatus]);
+  }, [user?.id, refreshSubscriptionStatus, refreshTierInfo]);
 
   useEffect(() => {
     if (user?.id && currentBusiness?.id) {
@@ -516,6 +560,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         reconnectAttemptsRef.current = 0;
 
         refreshSubscriptionStatus(true);
+        refreshTierInfo();
         if (currentBusiness?.id) {
           refreshSalesCount();
           checkFeatureAccess(true);
@@ -541,7 +586,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       subscription.remove();
     };
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshSalesCount, checkFeatureAccess, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, refreshSalesCount, checkFeatureAccess, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
 
   useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
@@ -572,10 +617,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     isLoading,
     isInitialized,
     canAccessFeature,
+    tierInfo,
+    ownedBusinessCount,
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,
     refreshSalesCount,
+    refreshTierInfo,
     showPaywall,
     hidePaywall,
     isPaywallVisible,

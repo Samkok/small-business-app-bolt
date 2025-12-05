@@ -101,10 +101,28 @@ Deno.serve(async (req: Request) => {
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
+      let tier = 'free';
+      let maxOwnedBusinesses = null;
+
+      if (productId) {
+        if (productId.includes('pro_plus')) {
+          tier = 'pro_plus';
+          maxOwnedBusinesses = 3;
+        } else if (productId.includes('max')) {
+          tier = 'max';
+          maxOwnedBusinesses = 999999;
+        } else if (productId.includes('pro')) {
+          tier = 'pro';
+          maxOwnedBusinesses = 1;
+        }
+      }
+
       console.log('Updating subscription in database:', {
         userId,
         status: 'active',
         productId,
+        tier,
+        maxOwnedBusinesses,
         expiresDate
       });
 
@@ -114,6 +132,8 @@ Deno.serve(async (req: Request) => {
           user_id: userId,
           subscription_status: 'active',
           subscription_product_id: productId,
+          tier: tier,
+          max_owned_businesses: maxOwnedBusinesses,
           subscription_expiration_date: expiresDate,
           receipt_data: receipt,
           last_validated_at: new Date().toISOString(),
