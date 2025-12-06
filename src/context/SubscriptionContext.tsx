@@ -214,7 +214,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('must_choose_businesses')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
       const mustChoose = profile?.must_choose_businesses || false;

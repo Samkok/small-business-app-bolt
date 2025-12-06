@@ -78,13 +78,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('id, subscription_tier, max_owned_businesses')
+    // Query user_subscriptions table (not user_profiles) to find the user
+    const { data: subscription } = await supabase
+      .from('user_subscriptions')
+      .select('user_id, tier, max_owned_businesses')
       .eq('subscription_product_id', originalTransactionId)
       .maybeSingle();
 
-    if (!profile) {
+    if (!subscription) {
       console.log('No user found for transaction:', originalTransactionId);
       return new Response(JSON.stringify({ status: 'user_not_found' }), {
         status: 200,
@@ -92,7 +93,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const userId = profile.id;
+    const userId = subscription.user_id;
     const tier = extractTierFromProductId(productId);
     const maxBusinesses = getMaxBusinessesForTier(tier);
 
@@ -199,16 +200,25 @@ async function handleSubscriptionActivated(
 
   const shouldChooseBusinesses = maxBusinesses !== null && ownedCount && ownedCount > maxBusinesses;
 
+  // Update user_subscriptions table with subscription fields
   await supabase
-    .from('user_profiles')
+    .from('user_subscriptions')
     .update({
-      subscription_tier: tier,
+      tier: tier,
       subscription_status: 'active',
       subscription_expiration_date: expirationDate.toISOString(),
       max_owned_businesses: maxBusinesses,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+
+  // Update user_profiles table with must_choose_businesses flag using correct column name
+  await supabase
+    .from('user_profiles')
+    .update({
       must_choose_businesses: shouldChooseBusinesses,
     })
-    .eq('id', userId);
+    .eq('user_id', userId);
 
   if (maxBusinesses === null) {
     await supabase.rpc('set_all_businesses_active', { p_user_id: userId });
@@ -230,12 +240,14 @@ async function handleSubscriptionActivated(
 async function handleSubscriptionCancelled(supabase: any, userId: string) {
   console.log(`Subscription cancelled for user ${userId}`);
 
+  // Update user_subscriptions table with subscription status
   await supabase
-    .from('user_profiles')
+    .from('user_subscriptions')
     .update({
       subscription_status: 'cancelled',
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', userId);
+    .eq('user_id', userId);
 
   console.log(`Subscription marked as cancelled for user ${userId}`);
 }
@@ -243,14 +255,16 @@ async function handleSubscriptionCancelled(supabase: any, userId: string) {
 async function handleSubscriptionExpired(supabase: any, userId: string) {
   console.log(`Subscription expired for user ${userId}`);
 
+  // Update user_subscriptions table with expired status and free tier
   await supabase
-    .from('user_profiles')
+    .from('user_subscriptions')
     .update({
-      subscription_tier: 'free',
+      tier: 'free',
       subscription_status: 'expired',
       max_owned_businesses: 1,
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', userId);
+    .eq('user_id', userId);
 
   const { count: ownedCount } = await supabase
     .from('businesses')
@@ -263,12 +277,13 @@ async function handleSubscriptionExpired(supabase: any, userId: string) {
       p_max_active_businesses: 1
     });
 
+    // Update user_profiles table with must_choose_businesses flag using correct column name
     await supabase
       .from('user_profiles')
       .update({
         must_choose_businesses: true,
       })
-      .eq('id', userId);
+      .eq('user_id', userId);
 
     console.log(`User ${userId} has ${ownedCount} businesses, downgrade modal triggered`);
   }
@@ -279,14 +294,16 @@ async function handleSubscriptionExpired(supabase: any, userId: string) {
 async function handleRefund(supabase: any, userId: string) {
   console.log(`Refund processed for user ${userId}`);
 
+  // Update user_subscriptions table with expired status and free tier
   await supabase
-    .from('user_profiles')
+    .from('user_subscriptions')
     .update({
-      subscription_tier: 'free',
+      tier: 'free',
       subscription_status: 'expired',
       max_owned_businesses: 1,
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', userId);
+    .eq('user_id', userId);
 
   const { count: ownedCount } = await supabase
     .from('businesses')
@@ -299,12 +316,13 @@ async function handleRefund(supabase: any, userId: string) {
       p_max_active_businesses: 1
     });
 
+    // Update user_profiles table with must_choose_businesses flag using correct column name
     await supabase
       .from('user_profiles')
       .update({
         must_choose_businesses: true,
       })
-      .eq('id', userId);
+      .eq('user_id', userId);
   }
 
   console.log(`Refund processed for user ${userId}, immediate downgrade`);
