@@ -877,7 +877,7 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      {salesCountData.isAtLimit && !canAccessFeature ? (
+      {salesCountData.isAtLimit && canAccessFeature ? (
         <ReadOnlyBanner
           salesCount={salesCountData.salesCount}
           onUpgrade={showPaywall}
