@@ -96,11 +96,12 @@ export const subscriptionService = {
     }
   },
 
-  async getTotalSalesCount(userId: string): Promise<number> {
+  async getTotalSalesCount(userId: string, businessId?: string): Promise<number> {
     try {
       const { data, error } = await supabase
         .rpc('get_user_total_sales_count', {
-          p_user_id: userId
+          p_user_id: userId,
+          p_business_id: businessId || null
         });
 
       if (error) throw error;
