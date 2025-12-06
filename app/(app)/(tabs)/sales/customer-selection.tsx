@@ -109,7 +109,9 @@ export default function CustomerSelectionScreen() {
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
-    showPaywall();
+    setTimeout(() => {
+      showPaywall();
+    }, 350);
   }, [showPaywall]);
 
   const renderCustomerItem = useCallback(({ item }) => (

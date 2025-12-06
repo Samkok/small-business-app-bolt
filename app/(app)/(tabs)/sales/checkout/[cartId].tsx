@@ -113,7 +113,9 @@ export default function CheckoutScreen() {
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
-    showPaywall();
+    setTimeout(() => {
+      showPaywall();
+    }, 350);
   }, [showPaywall]);
 
   if (!cart || !cartSummary) {

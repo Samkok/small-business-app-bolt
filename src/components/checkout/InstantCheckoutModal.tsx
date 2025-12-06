@@ -377,7 +377,9 @@ export function InstantCheckoutModal() {
 
   const handleUpgradeFromPrompt = () => {
     setShowUpgradePrompt(false);
-    showPaywall();
+    setTimeout(() => {
+      showPaywall();
+    }, 350);
   };
 
   const summary = getSessionSummary();

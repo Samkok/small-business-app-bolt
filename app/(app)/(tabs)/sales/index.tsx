@@ -280,7 +280,9 @@ export default function SalesScreen() {
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
-    showPaywall();
+    setTimeout(() => {
+      showPaywall();
+    }, 350);
   }, [showPaywall]);
 
   const shouldShowWarningBanner = useCallback(() => {
