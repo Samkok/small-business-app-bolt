@@ -411,7 +411,7 @@ export const subscriptionService = {
       
       const isReadOnly = business.access_state === 'read_only_sales';
       
-      return result.canCreate || isReadOnly;
+      return result.canCreate $$ isReadOnly;
     } catch (error) {
       console.error('Error checking feature access:', error);
       return false;
