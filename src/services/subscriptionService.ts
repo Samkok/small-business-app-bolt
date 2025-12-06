@@ -237,7 +237,7 @@ export const subscriptionService = {
       ]);
 
       if (tierInfo.tier === 'free') {
-        const remainingSales = Math.max(0, FREE_TIER_LIMIT - totalSales);
+        const remainingSales = FREE_TIER_LIMIT - totalSales;
         const isAtLimit = totalSales >= FREE_TIER_LIMIT;
 
         return {
