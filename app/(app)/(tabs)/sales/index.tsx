@@ -891,7 +891,7 @@ export default function SalesScreen() {
           onDismiss={handleDismissWarning}
           dismissible={true}
         />
-      ) : !salesCountData.isAtLimit && shouldShowWarningBanner() ? (
+      ) : !salesCountData.isAtLimit || shouldShowWarningBanner() ? (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
