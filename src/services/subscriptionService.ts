@@ -409,9 +409,9 @@ export const subscriptionService = {
         throw new Error('Business not found or query failed');
       }
       
-      const isReadOnly = business.access_state === 'read_only_sales';
+      const active = business.access_state !== 'read_only_sales';
       
-      return result.canCreate || isReadOnly;
+      return result.canCreate || active;
     } catch (error) {
       console.error('Error checking feature access:', error);
       return false;
