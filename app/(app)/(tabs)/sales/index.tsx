@@ -877,7 +877,7 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      { subscriptionStatus.subscriptionStatus === 'expired' || !salesCountData.isAtLimit ? (
+      { subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
