@@ -877,12 +877,7 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      {salesCountData.isAtLimit || !canAccessFeature ? (
-        <ReadOnlyBanner
-          salesCount={salesCountData.salesCount}
-          onUpgrade={showPaywall}
-        />
-      ) : subscriptionStatus.subscriptionStatus === 'expired' || !salesCountData.isAtLimit ? (
+      { subscriptionStatus.subscriptionStatus === 'expired' || !salesCountData.isAtLimit ? (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
@@ -890,6 +885,11 @@ export default function SalesScreen() {
           onUpgrade={showPaywall}
           onDismiss={handleDismissWarning}
           dismissible={true}
+        />
+      ) : salesCountData.isAtLimit || !canAccessFeature ? (
+        <ReadOnlyBanner
+          salesCount={salesCountData.salesCount}
+          onUpgrade={showPaywall}
         />
       ) : null}
       <View style={styles.header}>
