@@ -923,13 +923,13 @@ export default function SalesScreen() {
             style={[
               styles.actionButton,
               {
-                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#2563eb',
+                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
                 marginLeft: 8,
-                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
               }
             ]}
             onPress={handleNewSale}
-            disabled={salesCountData.isAtLimit && !canAccessFeature}
+            disabled={salesCountData.isAtLimit || !canAccessFeature}
           >
             <Plus size={24} color="#ffffff" />
           </TouchableOpacity>
