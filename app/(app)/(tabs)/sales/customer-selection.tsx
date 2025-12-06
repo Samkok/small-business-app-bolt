@@ -19,7 +19,6 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import CustomerForm from '@/src/components/customers/CustomerForm';
-import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, Users, Plus, Search, User } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -31,7 +30,6 @@ export default function CustomerSelectionScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [creatingCart, setCreatingCart] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const router = useRouter();
   const { isDark } = useTheme();
@@ -79,7 +77,7 @@ export default function CustomerSelectionScreen() {
     if (!currentBusiness?.id) return;
 
     if (salesCountData.isAtLimit && !canAccessFeature) {
-      setShowUpgradePrompt(true);
+      showPaywall();
       return;
     }
 
@@ -100,17 +98,12 @@ export default function CustomerSelectionScreen() {
     } finally {
       setCreatingCart(false);
     }
-  }, [currentBusiness?.id, createCart, router, salesCountData.isAtLimit, canAccessFeature]);
+  }, [currentBusiness?.id, createCart, router, salesCountData.isAtLimit, canAccessFeature, showPaywall]);
 
   const handleCustomerSave = useCallback(async () => {
     setShowCustomerForm(false);
     await loadCustomers();
   }, [loadCustomers]);
-
-  const handleUpgradeFromPrompt = useCallback(() => {
-    setShowUpgradePrompt(false);
-    showPaywall();
-  }, [showPaywall]);
 
   const renderCustomerItem = useCallback(({ item }) => (
     <TouchableOpacity
@@ -237,15 +230,6 @@ export default function CustomerSelectionScreen() {
           onCancel={() => setShowCustomerForm(false)}
         />
       </Modal>
-
-      {/* Upgrade Prompt Modal */}
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        onUpgrade={handleUpgradeFromPrompt}
-        salesCount={salesCountData.salesCount}
-        message="You've reached the free limit. Upgrade to continue creating sales."
-      />
     </View>
   );
 }

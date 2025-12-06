@@ -18,7 +18,6 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
-import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
 import { isSubscriptionRelatedError } from '@/src/utils/subscriptionErrorHelper';
 
@@ -28,7 +27,6 @@ export default function CheckoutScreen() {
   const [notes, setNotes] = useState('');
   const [saleDate, setSaleDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -93,7 +91,7 @@ export default function CheckoutScreen() {
         );
       } else {
         if (isSubscriptionRelatedError(result.error)) {
-          setShowUpgradePrompt(true);
+          showPaywall();
         } else {
           Alert.alert('Error', result.error || 'Failed to complete sale');
         }
@@ -102,19 +100,14 @@ export default function CheckoutScreen() {
       console.error('Error completing sale:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to complete sale';
       if (isSubscriptionRelatedError(errorMessage)) {
-        setShowUpgradePrompt(true);
+        showPaywall();
       } else {
         Alert.alert('Error', errorMessage);
       }
     } finally {
       setProcessing(false);
     }
-  }, [currentBusiness?.id, cartId, cart, paymentMethod, saleDate, notes, completeSale, router]);
-
-  const handleUpgradeFromPrompt = useCallback(() => {
-    setShowUpgradePrompt(false);
-    showPaywall();
-  }, [showPaywall]);
+  }, [currentBusiness?.id, cartId, cart, paymentMethod, saleDate, notes, completeSale, router, showPaywall]);
 
   if (!cart || !cartSummary) {
     return (
@@ -379,15 +372,6 @@ export default function CheckoutScreen() {
           </Card>
         </View>
       </Modal>
-
-      {/* Upgrade Prompt Modal */}
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        onUpgrade={handleUpgradeFromPrompt}
-        salesCount={salesCountData.salesCount}
-        message="You've reached the free limit. Upgrade to continue creating sales."
-      />
     </View>
   );
 }
