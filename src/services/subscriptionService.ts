@@ -398,15 +398,20 @@ export const subscriptionService = {
   async canAccessFeature(userId: string, businessId: string, forceRefresh = false): Promise<boolean> {
     try {
       const result = await this.canCreateSale(userId, businessId);
-      const { data: business } = await supabase
+      
+      const { data: business, error } = await supabase
         .from('businesses')
         .select('access_state')
-        .eq('id', business_id)
+        .eq('id', businessId)
         .maybeSingle();
-
-      const readOnly = business.access_state === 'read_only_sales' ? true : false;
       
-      return (result.canCreate & readOnly);
+      if (error || !business) {
+        throw new Error('Business not found or query failed');
+      }
+      
+      const isReadOnly = business.access_state === 'read_only_sales';
+      
+      return canCreate && !isReadOnly;
     } catch (error) {
       console.error('Error checking feature access:', error);
       return false;
