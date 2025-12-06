@@ -62,7 +62,7 @@ export function DowngradePick({
           .from('sales')
           .select('business_id')
           .in('business_id', businessIds)
-          .eq('is_voided', false),
+          .neq('status', 'voided'),
         supabase
           .from('user_business_roles')
           .select('business_id')

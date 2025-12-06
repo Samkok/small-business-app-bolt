@@ -207,12 +207,15 @@ export const businessService = {
     try {
       const { data, error } = await supabase
         .from('businesses')
-        .select('*, access_state')
+        .select('id, business_name, created_at, access_state, business_image_url')
         .eq('owner_user_id', userId);
 
       if (error) throw error;
 
-      return data || [];
+      return (data || []).map(business => ({
+        ...business,
+        name: business.business_name
+      }));
     } catch (error) {
       console.error('Error getting owned businesses with state:', error);
       return [];
