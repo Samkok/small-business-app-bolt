@@ -424,16 +424,25 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           event: 'UPDATE',
           schema: 'public',
           table: 'user_profiles',
-          filter: `id=eq.${user.id}`
+          filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
+          const oldProfile = payload.old as any;
           const newProfile = payload.new as any;
+          console.log('[Realtime] User profile UPDATE received:', {
+            oldMustChoose: oldProfile?.must_choose_businesses,
+            newMustChoose: newProfile.must_choose_businesses,
+            currentState: mustChooseBusinesses,
+            willCallLoadDowngrade: newProfile.must_choose_businesses !== mustChooseBusinesses
+          });
           if (newProfile.must_choose_businesses !== mustChooseBusinesses) {
             await loadDowngradeData();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime] User profile subscription status:', status);
+      });
 
     userProfileChannelRef.current = channel;
   }, [user?.id, mustChooseBusinesses, loadDowngradeData]);
