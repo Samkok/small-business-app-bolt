@@ -882,7 +882,16 @@ export default function SalesScreen() {
           salesCount={salesCountData.salesCount}
           onUpgrade={showPaywall}
         />
-      ) : subscriptionStatus.subscriptionStatus === 'expired' || !salesCountData.isAtLimit ? (
+      ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
+        <WarningBanner
+          salesCount={salesCountData.salesCount}
+          remainingSales={salesCountData.remainingSales}
+          totalLimit={FREE_TIER_LIMIT}
+          onUpgrade={showPaywall}
+          onDismiss={handleDismissWarning}
+          dismissible={true}
+        />
+      ) : subscriptionStatus.subscriptionStatus !== 'expired' && (!salesCountData.isAtLimit || shouldShowWarningBanner()) ? (
         <WarningBanner
           salesCount={salesCountData.salesCount}
           remainingSales={salesCountData.remainingSales}
