@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { AlertCircle, Check, Building2, Users, Calendar, TrendingUp } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useLanguage } from '@/src/context/LanguageContext';
 import { supabase } from '@/src/config/supabase';
@@ -38,8 +39,19 @@ export function DowngradePick({
   tierLimit,
   onComplete,
 }: DowngradePickProps) {
-  const { theme } = useTheme();
+  const { isDark } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+
+  const colors = {
+    background: isDark ? '#121212' : '#FFFFFF',
+    text: isDark ? '#E0E0E0' : '#1F2937',
+    textSecondary: isDark ? '#9CA3AF' : '#6B7280',
+    card: isDark ? '#1E1E1E' : '#F9FAFB',
+    border: isDark ? '#374151' : '#E5E7EB',
+    primary: isDark ? '#3B82F6' : '#2563EB',
+    warning: isDark ? '#F59E0B' : '#D97706',
+  };
 
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,22 +67,25 @@ export function DowngradePick({
   const loadBusinessDetails = async () => {
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
       const businessIds = ownedBusinesses.map(b => b.id);
 
       const [salesResult, teamResult] = await Promise.all([
         supabase
-          .from('sales')
-          .select('business_id')
-          .in('business_id', businessIds)
-          .in('status', ['completed', 'partially_returned']),
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', user.id)
+          .in('business_id', businessIds),
         supabase
           .from('user_business_roles')
           .select('business_id')
           .in('business_id', businessIds)
       ]);
 
-      const salesCount = (salesResult.data || []).reduce((acc, sale) => {
-        acc[sale.business_id] = (acc[sale.business_id] || 0) + 1;
+      const salesCount = (salesResult.data || []).reduce((acc, item) => {
+        acc[item.business_id] = item.sales_count;
         return acc;
       }, {} as Record<string, number>);
 
@@ -157,21 +172,21 @@ export function DowngradePick({
       transparent={false}
       statusBarTranslucent
     >
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.header}>
-          <View style={[styles.iconContainer, { backgroundColor: theme.primary + '15' }]}>
-            <AlertCircle size={32} color={theme.primary} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: Math.max(60, insets.top + 24) }]}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <AlertCircle size={32} color={colors.primary} />
           </View>
-          <Text style={[styles.title, { color: theme.text }]}>
+          <Text style={[styles.title, { color: colors.text }]}>
             Select Active {tierLimit === 1 ? 'Business' : 'Businesses'}
           </Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Your subscription tier includes {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
             {'\n'}Select which {tierLimit === 1 ? 'one' : 'ones'} to keep active.
           </Text>
-          <View style={[styles.warningBox, { backgroundColor: theme.warning + '15', borderColor: theme.warning + '40' }]}>
-            <AlertCircle size={20} color={theme.warning} />
-            <Text style={[styles.warningText, { color: theme.warning }]}>
+          <View style={[styles.warningBox, { backgroundColor: colors.warning + '15', borderColor: colors.warning + '40' }]}>
+            <AlertCircle size={20} color={colors.warning} />
+            <Text style={[styles.warningText, { color: colors.warning }]}>
               Other businesses will be read-only. You can view data and manage products/team, but cannot create sales.
             </Text>
           </View>
@@ -179,8 +194,8 @@ export function DowngradePick({
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
               Loading your businesses...
             </Text>
           </View>
@@ -195,8 +210,8 @@ export function DowngradePick({
                     style={[
                       styles.businessCard,
                       {
-                        backgroundColor: theme.card,
-                        borderColor: isSelected ? theme.primary : theme.border,
+                        backgroundColor: colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
                         borderWidth: isSelected ? 2 : 1,
                       },
                     ]}
@@ -205,8 +220,8 @@ export function DowngradePick({
                   >
                     <View style={styles.businessCardHeader}>
                       <View style={styles.businessCardTitle}>
-                        <Building2 size={24} color={theme.primary} />
-                        <Text style={[styles.businessName, { color: theme.text }]} numberOfLines={2}>
+                        <Building2 size={24} color={colors.primary} />
+                        <Text style={[styles.businessName, { color: colors.text }]} numberOfLines={2}>
                           {business.name || business.business_name || 'Unnamed Business'}
                         </Text>
                       </View>
@@ -214,8 +229,8 @@ export function DowngradePick({
                         style={[
                           styles.selectionIndicator,
                           {
-                            backgroundColor: isSelected ? theme.primary : 'transparent',
-                            borderColor: isSelected ? theme.primary : theme.border,
+                            backgroundColor: isSelected ? colors.primary : 'transparent',
+                            borderColor: isSelected ? colors.primary : colors.border,
                           },
                         ]}
                       >
@@ -225,20 +240,20 @@ export function DowngradePick({
 
                     <View style={styles.businessStats}>
                       <View style={styles.statItem}>
-                        <TrendingUp size={16} color={theme.textSecondary} />
-                        <Text style={[styles.statText, { color: theme.textSecondary }]}>
+                        <TrendingUp size={16} color={colors.textSecondary} />
+                        <Text style={[styles.statText, { color: colors.textSecondary }]}>
                           {business.sales_count || 0} sales
                         </Text>
                       </View>
                       <View style={styles.statItem}>
-                        <Users size={16} color={theme.textSecondary} />
-                        <Text style={[styles.statText, { color: theme.textSecondary }]}>
+                        <Users size={16} color={colors.textSecondary} />
+                        <Text style={[styles.statText, { color: colors.textSecondary }]}>
                           {business.team_member_count || 0} members
                         </Text>
                       </View>
                       <View style={styles.statItem}>
-                        <Calendar size={16} color={theme.textSecondary} />
-                        <Text style={[styles.statText, { color: theme.textSecondary }]}>
+                        <Calendar size={16} color={colors.textSecondary} />
+                        <Text style={[styles.statText, { color: colors.textSecondary }]}>
                           Created {format(new Date(business.created_at), 'MMM yyyy')}
                         </Text>
                       </View>
@@ -248,15 +263,22 @@ export function DowngradePick({
               })}
             </ScrollView>
 
-            <View style={[styles.footer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
-              <Text style={[styles.selectionCount, { color: theme.textSecondary }]}>
+            <View style={[
+              styles.footer,
+              {
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
+                paddingBottom: Math.max(16, insets.bottom + 16)
+              }
+            ]}>
+              <Text style={[styles.selectionCount, { color: colors.textSecondary }]}>
                 {selectedBusinessIds.length} of {tierLimit} selected
               </Text>
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
                   {
-                    backgroundColor: isConfirmDisabled ? theme.border : theme.primary,
+                    backgroundColor: isConfirmDisabled ? colors.border : colors.primary,
                   },
                 ]}
                 onPress={handleConfirm}
@@ -285,7 +307,6 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 24,
-    paddingTop: 60,
     alignItems: 'center',
   },
   iconContainer: {
@@ -380,7 +401,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   footer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     gap: 12,
   },
