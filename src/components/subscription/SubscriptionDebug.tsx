@@ -11,11 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { X, Bug, RefreshCw, Play, Zap } from 'lucide-react-native';
-import { useTheme } from '@/context/ThemeContext';
-import { useSubscription } from '@/context/SubscriptionContext';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/config/supabase';
-import { businessService } from '@/services/business';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useSubscription } from '@/src/context/SubscriptionContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { supabase } from '@/src/config/supabase';
+import { businessService } from '@/src/services/business';
 
 interface SubscriptionDebugProps {
   visible: boolean;

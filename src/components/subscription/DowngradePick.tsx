@@ -10,9 +10,9 @@ import {
   Alert,
 } from 'react-native';
 import { AlertCircle, CheckCircle, Building2, Users, Calendar, TrendingUp } from 'lucide-react-native';
-import { useTheme } from '@/context/ThemeContext';
-import { useLanguage } from '@/context/LanguageContext';
-import { supabase } from '@/config/supabase';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useLanguage } from '@/src/context/LanguageContext';
+import { supabase } from '@/src/config/supabase';
 import { format } from 'date-fns';
 
 interface Business {
