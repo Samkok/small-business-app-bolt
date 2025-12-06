@@ -22,6 +22,16 @@ export const salesService = {
       throw new Error('SUBSCRIPTION_LIMIT_REACHED');
     }
 
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('access_state')
+      .eq('id', saleData.business_id)
+      .maybeSingle();
+
+    if (business?.access_state === 'read_only_sales') {
+      throw new Error('BUSINESS_READ_ONLY');
+    }
+
     // Get cart summary with discount details
     const cartSummary = await cartService.getCartSummary(saleData.cart_id);
     const cart = await cartService.getCart(saleData.cart_id);
