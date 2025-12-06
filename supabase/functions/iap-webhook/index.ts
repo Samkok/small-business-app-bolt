@@ -192,6 +192,13 @@ async function handleSubscriptionActivated(
 ) {
   console.log(`Activating subscription for user ${userId}: ${tier}`);
 
+  const { count: ownedCount } = await supabase
+    .from('businesses')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner_user_id', userId);
+
+  const shouldChooseBusinesses = maxBusinesses !== null && ownedCount && ownedCount > maxBusinesses;
+
   await supabase
     .from('user_profiles')
     .update({
@@ -199,17 +206,22 @@ async function handleSubscriptionActivated(
       subscription_status: 'active',
       subscription_expiration_date: expirationDate.toISOString(),
       max_owned_businesses: maxBusinesses,
-      must_choose_businesses: false,
+      must_choose_businesses: shouldChooseBusinesses,
     })
     .eq('id', userId);
 
-  const { count: ownedCount } = await supabase
-    .from('businesses')
-    .select('id', { count: 'exact', head: true })
-    .eq('owner_user_id', userId);
-
-  if (maxBusinesses && ownedCount && ownedCount <= maxBusinesses) {
+  if (maxBusinesses === null) {
     await supabase.rpc('set_all_businesses_active', { p_user_id: userId });
+    console.log(`Unlimited tier - all businesses activated for user ${userId}`);
+  } else if (ownedCount && ownedCount > maxBusinesses) {
+    await supabase.rpc('set_read_only_businesses', {
+      p_user_id: userId,
+      p_max_active_businesses: maxBusinesses
+    });
+    console.log(`User ${userId} has ${ownedCount} businesses, downgraded to tier allowing ${maxBusinesses}. Downgrade modal triggered.`);
+  } else {
+    await supabase.rpc('set_all_businesses_active', { p_user_id: userId });
+    console.log(`User ${userId} has ${ownedCount} businesses within tier limit of ${maxBusinesses}. All businesses activated.`);
   }
 
   console.log(`Subscription activated for user ${userId}`);
