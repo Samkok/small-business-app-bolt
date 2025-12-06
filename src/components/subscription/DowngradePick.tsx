@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { AlertCircle, CheckCircle, Building2, Users, Calendar, TrendingUp } from 'lucide-react-native';
+import { AlertCircle, Check, Building2, Users, Calendar, TrendingUp } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useLanguage } from '@/src/context/LanguageContext';
 import { supabase } from '@/src/config/supabase';
@@ -62,7 +62,7 @@ export function DowngradePick({
           .from('sales')
           .select('business_id')
           .in('business_id', businessIds)
-          .neq('status', 'voided'),
+          .in('status', ['completed', 'partially_returned']),
         supabase
           .from('user_business_roles')
           .select('business_id')
@@ -206,8 +206,8 @@ export function DowngradePick({
                     <View style={styles.businessCardHeader}>
                       <View style={styles.businessCardTitle}>
                         <Building2 size={24} color={theme.primary} />
-                        <Text style={[styles.businessName, { color: theme.text }]}>
-                          {business.name}
+                        <Text style={[styles.businessName, { color: theme.text }]} numberOfLines={2}>
+                          {business.name || business.business_name || 'Unnamed Business'}
                         </Text>
                       </View>
                       <View
@@ -219,7 +219,7 @@ export function DowngradePick({
                           },
                         ]}
                       >
-                        {isSelected && <CheckCircle size={20} color="#FFFFFF" />}
+                        {isSelected && <Check size={16} color="#FFFFFF" strokeWidth={3} />}
                       </View>
                     </View>
 
