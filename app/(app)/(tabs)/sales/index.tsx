@@ -891,15 +891,6 @@ export default function SalesScreen() {
           onDismiss={handleDismissWarning}
           dismissible={true}
         />
-      ) : subscriptionStatus.subscriptionStatus !== 'expired' && (!salesCountData.isAtLimit || shouldShowWarningBanner()) ? (
-        <WarningBanner
-          salesCount={salesCountData.salesCount}
-          remainingSales={salesCountData.remainingSales}
-          totalLimit={FREE_TIER_LIMIT}
-          onUpgrade={showPaywall}
-          onDismiss={handleDismissWarning}
-          dismissible={true}
-        />
       ) : null}
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
