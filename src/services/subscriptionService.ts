@@ -235,6 +235,7 @@ export const subscriptionService = {
         this.getTotalSalesCount(userId),
         this.getTierInfo(userId)
       ]);
+      console.log("TOTAL SALES COUNT: ", totalSales);
 
       if (tierInfo.tier === 'free') {
         const remainingSales = (FREE_TIER_LIMIT - totalSales >= 0) ? FREE_TIER_LIMIT - totalSale : 0;
