@@ -27,6 +27,7 @@ import { InstantCheckoutSummary } from './InstantCheckoutSummary';
 import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
+import { isSubscriptionRelatedError } from '@/src/utils/subscriptionErrorHelper';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -282,7 +283,7 @@ export function InstantCheckoutModal() {
         });
         setShowPostSaleModal(true);
       } else {
-        if (result.error === 'SUBSCRIPTION_LIMIT_REACHED') {
+        if (isSubscriptionRelatedError(result.error)) {
           await refreshSalesCount();
           setShowUpgradePrompt(true);
         } else {
@@ -293,7 +294,7 @@ export function InstantCheckoutModal() {
       console.error('Failed to complete sale:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
 
-      if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
+      if (isSubscriptionRelatedError(errorMessage)) {
         await refreshSalesCount();
         setShowUpgradePrompt(true);
       } else {

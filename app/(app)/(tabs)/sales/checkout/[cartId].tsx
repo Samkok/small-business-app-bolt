@@ -20,6 +20,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
+import { isSubscriptionRelatedError } from '@/src/utils/subscriptionErrorHelper';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
@@ -91,7 +92,7 @@ export default function CheckoutScreen() {
           ]
         );
       } else {
-        if (result.error?.includes('free limit') || result.error?.includes('upgrade')) {
+        if (isSubscriptionRelatedError(result.error)) {
           setShowUpgradePrompt(true);
         } else {
           Alert.alert('Error', result.error || 'Failed to complete sale');
@@ -99,7 +100,12 @@ export default function CheckoutScreen() {
       }
     } catch (error) {
       console.error('Error completing sale:', error);
-      Alert.alert('Error', 'Failed to complete sale');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to complete sale';
+      if (isSubscriptionRelatedError(errorMessage)) {
+        setShowUpgradePrompt(true);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setProcessing(false);
     }
