@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
     const { data: verifyBusinesses, error: verifyError } = await supabase
       .from('businesses')
       .select('id')
-      .eq('owner_id', userId)
+      .eq('owner_user_id', userId)
       .in('id', selectedBusinessIds);
 
     if (verifyError) {
