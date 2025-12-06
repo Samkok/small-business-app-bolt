@@ -24,7 +24,6 @@ import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
-import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 import { isSubscriptionRelatedError } from '@/src/utils/subscriptionErrorHelper';
@@ -75,7 +74,6 @@ export function InstantCheckoutModal() {
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -257,7 +255,7 @@ export function InstantCheckoutModal() {
       await refreshSalesCount();
 
       if (salesCountData.isAtLimit && !canAccessFeature) {
-        setShowUpgradePrompt(true);
+        showPaywall();
         setCompleting(false);
         return;
       }
@@ -285,7 +283,7 @@ export function InstantCheckoutModal() {
       } else {
         if (isSubscriptionRelatedError(result.error)) {
           await refreshSalesCount();
-          setShowUpgradePrompt(true);
+          showPaywall();
         } else {
           Alert.alert('Error', result.error || 'Failed to complete sale');
         }
@@ -296,7 +294,7 @@ export function InstantCheckoutModal() {
 
       if (isSubscriptionRelatedError(errorMessage)) {
         await refreshSalesCount();
-        setShowUpgradePrompt(true);
+        showPaywall();
       } else {
         Alert.alert('Error', errorMessage);
       }
@@ -373,13 +371,6 @@ export function InstantCheckoutModal() {
     setShowPostSaleModal(false);
     setCompletedSaleInfo(null);
     clearSession();
-  };
-
-  const handleUpgradeFromPrompt = () => {
-    setShowUpgradePrompt(false);
-    setTimeout(() => {
-      showPaywall();
-    }, 350);
   };
 
   const summary = getSessionSummary();
@@ -859,15 +850,6 @@ export function InstantCheckoutModal() {
           onNewSale={handleNewSaleFromPost}
         />
       )}
-
-      {/* Upgrade Prompt Modal */}
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        onUpgrade={handleUpgradeFromPrompt}
-        salesCount={salesCountData.salesCount}
-        message="You've reached the free limit. Upgrade to continue creating sales."
-      />
     </Modal>
   );
 }

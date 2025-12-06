@@ -41,7 +41,6 @@ import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutM
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
 import { WarningBanner } from '@/src/components/subscription/WarningBanner';
-import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
 import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
@@ -67,7 +66,6 @@ export default function SalesScreen() {
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
   const [voidingInProgress, setVoidingInProgress] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [warningBannerDismissed, setWarningBannerDismissed] = useState(false);
 
   // Analytics states
@@ -278,13 +276,6 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id]);
 
-  const handleUpgradeFromPrompt = useCallback(() => {
-    setShowUpgradePrompt(false);
-    setTimeout(() => {
-      showPaywall();
-    }, 350);
-  }, [showPaywall]);
-
   const shouldShowWarningBanner = useCallback(() => {
     if (salesCountData.isAtLimit || isSubscribed || warningBannerDismissed) {
       return false;
@@ -488,11 +479,11 @@ export default function SalesScreen() {
 
   const handleNewSale = useCallback(() => {
     if (salesCountData.isAtLimit && !canAccessFeature) {
-      setShowUpgradePrompt(true);
+      showPaywall();
       return;
     }
     router.push('/sales/customer-selection');
-  }, [router, salesCountData.isAtLimit, canAccessFeature]);
+  }, [router, salesCountData.isAtLimit, canAccessFeature, showPaywall]);
 
   const handleCartPress = useCallback((cartId: string) => {
     router.push(`/sales/cart/${cartId}`);
@@ -916,7 +907,7 @@ export default function SalesScreen() {
                 opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
               }
             ]}
-            onPress={salesCountData.isAtLimit && !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+            onPress={salesCountData.isAtLimit && !canAccessFeature ? showPaywall : openInstantCheckoutModal}
             disabled={salesCountData.isAtLimit && !canAccessFeature}
           >
             <Zap size={24} color="#ffffff" />
@@ -1260,15 +1251,6 @@ export default function SalesScreen() {
         visible={isPaywallVisible}
         onClose={hidePaywall}
         canClose={true}
-      />
-
-      {/* Upgrade Prompt Modal */}
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        onUpgrade={handleUpgradeFromPrompt}
-        salesCount={salesCountData.salesCount}
-        message="You've reached the free limit. Upgrade to continue creating sales and unlock all features."
       />
     </View>
   );
