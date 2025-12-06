@@ -891,7 +891,6 @@ export default function SalesScreen() {
           onDismiss={handleDismissWarning}
           dismissible={true}
         />
-      )
       ) : null}
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
