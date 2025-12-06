@@ -24,9 +24,9 @@ import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
+import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
-import { isSubscriptionRelatedError } from '@/src/utils/subscriptionErrorHelper';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -74,6 +74,7 @@ export function InstantCheckoutModal() {
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -255,7 +256,7 @@ export function InstantCheckoutModal() {
       await refreshSalesCount();
 
       if (salesCountData.isAtLimit && !canAccessFeature) {
-        showPaywall();
+        setShowUpgradePrompt(true);
         setCompleting(false);
         return;
       }
@@ -281,9 +282,9 @@ export function InstantCheckoutModal() {
         });
         setShowPostSaleModal(true);
       } else {
-        if (isSubscriptionRelatedError(result.error)) {
+        if (result.error === 'SUBSCRIPTION_LIMIT_REACHED') {
           await refreshSalesCount();
-          showPaywall();
+          setShowUpgradePrompt(true);
         } else {
           Alert.alert('Error', result.error || 'Failed to complete sale');
         }
@@ -292,9 +293,9 @@ export function InstantCheckoutModal() {
       console.error('Failed to complete sale:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
 
-      if (isSubscriptionRelatedError(errorMessage)) {
+      if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
         await refreshSalesCount();
-        showPaywall();
+        setShowUpgradePrompt(true);
       } else {
         Alert.alert('Error', errorMessage);
       }
@@ -371,6 +372,11 @@ export function InstantCheckoutModal() {
     setShowPostSaleModal(false);
     setCompletedSaleInfo(null);
     clearSession();
+  };
+
+  const handleUpgradeFromPrompt = () => {
+    setShowUpgradePrompt(false);
+    showPaywall();
   };
 
   const summary = getSessionSummary();
@@ -850,6 +856,15 @@ export function InstantCheckoutModal() {
           onNewSale={handleNewSaleFromPost}
         />
       )}
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        onUpgrade={handleUpgradeFromPrompt}
+        salesCount={salesCountData.salesCount}
+        message="You've reached the free limit. Upgrade to continue creating sales."
+      />
     </Modal>
   );
 }
