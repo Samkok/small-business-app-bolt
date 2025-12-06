@@ -910,12 +910,12 @@ export default function SalesScreen() {
             style={[
               styles.actionButton,
               {
-                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#f59e0b',
-                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
               }
             ]}
-            onPress={salesCountData.isAtLimit && !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
-            disabled={salesCountData.isAtLimit && !canAccessFeature}
+            onPress={salesCountData.isAtLimit || !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+            disabled={salesCountData.isAtLimit || !canAccessFeature}
           >
             <Zap size={24} color="#ffffff" />
           </TouchableOpacity>
