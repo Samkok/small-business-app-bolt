@@ -168,6 +168,8 @@ export function DowngradePick({
     isConfirmDisabled = selectedBusinessIds.length == 0 || submitting;
   } else if (tierLimit === 3) {
     isConfirmDisabled = selectedBusinessIds.length > 3 || selectedBusinessIds <= 0 || submitting;
+  } else if (tierLimit === 1) {
+    isConfirmDisabled = selectedBusinessIds.length > 1 || selectedBusinessIds <= 0 || submitting;
   }
   
   return (
