@@ -163,7 +163,7 @@ export function DowngradePick({
     }
   };
 
-  const isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting;
+  var isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting;
   if (tierLimit === 999999) {
     isConfirmDisabled = false;
   }
