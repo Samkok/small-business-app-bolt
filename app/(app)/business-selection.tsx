@@ -21,6 +21,7 @@ import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw } from 'lucide-react-native';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
@@ -30,6 +31,7 @@ export default function BusinessSelectionScreen() {
   
   const router = useRouter();
   const { t } = useTranslation();
+  const subscription = useSubscription();
   const { isDark } = useTheme();
   const { userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses } = useAuth();
 
@@ -52,6 +54,11 @@ export default function BusinessSelectionScreen() {
   const handleCreateBusiness = async () => {
     if (!newBusinessName.trim()) {
       Alert.alert('Error', 'Please enter a business name');
+      return;
+    }
+
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses > userBusinesses.length) {
+      Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
       return;
     }
 
