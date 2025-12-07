@@ -205,19 +205,30 @@ export const businessService = {
 
   async getUserOwnedBusinessesWithState(userId: string) {
     try {
+      console.log('[BusinessService] Fetching owned businesses for user:', userId);
+
       const { data, error } = await supabase
         .from('businesses')
         .select('id, business_name, created_at, access_state, business_image_url')
         .eq('owner_user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[BusinessService] Error fetching businesses:', error);
+        throw error;
+      }
 
-      return (data || []).map(business => ({
+      console.log('[BusinessService] Found', (data || []).length, 'businesses');
+
+      const businesses = (data || []).map(business => ({
         ...business,
         name: business.business_name
       }));
+
+      console.log('[BusinessService] Returning businesses:', businesses.map(b => ({ id: b.id, name: b.name, access_state: b.access_state })));
+
+      return businesses;
     } catch (error) {
-      console.error('Error getting owned businesses with state:', error);
+      console.error('[BusinessService] Error getting owned businesses with state:', error);
       return [];
     }
   }

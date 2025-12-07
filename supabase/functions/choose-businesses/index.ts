@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
     const { data: updatedBusinesses } = await supabase
       .from('businesses')
       .select('id, business_name, access_state')
-      .eq('owner_id', userId)
+      .eq('owner_user_id', userId)
       .order('created_at', { ascending: true });
 
     console.log('[ChooseBusinesses] Selection saved successfully');

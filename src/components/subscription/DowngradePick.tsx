@@ -57,20 +57,46 @@ export function DowngradePick({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [businesses, setBusinesses] = useState<Business[]>(ownedBusinesses);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (visible) {
+      console.log('[DowngradePick] Modal visible, loading business details');
+      console.log('[DowngradePick] ownedBusinesses prop:', ownedBusinesses.length);
       loadBusinessDetails();
     }
-  }, [visible]);
+  }, [visible, retryCount]);
+
+  useEffect(() => {
+    console.log('[DowngradePick] ownedBusinesses prop changed:', ownedBusinesses.length);
+    if (ownedBusinesses.length > 0) {
+      setBusinesses(ownedBusinesses);
+    }
+  }, [ownedBusinesses]);
 
   const loadBusinessDetails = async () => {
     setLoading(true);
+    setError(null);
+
     try {
+      console.log('[DowngradePick] Loading business details...');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      if (!user) {
+        throw new Error('No user found');
+      }
+
+      console.log('[DowngradePick] User found:', user.id);
+
+      if (ownedBusinesses.length === 0) {
+        console.warn('[DowngradePick] ownedBusinesses is empty, cannot load details');
+        setError('No businesses found. Please try refreshing.');
+        setLoading(false);
+        return;
+      }
 
       const businessIds = ownedBusinesses.map(b => b.id);
+      console.log('[DowngradePick] Loading details for', businessIds.length, 'businesses');
 
       const [salesResult, teamResult] = await Promise.all([
         supabase
@@ -83,6 +109,13 @@ export function DowngradePick({
           .select('business_id')
           .in('business_id', businessIds)
       ]);
+
+      if (salesResult.error) {
+        console.error('[DowngradePick] Error loading sales counts:', salesResult.error);
+      }
+      if (teamResult.error) {
+        console.error('[DowngradePick] Error loading team members:', teamResult.error);
+      }
 
       const salesCount = (salesResult.data || []).reduce((acc, item) => {
         acc[item.business_id] = item.sales_count;
@@ -107,12 +140,20 @@ export function DowngradePick({
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
+      console.log('[DowngradePick] Successfully loaded', enrichedBusinesses.length, 'enriched businesses');
       setBusinesses(enrichedBusinesses);
+      setError(null);
     } catch (error) {
-      console.error('Error loading business details:', error);
+      console.error('[DowngradePick] Error loading business details:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load businesses');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRetry = () => {
+    console.log('[DowngradePick] Retrying business load, attempt:', retryCount + 1);
+    setRetryCount(prev => prev + 1);
   };
 
   const toggleBusinessSelection = (businessId: string) => {
@@ -129,14 +170,20 @@ export function DowngradePick({
 
   const handleConfirm = async () => {
     if (isConfirmDisabled) {
+      console.log('[DowngradePick] Confirm disabled, cannot proceed');
       return;
     }
 
+    console.log('[DowngradePick] Confirming selection:', selectedBusinessIds);
     setSubmitting(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      if (!user) {
+        throw new Error('No user found');
+      }
 
+      console.log('[DowngradePick] Calling choose-businesses function...');
       const { data, error } = await supabase.functions.invoke('choose-businesses', {
         body: {
           userId: user.id,
@@ -144,7 +191,17 @@ export function DowngradePick({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[DowngradePick] Edge function error:', error);
+        throw error;
+      }
+
+      if (data?.error) {
+        console.error('[DowngradePick] Business selection error:', data.error);
+        throw new Error(data.error);
+      }
+
+      console.log('[DowngradePick] Business selection successful:', data);
 
       Alert.alert(
         'Success',
@@ -152,10 +209,11 @@ export function DowngradePick({
         [{ text: 'OK', onPress: onComplete }]
       );
     } catch (error: any) {
-      console.error('Error confirming business selection:', error);
+      console.error('[DowngradePick] Error confirming business selection:', error);
+      const errorMessage = error.message || error.error || 'Failed to update business selection. Please try again.';
       Alert.alert(
         'Error',
-        error.message || 'Failed to update business selection. Please try again.',
+        errorMessage,
         [{ text: 'OK' }]
       );
     } finally {
@@ -205,6 +263,40 @@ export function DowngradePick({
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
               Loading your businesses...
             </Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <AlertCircle size={48} color={colors.warning} />
+            <Text style={[styles.errorTitle, { color: colors.text }]}>
+              Failed to Load Businesses
+            </Text>
+            <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              onPress={handleRetry}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : businesses.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <AlertCircle size={48} color={colors.warning} />
+            <Text style={[styles.errorTitle, { color: colors.text }]}>
+              No Businesses Found
+            </Text>
+            <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+              We couldn't find any businesses for your account. Please try refreshing.
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              onPress={handleRetry}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Refresh</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
@@ -358,6 +450,34 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   businessList: {
     flex: 1,

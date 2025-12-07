@@ -211,6 +211,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     if (!user?.id) return;
 
     try {
+      console.log('[SubscriptionContext] Loading downgrade data for user:', user.id);
+
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('must_choose_businesses')
@@ -218,19 +220,37 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         .maybeSingle();
 
       const mustChoose = profile?.must_choose_businesses || false;
-      setMustChooseBusinesses(mustChoose);
+      console.log('[SubscriptionContext] must_choose_businesses flag:', mustChoose);
 
       if (mustChoose) {
+        console.log('[SubscriptionContext] Fetching owned businesses...');
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
+        console.log('[SubscriptionContext] Fetched businesses:', businesses.length);
+
+        if (businesses.length === 0) {
+          console.warn('[SubscriptionContext] No businesses found for user, but must_choose_businesses is true');
+        }
+
         setOwnedBusinesses(businesses);
 
         const readOnlyIds = businesses
           .filter((b: any) => b.access_state === 'read_only_sales')
           .map((b: any) => b.id);
         setReadOnlyBusinessIds(readOnlyIds);
+
+        console.log('[SubscriptionContext] Setting mustChooseBusinesses to true with', businesses.length, 'businesses');
+        setMustChooseBusinesses(true);
+      } else {
+        console.log('[SubscriptionContext] Clearing downgrade data');
+        setMustChooseBusinesses(false);
+        setOwnedBusinesses([]);
+        setReadOnlyBusinessIds([]);
       }
     } catch (error) {
-      console.error('Error loading downgrade data:', error);
+      console.error('[SubscriptionContext] Error loading downgrade data:', error);
+      setMustChooseBusinesses(false);
+      setOwnedBusinesses([]);
+      setReadOnlyBusinessIds([]);
     }
   }, [user?.id]);
 
@@ -433,9 +453,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
             oldMustChoose: oldProfile?.must_choose_businesses,
             newMustChoose: newProfile.must_choose_businesses,
             currentState: mustChooseBusinesses,
+            currentBusinessCount: ownedBusinesses.length,
             willCallLoadDowngrade: newProfile.must_choose_businesses !== mustChooseBusinesses
           });
           if (newProfile.must_choose_businesses !== mustChooseBusinesses) {
+            console.log('[Realtime] must_choose_businesses changed, reloading downgrade data');
             await loadDowngradeData();
           }
         }
@@ -748,7 +770,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         visible={isUnauthorizedModalVisible}
         onClose={hideUnauthorizedModal}
       />
-      {mustChooseBusinesses && (
+      {mustChooseBusinesses && ownedBusinesses.length > 0 && (
         <DowngradePick
           visible={mustChooseBusinesses}
           ownedBusinesses={ownedBusinesses}
