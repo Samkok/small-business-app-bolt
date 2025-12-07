@@ -163,7 +163,7 @@ export function DowngradePick({
     }
   };
 
-  const isConfirmDisabled = selectedBusinessIds.length <= tierLimit || submitting;
+  const isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting;
 
   return (
     <Modal
