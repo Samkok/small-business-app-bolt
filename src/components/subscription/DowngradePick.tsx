@@ -128,7 +128,7 @@ export function DowngradePick({
   };
 
   const handleConfirm = async () => {
-    if (selectedBusinessIds.length !== tierLimit) {
+    if (isConfirmDisabled) {
       return;
     }
 
