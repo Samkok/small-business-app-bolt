@@ -101,6 +101,13 @@ export const debugSubscription = {
 
       if (error) throw error;
 
+      const errorUpdate = await supabase
+        .from('user_profiles')
+        .update({ must_choose_businesses: true })
+        .eq('user_id', userId);
+
+      if (errorUpdate) throw errorUpdate;
+
       await subscriptionService.clearSubscriptionCache();
 
       console.log(`[DEBUG] Simulated subscription: ${status}, product: ${finalProductId}, tier: ${tier}`);
