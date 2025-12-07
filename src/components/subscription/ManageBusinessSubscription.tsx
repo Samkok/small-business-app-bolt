@@ -33,7 +33,7 @@ import { supabase } from '@/src/config/supabase';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.75;
+const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.9;
 
 interface Business {
   id: string;
