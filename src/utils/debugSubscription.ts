@@ -106,7 +106,7 @@ export const debugSubscription = {
         .update({ must_choose_businesses: true })
         .eq('user_id', userId);
 
-      if (errorUpdate) throw errorUpdate;
+      if (errorUpdate.error) throw errorUpdate;
 
       await subscriptionService.clearSubscriptionCache();
 
