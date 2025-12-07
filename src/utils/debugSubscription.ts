@@ -117,7 +117,7 @@ export const debugSubscription = {
       const { data: updatedProfile, error: updateError, count } = await supabase
         .from('user_profiles')
         .update({ must_choose_businesses: true })
-        .eq('user_id', userId)
+        .eq('user_id', authUser.user.id)
         .select();
 
       if (updateError) {
