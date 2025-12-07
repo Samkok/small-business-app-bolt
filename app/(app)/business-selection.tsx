@@ -59,7 +59,6 @@ export default function BusinessSelectionScreen() {
 
     if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses <= userBusinesses.length) {
       // Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
-      subscription.showPaywall();
       return;
     }
 
