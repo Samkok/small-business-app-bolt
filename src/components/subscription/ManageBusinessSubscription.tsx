@@ -390,16 +390,6 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
                   })}
                 </ScrollView>
 
-                <View style={[styles.infoNote, {
-                  backgroundColor: isDark ? '#111827' : '#f9fafb',
-                  borderLeftColor: isDark ? '#60a5fa' : '#3b82f6',
-                }]}>
-                  <Text style={[styles.infoNoteText, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                    <Text style={{ fontWeight: '600' }}>Active:</Text> Full access to create sales, expenses, and manage inventory.{'\n\n'}
-                    <Text style={{ fontWeight: '600' }}>Read Only:</Text> Can view data but cannot create new records.
-                  </Text>
-                </View>
-
                 <Button
                   title={saving ? 'Applying Changes...' : 'Apply Changes'}
                   onPress={handleApplyChanges}
