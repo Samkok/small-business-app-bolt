@@ -7,6 +7,8 @@ export interface Database {
           owner_user_id: string;
           business_name: string;
           business_image_url?: string;
+          access_state: 'active' | 'read_only_sales';
+          archived_at?: string;
           created_at: string;
           updated_at: string;
         };
@@ -15,6 +17,8 @@ export interface Database {
           owner_user_id: string;
           business_name: string;
           business_image_url?: string;
+          access_state?: 'active' | 'read_only_sales';
+          archived_at?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -23,6 +27,8 @@ export interface Database {
           owner_user_id?: string;
           business_name?: string;
           business_image_url?: string;
+          access_state?: 'active' | 'read_only_sales';
+          archived_at?: string;
           created_at?: string;
           updated_at?: string;
         };

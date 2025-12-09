@@ -20,16 +20,20 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw } from 'lucide-react-native';
+import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
+import { useSubscription } from '@/src/context/SubscriptionContext';
+import { ManageBusinessSubscription } from '@/src/components/subscription/ManageBusinessSubscription';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [newBusinessName, setNewBusinessName] = useState('');
   const [creatingBusiness, setCreatingBusiness] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
+  const subscription = useSubscription();
   const { isDark } = useTheme();
   const { userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses } = useAuth();
 
@@ -49,9 +53,18 @@ export default function BusinessSelectionScreen() {
     }
   };
 
+  const handleManageComplete = async () => {
+    await refreshUserBusinesses();
+  };
+
   const handleCreateBusiness = async () => {
     if (!newBusinessName.trim()) {
       Alert.alert('Error', 'Please enter a business name');
+      return;
+    }
+
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses <= userBusinesses.length) {
+      // Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
       return;
     }
 
@@ -109,6 +122,25 @@ export default function BusinessSelectionScreen() {
           <Text style={[styles.businessRole, { color: '#2563eb' }]}>
             Admin
           </Text>
+          <View style={[
+            styles.statusBadge,
+            {
+              backgroundColor: (item as any).access_state === 'active'
+                ? (isDark ? '#065f46' : '#d1fae5')
+                : (isDark ? '#78350f' : '#fef3c7')
+            }
+          ]}>
+            <Text style={[
+              styles.statusBadgeText,
+              {
+                color: (item as any).access_state === 'active'
+                  ? (isDark ? '#6ee7b7' : '#047857')
+                  : (isDark ? '#fbbf24' : '#92400e')
+              }
+            ]}>
+              {(item as any).access_state === 'active' ? 'Active' : 'Read Only'}
+            </Text>
+          </View>
         </View>
       </View>
       <View style={styles.businessArrow}>
@@ -182,6 +214,23 @@ export default function BusinessSelectionScreen() {
           onPress={() => setShowCreateBusinessModal(true)}
           style={styles.createButton}
         />
+        {userBusinesses.length > 1 && (
+          <TouchableOpacity
+            style={[
+              styles.manageButton,
+              {
+                backgroundColor: isDark ? '#374151' : '#f3f4f6',
+                borderColor: isDark ? '#4b5563' : '#d1d5db',
+              }
+            ]}
+            onPress={() => setShowManageModal(true)}
+          >
+            <Sliders size={16} color={isDark ? '#d1d5db' : '#6b7280'} />
+            <Text style={[styles.manageButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Manage Business Subscription
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={() => {
@@ -246,6 +295,13 @@ export default function BusinessSelectionScreen() {
           </Card>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Manage Business Subscription Modal */}
+      <ManageBusinessSubscription
+        visible={showManageModal}
+        onClose={() => setShowManageModal(false)}
+        onComplete={handleManageComplete}
+      />
     </View>
   );
 }
@@ -356,6 +412,17 @@ const styles = StyleSheet.create({
   businessRole: {
     fontSize: 12,
     fontWeight: '500',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -381,6 +448,21 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginBottom: 16,
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+    gap: 8,
+  },
+  manageButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   signOutButton: {
     flexDirection: 'row',

@@ -9,6 +9,13 @@ export interface DeletePreview {
   teamMembersCount: number;
 }
 
+export interface CreateBusinessResult {
+  allowed: boolean;
+  currentCount: number;
+  maxAllowed: number | null;
+  reason?: string;
+}
+
 export const businessService = {
   async checkBusinessOwnership(businessId: string, userId: string): Promise<boolean> {
     try {
@@ -112,14 +119,14 @@ export const businessService = {
     try {
       const { data: ownedBusinesses, error: ownedError } = await supabase
         .from('businesses')
-        .select('*')
+        .select('*, access_state')
         .eq('owner_user_id', userId);
 
       if (ownedError) throw ownedError;
 
       const { data: memberBusinesses, error: memberError } = await supabase
         .from('user_business_roles')
-        .select('business_id, businesses(*)')
+        .select('business_id, businesses(*, access_state)')
         .eq('user_id', userId);
 
       if (memberError) throw memberError;
@@ -136,6 +143,92 @@ export const businessService = {
       return uniqueBusinesses;
     } catch (error) {
       console.error('Error getting user businesses:', error);
+      return [];
+    }
+  },
+
+  async canUserCreateBusiness(userId: string): Promise<CreateBusinessResult> {
+    try {
+      const { data, error } = await supabase.rpc('can_user_create_business', {
+        p_user_id: userId
+      });
+
+      if (error) throw error;
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('subscription_tier, max_owned_businesses')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const { count: currentCount } = await supabase
+        .from('businesses')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_user_id', userId);
+
+      const maxAllowed = profile?.max_owned_businesses || 1;
+      const allowed = data === true;
+
+      return {
+        allowed,
+        currentCount: currentCount || 0,
+        maxAllowed,
+        reason: allowed ? undefined : `Your ${profile?.subscription_tier || 'free'} tier allows ${maxAllowed} business${maxAllowed === 1 ? '' : 'es'}. You currently own ${currentCount}.`
+      };
+    } catch (error) {
+      console.error('Error checking if user can create business:', error);
+      return {
+        allowed: false,
+        currentCount: 0,
+        maxAllowed: 1,
+        reason: 'Error checking business creation limit'
+      };
+    }
+  },
+
+  async getBusinessAccessState(businessId: string): Promise<'active' | 'read_only_sales'> {
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('access_state')
+        .eq('id', businessId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      return data?.access_state || 'active';
+    } catch (error) {
+      console.error('Error getting business access state:', error);
+      return 'active';
+    }
+  },
+
+  async getUserOwnedBusinessesWithState(userId: string) {
+    try {
+      console.log('[BusinessService] Fetching owned businesses for user:', userId);
+
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('id, business_name, created_at, access_state, business_image_url')
+        .eq('owner_user_id', userId);
+
+      if (error) {
+        console.error('[BusinessService] Error fetching businesses:', error);
+        throw error;
+      }
+
+      console.log('[BusinessService] Found', (data || []).length, 'businesses');
+
+      const businesses = (data || []).map(business => ({
+        ...business,
+        name: business.business_name
+      }));
+
+      console.log('[BusinessService] Returning businesses:', businesses.map(b => ({ id: b.id, name: b.name, access_state: b.access_state })));
+
+      return businesses;
+    } catch (error) {
+      console.error('[BusinessService] Error getting owned businesses with state:', error);
       return [];
     }
   }

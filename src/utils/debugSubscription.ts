@@ -101,6 +101,40 @@ export const debugSubscription = {
 
       if (error) throw error;
 
+      const { data: authUser } = await supabase.auth.getUser();
+      console.log(`[DEBUG] Updating user_profile for userId: ${userId}, authenticated as: ${authUser?.user?.id}`);
+
+      const { data: profileExists } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!profileExists) {
+        throw new Error(`User profile not found for userId: ${userId}. Please ensure the user profile exists.`);
+      }
+
+      const { data: updatedProfile, error: updateError, count } = await supabase
+        .from('user_profiles')
+        .update({ must_choose_businesses: true })
+        .eq('user_id', authUser.user.id)
+        .select();
+
+      if (updateError) {
+        console.error('[DEBUG] Update error:', updateError);
+        throw updateError;
+      }
+
+      if (!updatedProfile || updatedProfile.length === 0) {
+        throw new Error(
+          `Failed to update user_profiles: 0 rows affected. ` +
+          `This may be due to RLS policies blocking the update. ` +
+          `Authenticated user: ${authUser?.user?.id}, Target user: ${userId}`
+        );
+      }
+
+      console.log(`[DEBUG] Successfully updated user_profiles, rows affected: ${count || updatedProfile.length}`);
+
       await subscriptionService.clearSubscriptionCache();
 
       console.log(`[DEBUG] Simulated subscription: ${status}, product: ${finalProductId}, tier: ${tier}`);
@@ -116,17 +150,32 @@ export const debugSubscription = {
     }
 
     try {
-      await Promise.all([
+      const [salesResult, subscriptionsResult] = await Promise.all([
         supabase
           .from('user_sales_counts')
           .delete()
           .eq('user_id', userId)
-          .eq('business_id', businessId),
+          .eq('business_id', businessId)
+          .select(),
         supabase
           .from('user_subscriptions')
           .delete()
           .eq('user_id', userId)
+          .select()
       ]);
+
+      if (salesResult.error) {
+        console.error('[DEBUG] Error deleting sales counts:', salesResult.error);
+        throw salesResult.error;
+      }
+
+      if (subscriptionsResult.error) {
+        console.error('[DEBUG] Error deleting subscriptions:', subscriptionsResult.error);
+        throw subscriptionsResult.error;
+      }
+
+      console.log(`[DEBUG] Deleted ${salesResult.data?.length || 0} sales count records`);
+      console.log(`[DEBUG] Deleted ${subscriptionsResult.data?.length || 0} subscription records`);
 
       await subscriptionService.clearSubscriptionCache();
       await subscriptionService.clearSalesCountCache(businessId);

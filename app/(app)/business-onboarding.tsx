@@ -20,6 +20,7 @@ import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { storageService } from '@/src/services/storage';
 import { Building2, Briefcase, ArrowRight, LogOut, UserPlus, RefreshCw } from 'lucide-react-native';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 
 export default function BusinessOnboardingScreen() {
   const [businessName, setBusinessName] = useState('');
@@ -31,6 +32,7 @@ export default function BusinessOnboardingScreen() {
 
   const router = useRouter();
   const { t } = useTranslation();
+  const subscription = useSubscription();
   const { isDark } = useTheme();
   const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses } = useAuth();
   const hasRedirectedRef = useRef(false);
@@ -122,6 +124,12 @@ export default function BusinessOnboardingScreen() {
   const handleCreateBusiness = async () => {
     if (!businessName.trim()) {
       Alert.alert('Error', 'Please enter a business name');
+      return;
+    }
+
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses > userBusinesses.length) {
+      Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
+      subscription.showPaywall();
       return;
     }
 

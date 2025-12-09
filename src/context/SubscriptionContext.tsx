@@ -5,9 +5,11 @@ import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
+import { DowngradePick } from '@/src/components/subscription/DowngradePick';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { productIdMapper } from '@/src/utils/productIdMapper';
 import { iapService } from '@/src/services/iapService';
+import { businessService } from '@/src/services/business';
 
 const IOS_PRODUCT_IDS = [
   'bizmanage.pro.month',
@@ -47,6 +49,10 @@ interface SubscriptionContextType {
   tierInfo: TierInfo;
   ownedBusinessCount: number;
   isIAPAvailable: boolean;
+  mustChooseBusinesses: boolean;
+  ownedBusinesses: any[];
+  readOnlyBusinessIds: string[];
+  isBusinessReadOnly: (businessId: string) => boolean;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -97,9 +103,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [isUnauthorizedModalVisible, setIsUnauthorizedModalVisible] = useState(false);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
+  const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
+  const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
+  const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
+  const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -194,6 +204,53 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       setOwnedBusinessCount(ownedCount);
     } catch (error) {
       console.error('Error refreshing tier info:', error);
+    }
+  }, [user?.id]);
+
+  const loadDowngradeData = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      console.log('[SubscriptionContext] Loading downgrade data for user:', user.id);
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('must_choose_businesses')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const mustChoose = profile?.must_choose_businesses || false;
+      console.log('[SubscriptionContext] must_choose_businesses flag:', mustChoose);
+
+      if (mustChoose) {
+        console.log('[SubscriptionContext] Fetching owned businesses...');
+        const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
+        console.log('[SubscriptionContext] Fetched businesses:', businesses.length);
+
+        if (businesses.length === 0) {
+          console.warn('[SubscriptionContext] No businesses found for user, but must_choose_businesses is true');
+        }
+
+        setOwnedBusinesses(businesses);
+
+        const readOnlyIds = businesses
+          .filter((b: any) => b.access_state === 'read_only_sales')
+          .map((b: any) => b.id);
+        setReadOnlyBusinessIds(readOnlyIds);
+
+        console.log('[SubscriptionContext] Setting mustChooseBusinesses to true with', businesses.length, 'businesses');
+        setMustChooseBusinesses(true);
+      } else {
+        console.log('[SubscriptionContext] Clearing downgrade data');
+        setMustChooseBusinesses(false);
+        setOwnedBusinesses([]);
+        setReadOnlyBusinessIds([]);
+      }
+    } catch (error) {
+      console.error('[SubscriptionContext] Error loading downgrade data:', error);
+      setMustChooseBusinesses(false);
+      setOwnedBusinesses([]);
+      setReadOnlyBusinessIds([]);
     }
   }, [user?.id]);
 
@@ -365,6 +422,62 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
     salesCountChannelRef.current = channel;
   }, [user?.id, currentBusiness?.id, checkFeatureAccess, refreshSalesCount, refreshTierInfo]);
+
+  const setupUserProfileRealtime = useCallback(() => {
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    if (userProfileChannelRef.current) {
+      try {
+        userProfileChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
+      userProfileChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`user-profile-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          const oldProfile = payload.old as any;
+          const newProfile = payload.new as any;
+          console.log('[Realtime] User profile UPDATE received:', {
+            oldMustChoose: oldProfile?.must_choose_businesses,
+            newMustChoose: newProfile.must_choose_businesses,
+            currentState: mustChooseBusinesses,
+            currentBusinessCount: ownedBusinesses.length,
+            willCallLoadDowngrade: newProfile.must_choose_businesses !== mustChooseBusinesses
+          });
+          if (newProfile.must_choose_businesses !== mustChooseBusinesses) {
+            console.log('[Realtime] must_choose_businesses changed, reloading downgrade data');
+            await loadDowngradeData();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] User profile subscription status:', status);
+      });
+
+    userProfileChannelRef.current = channel;
+  }, [user?.id, mustChooseBusinesses, loadDowngradeData]);
+
+  const cleanupUserProfileRealtime = useCallback(() => {
+    if (userProfileChannelRef.current) {
+      try {
+        userProfileChannelRef.current.unsubscribe();
+      } catch (error) {
+      }
+      userProfileChannelRef.current = null;
+    }
+  }, []);
 
   const cleanupRealtimeSubscription = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -542,8 +655,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     if (user?.id) {
       refreshSubscriptionStatus();
       refreshTierInfo();
+      loadDowngradeData();
     }
-  }, [user?.id, refreshSubscriptionStatus, refreshTierInfo]);
+  }, [user?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData]);
 
   useEffect(() => {
     if (user?.id && currentBusiness?.id) {
@@ -572,6 +686,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         setTimeout(() => {
           if (isAppActiveRef.current) {
             setupRealtimeSubscription();
+            setupUserProfileRealtime();
             if (currentBusiness?.id) {
               setupSalesCountRealtime();
             }
@@ -580,6 +695,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       } else if (!isActive && wasActive) {
         cleanupRealtimeSubscription();
         cleanupSalesCountRealtime();
+        cleanupUserProfileRealtime();
       }
     };
 
@@ -588,11 +704,12 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       subscription.remove();
     };
-  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, refreshSalesCount, checkFeatureAccess, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, refreshSalesCount, checkFeatureAccess, setupRealtimeSubscription, setupUserProfileRealtime, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime, cleanupUserProfileRealtime]);
 
   useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
       setupRealtimeSubscription();
+      setupUserProfileRealtime();
 
       if (currentBusiness?.id) {
         setupSalesCountRealtime();
@@ -602,14 +719,19 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     return () => {
       cleanupRealtimeSubscription();
       cleanupSalesCountRealtime();
+      cleanupUserProfileRealtime();
     };
-  }, [user?.id, currentBusiness?.id, setupRealtimeSubscription, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime]);
+  }, [user?.id, currentBusiness?.id, setupRealtimeSubscription, setupUserProfileRealtime, setupSalesCountRealtime, cleanupRealtimeSubscription, cleanupSalesCountRealtime, cleanupUserProfileRealtime]);
 
   useEffect(() => {
     if (isInitialized) {
       setIsLoading(false);
     }
   }, [isInitialized]);
+
+  const isBusinessReadOnly = useCallback((businessId: string) => {
+    return readOnlyBusinessIds.includes(businessId);
+  }, [readOnlyBusinessIds]);
 
   const value: SubscriptionContextType = {
     isSubscribed,
@@ -622,6 +744,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     tierInfo,
     ownedBusinessCount,
     isIAPAvailable: iapService.isAvailable(),
+    mustChooseBusinesses,
+    ownedBusinesses,
+    readOnlyBusinessIds,
+    isBusinessReadOnly,
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,
@@ -644,6 +770,14 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         visible={isUnauthorizedModalVisible}
         onClose={hideUnauthorizedModal}
       />
+      {mustChooseBusinesses && ownedBusinesses.length > 0 && (
+        <DowngradePick
+          visible={mustChooseBusinesses}
+          ownedBusinesses={ownedBusinesses}
+          tierLimit={tierInfo.maxOwnedBusinesses || 1}
+          onComplete={loadDowngradeData}
+        />
+      )}
     </SubscriptionContext.Provider>
   );
 };

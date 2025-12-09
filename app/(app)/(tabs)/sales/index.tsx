@@ -877,28 +877,19 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      {salesCountData.isAtLimit && !canAccessFeature ? (
+      { subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
+        <WarningBanner
+          salesCount={salesCountData.salesCount}
+          remainingSales={salesCountData.remainingSales}
+          totalLimit={FREE_TIER_LIMIT}
+          onUpgrade={showPaywall}
+          onDismiss={handleDismissWarning}
+          dismissible={true}
+        />
+      ) : salesCountData.isAtLimit || !canAccessFeature ? (
         <ReadOnlyBanner
           salesCount={salesCountData.salesCount}
           onUpgrade={showPaywall}
-        />
-      ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
-        <WarningBanner
-          salesCount={salesCountData.salesCount}
-          remainingSales={salesCountData.remainingSales}
-          totalLimit={FREE_TIER_LIMIT}
-          onUpgrade={showPaywall}
-          onDismiss={handleDismissWarning}
-          dismissible={true}
-        />
-      ) : !salesCountData.isAtLimit && shouldShowWarningBanner() ? (
-        <WarningBanner
-          salesCount={salesCountData.salesCount}
-          remainingSales={salesCountData.remainingSales}
-          totalLimit={FREE_TIER_LIMIT}
-          onUpgrade={showPaywall}
-          onDismiss={handleDismissWarning}
-          dismissible={true}
         />
       ) : null}
       <View style={styles.header}>
@@ -910,12 +901,12 @@ export default function SalesScreen() {
             style={[
               styles.actionButton,
               {
-                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#f59e0b',
-                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
               }
             ]}
-            onPress={salesCountData.isAtLimit && !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
-            disabled={salesCountData.isAtLimit && !canAccessFeature}
+            onPress={salesCountData.isAtLimit || !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+            disabled={salesCountData.isAtLimit || !canAccessFeature}
           >
             <Zap size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -923,13 +914,13 @@ export default function SalesScreen() {
             style={[
               styles.actionButton,
               {
-                backgroundColor: salesCountData.isAtLimit && !canAccessFeature ? '#9ca3af' : '#2563eb',
+                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
                 marginLeft: 8,
-                opacity: salesCountData.isAtLimit && !canAccessFeature ? 0.5 : 1
+                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
               }
             ]}
             onPress={handleNewSale}
-            disabled={salesCountData.isAtLimit && !canAccessFeature}
+            disabled={salesCountData.isAtLimit || !canAccessFeature}
           >
             <Plus size={24} color="#ffffff" />
           </TouchableOpacity>

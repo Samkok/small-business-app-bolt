@@ -6,27 +6,55 @@ import { AlertCircle, X } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 
 interface ReadOnlyBannerProps {
-  salesCount: number;
+  salesCount?: number;
+  businessName?: string;
+  businessCount?: number;
   onUpgrade: () => void;
+  onSwitchBusiness?: () => void;
   onDismiss?: () => void;
   dismissible?: boolean;
+  showSelectBusinesses?: boolean;
+  variant?: 'sales_limit' | 'business_readonly';
 }
 
 export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   salesCount,
+  businessName,
+  businessCount,
   onUpgrade,
+  onSwitchBusiness,
   onDismiss,
-  dismissible = false
+  dismissible = false,
+  showSelectBusinesses = false,
+  variant = 'sales_limit'
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const getTitle = () => {
+    if (variant === 'business_readonly') {
+      return businessName
+        ? `'${businessName}' is in read-only mode`
+        : 'Business is in read-only mode';
+    }
+    return t('subscription.freeLimitReached');
+  };
+
+  const getMessage = () => {
+    if (variant === 'business_readonly') {
+      return 'You can view data and manage products, but cannot create sales transactions.';
+    }
+    return t('subscription.upgradeMessage');
+  };
 
   return (
     <View
       style={[
         styles.container,
         isDark && styles.containerDark,
+        variant === 'business_readonly' && styles.containerWarning,
+        variant === 'business_readonly' && isDark && styles.containerWarningDark,
         {
           paddingTop: Math.max(12, insets.top + 12),
           paddingLeft: Math.max(16, insets.left + 8),
@@ -35,24 +63,62 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
       ]}
     >
       <View style={styles.content}>
-        <AlertCircle size={20} color="#ef4444" />
+        <AlertCircle size={20} color={variant === 'business_readonly' ? '#f59e0b' : '#ef4444'} />
         <View style={styles.textContainer}>
-          <Text style={[styles.title, isDark && styles.titleDark]}>
-            {t('subscription.freeLimitReached')}
+          <Text style={[
+            styles.title,
+            isDark && styles.titleDark,
+            variant === 'business_readonly' && styles.titleWarning,
+            variant === 'business_readonly' && isDark && styles.titleWarningDark
+          ]}>
+            {getTitle()}
           </Text>
-          <Text style={[styles.message, isDark && styles.messageDark]}>
-            {t('subscription.upgradeMessage')}
+          <Text style={[
+            styles.message,
+            isDark && styles.messageDark,
+            variant === 'business_readonly' && styles.messageWarning,
+            variant === 'business_readonly' && isDark && styles.messageWarningDark
+          ]}>
+            {getMessage()}
           </Text>
         </View>
       </View>
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.upgradeButton, isDark && styles.upgradeButtonDark]}
-          onPress={onUpgrade}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
-        </TouchableOpacity>
+        {showSelectBusinesses ? (
+          <TouchableOpacity
+            style={[styles.upgradeButton, isDark && styles.upgradeButtonDark]}
+            onPress={onUpgrade}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.upgradeText}>Choose Active</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[
+                styles.upgradeButton,
+                isDark && styles.upgradeButtonDark,
+                variant === 'business_readonly' && styles.upgradeButtonWarning,
+                variant === 'business_readonly' && isDark && styles.upgradeButtonWarningDark
+              ]}
+              onPress={onUpgrade}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
+            </TouchableOpacity>
+            {variant === 'business_readonly' && onSwitchBusiness && (
+              <TouchableOpacity
+                style={[styles.secondaryButton, isDark && styles.secondaryButtonDark]}
+                onPress={onSwitchBusiness}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.secondaryButtonText, isDark && styles.secondaryButtonTextDark]}>
+                  Switch
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
         {dismissible && onDismiss && (
           <TouchableOpacity
             onPress={onDismiss}
@@ -82,6 +148,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#7f1d1d',
     borderBottomColor: '#991b1b',
   },
+  containerWarning: {
+    backgroundColor: '#fef3c7',
+    borderBottomColor: '#fde68a',
+  },
+  containerWarningDark: {
+    backgroundColor: '#78350f',
+    borderBottomColor: '#92400e',
+  },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -100,12 +174,24 @@ const styles = StyleSheet.create({
   titleDark: {
     color: '#fca5a5',
   },
+  titleWarning: {
+    color: '#92400e',
+  },
+  titleWarningDark: {
+    color: '#fbbf24',
+  },
   message: {
     fontSize: 12,
     color: '#7f1d1d',
   },
   messageDark: {
     color: '#fecaca',
+  },
+  messageWarning: {
+    color: '#78350f',
+  },
+  messageWarningDark: {
+    color: '#fde68a',
   },
   actions: {
     flexDirection: 'row',
@@ -125,10 +211,39 @@ const styles = StyleSheet.create({
   upgradeButtonDark: {
     backgroundColor: '#dc2626',
   },
+  upgradeButtonWarning: {
+    backgroundColor: '#f59e0b',
+  },
+  upgradeButtonWarningDark: {
+    backgroundColor: '#d97706',
+  },
   upgradeText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#92400e',
+    minHeight: 44,
+    minWidth: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryButtonDark: {
+    borderColor: '#fbbf24',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  secondaryButtonTextDark: {
+    color: '#fbbf24',
   },
   dismissButton: {
     padding: 12,
