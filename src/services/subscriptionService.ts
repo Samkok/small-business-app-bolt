@@ -1,10 +1,70 @@
 import { supabase } from '@/src/config/supabase';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { productIdMapper } from '@/src/utils/productIdMapper';
 
 export const FREE_TIER_LIMIT = 50;
 const CACHE_TTL_MS = 2 * 60 * 1000;
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000;
+
+function isNetworkError(error: any): boolean {
+  if (!error) return false;
+
+  const errorMessage = error.message?.toLowerCase() || '';
+  const errorCode = error.code?.toLowerCase() || '';
+
+  const networkIndicators = [
+    'network',
+    'fetch failed',
+    'failed to fetch',
+    'timeout',
+    'connection',
+    'offline',
+    'no internet',
+    'econnrefused',
+    'enotfound',
+    'etimedout',
+  ];
+
+  return networkIndicators.some(indicator =>
+    errorMessage.includes(indicator) || errorCode.includes(indicator)
+  );
+}
+
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  context: string,
+  retries = MAX_RETRIES
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      if (!isNetworkError(error) || attempt === retries - 1) {
+        throw error;
+      }
+
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+      console.log(`[SubscriptionService] Retry ${attempt + 1}/${retries} for ${context} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+}
+
+function showNetworkErrorAlert(context: string) {
+  Alert.alert(
+    'Connection Issue',
+    `Unable to ${context} due to a network problem. Please check your internet connection and try again.`,
+    [{ text: 'OK' }]
+  );
+}
 
 export type SubscriptionTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
@@ -60,33 +120,40 @@ const SUBSCRIPTION_CACHE_KEY = 'subscription_status';
 const SALES_COUNT_CACHE_KEY = 'sales_count_cache';
 
 export const subscriptionService = {
-  async getTierInfo(userId: string): Promise<TierInfo> {
+  async getTierInfo(userId: string, showErrorAlert = false): Promise<TierInfo> {
     try {
-      const { data, error } = await supabase
-        .rpc('get_user_subscription_tier', {
-          p_user_id: userId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_user_subscription_tier', {
+            p_user_id: userId
+          });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (!data || data.length === 0) {
+        if (!data || data.length === 0) {
+          return {
+            tier: 'free',
+            maxOwnedBusinesses: null,
+            subscriptionStatus: 'trial',
+            expirationDate: null
+          };
+        }
+
+        const tierData = data[0];
         return {
-          tier: 'free',
-          maxOwnedBusinesses: null,
-          subscriptionStatus: 'trial',
-          expirationDate: null
+          tier: tierData.tier as SubscriptionTier,
+          maxOwnedBusinesses: tierData.max_owned_businesses,
+          subscriptionStatus: tierData.subscription_status,
+          expirationDate: tierData.expiration_date
         };
-      }
-
-      const tierData = data[0];
-      return {
-        tier: tierData.tier as SubscriptionTier,
-        maxOwnedBusinesses: tierData.max_owned_businesses,
-        subscriptionStatus: tierData.subscription_status,
-        expirationDate: tierData.expiration_date
-      };
+      }, 'get tier info');
     } catch (error) {
       console.error('Error getting tier info:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('load subscription information');
+      }
+
       return {
         tier: 'free',
         maxOwnedBusinesses: null,
@@ -96,55 +163,77 @@ export const subscriptionService = {
     }
   },
 
-  async getTotalSalesCount(userId: string, businessId?: string): Promise<number> {
+  async getTotalSalesCount(userId: string, businessId?: string, showErrorAlert = false): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .rpc('get_user_total_sales_count', {
-          p_user_id: userId,
-          p_business_id: businessId || null
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_user_total_sales_count', {
+            p_user_id: userId,
+            p_business_id: businessId || null
+          });
 
-      if (error) throw error;
-      return data || 0;
+        if (error) throw error;
+        return data || 0;
+      }, 'get total sales count');
     } catch (error) {
       console.error('Error getting total sales count:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('load sales count');
+      }
+
       return 0;
     }
   },
 
-  async canCreateSale(userId: string, businessId: string): Promise<{
+  async canCreateSale(userId: string, businessId: string, showErrorAlert = false): Promise<{
     canCreate: boolean;
     reason: string | null;
     currentCount: number;
     limitReached: boolean;
   }> {
     try {
-      const { data, error } = await supabase
-        .rpc('can_user_create_sale', {
-          p_user_id: userId,
-          p_business_id: businessId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('can_user_create_sale', {
+            p_user_id: userId,
+            p_business_id: businessId
+          });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (!data || data.length === 0) {
+        if (!data || data.length === 0) {
+          return {
+            canCreate: false,
+            reason: 'UNKNOWN_ERROR',
+            currentCount: 0,
+            limitReached: false
+          };
+        }
+
+        const result = data[0];
+        return {
+          canCreate: result.can_create,
+          reason: result.reason,
+          currentCount: result.current_count,
+          limitReached: result.limit_reached
+        };
+      }, 'check if user can create sale');
+    } catch (error) {
+      console.error('Error checking if user can create sale:', error);
+
+      if (isNetworkError(error)) {
+        if (showErrorAlert) {
+          showNetworkErrorAlert('verify sales permissions');
+        }
         return {
           canCreate: false,
-          reason: 'UNKNOWN_ERROR',
+          reason: 'NETWORK_ERROR',
           currentCount: 0,
           limitReached: false
         };
       }
 
-      const result = data[0];
-      return {
-        canCreate: result.can_create,
-        reason: result.reason,
-        currentCount: result.current_count,
-        limitReached: result.limit_reached
-      };
-    } catch (error) {
-      console.error('Error checking if user can create sale:', error);
       return {
         canCreate: false,
         reason: 'ERROR',
@@ -154,48 +243,69 @@ export const subscriptionService = {
     }
   },
 
-  async getOwnedBusinessCount(userId: string): Promise<number> {
+  async getOwnedBusinessCount(userId: string, showErrorAlert = false): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .rpc('get_user_owned_business_count', {
-          p_user_id: userId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_user_owned_business_count', {
+            p_user_id: userId
+          });
 
-      if (error) throw error;
-      return data || 0;
+        if (error) throw error;
+        return data || 0;
+      }, 'get owned business count');
     } catch (error) {
       console.error('Error getting owned business count:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('load business count');
+      }
+
       return 0;
     }
   },
 
-  async canCreateBusiness(userId: string): Promise<boolean> {
+  async canCreateBusiness(userId: string, showErrorAlert = false): Promise<boolean> {
     try {
-      const { data, error } = await supabase
-        .rpc('can_user_create_business', {
-          p_user_id: userId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('can_user_create_business', {
+            p_user_id: userId
+          });
 
-      if (error) throw error;
-      return data || false;
+        if (error) throw error;
+        return data || false;
+      }, 'check if user can create business');
     } catch (error) {
       console.error('Error checking if user can create business:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('verify business creation permissions');
+      }
+
       return false;
     }
   },
 
-  async getSalesCount(userId: string, businessId: string): Promise<number> {
+  async getSalesCount(userId: string, businessId: string, showErrorAlert = false): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .rpc('get_or_create_sales_count', {
-          p_user_id: userId,
-          p_business_id: businessId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_or_create_sales_count', {
+            p_user_id: userId,
+            p_business_id: businessId
+          });
 
-      if (error) throw error;
-      return data || 0;
+        if (error) throw error;
+        return data || 0;
+      }, 'get sales count');
     } catch (error) {
       console.error('Error getting sales count:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('load sales count');
+      }
+
       return 0;
     }
   },
@@ -267,7 +377,7 @@ export const subscriptionService = {
     }
   },
 
-  async getSubscriptionStatus(userId: string, forceRefresh = false): Promise<SubscriptionStatus> {
+  async getSubscriptionStatus(userId: string, forceRefresh = false, showErrorAlert = false): Promise<SubscriptionStatus> {
     try {
       if (!forceRefresh) {
         const cachedData = await this.getCachedSubscriptionStatus();
@@ -280,7 +390,7 @@ export const subscriptionService = {
             const isExpiredClientSide = this.isSubscriptionExpired(status);
             if (isExpiredClientSide && status.isSubscribed) {
               console.log('[SubscriptionService] Cache indicates expired subscription, forcing refresh');
-              return await this.getSubscriptionStatus(userId, true);
+              return await this.getSubscriptionStatus(userId, true, showErrorAlert);
             }
             return status;
           }
@@ -288,34 +398,49 @@ export const subscriptionService = {
         }
       }
 
-      const { data, error } = await supabase
-        .rpc('get_subscription_status', {
-          p_user_id: userId
-        });
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_subscription_status', {
+            p_user_id: userId
+          });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (!data || data.length === 0) {
-        const defaultStatus: SubscriptionStatus = {
-          isSubscribed: false,
-          subscriptionStatus: 'trial',
+        if (!data || data.length === 0) {
+          const defaultStatus: SubscriptionStatus = {
+            isSubscribed: false,
+            subscriptionStatus: 'trial',
+          };
+          await this.cacheSubscriptionStatus(defaultStatus);
+          return defaultStatus;
+        }
+
+        const statusData = data[0];
+        const status: SubscriptionStatus = {
+          isSubscribed: statusData.is_subscribed,
+          subscriptionStatus: statusData.subscription_status as any,
+          productId: statusData.product_id,
+          expirationDate: statusData.expiration_date
         };
-        await this.cacheSubscriptionStatus(defaultStatus);
-        return defaultStatus;
-      }
 
-      const statusData = data[0];
-      const status: SubscriptionStatus = {
-        isSubscribed: statusData.is_subscribed,
-        subscriptionStatus: statusData.subscription_status as any,
-        productId: statusData.product_id,
-        expirationDate: statusData.expiration_date
-      };
-
-      await this.cacheSubscriptionStatus(status);
-      return status;
+        await this.cacheSubscriptionStatus(status);
+        return status;
+      }, 'get subscription status');
     } catch (error) {
       console.error('Error getting subscription status:', error);
+
+      if (isNetworkError(error)) {
+        if (showErrorAlert) {
+          showNetworkErrorAlert('load subscription status');
+        }
+
+        const cachedData = await this.getCachedSubscriptionStatus();
+        if (cachedData) {
+          console.log('[SubscriptionService] Using cached data due to network error');
+          return cachedData.status;
+        }
+      }
+
       return {
         isSubscribed: false,
         subscriptionStatus: 'trial',
@@ -397,25 +522,32 @@ export const subscriptionService = {
     }
   },
 
-  async canAccessFeature(userId: string, businessId: string, forceRefresh = false): Promise<boolean> {
+  async canAccessFeature(userId: string, businessId: string, forceRefresh = false, showErrorAlert = false): Promise<boolean> {
     try {
-      const result = await this.canCreateSale(userId, businessId);
-      
-      const { data: business, error } = await supabase
-        .from('businesses')
-        .select('access_state')
-        .eq('id', businessId)
-        .maybeSingle();
-      
-      if (error || !business) {
-        throw new Error('Business not found or query failed');
-      }
-      
-      const active = business.access_state !== 'read_only_sales';
-      
-      return result.canCreate && active;
+      return await retryWithBackoff(async () => {
+        const result = await this.canCreateSale(userId, businessId, false);
+
+        const { data: business, error } = await supabase
+          .from('businesses')
+          .select('access_state')
+          .eq('id', businessId)
+          .maybeSingle();
+
+        if (error || !business) {
+          throw new Error('Business not found or query failed');
+        }
+
+        const active = business.access_state !== 'read_only_sales';
+
+        return result.canCreate && active;
+      }, 'check feature access');
     } catch (error) {
       console.error('Error checking feature access:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('verify feature access');
+      }
+
       return false;
     }
   },
@@ -423,9 +555,14 @@ export const subscriptionService = {
   async validateFeatureAccessForCriticalOperation(userId: string, businessId: string): Promise<boolean> {
     try {
       await this.clearSubscriptionCache();
-      return await this.canAccessFeature(userId, businessId, true);
+      return await this.canAccessFeature(userId, businessId, true, true);
     } catch (error) {
       console.error('Error validating feature access for critical operation:', error);
+
+      if (isNetworkError(error)) {
+        showNetworkErrorAlert('validate permissions');
+      }
+
       return false;
     }
   },
