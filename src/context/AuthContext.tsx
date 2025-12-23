@@ -1579,15 +1579,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
-  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  // Helper function to compare business arrays by IDs and access_state to prevent unnecessary re-renders
   const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
     if (arr1.length !== arr2.length) return false;
-    
-    // Sort both arrays by ID and compare
-    const ids1 = arr1.map(b => b.id).sort();
-    const ids2 = arr2.map(b => b.id).sort();
-    
-    return ids1.every((id, index) => id === ids2[index]);
+
+    // Sort both arrays by ID
+    const sorted1 = [...arr1].sort((a, b) => a.id.localeCompare(b.id));
+    const sorted2 = [...arr2].sort((a, b) => a.id.localeCompare(b.id));
+
+    // Compare IDs and access_state
+    return sorted1.every((b1, index) => {
+      const b2 = sorted2[index];
+      return b1.id === b2.id && (b1 as any).access_state === (b2 as any).access_state;
+    });
   };
 
   const loadAuthData = async (userId: string) => {
@@ -1862,7 +1866,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('refreshUserBusinesses: Starting refresh for user:', user.id);
 
-      // Fetch the user's businesses
+      // Fetch the user's businesses (includes all columns including access_state)
       const { data: businessRoles, error: businessRolesError } = await supabase
         .from('user_business_roles')
         .select(`
@@ -1889,6 +1893,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         count: businesses.length,
         businessIds: businesses.map(b => b.id),
         businessNames: businesses.map(b => b.business_name),
+        accessStates: businesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
       });
 
       // Store roles in a map for quick lookup
@@ -1905,6 +1910,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Update businesses if changed
         const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
+        console.log('refreshUserBusinesses: Comparison result:', {
+          shouldUpdate: shouldUpdateBusinesses,
+          newCount: businesses.length,
+          oldCount: userBusinesses.length,
+          newAccessStates: businesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
+          oldAccessStates: userBusinesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
+        });
         if (shouldUpdateBusinesses) {
           setUserBusinesses(businesses);
           console.log('refreshUserBusinesses: Updated state with new businesses');
