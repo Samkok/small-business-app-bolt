@@ -296,6 +296,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, []);
 
+  // Helper function to check if error is an invalid/expired token error
+  const isInvalidTokenError = useCallback((error: any): boolean => {
+    if (!error) return false;
+
+    const errorMessage = error.message?.toLowerCase() || '';
+    const errorName = error.name?.toLowerCase() || '';
+
+    const invalidTokenIndicators = [
+      'invalid refresh token',
+      'refresh token not found',
+      'refresh token expired',
+      'jwt expired',
+      'invalid jwt',
+      'token has expired',
+      'authapieerror',
+    ];
+
+    return invalidTokenIndicators.some(indicator =>
+      errorMessage.includes(indicator) || errorName.includes(indicator)
+    );
+  }, []);
+
+  // Helper function to handle invalid token by clearing session
+  const handleInvalidToken = useCallback(async () => {
+    console.log('[Auth] Invalid token detected, clearing session and redirecting to sign in');
+
+    try {
+      // Clear all auth storage
+      await clearAuthStorage();
+
+      // Clear state
+      if (mounted.current) {
+        setSession(null);
+        setUser(null);
+        setUserProfile(null);
+        setUserBusinesses([]);
+        setCurrentBusiness(null);
+        setLoading(false);
+        setDataLoadingState('loaded');
+      }
+
+      // Sign out from Supabase (will trigger SIGNED_OUT event)
+      await supabase.auth.signOut({ scope: 'local' });
+
+      console.log('[Auth] Invalid token handling complete');
+    } catch (error) {
+      console.error('[Auth] Error handling invalid token:', error);
+    }
+  }, []);
+
   // Helper function to refresh session when it might be stale
   const refreshSessionIfNeeded = useCallback(async (): Promise<boolean> => {
     // Prevent multiple simultaneous refresh attempts
@@ -313,6 +363,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Session refresh failed:', error.message);
+
+        // Check if it's an invalid token error
+        if (isInvalidTokenError(error)) {
+          console.error('[Auth] Invalid refresh token detected, clearing session');
+          isRefreshingSessionRef.current = false;
+          await handleInvalidToken();
+          return false;
+        }
+
         isRefreshingSessionRef.current = false;
         return false;
       }
@@ -331,10 +390,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Unexpected error during session refresh:', error);
+
+      // Check if it's an invalid token error
+      if (isInvalidTokenError(error)) {
+        console.error('[Auth] Invalid refresh token detected in catch block, clearing session');
+        isRefreshingSessionRef.current = false;
+        await handleInvalidToken();
+        return false;
+      }
+
       isRefreshingSessionRef.current = false;
       return false;
     }
-  }, []);
+  }, [isInvalidTokenError, handleInvalidToken]);
 
   // Polling fallback function when realtime fails
   const startPollingFallback = useCallback(() => {
@@ -406,10 +474,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error.message?.includes('JWT') ||
             error.message?.includes('expired') ||
             error.message?.includes('Invalid API key') ||
-            error.code === 'PGRST301';
+            error.code === 'PGRST301' ||
+            isInvalidTokenError(error);
 
           if (isAuthError) {
-            console.log('Auth error detected, attempting session refresh...');
+            console.log('Auth error detected during polling');
+
+            // Check if it's specifically an invalid token error
+            if (isInvalidTokenError(error)) {
+              console.error('[Polling] Invalid refresh token detected, stopping polling and clearing session');
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+              }
+              await handleInvalidToken();
+              return;
+            }
+
+            console.log('Attempting session refresh...');
 
             // Attempt to refresh the session
             const refreshSuccess = await refreshSessionIfNeeded();
@@ -686,7 +768,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      // Check for invalid token errors on initial load
+      if (error) {
+        console.error('Initial getSession error:', error);
+        if (isInvalidTokenError(error)) {
+          console.log('[Auth] Invalid token on initial load, clearing session');
+          await handleInvalidToken();
+          if (mounted.current) {
+            setLoading(false);
+            setDataLoadingState('loaded');
+          }
+          return;
+        }
+      }
+
       // Check if session exists and if it's expired due to inactivity
       console.log('Initial getSession result:', session ? 'Session exists' : 'No session');
       if (session) {
@@ -707,6 +803,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           setDataLoadingState('loaded');
         }
+      }
+    }).catch(async (error) => {
+      console.error('Unexpected error in getSession:', error);
+      if (isInvalidTokenError(error)) {
+        console.log('[Auth] Invalid token error caught, clearing session');
+        await handleInvalidToken();
+      }
+      if (mounted.current) {
+        setLoading(false);
+        setDataLoadingState('loaded');
       }
     });
 
@@ -1473,15 +1579,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
-  // Helper function to compare business arrays by IDs to prevent unnecessary re-renders
+  // Helper function to compare business arrays by IDs and access_state to prevent unnecessary re-renders
   const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
     if (arr1.length !== arr2.length) return false;
-    
-    // Sort both arrays by ID and compare
-    const ids1 = arr1.map(b => b.id).sort();
-    const ids2 = arr2.map(b => b.id).sort();
-    
-    return ids1.every((id, index) => id === ids2[index]);
+
+    // Sort both arrays by ID
+    const sorted1 = [...arr1].sort((a, b) => a.id.localeCompare(b.id));
+    const sorted2 = [...arr2].sort((a, b) => a.id.localeCompare(b.id));
+
+    // Compare IDs and access_state
+    return sorted1.every((b1, index) => {
+      const b2 = sorted2[index];
+      return b1.id === b2.id && (b1 as any).access_state === (b2 as any).access_state;
+    });
   };
 
   const loadAuthData = async (userId: string) => {
@@ -1506,6 +1616,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log("Data return: ", data);
 
           if (error) {
+            // Check if it's an invalid token error - handle immediately
+            if (isInvalidTokenError(error)) {
+              console.error('[loadAuthData] Invalid refresh token detected, clearing session');
+              await handleInvalidToken();
+              if (mounted.current) {
+                setLoading(false);
+                setDataLoadingState('loaded');
+              }
+              return;
+            }
+
             // Store the error but don't throw yet (unless it's the last attempt)
             lastError = error;
 
@@ -1629,15 +1750,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (retryError) {
+          // Check if it's an invalid token error
+          if (isInvalidTokenError(retryError)) {
+            console.error('[loadAuthData] Invalid refresh token detected in catch, clearing session');
+            await handleInvalidToken();
+            if (mounted.current) {
+              setLoading(false);
+              setDataLoadingState('loaded');
+            }
+            return;
+          }
+
           // Store the error for the final attempt
           console.log("Retry Error: ", retryError);
           lastError = retryError;
-          
+
           // If this is the last attempt, we'll let it fall through to the error handling below
           if (attempt === MAX_RETRIES - 1) {
             break;
           }
-          
+
           // Otherwise, we'll continue to the next iteration (after the delay)
           const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
           await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -1658,6 +1790,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     } catch (error: any) {
       console.error('Error in loadAuthData:', error);
+
+      // Check if it's an invalid token error
+      if (isInvalidTokenError(error)) {
+        console.error('[loadAuthData] Invalid refresh token detected in outer catch, clearing session');
+        await handleInvalidToken();
+      }
+
       if (mounted.current) {
         setUserBusinesses([]);
         setCurrentBusiness(null);
@@ -1727,7 +1866,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('refreshUserBusinesses: Starting refresh for user:', user.id);
 
-      // Fetch the user's businesses
+      // Fetch the user's businesses (includes all columns including access_state)
       const { data: businessRoles, error: businessRolesError } = await supabase
         .from('user_business_roles')
         .select(`
@@ -1754,6 +1893,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         count: businesses.length,
         businessIds: businesses.map(b => b.id),
         businessNames: businesses.map(b => b.business_name),
+        accessStates: businesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
       });
 
       // Store roles in a map for quick lookup
@@ -1770,6 +1910,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Update businesses if changed
         const shouldUpdateBusinesses = !businessArraysEqual(businesses, userBusinesses);
+        console.log('refreshUserBusinesses: Comparison result:', {
+          shouldUpdate: shouldUpdateBusinesses,
+          newCount: businesses.length,
+          oldCount: userBusinesses.length,
+          newAccessStates: businesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
+          oldAccessStates: userBusinesses.map(b => ({ id: b.id, access_state: (b as any).access_state })),
+        });
         if (shouldUpdateBusinesses) {
           setUserBusinesses(businesses);
           console.log('refreshUserBusinesses: Updated state with new businesses');
