@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Platform, Alert, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { presentCustomerCenter, CustomerCenterResult } from 'react-native-purchases-ui';
 import { useTranslation } from 'react-i18next';
 import { Settings } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -9,13 +8,26 @@ interface CustomerCenterProps {
   onDismiss?: () => void;
 }
 
+let presentCustomerCenter: any = null;
+let CustomerCenterResult: any = null;
+
+try {
+  if (Platform.OS !== 'web') {
+    const purchasesUI = require('react-native-purchases-ui');
+    presentCustomerCenter = purchasesUI.presentCustomerCenter;
+    CustomerCenterResult = purchasesUI.CustomerCenterResult;
+  }
+} catch (error) {
+  console.log('[CustomerCenter] react-native-purchases-ui not available, feature disabled');
+}
+
 export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const [loading, setLoading] = useState(false);
 
   const handleOpenCustomerCenter = async () => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !presentCustomerCenter) {
       Alert.alert(
         t('subscription.customerCenter.unavailable'),
         t('subscription.customerCenter.webMessage'),
@@ -28,7 +40,7 @@ export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss 
       setLoading(true);
       console.log('[CustomerCenter] Opening customer center...');
 
-      const result: CustomerCenterResult = await presentCustomerCenter();
+      const result = await presentCustomerCenter();
 
       console.log('[CustomerCenter] Result:', result);
 
@@ -64,7 +76,7 @@ export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss 
     }
   };
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !presentCustomerCenter) {
     return null;
   }
 

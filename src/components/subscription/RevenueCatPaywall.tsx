@@ -1,10 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, Alert } from 'react-native';
-import {
-  presentPaywall,
-  presentPaywallIfNeeded,
-  PaywallResult,
-} from 'react-native-purchases-ui';
 import { useTranslation } from 'react-i18next';
 import { revenueCatService } from '@/src/services/revenueCatService';
 import { Paywall as CustomPaywall } from './Paywall';
@@ -16,6 +11,19 @@ interface RevenueCatPaywallProps {
   requiredEntitlementIdentifier?: string;
   onPurchaseSuccess?: () => void;
   onPurchaseError?: (error: Error) => void;
+}
+
+let presentPaywall: any = null;
+let PaywallResult: any = null;
+
+try {
+  if (Platform.OS !== 'web') {
+    const purchasesUI = require('react-native-purchases-ui');
+    presentPaywall = purchasesUI.presentPaywall;
+    PaywallResult = purchasesUI.PaywallResult;
+  }
+} catch (error) {
+  console.log('[RevenueCatPaywall] react-native-purchases-ui not available, using custom paywall');
 }
 
 export const RevenueCatPaywall: React.FC<RevenueCatPaywallProps> = ({
@@ -30,20 +38,20 @@ export const RevenueCatPaywall: React.FC<RevenueCatPaywallProps> = ({
   const [showingNativePaywall, setShowingNativePaywall] = useState(false);
 
   useEffect(() => {
-    if (visible && !showingNativePaywall && Platform.OS !== 'web') {
+    if (visible && !showingNativePaywall && Platform.OS !== 'web' && presentPaywall) {
       handleShowPaywall();
     }
   }, [visible]);
 
   const handleShowPaywall = async () => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !presentPaywall) {
       return;
     }
 
     try {
       setShowingNativePaywall(true);
 
-      const result: PaywallResult = await presentPaywall({
+      const result = await presentPaywall({
         requiredEntitlementIdentifier,
       });
 
@@ -96,7 +104,7 @@ export const RevenueCatPaywall: React.FC<RevenueCatPaywallProps> = ({
     }
   };
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !presentPaywall) {
     return (
       <CustomPaywall
         visible={visible}
