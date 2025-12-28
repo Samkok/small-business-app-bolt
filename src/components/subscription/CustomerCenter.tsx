@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Platform, Alert, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { Platform, Alert, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Settings } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -8,75 +8,19 @@ interface CustomerCenterProps {
   onDismiss?: () => void;
 }
 
-let presentCustomerCenter: any = null;
-let CustomerCenterResult: any = null;
-
-try {
-  if (Platform.OS !== 'web') {
-    const purchasesUI = require('react-native-purchases-ui');
-    presentCustomerCenter = purchasesUI.presentCustomerCenter;
-    CustomerCenterResult = purchasesUI.CustomerCenterResult;
-  }
-} catch (error) {
-  console.log('[CustomerCenter] react-native-purchases-ui not available, feature disabled');
-}
-
 export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const [loading, setLoading] = useState(false);
 
-  const handleOpenCustomerCenter = async () => {
-    if (Platform.OS === 'web' || !presentCustomerCenter) {
-      Alert.alert(
-        t('subscription.customerCenter.unavailable'),
-        t('subscription.customerCenter.webMessage'),
-        [{ text: t('common.ok') }]
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-      console.log('[CustomerCenter] Opening customer center...');
-
-      const result = await presentCustomerCenter();
-
-      console.log('[CustomerCenter] Result:', result);
-
-      switch (result) {
-        case CustomerCenterResult.RESTORED:
-          Alert.alert(
-            t('subscription.alerts.restoreSuccessTitle'),
-            t('subscription.alerts.restoreSuccessMessage'),
-            [{ text: t('common.ok') }]
-          );
-          break;
-
-        case CustomerCenterResult.ERROR:
-          console.error('[CustomerCenter] Error occurred');
-          Alert.alert(
-            t('common.error'),
-            t('subscription.customerCenter.errorMessage'),
-            [{ text: t('common.ok') }]
-          );
-          break;
-      }
-
-      onDismiss?.();
-    } catch (error) {
-      console.error('[CustomerCenter] Error opening customer center:', error);
-      Alert.alert(
-        t('common.error'),
-        t('subscription.customerCenter.errorMessage'),
-        [{ text: t('common.ok') }]
-      );
-    } finally {
-      setLoading(false);
-    }
+  const handleOpenCustomerCenter = () => {
+    Alert.alert(
+      t('subscription.customerCenter.unavailable'),
+      'Customer Center requires a development build. Run: npx expo prebuild',
+      [{ text: t('common.ok') }]
+    );
   };
 
-  if (Platform.OS === 'web' || !presentCustomerCenter) {
+  if (Platform.OS === 'web') {
     return null;
   }
 
@@ -84,18 +28,11 @@ export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss 
     <TouchableOpacity
       style={[styles.button, isDark && styles.buttonDark]}
       onPress={handleOpenCustomerCenter}
-      disabled={loading}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={isDark ? '#60a5fa' : '#3b82f6'} />
-      ) : (
-        <>
-          <Settings size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
-          <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>
-            {t('subscription.customerCenter.title')}
-          </Text>
-        </>
-      )}
+      <Settings size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+      <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>
+        {t('subscription.customerCenter.title')}
+      </Text>
     </TouchableOpacity>
   );
 };

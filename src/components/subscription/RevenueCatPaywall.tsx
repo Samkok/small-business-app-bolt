@@ -1,7 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { Platform, Alert } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { revenueCatService } from '@/src/services/revenueCatService';
+import React from 'react';
 import { Paywall as CustomPaywall } from './Paywall';
 
 interface RevenueCatPaywallProps {
@@ -13,19 +10,6 @@ interface RevenueCatPaywallProps {
   onPurchaseError?: (error: Error) => void;
 }
 
-let presentPaywall: any = null;
-let PaywallResult: any = null;
-
-try {
-  if (Platform.OS !== 'web') {
-    const purchasesUI = require('react-native-purchases-ui');
-    presentPaywall = purchasesUI.presentPaywall;
-    PaywallResult = purchasesUI.PaywallResult;
-  }
-} catch (error) {
-  console.log('[RevenueCatPaywall] react-native-purchases-ui not available, using custom paywall');
-}
-
 export const RevenueCatPaywall: React.FC<RevenueCatPaywallProps> = ({
   visible,
   onClose,
@@ -34,85 +18,11 @@ export const RevenueCatPaywall: React.FC<RevenueCatPaywallProps> = ({
   onPurchaseSuccess,
   onPurchaseError,
 }) => {
-  const { t } = useTranslation();
-  const [showingNativePaywall, setShowingNativePaywall] = useState(false);
-
-  useEffect(() => {
-    if (visible && !showingNativePaywall && Platform.OS !== 'web' && presentPaywall) {
-      handleShowPaywall();
-    }
-  }, [visible]);
-
-  const handleShowPaywall = async () => {
-    if (Platform.OS === 'web' || !presentPaywall) {
-      return;
-    }
-
-    try {
-      setShowingNativePaywall(true);
-
-      const result = await presentPaywall({
-        requiredEntitlementIdentifier,
-      });
-
-      console.log('[RevenueCatPaywall] Paywall result:', result);
-
-      switch (result) {
-        case PaywallResult.PURCHASED:
-        case PaywallResult.RESTORED:
-          Alert.alert(
-            t('subscription.alerts.purchaseSuccessTitle'),
-            t('subscription.alerts.purchaseSuccessMessage'),
-            [
-              {
-                text: t('common.done'),
-                onPress: () => {
-                  onPurchaseSuccess?.();
-                  onClose();
-                },
-              },
-            ]
-          );
-          break;
-
-        case PaywallResult.CANCELLED:
-          console.log('[RevenueCatPaywall] User cancelled paywall');
-          onClose();
-          break;
-
-        case PaywallResult.ERROR:
-          console.error('[RevenueCatPaywall] Paywall error');
-          Alert.alert(
-            t('subscription.alerts.purchaseErrorTitle'),
-            t('subscription.alerts.purchaseErrorMessage'),
-            [{ text: t('common.ok') }]
-          );
-          onClose();
-          break;
-
-        case PaywallResult.NOT_PRESENTED:
-          console.log('[RevenueCatPaywall] Paywall not presented');
-          onClose();
-          break;
-      }
-    } catch (error) {
-      console.error('[RevenueCatPaywall] Error showing paywall:', error);
-      onPurchaseError?.(error as Error);
-      onClose();
-    } finally {
-      setShowingNativePaywall(false);
-    }
-  };
-
-  if (Platform.OS === 'web' || !presentPaywall) {
-    return (
-      <CustomPaywall
-        visible={visible}
-        onClose={onClose}
-        canClose={canClose}
-      />
-    );
-  }
-
-  return null;
+  return (
+    <CustomPaywall
+      visible={visible}
+      onClose={onClose}
+      canClose={canClose}
+    />
+  );
 };
