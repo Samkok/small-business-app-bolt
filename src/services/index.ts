@@ -13,3 +13,4 @@ export { batchImportService } from './batchImport';
 export { productTransactionService } from './productTransactions';
 export { subscriptionService } from './subscriptionService';
 export { iapService } from './iapService';
+export { revenueCatService } from './revenueCatService';
