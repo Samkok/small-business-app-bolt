@@ -95,6 +95,7 @@ export interface SubscriptionStatus {
   platform?: 'ios' | 'android' | 'web';
   tier?: SubscriptionTier;
   maxOwnedBusinesses?: number;
+  revenueCatAppUserId?: string;
 }
 
 export interface SalesCountData {
@@ -420,7 +421,8 @@ export const subscriptionService = {
           isSubscribed: statusData.is_subscribed,
           subscriptionStatus: statusData.subscription_status as any,
           productId: statusData.product_id,
-          expirationDate: statusData.expiration_date
+          expirationDate: statusData.expiration_date,
+          revenueCatAppUserId: statusData.revenuecat_app_user_id
         };
 
         await this.cacheSubscriptionStatus(status);

@@ -95,8 +95,9 @@ Deno.serve(async (req: Request) => {
             subscription_product_id: event.product_id,
             subscription_expiration_date: expirationDate,
             platform: event.store === 'app_store' ? 'ios' : 'android',
-            subscription_tier: tier,
+            tier: tier,
             max_owned_businesses: maxBusinesses,
+            revenuecat_app_user_id: event.original_app_user_id,
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'user_id',
@@ -117,7 +118,7 @@ Deno.serve(async (req: Request) => {
           .from('user_subscriptions')
           .update({
             subscription_status: event.type === 'CANCELLATION' ? 'cancelled' : 'expired',
-            subscription_tier: 'free',
+            tier: 'free',
             max_owned_businesses: null,
             updated_at: new Date().toISOString(),
           })

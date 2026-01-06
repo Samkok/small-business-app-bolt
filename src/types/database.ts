@@ -623,6 +623,11 @@ export interface Database {
           receipt_data?: string;
           last_validated_at?: string;
           platform?: 'ios' | 'android' | 'web';
+          tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          max_owned_businesses?: number;
+          selected_business_ids?: string[];
+          previous_tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          revenuecat_app_user_id?: string;
           created_at: string;
           updated_at: string;
         };
@@ -636,6 +641,11 @@ export interface Database {
           receipt_data?: string;
           last_validated_at?: string;
           platform?: 'ios' | 'android' | 'web';
+          tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          max_owned_businesses?: number;
+          selected_business_ids?: string[];
+          previous_tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          revenuecat_app_user_id?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -649,6 +659,11 @@ export interface Database {
           receipt_data?: string;
           last_validated_at?: string;
           platform?: 'ios' | 'android' | 'web';
+          tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          max_owned_businesses?: number;
+          selected_business_ids?: string[];
+          previous_tier?: 'free' | 'pro' | 'pro_plus' | 'max';
+          revenuecat_app_user_id?: string;
           created_at?: string;
           updated_at?: string;
         };
