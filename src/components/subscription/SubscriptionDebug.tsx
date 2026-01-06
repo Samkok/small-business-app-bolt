@@ -24,7 +24,7 @@ interface SubscriptionDebugProps {
 
 export function SubscriptionDebug({ visible, onClose }: SubscriptionDebugProps) {
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, currentBusiness } = useAuth();
   const subscription = useSubscription();
 
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,7 @@ export function SubscriptionDebug({ visible, onClose }: SubscriptionDebugProps) 
         supabase
           .from('sales')
           .select('id', { count: 'exact', head: true })
-          .eq('business_id', subscription.currentBusiness?.id || '')
+          .eq('business_id', currentBusiness?.id || '')
           .eq('is_voided', false)
       ]);
 
