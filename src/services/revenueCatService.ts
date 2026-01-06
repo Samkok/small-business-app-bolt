@@ -38,12 +38,20 @@ try {
     Purchases = purchasesModule.default;
     LOG_LEVEL = purchasesModule.LOG_LEVEL;
     PURCHASES_ERROR_CODE = purchasesModule.PURCHASES_ERROR_CODE;
-    isNativeModuleAvailable = true;
-    console.log('[RevenueCat] Native module loaded successfully');
+
+    if (Purchases && typeof Purchases.configure === 'function') {
+      isNativeModuleAvailable = true;
+      console.log('[RevenueCat] Native module loaded successfully');
+    } else {
+      console.log('[RevenueCat] Native module loaded but not functional');
+      isNativeModuleAvailable = false;
+      Purchases = null;
+    }
   }
 } catch (error) {
   console.log('[RevenueCat] Native module not available - running in Expo Go or web');
   isNativeModuleAvailable = false;
+  Purchases = null;
 }
 
 const emptyCustomerInfo = {
@@ -104,6 +112,10 @@ class RevenueCatService {
       this.initializing = true;
       console.log('[RevenueCat] Configuring SDK...');
 
+      if (!Purchases || typeof Purchases.configure !== 'function') {
+        throw new Error('Purchases module not available');
+      }
+
       Purchases.configure({
         apiKey: REVENUECAT_API_KEY,
         appUserID: userId,
@@ -145,7 +157,7 @@ class RevenueCatService {
   }
 
   async setUserId(userId: string): Promise<void> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return;
 
     try {
       console.log('[RevenueCat] Setting user ID:', userId);
@@ -158,7 +170,7 @@ class RevenueCatService {
   }
 
   async logOut(): Promise<void> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return;
 
     try {
       console.log('[RevenueCat] Logging out user');
@@ -171,7 +183,7 @@ class RevenueCatService {
   }
 
   async getOfferings(): Promise<any | null> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       console.log('[RevenueCat] Offerings not available - native module not loaded');
       return null;
     }
@@ -203,7 +215,7 @@ class RevenueCatService {
   }
 
   async getCustomerInfo(): Promise<any> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       return emptyCustomerInfo;
     }
 
@@ -217,7 +229,7 @@ class RevenueCatService {
   }
 
   async purchasePackage(pkg: any): Promise<{ customerInfo: any; cancelled: boolean }> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       throw new Error('Purchases not available - native module not loaded');
     }
 
@@ -240,7 +252,7 @@ class RevenueCatService {
   }
 
   async restorePurchases(): Promise<any> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       throw new Error('Restore not available - native module not loaded');
     }
 
@@ -256,7 +268,7 @@ class RevenueCatService {
   }
 
   async getActiveEntitlements(): Promise<RevenueCatEntitlement[]> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return [];
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return [];
 
     try {
       const customerInfo = await this.getCustomerInfo();
@@ -279,7 +291,7 @@ class RevenueCatService {
   }
 
   async hasEntitlement(entitlementId: string): Promise<boolean> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return false;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return false;
 
     try {
       const customerInfo = await this.getCustomerInfo();
@@ -293,7 +305,7 @@ class RevenueCatService {
   }
 
   async getCurrentTier(): Promise<RevenueCatTier> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return 'free';
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return 'free';
 
     try {
       const customerInfo = await this.getCustomerInfo();
@@ -333,7 +345,7 @@ class RevenueCatService {
   }
 
   async setAttributes(attributes: Record<string, string | null>): Promise<void> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return;
 
     try {
       console.log('[RevenueCat] Setting attributes:', attributes);

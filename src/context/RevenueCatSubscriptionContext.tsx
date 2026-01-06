@@ -223,8 +223,6 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           subscription_product_id: activeEntitlement?.productIdentifier || null,
           subscription_expiration_date: expirationDate || null,
           platform: Platform.OS === 'ios' ? 'ios' : 'android',
-          subscription_tier: tier,
-          max_owned_businesses: maxBusinesses,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
