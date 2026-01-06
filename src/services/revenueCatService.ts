@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const REVENUECAT_API_KEY = 'test_fkrdKDZMZCmmDvjIvjAjVnSaROY';
+const REVENUECAT_API_KEY = (Constants.expoConfig?.extra?.revenueCatApiKey || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'test_fkrdKDZMZCmmDvjIvjAjVnSaROY') as string;
 
 export type RevenueCatTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
@@ -33,6 +34,15 @@ let PURCHASES_ERROR_CODE: any = null;
 let isNativeModuleAvailable = false;
 
 console.log('[RevenueCat Module Loading] Platform:', Platform.OS);
+console.log('[RevenueCat Module Loading] App Owner:', Constants.expoConfig?.owner);
+console.log('[RevenueCat Module Loading] Execution Environment:', Constants.executionEnvironment);
+console.log('[RevenueCat Module Loading] Is Device:', Constants.isDevice);
+
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+if (isExpoGo) {
+  console.warn('[RevenueCat] ⚠️ Running in Expo Go! RevenueCat requires a development build.');
+  console.warn('[RevenueCat] ⚠️ Run `npx expo prebuild` and build with EAS or locally to use RevenueCat.');
+}
 
 try {
   if (Platform.OS !== 'web') {
@@ -49,9 +59,9 @@ try {
 
     if (Purchases && typeof Purchases.configure === 'function') {
       isNativeModuleAvailable = true;
-      console.log('[RevenueCat] Native module loaded successfully and functional');
+      console.log('[RevenueCat] ✅ Native module loaded successfully and functional');
     } else {
-      console.log('[RevenueCat] Native module loaded but not functional');
+      console.log('[RevenueCat] ❌ Native module loaded but not functional');
       isNativeModuleAvailable = false;
       Purchases = null;
     }
@@ -59,8 +69,12 @@ try {
     console.log('[RevenueCat Module Loading] Skipping load - running on web');
   }
 } catch (error) {
-  console.error('[RevenueCat] Failed to load native module:', error);
-  console.log('[RevenueCat] Native module not available - running in Expo Go or web');
+  console.error('[RevenueCat] ❌ Failed to load native module:', error);
+  if (isExpoGo) {
+    console.log('[RevenueCat] This is expected in Expo Go - create a development build to use RevenueCat');
+  } else {
+    console.log('[RevenueCat] Native module not available');
+  }
   isNativeModuleAvailable = false;
   Purchases = null;
 }
