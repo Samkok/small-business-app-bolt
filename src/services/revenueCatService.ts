@@ -32,23 +32,34 @@ let LOG_LEVEL: any = null;
 let PURCHASES_ERROR_CODE: any = null;
 let isNativeModuleAvailable = false;
 
+console.log('[RevenueCat Module Loading] Platform:', Platform.OS);
+
 try {
   if (Platform.OS !== 'web') {
+    console.log('[RevenueCat Module Loading] Attempting to load react-native-purchases...');
     const purchasesModule = require('react-native-purchases');
+    console.log('[RevenueCat Module Loading] Module required successfully');
+
     Purchases = purchasesModule.default;
     LOG_LEVEL = purchasesModule.LOG_LEVEL;
     PURCHASES_ERROR_CODE = purchasesModule.PURCHASES_ERROR_CODE;
 
+    console.log('[RevenueCat Module Loading] Purchases exists:', !!Purchases);
+    console.log('[RevenueCat Module Loading] configure function exists:', typeof Purchases?.configure);
+
     if (Purchases && typeof Purchases.configure === 'function') {
       isNativeModuleAvailable = true;
-      console.log('[RevenueCat] Native module loaded successfully');
+      console.log('[RevenueCat] Native module loaded successfully and functional');
     } else {
       console.log('[RevenueCat] Native module loaded but not functional');
       isNativeModuleAvailable = false;
       Purchases = null;
     }
+  } else {
+    console.log('[RevenueCat Module Loading] Skipping load - running on web');
   }
 } catch (error) {
+  console.error('[RevenueCat] Failed to load native module:', error);
   console.log('[RevenueCat] Native module not available - running in Expo Go or web');
   isNativeModuleAvailable = false;
   Purchases = null;
@@ -89,7 +100,17 @@ class RevenueCatService {
   }
 
   async configure(userId?: string): Promise<void> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+    console.log('[RevenueCat configure] Called with userId:', userId);
+    console.log('[RevenueCat configure] Platform:', Platform.OS);
+    console.log('[RevenueCat configure] isNativeModuleAvailable:', isNativeModuleAvailable);
+    console.log('[RevenueCat configure] configured:', this.configured);
+
+    if (Platform.OS === 'web') {
+      console.log('[RevenueCat] Skipping configuration - running on web');
+      return;
+    }
+
+    if (!isNativeModuleAvailable) {
       console.log('[RevenueCat] Skipping configuration - native module not available');
       return;
     }
@@ -97,6 +118,7 @@ class RevenueCatService {
     if (this.configured) {
       console.log('[RevenueCat] Already configured');
       if (userId) {
+        console.log('[RevenueCat] Setting user ID for already configured SDK');
         await this.setUserId(userId);
       }
       return;
@@ -111,27 +133,37 @@ class RevenueCatService {
     try {
       this.initializing = true;
       console.log('[RevenueCat] Configuring SDK...');
+      console.log('[RevenueCat] API Key:', REVENUECAT_API_KEY?.substring(0, 10) + '...');
 
-      if (!Purchases || typeof Purchases.configure !== 'function') {
-        throw new Error('Purchases module not available');
+      if (!Purchases) {
+        throw new Error('Purchases module is null');
       }
 
+      if (typeof Purchases.configure !== 'function') {
+        throw new Error('Purchases.configure is not a function');
+      }
+
+      console.log('[RevenueCat] Calling Purchases.configure...');
       Purchases.configure({
         apiKey: REVENUECAT_API_KEY,
         appUserID: userId,
       });
+      console.log('[RevenueCat] Purchases.configure completed');
 
       this.configured = true;
       console.log('[RevenueCat] SDK configured successfully');
 
       try {
+        console.log('[RevenueCat] Fetching initial customer info...');
         const customerInfo = await Purchases.getCustomerInfo();
         console.log('[RevenueCat] Customer info:', {
           activeEntitlements: Object.keys(customerInfo.entitlements.active),
           activeSubscriptions: customerInfo.activeSubscriptions,
+          originalAppUserId: customerInfo.originalAppUserId,
         });
       } catch (infoError) {
-        console.log('[RevenueCat] Could not fetch initial customer info - this is normal for new users or unconfigured products');
+        console.log('[RevenueCat] Could not fetch initial customer info:', infoError);
+        console.log('[RevenueCat] This is normal for new users or unconfigured products');
       }
     } catch (error) {
       console.error('[RevenueCat] Configuration error:', error);
@@ -139,6 +171,7 @@ class RevenueCatService {
       console.log('[RevenueCat] SDK marked as configured despite error - continuing with degraded functionality');
     } finally {
       this.initializing = false;
+      console.log('[RevenueCat] Configuration process complete');
     }
   }
 
@@ -183,14 +216,36 @@ class RevenueCatService {
   }
 
   async getOfferings(): Promise<any | null> {
-    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
-      console.log('[RevenueCat] Offerings not available - native module not loaded');
+    console.log('[RevenueCat getOfferings] Called');
+    console.log('[RevenueCat getOfferings] Platform:', Platform.OS);
+    console.log('[RevenueCat getOfferings] isNativeModuleAvailable:', isNativeModuleAvailable);
+    console.log('[RevenueCat getOfferings] Purchases exists:', !!Purchases);
+    console.log('[RevenueCat getOfferings] configured:', this.configured);
+
+    if (Platform.OS === 'web') {
+      console.log('[RevenueCat] Offerings not available - running on web');
       return null;
     }
 
+    if (!isNativeModuleAvailable) {
+      console.log('[RevenueCat] Offerings not available - native module not available');
+      return null;
+    }
+
+    if (!Purchases) {
+      console.log('[RevenueCat] Offerings not available - Purchases is null');
+      return null;
+    }
+
+    if (!this.configured) {
+      console.log('[RevenueCat] SDK not configured yet, attempting to configure...');
+      await this.configure();
+    }
+
     try {
-      console.log('[RevenueCat] Fetching offerings...');
+      console.log('[RevenueCat] Fetching offerings from RevenueCat API...');
       const offerings = await Purchases.getOfferings();
+      console.log('[RevenueCat] Offerings fetch completed');
 
       if (offerings.current) {
         console.log('[RevenueCat] Current offering:', offerings.current.identifier);

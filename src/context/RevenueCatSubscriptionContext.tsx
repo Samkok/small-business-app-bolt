@@ -16,12 +16,19 @@ let isRevenueCatAvailable = false;
 try {
   if (Platform.OS !== 'web') {
     Purchases = require('react-native-purchases').default;
-    revenueCatService = require('@/src/services/revenueCatService').revenueCatService;
-    isRevenueCatAvailable = true;
-    console.log('[RevenueCatSubscriptionContext] RevenueCat native module loaded');
+    const rcServiceModule = require('@/src/services/revenueCatService');
+    revenueCatService = rcServiceModule.revenueCatService;
+
+    if (revenueCatService && typeof revenueCatService.isAvailable === 'function' && revenueCatService.isAvailable()) {
+      isRevenueCatAvailable = true;
+      console.log('[RevenueCatSubscriptionContext] RevenueCat native module loaded and available');
+    } else {
+      isRevenueCatAvailable = false;
+      console.log('[RevenueCatSubscriptionContext] RevenueCat module loaded but native functionality not available');
+    }
   }
 } catch (error) {
-  console.log('[RevenueCatSubscriptionContext] RevenueCat native module not available - using Supabase-only mode');
+  console.log('[RevenueCatSubscriptionContext] RevenueCat native module not available - using Supabase-only mode:', error);
   isRevenueCatAvailable = false;
 }
 
@@ -116,6 +123,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
   const initializeRevenueCat = useCallback(async () => {
     console.log("[RevenueCatSubscriptionContext] Initializing subscription system");
+    console.log("[RevenueCatSubscriptionContext] Platform:", Platform.OS);
+    console.log("[RevenueCatSubscriptionContext] isRevenueCatAvailable:", isRevenueCatAvailable);
+    console.log("[RevenueCatSubscriptionContext] revenueCatService exists:", !!revenueCatService);
 
     if (Platform.OS === 'web' || !isRevenueCatAvailable) {
       console.log('[RevenueCatSubscriptionContext] Using Supabase-only mode');
@@ -124,17 +134,28 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       return;
     }
 
+    if (!revenueCatService) {
+      console.error('[RevenueCatSubscriptionContext] RevenueCat service is null!');
+      setIsInitialized(true);
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      console.log('[RevenueCatSubscriptionContext] Configuring RevenueCat with user ID:', user?.id);
       await revenueCatService.configure(user?.id);
 
       if (user?.id) {
+        console.log('[RevenueCatSubscriptionContext] Setting user attributes');
         await revenueCatService.setAttributes({
           'user_id': user.id,
           'email': user.email || null,
         });
       }
 
+      console.log('[RevenueCatSubscriptionContext] Calling getOfferings...');
       const offeringsData = await revenueCatService.getOfferings();
+      console.log('[RevenueCatSubscriptionContext] Offerings received:', !!offeringsData);
       setOfferings(offeringsData);
 
       if (offeringsData?.current) {
