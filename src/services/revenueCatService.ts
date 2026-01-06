@@ -99,16 +99,21 @@ class RevenueCatService implements RevenueCatServiceInterface {
       });
 
       this.configured = true;
-      console.log('[RevenueCat] ✅ SDK configured successfully');
+      console.log('[RevenueCat] SDK configured successfully');
 
-      const customerInfo = await Purchases.getCustomerInfo();
-      console.log('[RevenueCat] Customer info:', {
-        activeEntitlements: Object.keys(customerInfo.entitlements.active),
-        activeSubscriptions: customerInfo.activeSubscriptions,
-      });
+      try {
+        const customerInfo = await Purchases.getCustomerInfo();
+        console.log('[RevenueCat] Customer info:', {
+          activeEntitlements: Object.keys(customerInfo.entitlements.active),
+          activeSubscriptions: customerInfo.activeSubscriptions,
+        });
+      } catch (infoError) {
+        console.log('[RevenueCat] Could not fetch initial customer info - this is normal for new users or unconfigured products');
+      }
     } catch (error) {
       console.error('[RevenueCat] Configuration error:', error);
-      throw error;
+      this.configured = true;
+      console.log('[RevenueCat] SDK marked as configured despite error - continuing with degraded functionality');
     } finally {
       this.initializing = false;
     }
@@ -169,20 +174,42 @@ class RevenueCatService implements RevenueCatServiceInterface {
       if (offerings.current) {
         console.log('[RevenueCat] Current offering:', offerings.current.identifier);
         console.log('[RevenueCat] Available packages:', offerings.current.availablePackages.length);
+
+        if (offerings.current.availablePackages.length === 0) {
+          console.log('[RevenueCat] No packages available in current offering - products may not be configured for this platform');
+        }
       } else {
-        console.log('[RevenueCat] No current offering available');
+        console.log('[RevenueCat] No current offering available - this is normal if products are not yet configured in RevenueCat');
       }
 
       return offerings;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'PRODUCT_ALREADY_PURCHASED' || error?.code === 'PRODUCT_NOT_AVAILABLE_FOR_PURCHASE') {
+        console.log('[RevenueCat] Product availability error - products may not be configured for this platform');
+        return null;
+      }
       console.error('[RevenueCat] Error fetching offerings:', error);
       return null;
     }
   }
 
   async getCustomerInfo(): Promise<CustomerInfo> {
+    const emptyCustomerInfo = {
+      entitlements: { active: {}, all: {}, verification: 'NOT_REQUESTED' },
+      activeSubscriptions: [],
+      allPurchasedProductIdentifiers: [],
+      nonSubscriptionTransactions: [],
+      latestExpirationDate: null,
+      firstSeen: new Date().toISOString(),
+      originalAppUserId: '',
+      requestDate: new Date().toISOString(),
+      managementURL: null,
+      originalPurchaseDate: null,
+      originalApplicationVersion: null,
+    } as unknown as CustomerInfo;
+
     if (Platform.OS === 'web') {
-      throw new Error('RevenueCat not available on web');
+      return emptyCustomerInfo;
     }
 
     try {
@@ -190,7 +217,7 @@ class RevenueCatService implements RevenueCatServiceInterface {
       return customerInfo;
     } catch (error) {
       console.error('[RevenueCat] Error fetching customer info:', error);
-      throw error;
+      return emptyCustomerInfo;
     }
   }
 

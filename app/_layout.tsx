@@ -13,7 +13,7 @@ import { InstantCheckoutProvider } from '@/src/context/InstantCheckoutContext';
 import { NotificationProvider } from '@/src/context/NotificationContext';
 import { BusinessSwitchProvider } from '@/src/context/BusinessSwitchContext';
 import { SaleDetailsModalProvider } from '@/src/context/SaleDetailsModalContext';
-import { SubscriptionProvider } from '@/src/context/SubscriptionContext';
+import { RevenueCatSubscriptionProvider } from '@/src/context/RevenueCatSubscriptionContext';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -25,7 +25,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <SubscriptionProvider>
+            <RevenueCatSubscriptionProvider>
               <BusinessSwitchProvider>
                 <SaleDetailsModalProvider>
                   <NotificationProvider>
@@ -42,7 +42,7 @@ export default function RootLayout() {
                   </NotificationProvider>
                 </SaleDetailsModalProvider>
               </BusinessSwitchProvider>
-            </SubscriptionProvider>
+            </RevenueCatSubscriptionProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

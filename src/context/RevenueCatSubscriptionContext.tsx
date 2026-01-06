@@ -184,6 +184,23 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
+      const { data: existingSubscription } = await supabase
+        .from('user_subscriptions')
+        .select('subscription_status, subscription_expiration_date')
+        .eq('user_id', user.id)
+        .maybeSingle() as { data: { subscription_status: string; subscription_expiration_date: string | null } | null };
+
+      const existingIsActive = existingSubscription?.subscription_status === 'active';
+      const existingNotExpired = existingSubscription?.subscription_expiration_date
+        ? new Date(existingSubscription.subscription_expiration_date) > new Date()
+        : true;
+      const hasValidExistingSubscription = existingIsActive && existingNotExpired;
+
+      if (tier === 'free' && hasValidExistingSubscription) {
+        console.log('[RevenueCatSubscriptionContext] Protecting existing subscription during migration - skipping sync');
+        return;
+      }
+
       const activeEntitlement = Object.values(info.entitlements.active)[0];
       const expirationDate = activeEntitlement?.expirationDate;
 
@@ -212,24 +229,30 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
+      const status = await subscriptionService.getSubscriptionStatus(user.id, forceRefresh);
+      const isExpired = subscriptionService.isSubscriptionExpired(status);
+      const supabaseSubscribed = status.isSubscribed && !isExpired;
+
       if (Platform.OS !== 'web') {
         await refreshCustomerInfo();
       }
 
-      const status = await subscriptionService.getSubscriptionStatus(user.id, forceRefresh);
-      const isExpired = subscriptionService.isSubscriptionExpired(status);
-      const actuallySubscribed = status.isSubscribed && !isExpired;
+      const revenueCatSubscribed = customerInfo
+        ? Object.keys(customerInfo.entitlements.active).length > 0
+        : false;
+
+      const actuallySubscribed = supabaseSubscribed || revenueCatSubscribed;
 
       setSubscriptionStatus({
         ...status,
         isSubscribed: actuallySubscribed,
-        subscriptionStatus: isExpired ? 'expired' : status.subscriptionStatus
+        subscriptionStatus: actuallySubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
       });
       setIsSubscribed(actuallySubscribed);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
     }
-  }, [user?.id, refreshCustomerInfo]);
+  }, [user?.id, refreshCustomerInfo, customerInfo]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;
@@ -265,7 +288,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         .from('user_profiles')
         .select('must_choose_businesses')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .maybeSingle() as { data: { must_choose_businesses: boolean } | null };
 
       const mustChoose = profile?.must_choose_businesses || false;
 
