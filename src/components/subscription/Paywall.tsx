@@ -81,8 +81,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
         t('subscription.features.oneBusinessOwned'),
         t('subscription.features.unlimitedSales'),
         t('subscription.features.basicReporting'),
-        t('subscription.features.cloudSync'),
-t('subscription.features.teamCollaboration')
+        t('subscription.features.teamCollaboration')
       ],
       icon: Building2,
     },
