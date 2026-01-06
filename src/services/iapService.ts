@@ -4,14 +4,18 @@ import Constants from 'expo-constants';
 let RealIAP: any = null;
 let isRealIAPAvailable = false;
 
-if (Platform.OS !== 'web') {
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+if (Platform.OS !== 'web' && !isExpoGo) {
   try {
     RealIAP = require('react-native-iap');
     isRealIAPAvailable = true;
     console.log('[IAPService] react-native-iap is available');
   } catch (error) {
-    console.log('[IAPService] react-native-iap not available');
+    console.log('[IAPService] react-native-iap not available:', error instanceof Error ? error.message : 'Unknown error');
   }
+} else if (isExpoGo) {
+  console.log('[IAPService] Skipping react-native-iap load in Expo Go');
 }
 
 export interface IAPProduct {

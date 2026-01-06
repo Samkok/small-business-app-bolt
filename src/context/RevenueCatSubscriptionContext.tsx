@@ -9,7 +9,6 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { businessService } from '@/src/services/business';
 import { Paywall } from '@/src/components/subscription/Paywall';
 
-let Purchases: any = null;
 let revenueCatService: any = null;
 let isRevenueCatAvailable = false;
 
@@ -21,39 +20,25 @@ if (Platform.OS !== 'web') {
     const rcServiceModule = require('@/src/services/revenueCatService');
     revenueCatService = rcServiceModule.revenueCatService;
     console.log('[RevenueCatSubscriptionContext Loading] Service loaded:', !!revenueCatService);
-    console.log('[RevenueCatSubscriptionContext Loading] Service has isAvailable:', typeof revenueCatService?.isAvailable);
 
     if (revenueCatService && typeof revenueCatService.isAvailable === 'function') {
-      const available = revenueCatService.isAvailable();
-      console.log('[RevenueCatSubscriptionContext Loading] isAvailable() returned:', available);
+      isRevenueCatAvailable = revenueCatService.isAvailable();
+      console.log('[RevenueCatSubscriptionContext Loading] isAvailable() returned:', isRevenueCatAvailable);
 
-      if (available) {
-        try {
-          console.log('[RevenueCatSubscriptionContext Loading] Loading react-native-purchases...');
-          Purchases = require('react-native-purchases').default;
-          console.log('[RevenueCatSubscriptionContext Loading] Purchases loaded:', !!Purchases);
-          isRevenueCatAvailable = true;
-          console.log('[RevenueCatSubscriptionContext] RevenueCat native module loaded and available');
-        } catch (purchasesError) {
-          console.log('[RevenueCatSubscriptionContext] Error loading Purchases module:', purchasesError);
-          isRevenueCatAvailable = false;
-          Purchases = null;
-        }
+      if (isRevenueCatAvailable) {
+        console.log('[RevenueCatSubscriptionContext] RevenueCat is available and ready');
       } else {
-        isRevenueCatAvailable = false;
-        console.log('[RevenueCatSubscriptionContext] RevenueCat module loaded but native functionality not available');
-        console.log('[RevenueCatSubscriptionContext] Check revenueCatService.ts logs for why native module is unavailable');
+        console.log('[RevenueCatSubscriptionContext] RevenueCat not available - using Supabase-only mode');
       }
     } else {
       isRevenueCatAvailable = false;
       console.log('[RevenueCatSubscriptionContext] Service does not have isAvailable method');
     }
   } catch (error) {
-    console.log('[RevenueCatSubscriptionContext] Error loading RevenueCat service:', error);
-    console.log('[RevenueCatSubscriptionContext] RevenueCat native module not available - using Supabase-only mode');
+    console.log('[RevenueCatSubscriptionContext] Error loading RevenueCat service:', error instanceof Error ? error.message : 'Unknown error');
+    console.log('[RevenueCatSubscriptionContext] Using Supabase-only mode');
     isRevenueCatAvailable = false;
     revenueCatService = null;
-    Purchases = null;
   }
 } else {
   console.log('[RevenueCatSubscriptionContext Loading] Skipping - running on web');

@@ -42,10 +42,10 @@ const isExpoGo = Constants.executionEnvironment === 'storeClient';
 if (isExpoGo) {
   console.warn('[RevenueCat] ⚠️ Running in Expo Go! RevenueCat requires a development build.');
   console.warn('[RevenueCat] ⚠️ Run `npx expo prebuild` and build with EAS or locally to use RevenueCat.');
-}
-
-try {
-  if (Platform.OS !== 'web') {
+  console.log('[RevenueCat] Skipping module load in Expo Go');
+  isNativeModuleAvailable = false;
+} else if (Platform.OS !== 'web') {
+  try {
     console.log('[RevenueCat Module Loading] Attempting to load react-native-purchases...');
     const purchasesModule = require('react-native-purchases');
     console.log('[RevenueCat Module Loading] Module required successfully');
@@ -65,18 +65,15 @@ try {
       isNativeModuleAvailable = false;
       Purchases = null;
     }
-  } else {
-    console.log('[RevenueCat Module Loading] Skipping load - running on web');
+  } catch (error) {
+    console.log('[RevenueCat] ❌ Failed to load native module:', error instanceof Error ? error.message : 'Unknown error');
+    console.log('[RevenueCat] Native module not available - this is expected in Expo Go');
+    isNativeModuleAvailable = false;
+    Purchases = null;
   }
-} catch (error) {
-  console.error('[RevenueCat] ❌ Failed to load native module:', error);
-  if (isExpoGo) {
-    console.log('[RevenueCat] This is expected in Expo Go - create a development build to use RevenueCat');
-  } else {
-    console.log('[RevenueCat] Native module not available');
-  }
+} else {
+  console.log('[RevenueCat Module Loading] Skipping load - running on web');
   isNativeModuleAvailable = false;
-  Purchases = null;
 }
 
 const emptyCustomerInfo = {
