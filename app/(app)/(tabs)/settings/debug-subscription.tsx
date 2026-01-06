@@ -5,10 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bug } from 'lucide-react-native';
+import { ArrowLeft, Bug, RefreshCw, ShoppingCart, Info } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -21,7 +22,18 @@ export default function DebugSubscriptionScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { user, currentBusiness } = useAuth();
-  const { salesCountData, subscriptionStatus, tierInfo, ownedBusinessCount, refreshSubscriptionStatus, refreshSalesCount, refreshTierInfo } = useSubscription();
+  const {
+    salesCountData,
+    subscriptionStatus,
+    tierInfo,
+    ownedBusinessCount,
+    refreshSubscriptionStatus,
+    refreshSalesCount,
+    refreshTierInfo,
+    refreshCustomerInfo,
+    showPaywall,
+    isIAPAvailable
+  } = useSubscription();
   const [processing, setProcessing] = useState(false);
   const iapDiagnostics = iapService.getDiagnosticInfo();
 
@@ -135,6 +147,39 @@ export default function DebugSubscriptionScreen() {
     Alert.alert('State Logged', 'Check console for details');
   };
 
+  const syncFromRevenueCat = async () => {
+    if (!isIAPAvailable) {
+      Alert.alert(
+        'RevenueCat Not Available',
+        'RevenueCat is only available in native builds. Use Supabase debug functions for testing in Expo Go.'
+      );
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      await refreshCustomerInfo();
+      await Promise.all([refreshSubscriptionStatus(), refreshSalesCount(), refreshTierInfo()]);
+      Alert.alert('Success', 'Synced subscription data from RevenueCat');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sync from RevenueCat');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openSubscriptionScreen = () => {
+    if (!isIAPAvailable) {
+      Alert.alert(
+        'RevenueCat Not Available',
+        'RevenueCat is only available in native builds. Create a development build to test real purchases.'
+      );
+      return;
+    }
+
+    showPaywall();
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
@@ -161,6 +206,23 @@ export default function DebugSubscriptionScreen() {
           </View>
           <Text style={[styles.warningText, isDark && styles.warningTextDark]}>
             These tools are only available in development mode. They will not appear in production builds.
+          </Text>
+        </Card>
+
+        <Card style={styles.guideCard}>
+          <View style={styles.guideHeader}>
+            <Info size={24} color="#3b82f6" />
+            <Text style={[styles.guideTitle, isDark && styles.guideTitleDark]}>
+              Testing Guide
+            </Text>
+          </View>
+          <Text style={[styles.guideText, isDark && styles.guideTextDark]}>
+            <Text style={styles.guideBold}>Quick Testing (Expo Go):</Text>{'\n'}
+            Use Supabase debug functions below for fast UI/feature iteration without native builds.{'\n\n'}
+            <Text style={styles.guideBold}>Integration Testing (Native Build):</Text>{'\n'}
+            Use RevenueCat sandbox purchases to test the complete flow. Sync manually if needed.{'\n\n'}
+            <Text style={styles.guideBold}>Production Testing:</Text>{'\n'}
+            Use TestFlight/Internal Testing with sandbox subscriptions only.
           </Text>
         </Card>
 
@@ -302,9 +364,53 @@ export default function DebugSubscriptionScreen() {
           )}
         </Card>
 
+        <Card style={[styles.actionsCard, isIAPAvailable ? styles.revenueCatAvailableCard : styles.revenueCatUnavailableCard]}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            RevenueCat Testing
+          </Text>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              RevenueCat Status:
+            </Text>
+            <Text style={[
+              styles.stateValue,
+              isDark && styles.stateValueDark,
+              isIAPAvailable ? styles.availableText : styles.unavailableText
+            ]}>
+              {isIAPAvailable ? '✅ CONNECTED' : '❌ NOT AVAILABLE'}
+            </Text>
+          </View>
+          {isIAPAvailable && (
+            <View style={styles.revenueCatInfo}>
+              <Text style={[styles.revenueCatInfoText, isDark && styles.revenueCatInfoTextDark]}>
+                RevenueCat is connected. Make sandbox purchases and use sync if data seems delayed.
+              </Text>
+            </View>
+          )}
+          {!isIAPAvailable && (
+            <View style={styles.revenueCatWarning}>
+              <Text style={[styles.revenueCatWarningText, isDark && styles.revenueCatWarningTextDark]}>
+                RevenueCat requires a native build. Use Supabase debug functions below for Expo Go testing.
+              </Text>
+            </View>
+          )}
+          <Button
+            title="Sync from RevenueCat"
+            onPress={syncFromRevenueCat}
+            disabled={processing || !isIAPAvailable}
+            style={styles.button}
+          />
+          <Button
+            title="Open Subscription Screen"
+            onPress={openSubscriptionScreen}
+            disabled={!isIAPAvailable}
+            style={styles.button}
+          />
+        </Card>
+
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Simulate Sales Count
+            Supabase Debug - Simulate Sales Count
           </Text>
           <Button
             title="Simulate 49 Sales"
@@ -322,7 +428,7 @@ export default function DebugSubscriptionScreen() {
 
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Pro Tier (1 Business)
+            Supabase Debug - Pro Tier (1 Business)
           </Text>
           <Button
             title="Pro Monthly"
@@ -340,7 +446,7 @@ export default function DebugSubscriptionScreen() {
 
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Pro Plus Tier (3 Businesses)
+            Supabase Debug - Pro Plus Tier (3 Businesses)
           </Text>
           <Button
             title="Pro Plus Monthly"
@@ -358,7 +464,7 @@ export default function DebugSubscriptionScreen() {
 
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Max Tier (Unlimited Businesses)
+            Supabase Debug - Max Tier (Unlimited)
           </Text>
           <Button
             title="Max Monthly"
@@ -376,7 +482,7 @@ export default function DebugSubscriptionScreen() {
 
         <Card style={styles.actionsCard}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Other States
+            Supabase Debug - Other States
           </Text>
           <Button
             title="Expired Subscription"
@@ -550,5 +656,72 @@ const styles = StyleSheet.create({
   },
   iapSuccessTextDark: {
     color: '#34d399',
+  },
+  guideCard: {
+    marginBottom: 16,
+    backgroundColor: '#eff6ff',
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  guideTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e40af',
+  },
+  guideTitleDark: {
+    color: '#93c5fd',
+  },
+  guideText: {
+    fontSize: 14,
+    color: '#1e40af',
+    lineHeight: 20,
+  },
+  guideTextDark: {
+    color: '#93c5fd',
+  },
+  guideBold: {
+    fontWeight: '700',
+  },
+  revenueCatAvailableCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  revenueCatUnavailableCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  revenueCatInfo: {
+    marginTop: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+  },
+  revenueCatInfoText: {
+    fontSize: 13,
+    color: '#065f46',
+    lineHeight: 18,
+  },
+  revenueCatInfoTextDark: {
+    color: '#34d399',
+  },
+  revenueCatWarning: {
+    marginTop: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+  },
+  revenueCatWarningText: {
+    fontSize: 13,
+    color: '#92400e',
+    lineHeight: 18,
+  },
+  revenueCatWarningTextDark: {
+    color: '#fbbf24',
   },
 });
