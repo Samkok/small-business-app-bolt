@@ -1,12 +1,4 @@
 import { Platform } from 'react-native';
-import Purchases, {
-  CustomerInfo,
-  PurchasesOfferings,
-  PurchasesPackage,
-  LOG_LEVEL,
-  PurchasesStoreProduct,
-  PURCHASES_ERROR_CODE,
-} from 'react-native-purchases';
 
 const REVENUECAT_API_KEY = 'test_fkrdKDZMZCmmDvjIvjAjVnSaROY';
 
@@ -35,33 +27,52 @@ export interface RevenueCatEntitlement {
   expirationDate: string | null;
 }
 
-export interface RevenueCatServiceInterface {
-  configure(userId?: string): Promise<void>;
-  setUserId(userId: string): Promise<void>;
-  getOfferings(): Promise<PurchasesOfferings | null>;
-  getCustomerInfo(): Promise<CustomerInfo>;
-  purchasePackage(pkg: PurchasesPackage): Promise<{ customerInfo: CustomerInfo; cancelled: boolean }>;
-  restorePurchases(): Promise<CustomerInfo>;
-  getActiveEntitlements(): Promise<RevenueCatEntitlement[]>;
-  hasEntitlement(entitlementId: string): Promise<boolean>;
-  getCurrentTier(): Promise<RevenueCatTier>;
-  getMaxBusinesses(): Promise<number | null>;
-  isConfigured(): boolean;
-  logOut(): Promise<void>;
-  setAttributes(attributes: Record<string, string | null>): Promise<void>;
+let Purchases: any = null;
+let LOG_LEVEL: any = null;
+let PURCHASES_ERROR_CODE: any = null;
+let isNativeModuleAvailable = false;
+
+try {
+  if (Platform.OS !== 'web') {
+    const purchasesModule = require('react-native-purchases');
+    Purchases = purchasesModule.default;
+    LOG_LEVEL = purchasesModule.LOG_LEVEL;
+    PURCHASES_ERROR_CODE = purchasesModule.PURCHASES_ERROR_CODE;
+    isNativeModuleAvailable = true;
+    console.log('[RevenueCat] Native module loaded successfully');
+  }
+} catch (error) {
+  console.log('[RevenueCat] Native module not available - running in Expo Go or web');
+  isNativeModuleAvailable = false;
 }
 
-class RevenueCatService implements RevenueCatServiceInterface {
+const emptyCustomerInfo = {
+  entitlements: { active: {}, all: {}, verification: 'NOT_REQUESTED' },
+  activeSubscriptions: [],
+  allPurchasedProductIdentifiers: [],
+  nonSubscriptionTransactions: [],
+  latestExpirationDate: null,
+  firstSeen: new Date().toISOString(),
+  originalAppUserId: '',
+  requestDate: new Date().toISOString(),
+  managementURL: null,
+  originalPurchaseDate: null,
+  originalApplicationVersion: null,
+};
+
+class RevenueCatService {
   private configured: boolean = false;
   private initializing: boolean = false;
 
   constructor() {
-    if (Platform.OS !== 'web') {
+    if (isNativeModuleAvailable && LOG_LEVEL) {
       this.setupLogger();
     }
   }
 
   private setupLogger(): void {
+    if (!Purchases) return;
+
     if (__DEV__) {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     } else {
@@ -70,8 +81,8 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async configure(userId?: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      console.log('[RevenueCat] Skipping configuration on web platform');
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+      console.log('[RevenueCat] Skipping configuration - native module not available');
       return;
     }
 
@@ -134,13 +145,12 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async setUserId(userId: string): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
 
     try {
       console.log('[RevenueCat] Setting user ID:', userId);
-      const { customerInfo } = await Purchases.logIn(userId);
+      await Purchases.logIn(userId);
       console.log('[RevenueCat] User logged in successfully');
-      return;
     } catch (error) {
       console.error('[RevenueCat] Error setting user ID:', error);
       throw error;
@@ -148,22 +158,21 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async logOut(): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
 
     try {
       console.log('[RevenueCat] Logging out user');
-      const customerInfo = await Purchases.logOut();
+      await Purchases.logOut();
       console.log('[RevenueCat] User logged out successfully');
-      return;
     } catch (error) {
       console.error('[RevenueCat] Error logging out:', error);
       throw error;
     }
   }
 
-  async getOfferings(): Promise<PurchasesOfferings | null> {
-    if (Platform.OS === 'web') {
-      console.log('[RevenueCat] Offerings not available on web');
+  async getOfferings(): Promise<any | null> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+      console.log('[RevenueCat] Offerings not available - native module not loaded');
       return null;
     }
 
@@ -193,22 +202,8 @@ class RevenueCatService implements RevenueCatServiceInterface {
     }
   }
 
-  async getCustomerInfo(): Promise<CustomerInfo> {
-    const emptyCustomerInfo = {
-      entitlements: { active: {}, all: {}, verification: 'NOT_REQUESTED' },
-      activeSubscriptions: [],
-      allPurchasedProductIdentifiers: [],
-      nonSubscriptionTransactions: [],
-      latestExpirationDate: null,
-      firstSeen: new Date().toISOString(),
-      originalAppUserId: '',
-      requestDate: new Date().toISOString(),
-      managementURL: null,
-      originalPurchaseDate: null,
-      originalApplicationVersion: null,
-    } as unknown as CustomerInfo;
-
-    if (Platform.OS === 'web') {
+  async getCustomerInfo(): Promise<any> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
       return emptyCustomerInfo;
     }
 
@@ -221,9 +216,9 @@ class RevenueCatService implements RevenueCatServiceInterface {
     }
   }
 
-  async purchasePackage(pkg: PurchasesPackage): Promise<{ customerInfo: CustomerInfo; cancelled: boolean }> {
-    if (Platform.OS === 'web') {
-      throw new Error('Purchases not available on web');
+  async purchasePackage(pkg: any): Promise<{ customerInfo: any; cancelled: boolean }> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+      throw new Error('Purchases not available - native module not loaded');
     }
 
     try {
@@ -233,7 +228,7 @@ class RevenueCatService implements RevenueCatServiceInterface {
 
       return { customerInfo, cancelled: false };
     } catch (error: any) {
-      if (error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
+      if (PURCHASES_ERROR_CODE && error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
         console.log('[RevenueCat] Purchase cancelled by user');
         const customerInfo = await this.getCustomerInfo();
         return { customerInfo, cancelled: true };
@@ -244,9 +239,9 @@ class RevenueCatService implements RevenueCatServiceInterface {
     }
   }
 
-  async restorePurchases(): Promise<CustomerInfo> {
-    if (Platform.OS === 'web') {
-      throw new Error('Restore not available on web');
+  async restorePurchases(): Promise<any> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+      throw new Error('Restore not available - native module not loaded');
     }
 
     try {
@@ -261,13 +256,13 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async getActiveEntitlements(): Promise<RevenueCatEntitlement[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return [];
 
     try {
       const customerInfo = await this.getCustomerInfo();
       const entitlements: RevenueCatEntitlement[] = [];
 
-      Object.entries(customerInfo.entitlements.active).forEach(([id, entitlement]) => {
+      Object.entries(customerInfo.entitlements.active).forEach(([id, entitlement]: [string, any]) => {
         entitlements.push({
           identifier: id,
           isActive: entitlement.isActive,
@@ -284,7 +279,7 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async hasEntitlement(entitlementId: string): Promise<boolean> {
-    if (Platform.OS === 'web') return false;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return false;
 
     try {
       const customerInfo = await this.getCustomerInfo();
@@ -298,7 +293,7 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async getCurrentTier(): Promise<RevenueCatTier> {
-    if (Platform.OS === 'web') return 'free';
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return 'free';
 
     try {
       const customerInfo = await this.getCustomerInfo();
@@ -338,7 +333,7 @@ class RevenueCatService implements RevenueCatServiceInterface {
   }
 
   async setAttributes(attributes: Record<string, string | null>): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) return;
 
     try {
       console.log('[RevenueCat] Setting attributes:', attributes);
@@ -350,6 +345,10 @@ class RevenueCatService implements RevenueCatServiceInterface {
 
   isConfigured(): boolean {
     return this.configured;
+  }
+
+  isAvailable(): boolean {
+    return isNativeModuleAvailable;
   }
 }
 

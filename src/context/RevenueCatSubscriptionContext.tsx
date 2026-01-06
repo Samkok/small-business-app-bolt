@@ -1,15 +1,29 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { Platform, AppState, AppStateStatus } from 'react-native';
-import Purchases, { CustomerInfo, PurchasesOfferings } from 'react-native-purchases';
+import { Platform } from 'react-native';
 import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, SubscriptionTier } from '@/src/services/subscriptionService';
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
-import { RevenueCatPaywall } from '@/src/components/subscription/RevenueCatPaywall';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
 import { DowngradePick } from '@/src/components/subscription/DowngradePick';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { revenueCatService, ENTITLEMENT_IDS, RevenueCatTier } from '@/src/services/revenueCatService';
 import { businessService } from '@/src/services/business';
+import { Paywall } from '@/src/components/subscription/Paywall';
+
+let Purchases: any = null;
+let revenueCatService: any = null;
+let isRevenueCatAvailable = false;
+
+try {
+  if (Platform.OS !== 'web') {
+    Purchases = require('react-native-purchases').default;
+    revenueCatService = require('@/src/services/revenueCatService').revenueCatService;
+    isRevenueCatAvailable = true;
+    console.log('[RevenueCatSubscriptionContext] RevenueCat native module loaded');
+  }
+} catch (error) {
+  console.log('[RevenueCatSubscriptionContext] RevenueCat native module not available - using Supabase-only mode');
+  isRevenueCatAvailable = false;
+}
 
 export interface SubscriptionProduct {
   productId: string;
@@ -36,8 +50,8 @@ interface SubscriptionContextType {
   ownedBusinesses: any[];
   readOnlyBusinessIds: string[];
   isBusinessReadOnly: (businessId: string) => boolean;
-  offerings: PurchasesOfferings | null;
-  customerInfo: CustomerInfo | null;
+  offerings: any | null;
+  customerInfo: any | null;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -64,6 +78,8 @@ interface SubscriptionProviderProps {
   children: ReactNode;
 }
 
+type RevenueCatTier = 'free' | 'pro' | 'pro_plus' | 'max';
+
 export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ children }) => {
   const { user, currentBusiness } = useAuth();
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -84,8 +100,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   });
   const [ownedBusinessCount, setOwnedBusinessCount] = useState(0);
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
-  const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [offerings, setOfferings] = useState<any | null>(null);
+  const [customerInfo, setCustomerInfo] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
@@ -96,20 +112,13 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
-  const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
-  const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 3;
-  const isReconnectingRef = useRef(false);
-  const realtimeDisabledRef = useRef(false);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const initializeRevenueCat = useCallback(async () => {
-    console.log("[RevenueCatSubscriptionContext] Initializing RevenueCat");
+    console.log("[RevenueCatSubscriptionContext] Initializing subscription system");
 
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !isRevenueCatAvailable) {
+      console.log('[RevenueCatSubscriptionContext] Using Supabase-only mode');
       setIsInitialized(true);
       setIsLoading(false);
       return;
@@ -129,7 +138,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setOfferings(offeringsData);
 
       if (offeringsData?.current) {
-        const formattedProducts: SubscriptionProduct[] = offeringsData.current.availablePackages.map(pkg => ({
+        const formattedProducts: SubscriptionProduct[] = offeringsData.current.availablePackages.map((pkg: any) => ({
           productId: pkg.product.identifier,
           title: pkg.product.title,
           description: pkg.product.description,
@@ -155,7 +164,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [user?.id, user?.email]);
 
   const refreshCustomerInfo = useCallback(async () => {
-    if (Platform.OS === 'web' || !user?.id) return;
+    if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id) return;
 
     try {
       const info = await revenueCatService.getCustomerInfo();
@@ -180,7 +189,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     }
   }, [user?.id]);
 
-  const syncWithSupabase = async (info: CustomerInfo, tier: RevenueCatTier) => {
+  const syncWithSupabase = async (info: any, tier: RevenueCatTier) => {
     if (!user?.id) return;
 
     try {
@@ -201,8 +210,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         return;
       }
 
-      const activeEntitlement = Object.values(info.entitlements.active)[0];
+      const activeEntitlement = info?.entitlements?.active ? Object.values(info.entitlements.active)[0] as any : null;
       const expirationDate = activeEntitlement?.expirationDate;
+
+      const maxBusinesses = isRevenueCatAvailable ? await revenueCatService.getMaxBusinesses() : null;
 
       await supabase
         .from('user_subscriptions')
@@ -213,7 +224,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           subscription_expiration_date: expirationDate || null,
           platform: Platform.OS === 'ios' ? 'ios' : 'android',
           subscription_tier: tier,
-          max_owned_businesses: await revenueCatService.getMaxBusinesses(),
+          max_owned_businesses: maxBusinesses,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
@@ -233,11 +244,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && isRevenueCatAvailable) {
         await refreshCustomerInfo();
       }
 
-      const revenueCatSubscribed = customerInfo
+      const revenueCatSubscribed = customerInfo?.entitlements?.active
         ? Object.keys(customerInfo.entitlements.active).length > 0
         : false;
 
@@ -330,8 +341,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [user?.id, currentBusiness?.id]);
 
   const purchaseSubscription = useCallback(async (productId: string): Promise<boolean> => {
-    if (Platform.OS === 'web') {
-      console.log('[RevenueCatSubscriptionContext] Purchases not supported on web');
+    if (Platform.OS === 'web' || !isRevenueCatAvailable) {
+      console.log('[RevenueCatSubscriptionContext] Purchases not supported in this environment');
       return false;
     }
 
@@ -339,7 +350,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setIsLoading(true);
 
       const pkg = offerings?.current?.availablePackages.find(
-        p => p.product.identifier === productId
+        (p: any) => p.product.identifier === productId
       );
 
       if (!pkg) {
@@ -369,8 +380,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [offerings, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS === 'web') {
-      console.log('[RevenueCatSubscriptionContext] Restore not supported on web');
+    if (Platform.OS === 'web' || !isRevenueCatAvailable) {
+      console.log('[RevenueCatSubscriptionContext] Restore not supported in this environment');
       return false;
     }
 
@@ -420,7 +431,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, []);
 
   const setupRealtimeSubscription = useCallback(() => {
-    if (!user?.id || !isAppActiveRef.current || realtimeDisabledRef.current) {
+    if (!user?.id || !isAppActiveRef.current) {
       return;
     }
 
@@ -442,7 +453,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           filter: `user_id=eq.${user.id}`
         },
         async () => {
-          await refreshCustomerInfo();
+          if (isRevenueCatAvailable) {
+            await refreshCustomerInfo();
+          }
           await refreshSubscriptionStatus(true);
           await refreshTierInfo();
           if (currentBusiness?.id) {
@@ -456,10 +469,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [user?.id, currentBusiness?.id, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const setupCustomerInfoListener = useCallback(() => {
-    if (Platform.OS === 'web' || !user?.id) return;
+    if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !Purchases) return;
 
     try {
-      Purchases.addCustomerInfoUpdateListener(async (info) => {
+      Purchases.addCustomerInfoUpdateListener(async (info: any) => {
         console.log('[RevenueCatSubscriptionContext] Customer info updated via listener');
         setCustomerInfo(info);
         await refreshCustomerInfo();
@@ -472,7 +485,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   useEffect(() => {
     if (user?.id) {
       initializeRevenueCat();
-      setupCustomerInfoListener();
+      if (isRevenueCatAvailable) {
+        setupCustomerInfoListener();
+      }
     }
   }, [user?.id, initializeRevenueCat, setupCustomerInfoListener]);
 
@@ -520,7 +535,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     canAccessFeature,
     tierInfo,
     ownedBusinessCount,
-    isIAPAvailable: Platform.OS !== 'web',
+    isIAPAvailable: Platform.OS !== 'web' && isRevenueCatAvailable,
     mustChooseBusinesses,
     ownedBusinesses,
     readOnlyBusinessIds,
@@ -541,15 +556,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   return (
     <SubscriptionContext.Provider value={value}>
       {children}
-      <RevenueCatPaywall
+      <Paywall
         visible={isPaywallVisible}
         onClose={hidePaywall}
         canClose={true}
-        onPurchaseSuccess={async () => {
-          await refreshCustomerInfo();
-          await refreshSubscriptionStatus();
-          await refreshTierInfo();
-        }}
       />
       <UnauthorizedUpgradeModal
         visible={isUnauthorizedModalVisible}
