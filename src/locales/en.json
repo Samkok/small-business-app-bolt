@@ -746,6 +746,12 @@
       "title": "Owner-Only Feature",
       "managementMessage": "Only the business owner can manage subscription settings. Contact the owner if you need to make changes.",
       "upgradeMessage": "Only the business owner can upgrade the subscription. Contact the owner if you need access to premium features."
+    },
+    "customerCenter": {
+      "title": "Manage Subscription",
+      "unavailable": "Not Available",
+      "webMessage": "Subscription management is not available on web. Please use the mobile app.",
+      "errorMessage": "An error occurred while opening subscription management. Please try again."
     }
   }
 }

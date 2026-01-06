@@ -19,6 +19,7 @@ import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import { CustomerCenterButton } from '@/src/components/subscription/CustomerCenter';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
@@ -170,11 +171,14 @@ export default function SubscriptionScreen() {
             </Card>
 
             {isOwner ? (
-              <Button
-                title={t('subscription.manageSubscription')}
-                onPress={handleManageSubscription}
-                style={styles.manageButton}
-              />
+              <>
+                <CustomerCenterButton />
+                <Button
+                  title={t('subscription.manageSubscription')}
+                  onPress={handleManageSubscription}
+                  style={styles.manageButton}
+                />
+              </>
             ) : (
               <Card style={styles.infoCard}>
                 <View style={styles.infoHeader}>

@@ -24,16 +24,18 @@ A comprehensive mobile business management application built with React Native, 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **React Native** with Expo SDK 53
+- **React Native** with Expo SDK 54
 - **TypeScript** for type safety
 - **Expo Router** for navigation
 - **React Native Reanimated** for smooth animations
 - **Lucide React Native** for consistent iconography
+- **RevenueCat** for subscription management and paywalls
 
 ### Backend
 - **Supabase** for database, authentication, and real-time features
 - **PostgreSQL** with Row Level Security (RLS)
 - **Supabase Storage** for product images and assets
+- **Supabase Edge Functions** for webhook processing
 
 ### Development
 - **ESLint** and **Prettier** for code quality
@@ -182,30 +184,40 @@ npx tsc --noEmit
 # Add Detox or Maestro configuration
 ```
 
-## 💳 In-App Purchases (IAP)
+## 💳 Subscriptions (RevenueCat)
 
-The app includes a sophisticated subscription system that works across all environments:
+The app uses RevenueCat for powerful, cross-platform subscription management:
 
 ### Quick Start
-- **Development**: Mock IAP works automatically - just run `npm start`
-- **Testing**: Build with `eas build --profile preview` for sandbox testing
-- **Production**: Build with `eas build --profile production` for live stores
+1. **RevenueCat Dashboard**: Configure products and entitlements
+2. **Deploy Webhook**: `supabase functions deploy revenuecat-webhook`
+3. **Switch Context**: Use `RevenueCatSubscriptionProvider` in your app
+4. **Test**: Build with EAS and test with sandbox accounts
 
 ### Subscription Tiers
 - **Free**: 50 total sales, 1 business
-- **Pro** ($4.99/month or $47.99/year): Unlimited sales, 1 business
-- **Pro Plus** ($9.99/month or $95.99/year): Unlimited sales, 3 businesses
-- **Max** ($19.99/month or $191.99/year): Unlimited sales & businesses
+- **Pro** (monthly/yearly): Unlimited sales, 1 owned business
+- **Pro Plus** (monthly/yearly): Unlimited sales, 3 owned businesses
+- **Max** (monthly/yearly): Unlimited sales & businesses
+
+### Features
+- �� **Native Paywall UI**: Beautiful, pre-built paywalls with customization
+- 👤 **Customer Center**: Self-service subscription management
+- 🔄 **Automatic Sync**: Real-time webhook updates to your database
+- 🔐 **Server-Side Validation**: Secure receipt validation via RevenueCat
+- 📊 **Analytics Dashboard**: Comprehensive subscription metrics
+- 🌍 **Cross-Platform**: Seamless iOS and Android support
 
 ### Documentation
-- **Quick Start**: `IAP_QUICKSTART.md` - Get started in 3 steps
-- **Complete Guide**: `IAP_ENVIRONMENT_GUIDE.md` - Full environment setup
-- **Mock IAP**: `MOCK_IAP_SETUP.md` - Development testing details
+- **Setup Guide**: `REVENUECAT_SETUP.md` - Complete RevenueCat configuration
+- **Migration Guide**: `REVENUECAT_MIGRATION.md` - Migrate from react-native-iap
+- **Integration**: Automatic subscription status sync with Supabase
 
 ### How It Works
-The app automatically detects the environment and switches between:
-- **Mock IAP**: Fast development testing in Expo Go
-- **Real IAP**: Production builds with App Store/Play Store integration
+1. User opens paywall → RevenueCat displays products
+2. User purchases → RevenueCat validates and processes
+3. Webhook fires → Supabase updates subscription status
+4. App checks entitlements → User gets access to features
 
 ## 📖 Usage Guide
 

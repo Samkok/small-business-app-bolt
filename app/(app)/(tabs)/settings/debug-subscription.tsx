@@ -218,6 +218,16 @@ export default function DebugSubscriptionScreen() {
               </Text>
             </View>
           )}
+          {subscriptionStatus.revenueCatAppUserId && (
+            <View style={styles.stateItem}>
+              <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+                RevenueCat App User ID:
+              </Text>
+              <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+                {subscriptionStatus.revenueCatAppUserId}
+              </Text>
+            </View>
+          )}
         </Card>
 
         <Card style={[styles.stateCard, !iapDiagnostics.isAvailable ? styles.iapUnavailableCard : styles.iapAvailableCard]}>
