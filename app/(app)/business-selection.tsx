@@ -35,17 +35,23 @@ export default function BusinessSelectionScreen() {
   const { t } = useTranslation();
   const subscription = useSubscription();
   const { isDark } = useTheme();
-  const { userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses } = useAuth();
+  const { user, userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses, getUserRole } = useAuth();
 
   const handleSelectBusiness = async (businessId: string) => {
     await switchBusiness(businessId);
+    await subscription.refreshTierInfo();
+    await subscription.refreshSalesCount();
     router.replace('/(app)/(tabs)');
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await refreshUserBusinesses();
+      await Promise.all([
+        refreshUserBusinesses(),
+        subscription.refreshTierInfo(),
+        subscription.refreshSubscriptionStatus()
+      ]);
     } catch (error) {
       console.error('Error refreshing businesses:', error);
     } finally {
@@ -54,7 +60,10 @@ export default function BusinessSelectionScreen() {
   };
 
   const handleManageComplete = async () => {
-    await refreshUserBusinesses();
+    await Promise.all([
+      refreshUserBusinesses(),
+      subscription.refreshTierInfo()
+    ]);
   };
 
   const handleCreateBusiness = async () => {
@@ -63,8 +72,8 @@ export default function BusinessSelectionScreen() {
       return;
     }
 
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses <= userBusinesses.length) {
-      // Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+      Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'} on your current plan. Please upgrade your subscription to create more businesses.`);
       return;
     }
 
@@ -77,6 +86,8 @@ export default function BusinessSelectionScreen() {
       } else {
         setShowCreateBusinessModal(false);
         setNewBusinessName('');
+
+        await subscription.refreshTierInfo();
 
         // If this is the first business, navigate to the main app
         if (userBusinesses.length === 0) {
@@ -116,11 +127,20 @@ export default function BusinessSelectionScreen() {
           )}
         </View>
         <View style={styles.businessDetails}>
-          <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {item.business_name}
-          </Text>
+          <View style={styles.businessNameRow}>
+            <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {item.business_name}
+            </Text>
+            {item.owner_user_id === user?.id && (
+              <View style={[styles.ownerBadge, { backgroundColor: isDark ? '#1e3a8a' : '#dbeafe' }]}>
+                <Text style={[styles.ownerBadgeText, { color: isDark ? '#93c5fd' : '#1e40af' }]}>
+                  Owner
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.businessRole, { color: '#2563eb' }]}>
-            Admin
+            {getUserRole(item.id) === 'admin' ? 'Admin' : 'Staff'}
           </Text>
           <View style={[
             styles.statusBadge,
@@ -179,6 +199,31 @@ export default function BusinessSelectionScreen() {
         <Text style={[styles.selectPrompt, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
           Please select a business to continue
         </Text>
+        {subscription.tierInfo.maxOwnedBusinesses !== null && (
+          <View style={[
+            styles.limitBadge,
+            {
+              backgroundColor: subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses
+                ? (isDark ? '#7f1d1d' : '#fee2e2')
+                : subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses * 0.8
+                ? (isDark ? '#78350f' : '#fef3c7')
+                : (isDark ? '#065f46' : '#d1fae5')
+            }
+          ]}>
+            <Text style={[
+              styles.limitBadgeText,
+              {
+                color: subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses
+                  ? (isDark ? '#fca5a5' : '#991b1b')
+                  : subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses * 0.8
+                  ? (isDark ? '#fbbf24' : '#92400e')
+                  : (isDark ? '#6ee7b7' : '#047857')
+              }
+            ]}>
+              {subscription.ownedBusinessCount} / {subscription.tierInfo.maxOwnedBusinesses === 999999 ? '∞' : subscription.tierInfo.maxOwnedBusinesses} businesses owned
+            </Text>
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -351,6 +396,17 @@ const styles = StyleSheet.create({
   },
   selectPrompt: {
     fontSize: 14,
+    marginBottom: 8,
+  },
+  limitBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  limitBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   businessList: {
     flex: 1,
@@ -404,10 +460,25 @@ const styles = StyleSheet.create({
   businessDetails: {
     flex: 1,
   },
+  businessNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   businessName: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+  },
+  ownerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  ownerBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   businessRole: {
     fontSize: 12,

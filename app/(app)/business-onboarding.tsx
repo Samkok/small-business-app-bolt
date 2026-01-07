@@ -56,7 +56,11 @@ export default function BusinessOnboardingScreen() {
     setRefreshing(true);
     try {
       console.log('BusinessOnboarding: Manual refresh triggered');
-      const businesses = await refreshUserBusinesses();
+      const [businesses] = await Promise.all([
+        refreshUserBusinesses(),
+        subscription.refreshTierInfo(),
+        subscription.refreshSubscriptionStatus()
+      ]);
 
       // Check if user has been added to any businesses
       if (businesses.length > 0) {
@@ -162,6 +166,9 @@ export default function BusinessOnboardingScreen() {
           setImageLoading(false);
         }
       }
+
+      // Refresh subscription data to update owned business count
+      await subscription.refreshTierInfo();
 
       // Navigate to the main app
       router.replace('/(app)/(tabs)');
