@@ -36,7 +36,8 @@ export default function SubscriptionScreen() {
     tierInfo,
     ownedBusinessCount,
     refreshTierInfo,
-    refreshSubscriptionStatus
+    refreshSubscriptionStatus,
+    isIAPAvailable
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
@@ -182,12 +183,15 @@ export default function SubscriptionScreen() {
 
             {isOwner ? (
               <>
-                <CustomerCenterButton />
-                <Button
-                  title={t('subscription.manageSubscription')}
-                  onPress={handleManageSubscription}
-                  style={styles.manageButton}
-                />
+                {isIAPAvailable ? (
+                  <CustomerCenterButton />
+                ) : (
+                  <Button
+                    title={t('subscription.manageSubscription')}
+                    onPress={handleManageSubscription}
+                    style={styles.manageButton}
+                  />
+                )}
               </>
             ) : (
               <Card style={styles.infoCard}>

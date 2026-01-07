@@ -1,8 +1,19 @@
-import React from 'react';
-import { Platform, Alert, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { Platform, Alert, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Settings } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+
+let revenueCatService: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const rcServiceModule = require('@/src/services/revenueCatService');
+    revenueCatService = rcServiceModule.revenueCatService;
+  } catch (error) {
+    console.log('[CustomerCenter] Error loading RevenueCat service:', error);
+  }
+}
 
 interface CustomerCenterProps {
   onDismiss?: () => void;
@@ -11,13 +22,31 @@ interface CustomerCenterProps {
 export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleOpenCustomerCenter = () => {
-    Alert.alert(
-      t('subscription.customerCenter.unavailable'),
-      'Customer Center requires a development build. Run: npx expo prebuild',
-      [{ text: t('common.ok') }]
-    );
+  const handleOpenCustomerCenter = async () => {
+    if (!revenueCatService || !revenueCatService.isAvailable()) {
+      Alert.alert(
+        t('subscription.customerCenter.unavailable'),
+        'Customer Center requires a development build. Run: npx expo prebuild',
+        [{ text: t('common.ok') }]
+      );
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await revenueCatService.presentCustomerCenter();
+    } catch (error) {
+      console.error('[CustomerCenter] Error opening customer center:', error);
+      Alert.alert(
+        'Error',
+        'Unable to open customer center. Please try again.',
+        [{ text: t('common.ok') }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (Platform.OS === 'web') {
@@ -28,8 +57,13 @@ export const CustomerCenterButton: React.FC<CustomerCenterProps> = ({ onDismiss 
     <TouchableOpacity
       style={[styles.button, isDark && styles.buttonDark]}
       onPress={handleOpenCustomerCenter}
+      disabled={isLoading}
     >
-      <Settings size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+      {isLoading ? (
+        <ActivityIndicator size="small" color={isDark ? '#60a5fa' : '#3b82f6'} />
+      ) : (
+        <Settings size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+      )}
       <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>
         {t('subscription.customerCenter.title')}
       </Text>
