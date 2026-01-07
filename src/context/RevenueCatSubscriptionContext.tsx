@@ -284,10 +284,6 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      if (Platform.OS !== 'web' && isRevenueCatAvailable) {
-        await refreshCustomerInfo();
-      }
-
       const revenueCatSubscribed = customerInfo?.entitlements?.active
         ? Object.keys(customerInfo.entitlements.active).length > 0
         : false;
@@ -303,7 +299,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
     }
-  }, [user?.id, refreshCustomerInfo]);
+  }, [user?.id, customerInfo]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;
@@ -444,6 +440,34 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       setIsLoading(true);
 
+      const currentInfo = await revenueCatService.getCustomerInfo();
+      const activeProductIds = Object.values(currentInfo.entitlements.active)
+        .map((entitlement: any) => entitlement.productIdentifier);
+
+      if (activeProductIds.includes(productId)) {
+        console.log('[RevenueCatSubscriptionContext] User already has this subscription');
+
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
+        return true;
+      }
+
       const pkg = offerings?.current?.availablePackages.find(
         (p: any) => p.product.identifier === productId
       );
@@ -460,19 +484,60 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
 
       setCustomerInfo(newCustomerInfo);
-      await refreshCustomerInfo();
-      await refreshSubscriptionStatus();
-      await refreshTierInfo();
-      await checkFeatureAccess();
+
+      const fullState = await subscriptionService.getFullSubscriptionState(
+        user.id,
+        currentBusiness?.id
+      );
+
+      setSubscriptionStatus(fullState.subscriptionStatus);
+      setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+      setTierInfo(fullState.tierInfo);
+      setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+      if (fullState.salesCountData) {
+        setSalesCountData(fullState.salesCountData);
+      }
+
+      if (fullState.canAccessFeature !== null) {
+        setCanAccessFeature(fullState.canAccessFeature);
+      }
 
       return true;
     } catch (error: any) {
       console.error('[RevenueCatSubscriptionContext] Error purchasing subscription:', error);
+
+      if (error?.code === 'PRODUCT_ALREADY_PURCHASED_ERROR' ||
+          error?.message?.toLowerCase().includes('already purchased') ||
+          error?.message?.toLowerCase().includes('already own')) {
+        console.log('[RevenueCatSubscriptionContext] Product already owned, returning success');
+
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
+        return true;
+      }
+
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [offerings, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [offerings, user?.id, currentBusiness?.id]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable) {
@@ -489,10 +554,24 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const hasActiveEntitlements = Object.keys(restoredInfo.entitlements.active).length > 0;
 
       if (hasActiveEntitlements) {
-        await refreshCustomerInfo();
-        await refreshSubscriptionStatus();
-        await refreshTierInfo();
-        await checkFeatureAccess();
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
         return true;
       }
 
@@ -503,7 +582,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } finally {
       setIsLoading(false);
     }
-  }, [refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id]);
 
   const showPaywall = useCallback(() => {
     if (!currentBusiness) return;
