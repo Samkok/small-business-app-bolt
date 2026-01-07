@@ -206,10 +206,11 @@ export function DowngradePick({
 
       console.log('[DowngradePick] Business selection successful:', data);
 
+      onComplete();
+
       Alert.alert(
         'Success',
-        `${tierLimit} ${tierLimit === 1 ? 'business' : 'businesses'} activated successfully`,
-        [{ text: 'OK', onPress: onComplete }]
+        `${tierLimit} ${tierLimit === 1 ? 'business' : 'businesses'} activated successfully`
       );
     } catch (error: any) {
       console.error('[DowngradePick] Error confirming business selection:', error);
