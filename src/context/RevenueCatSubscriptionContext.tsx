@@ -606,7 +606,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
   const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
     if (reconnectAttempts.current >= maxReconnectAttempts) {
-      console.error('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType);
+      console.log('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType, '- will retry on next app activity');
       return;
     }
 
@@ -665,7 +665,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         if (status === 'SUBSCRIBED') {
           reconnectAttempts.current = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('[RevenueCatSubscriptionContext] Business count channel error, attempting reconnect');
+          console.log('[RevenueCatSubscriptionContext] Business count channel connection issue, attempting reconnect');
           handleReconnect('business', setupBusinessCountSubscription);
         }
       });
@@ -715,7 +715,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         if (status === 'SUBSCRIBED') {
           reconnectAttempts.current = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('[RevenueCatSubscriptionContext] User profile channel error, attempting reconnect');
+          console.log('[RevenueCatSubscriptionContext] User profile channel connection issue, attempting reconnect');
           handleReconnect('subscription', setupUserProfileSubscription);
         }
       });
@@ -783,7 +783,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         if (status === 'SUBSCRIBED') {
           reconnectAttempts.current = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('[RevenueCatSubscriptionContext] Subscription channel error, attempting reconnect');
+          console.log('[RevenueCatSubscriptionContext] Subscription channel connection issue, attempting reconnect');
           handleReconnect('subscription', setupRealtimeSubscription);
         }
       });
