@@ -523,8 +523,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         created_by: user.id
       });
 
-      await subscriptionService.incrementSalesCount(user.id, currentBusiness.id);
-
       setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
 
       return { success: true, saleId: sale.id };
