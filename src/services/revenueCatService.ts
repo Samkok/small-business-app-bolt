@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const REVENUECAT_API_KEY = (Constants.expoConfig?.extra?.revenueCatApiKey || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'test_fkrdKDZMZCmmDvjIvjAjVnSaROY') as string;
+const REVENUECAT_API_KEY = (Constants.expoConfig?.extra?.revenueCatApiKey || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY) as string;
 
 export type RevenueCatTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
@@ -418,6 +418,20 @@ class RevenueCatService {
       await Purchases.setAttributes(attributes);
     } catch (error) {
       console.error('[RevenueCat] Error setting attributes:', error);
+    }
+  }
+
+  addCustomerInfoUpdateListener(callback: (customerInfo: any) => void): void {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
+      console.log('[RevenueCat] Customer info listener not available - native module not loaded');
+      return;
+    }
+
+    try {
+      console.log('[RevenueCat] Setting up customer info update listener');
+      Purchases.addCustomerInfoUpdateListener(callback);
+    } catch (error) {
+      console.error('[RevenueCat] Error setting up customer info listener:', error);
     }
   }
 
