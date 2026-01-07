@@ -112,6 +112,14 @@ export interface TierInfo {
   expirationDate: string | null;
 }
 
+export interface FullSubscriptionState {
+  subscriptionStatus: SubscriptionStatus;
+  tierInfo: TierInfo;
+  ownedBusinessCount: number;
+  salesCountData: SalesCountData | null;
+  canAccessFeature: boolean | null;
+}
+
 interface CachedSubscriptionData {
   status: SubscriptionStatus;
   cachedAt: number;
@@ -673,6 +681,90 @@ export const subscriptionService = {
         isValid: false,
         expiresDate: null,
         productId: null
+      };
+    }
+  },
+
+  async getFullSubscriptionState(userId: string, businessId?: string, showErrorAlert = false): Promise<FullSubscriptionState> {
+    try {
+      return await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .rpc('get_full_subscription_state', {
+            p_user_id: userId,
+            p_business_id: businessId || null
+          });
+
+        if (error) throw error;
+
+        if (!data) {
+          return {
+            subscriptionStatus: {
+              isSubscribed: false,
+              subscriptionStatus: 'trial',
+            },
+            tierInfo: {
+              tier: 'free',
+              maxOwnedBusinesses: null,
+              subscriptionStatus: 'trial',
+              expirationDate: null
+            },
+            ownedBusinessCount: 0,
+            salesCountData: businessId ? {
+              salesCount: 0,
+              remainingSales: FREE_TIER_LIMIT,
+              isAtLimit: false
+            } : null,
+            canAccessFeature: businessId ? true : null
+          };
+        }
+
+        return {
+          subscriptionStatus: {
+            isSubscribed: data.subscriptionStatus.isSubscribed,
+            subscriptionStatus: data.subscriptionStatus.subscriptionStatus,
+            productId: data.subscriptionStatus.subscriptionProductId,
+            expirationDate: data.subscriptionStatus.subscriptionExpirationDate,
+          },
+          tierInfo: {
+            tier: data.tierInfo.tier,
+            maxOwnedBusinesses: data.tierInfo.maxOwnedBusinesses,
+            subscriptionStatus: data.tierInfo.subscriptionStatus,
+            expirationDate: data.tierInfo.expirationDate
+          },
+          ownedBusinessCount: data.ownedBusinessCount,
+          salesCountData: data.salesCountData ? {
+            salesCount: data.salesCountData.salesCount,
+            remainingSales: data.salesCountData.remainingSales,
+            isAtLimit: data.salesCountData.isAtLimit
+          } : null,
+          canAccessFeature: data.canAccessFeature
+        };
+      }, 'get full subscription state');
+    } catch (error) {
+      console.error('Error getting full subscription state:', error);
+
+      if (isNetworkError(error) && showErrorAlert) {
+        showNetworkErrorAlert('load subscription information');
+      }
+
+      return {
+        subscriptionStatus: {
+          isSubscribed: false,
+          subscriptionStatus: 'trial',
+        },
+        tierInfo: {
+          tier: 'free',
+          maxOwnedBusinesses: null,
+          subscriptionStatus: 'trial',
+          expirationDate: null
+        },
+        ownedBusinessCount: 0,
+        salesCountData: businessId ? {
+          salesCount: 0,
+          remainingSales: FREE_TIER_LIMIT,
+          isAtLimit: false
+        } : null,
+        canAccessFeature: businessId ? true : null
       };
     }
   }

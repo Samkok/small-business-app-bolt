@@ -131,7 +131,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
 
   const initializeRevenueCat = useCallback(async () => {
     console.log("[RevenueCatSubscriptionContext] Initializing subscription system");
@@ -465,6 +469,75 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     setIsUnauthorizedModalVisible(false);
   }, []);
 
+  const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.error('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType);
+      return;
+    }
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+    reconnectAttempts.current += 1;
+
+    console.log(`[RevenueCatSubscriptionContext] Reconnecting ${channelType} channel in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setupFn();
+    }, delay);
+  }, []);
+
+  const setupBusinessCountSubscription = useCallback(() => {
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    if (businessCountChannelRef.current) {
+      try {
+        businessCountChannelRef.current.unsubscribe();
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing business count channel:', error);
+      }
+      businessCountChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`business-count-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'businesses',
+          filter: `owner_user_id=eq.${user.id}`
+        },
+        async () => {
+          console.log('[RevenueCatSubscriptionContext] Business count change detected');
+
+          try {
+            const count = await subscriptionService.getOwnedBusinessCount(user.id);
+            setOwnedBusinessCount(count);
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error updating business count:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] Business count channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('[RevenueCatSubscriptionContext] Business count channel error, attempting reconnect');
+          handleReconnect('business', setupBusinessCountSubscription);
+        }
+      });
+
+    businessCountChannelRef.current = channel;
+  }, [user?.id, handleReconnect]);
+
   const setupRealtimeSubscription = useCallback(() => {
     if (!user?.id || !isAppActiveRef.current) {
       return;
@@ -473,7 +546,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (realtimeChannelRef.current) {
       try {
         realtimeChannelRef.current.unsubscribe();
-      } catch (error) {}
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing subscription channel:', error);
+      }
       realtimeChannelRef.current = null;
     }
 
@@ -488,20 +563,48 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           filter: `user_id=eq.${user.id}`
         },
         async () => {
-          if (isRevenueCatAvailable) {
-            await refreshCustomerInfo();
-          }
-          await refreshSubscriptionStatus(true);
-          await refreshTierInfo();
-          if (currentBusiness?.id) {
-            await checkFeatureAccess(true);
+          console.log('[RevenueCatSubscriptionContext] Subscription change detected, refreshing state');
+
+          try {
+            if (isRevenueCatAvailable) {
+              await refreshCustomerInfo();
+            }
+
+            const fullState = await subscriptionService.getFullSubscriptionState(
+              user.id,
+              currentBusiness?.id
+            );
+
+            setSubscriptionStatus(fullState.subscriptionStatus);
+            setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+            setTierInfo(fullState.tierInfo);
+            setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+            if (fullState.salesCountData) {
+              setSalesCountData(fullState.salesCountData);
+            }
+
+            if (fullState.canAccessFeature !== null) {
+              setCanAccessFeature(fullState.canAccessFeature);
+            }
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error processing subscription change:', error);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] Subscription channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('[RevenueCatSubscriptionContext] Subscription channel error, attempting reconnect');
+          handleReconnect('subscription', setupRealtimeSubscription);
+        }
+      });
 
     realtimeChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshCustomerInfo, handleReconnect]);
 
   const setupCustomerInfoListener = useCallback(() => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !revenueCatService) return;
@@ -546,17 +649,34 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
       setupRealtimeSubscription();
+      setupBusinessCountSubscription();
     }
 
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (realtimeChannelRef.current) {
         try {
           realtimeChannelRef.current.unsubscribe();
-        } catch (error) {}
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up subscription channel:', error);
+        }
         realtimeChannelRef.current = null;
       }
+
+      if (businessCountChannelRef.current) {
+        try {
+          businessCountChannelRef.current.unsubscribe();
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up business count channel:', error);
+        }
+        businessCountChannelRef.current = null;
+      }
     };
-  }, [user?.id, setupRealtimeSubscription]);
+  }, [user?.id, setupRealtimeSubscription, setupBusinessCountSubscription]);
 
   const isBusinessReadOnly = useCallback((businessId: string) => {
     return readOnlyBusinessIds.includes(businessId);
