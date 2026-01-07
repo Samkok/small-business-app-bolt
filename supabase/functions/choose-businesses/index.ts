@@ -160,6 +160,17 @@ Deno.serve(async (req: Request) => {
       console.error('[ChooseBusinesses] Error clearing must_choose_businesses flag:', clearFlagError);
     }
 
+    console.log('[ChooseBusinesses] Running consistency safeguard to verify data integrity');
+    const { error: safeguardError } = await supabase.rpc('ensure_selected_business_ids_consistency', {
+      p_user_id: userId
+    });
+
+    if (safeguardError) {
+      console.error('[ChooseBusinesses] Error running consistency safeguard:', safeguardError);
+    } else {
+      console.log('[ChooseBusinesses] Consistency safeguard completed successfully');
+    }
+
     const { data: updatedBusinesses } = await supabase
       .from('businesses')
       .select('id, business_name, access_state')
