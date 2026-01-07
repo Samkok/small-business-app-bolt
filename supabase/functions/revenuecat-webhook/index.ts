@@ -27,6 +27,24 @@ interface RevenueCatEvent {
   };
 }
 
+function getTierFromProductId(productId: string | null | undefined): string {
+  if (!productId) {
+    return 'free';
+  }
+
+  const lowerProductId = productId.toLowerCase();
+
+  if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
+    return 'pro_plus';
+  } else if (lowerProductId.includes('max')) {
+    return 'max';
+  } else if (lowerProductId.includes('pro')) {
+    return 'pro';
+  }
+
+  return 'free';
+}
+
 function getTierFromEntitlements(entitlementIds: string[] | null | undefined): string {
   if (!entitlementIds || !Array.isArray(entitlementIds)) {
     return 'free';
@@ -79,8 +97,14 @@ Deno.serve(async (req: Request) => {
     console.log('[RevenueCat Webhook] Entitlements:', event.entitlement_ids);
 
     const userId = event.app_user_id;
-    const tier = getTierFromEntitlements(event.entitlement_ids);
+    const tierFromProductId = getTierFromProductId(event.product_id);
+    const tierFromEntitlements = getTierFromEntitlements(event.entitlement_ids);
+    const tier = tierFromProductId !== 'free' ? tierFromProductId : tierFromEntitlements;
     const maxBusinesses = getMaxBusinessesFromTier(tier);
+
+    console.log('[RevenueCat Webhook] Tier from product ID:', tierFromProductId);
+    console.log('[RevenueCat Webhook] Tier from entitlements:', tierFromEntitlements);
+    console.log('[RevenueCat Webhook] Final tier:', tier);
 
     switch (event.type) {
       case 'INITIAL_PURCHASE':
