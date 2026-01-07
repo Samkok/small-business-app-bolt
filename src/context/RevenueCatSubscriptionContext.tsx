@@ -504,14 +504,16 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [user?.id, currentBusiness?.id, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
 
   const setupCustomerInfoListener = useCallback(() => {
-    if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !Purchases) return;
+    if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !revenueCatService) return;
 
     try {
-      Purchases.addCustomerInfoUpdateListener(async (info: any) => {
-        console.log('[RevenueCatSubscriptionContext] Customer info updated via listener');
-        setCustomerInfo(info);
-        await refreshCustomerInfo();
-      });
+      if (revenueCatService.addCustomerInfoUpdateListener) {
+        revenueCatService.addCustomerInfoUpdateListener(async (info: any) => {
+          console.log('[RevenueCatSubscriptionContext] Customer info updated via listener');
+          setCustomerInfo(info);
+          await refreshCustomerInfo();
+        });
+      }
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error setting up customer info listener:', error);
     }
