@@ -27,7 +27,29 @@ interface RevenueCatEvent {
   };
 }
 
-function getTierFromEntitlements(entitlementIds: string[]): string {
+function getTierFromProductId(productId: string | null | undefined): string {
+  if (!productId) {
+    return 'free';
+  }
+
+  const lowerProductId = productId.toLowerCase();
+
+  if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
+    return 'pro_plus';
+  } else if (lowerProductId.includes('max')) {
+    return 'max';
+  } else if (lowerProductId.includes('pro')) {
+    return 'pro';
+  }
+
+  return 'free';
+}
+
+function getTierFromEntitlements(entitlementIds: string[] | null | undefined): string {
+  if (!entitlementIds || !Array.isArray(entitlementIds)) {
+    return 'free';
+  }
+
   if (entitlementIds.includes('bizmanage_max')) {
     return 'max';
   }
@@ -48,9 +70,34 @@ function getMaxBusinessesFromTier(tier: string): number | null {
       return 3;
     case 'max':
       return 999999;
+    case 'free':
+      return 1;
     default:
-      return null;
+      return 1;
   }
+}
+
+function getTierLevel(tier: string): number {
+  switch (tier) {
+    case 'free':
+      return 0;
+    case 'pro':
+      return 1;
+    case 'pro_plus':
+      return 2;
+    case 'max':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function isUpgrade(oldTier: string, newTier: string): boolean {
+  return getTierLevel(newTier) > getTierLevel(oldTier);
+}
+
+function isDowngrade(oldTier: string, newTier: string): boolean {
+  return getTierLevel(newTier) < getTierLevel(oldTier);
 }
 
 Deno.serve(async (req: Request) => {
@@ -75,13 +122,76 @@ Deno.serve(async (req: Request) => {
     console.log('[RevenueCat Webhook] Entitlements:', event.entitlement_ids);
 
     const userId = event.app_user_id;
-    const tier = getTierFromEntitlements(event.entitlement_ids);
+    const tierFromProductId = getTierFromProductId(event.product_id);
+    const tierFromEntitlements = getTierFromEntitlements(event.entitlement_ids);
+    const tier = tierFromProductId !== 'free' ? tierFromProductId : tierFromEntitlements;
     const maxBusinesses = getMaxBusinessesFromTier(tier);
+
+    console.log('[RevenueCat Webhook] Tier from product ID:', tierFromProductId);
+    console.log('[RevenueCat Webhook] Tier from entitlements:', tierFromEntitlements);
+    console.log('[RevenueCat Webhook] Final tier:', tier);
 
     switch (event.type) {
       case 'INITIAL_PURCHASE':
-      case 'RENEWAL':
-      case 'PRODUCT_CHANGE':
+      case 'RENEWAL': {
+        const expirationDate = event.expiration_at_ms
+          ? new Date(event.expiration_at_ms).toISOString()
+          : null;
+
+        const { error: subscriptionError } = await supabase
+          .from('user_subscriptions')
+          .upsert({
+            user_id: userId,
+            subscription_status: 'active',
+            subscription_product_id: event.product_id,
+            subscription_expiration_date: expirationDate,
+            platform: event.store === 'app_store' ? 'ios' : 'android',
+            tier: tier,
+            max_owned_businesses: maxBusinesses,
+            revenuecat_app_user_id: event.original_app_user_id,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id',
+          });
+
+        if (subscriptionError) {
+          console.error('[RevenueCat Webhook] Error updating subscription:', subscriptionError);
+          throw subscriptionError;
+        }
+
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('must_choose_businesses')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (profile?.must_choose_businesses) {
+          const { error: clearFlagError } = await supabase
+            .from('user_profiles')
+            .update({ must_choose_businesses: false })
+            .eq('user_id', userId);
+
+          if (clearFlagError) {
+            console.error('[RevenueCat Webhook] Error clearing must_choose_businesses flag:', clearFlagError);
+          } else {
+            console.log('[RevenueCat Webhook] Cleared must_choose_businesses flag');
+          }
+
+          const { error: activateError } = await supabase.rpc('set_all_businesses_active', {
+            p_user_id: userId
+          });
+
+          if (activateError) {
+            console.error('[RevenueCat Webhook] Error activating businesses:', activateError);
+          } else {
+            console.log('[RevenueCat Webhook] Reactivated all businesses');
+          }
+        }
+
+        console.log('[RevenueCat Webhook] Subscription updated successfully');
+        break;
+      }
+
       case 'UNCANCELLATION': {
         const expirationDate = event.expiration_at_ms
           ? new Date(event.expiration_at_ms).toISOString()
@@ -108,7 +218,137 @@ Deno.serve(async (req: Request) => {
           throw subscriptionError;
         }
 
-        console.log('[RevenueCat Webhook] Subscription updated successfully');
+        const { error: clearFlagError } = await supabase
+          .from('user_profiles')
+          .update({ must_choose_businesses: false })
+          .eq('user_id', userId);
+
+        if (clearFlagError) {
+          console.error('[RevenueCat Webhook] Error clearing must_choose_businesses flag:', clearFlagError);
+        } else {
+          console.log('[RevenueCat Webhook] Cleared must_choose_businesses flag on uncancellation');
+        }
+
+        const { error: activateError } = await supabase.rpc('set_all_businesses_active', {
+          p_user_id: userId
+        });
+
+        if (activateError) {
+          console.error('[RevenueCat Webhook] Error activating businesses:', activateError);
+        } else {
+          console.log('[RevenueCat Webhook] Reactivated all businesses');
+        }
+
+        console.log('[RevenueCat Webhook] Subscription uncancelled successfully');
+        break;
+      }
+
+      case 'PRODUCT_CHANGE': {
+        const { data: currentSubscription } = await supabase
+          .from('user_subscriptions')
+          .select('tier, previous_tier')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const previousTier = currentSubscription?.tier || 'free';
+        console.log('[RevenueCat Webhook] Previous tier:', previousTier);
+        console.log('[RevenueCat Webhook] New tier:', tier);
+
+        const expirationDate = event.expiration_at_ms
+          ? new Date(event.expiration_at_ms).toISOString()
+          : null;
+
+        const { error: subscriptionError } = await supabase
+          .from('user_subscriptions')
+          .upsert({
+            user_id: userId,
+            subscription_status: 'active',
+            subscription_product_id: event.product_id,
+            subscription_expiration_date: expirationDate,
+            platform: event.store === 'app_store' ? 'ios' : 'android',
+            tier: tier,
+            max_owned_businesses: maxBusinesses,
+            previous_tier: previousTier,
+            revenuecat_app_user_id: event.original_app_user_id,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id',
+          });
+
+        if (subscriptionError) {
+          console.error('[RevenueCat Webhook] Error updating subscription:', subscriptionError);
+          throw subscriptionError;
+        }
+
+        if (isUpgrade(previousTier, tier)) {
+          console.log('[RevenueCat Webhook] Detected upgrade from', previousTier, 'to', tier);
+
+          const { error: clearFlagError } = await supabase
+            .from('user_profiles')
+            .update({ must_choose_businesses: false })
+            .eq('user_id', userId);
+
+          if (clearFlagError) {
+            console.error('[RevenueCat Webhook] Error clearing must_choose_businesses flag:', clearFlagError);
+          } else {
+            console.log('[RevenueCat Webhook] Cleared must_choose_businesses flag on upgrade');
+          }
+
+          const { error: activateError } = await supabase.rpc('set_all_businesses_active', {
+            p_user_id: userId
+          });
+
+          if (activateError) {
+            console.error('[RevenueCat Webhook] Error activating businesses:', activateError);
+          } else {
+            console.log('[RevenueCat Webhook] Reactivated all businesses after upgrade');
+          }
+        } else if (isDowngrade(previousTier, tier)) {
+          console.log('[RevenueCat Webhook] Detected downgrade from', previousTier, 'to', tier);
+
+          const { data: businessCountData } = await supabase
+            .rpc('get_user_owned_business_count', { p_user_id: userId });
+
+          const businessCount = businessCountData || 0;
+          console.log('[RevenueCat Webhook] User owns', businessCount, 'businesses, tier allows', maxBusinesses);
+
+          if (businessCount > (maxBusinesses || 1)) {
+            console.log('[RevenueCat Webhook] Business count exceeds tier limit, setting read-only mode');
+
+            const { error: readOnlyError } = await supabase.rpc('set_read_only_businesses', {
+              p_user_id: userId,
+              p_max_active_businesses: maxBusinesses || 1
+            });
+
+            if (readOnlyError) {
+              console.error('[RevenueCat Webhook] Error setting read-only businesses:', readOnlyError);
+            } else {
+              console.log('[RevenueCat Webhook] Set businesses to read-only and flagged for selection');
+            }
+
+            const { error: notificationError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: userId,
+                business_id: null,
+                type: 'subscription_warning',
+                title: 'Plan Downgraded',
+                message: `Your plan has been downgraded to ${tier}. Please select which ${maxBusinesses} business(es) to keep active.`,
+                read: false,
+                created_at: new Date().toISOString(),
+              });
+
+            if (notificationError) {
+              console.error('[RevenueCat Webhook] Error creating notification:', notificationError);
+            }
+          } else {
+            console.log('[RevenueCat Webhook] Business count within tier limit, no action needed');
+          }
+        } else {
+          console.log('[RevenueCat Webhook] Tier unchanged (lateral move)');
+        }
+
+        console.log('[RevenueCat Webhook] Product change processed successfully');
         break;
       }
 
@@ -119,7 +359,8 @@ Deno.serve(async (req: Request) => {
           .update({
             subscription_status: event.type === 'CANCELLATION' ? 'cancelled' : 'expired',
             tier: 'free',
-            max_owned_businesses: null,
+            max_owned_businesses: 1,
+            previous_tier: tier,
             updated_at: new Date().toISOString(),
           })
           .eq('user_id', userId);
@@ -129,34 +370,55 @@ Deno.serve(async (req: Request) => {
           throw subscriptionError;
         }
 
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('must_choose_businesses')
-          .eq('user_id', userId)
-          .maybeSingle();
+        const { data: businessCountData } = await supabase
+          .rpc('get_user_owned_business_count', { p_user_id: userId });
 
-        if (!profile?.must_choose_businesses) {
-          const { data: businesses } = await supabase
-            .from('businesses')
-            .select('id')
-            .eq('owner_user_id', userId)
-            .order('created_at', { ascending: true });
+        const businessCount = businessCountData || 0;
+        console.log('[RevenueCat Webhook] User owns', businessCount, 'businesses');
 
-          if (businesses && businesses.length > 1) {
-            const { error: profileError } = await supabase
-              .from('user_profiles')
-              .update({ must_choose_businesses: true })
-              .eq('user_id', userId);
+        if (businessCount > 1) {
+          console.log('[RevenueCat Webhook] Business count exceeds free tier limit (1), setting read-only mode');
 
-            if (profileError) {
-              console.error('[RevenueCat Webhook] Error updating profile:', profileError);
-            } else {
-              console.log('[RevenueCat Webhook] User flagged to choose businesses');
-            }
+          const { error: readOnlyError } = await supabase.rpc('set_read_only_businesses', {
+            p_user_id: userId,
+            p_max_active_businesses: 1
+          });
+
+          if (readOnlyError) {
+            console.error('[RevenueCat Webhook] Error setting read-only businesses:', readOnlyError);
+          } else {
+            console.log('[RevenueCat Webhook] Set businesses to read-only and flagged for selection');
+          }
+
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: userId,
+              business_id: null,
+              type: 'subscription_warning',
+              title: event.type === 'CANCELLATION' ? 'Subscription Cancelled' : 'Subscription Expired',
+              message: 'Your subscription has ended. Please select 1 business to keep active on the free plan.',
+              read: false,
+              created_at: new Date().toISOString(),
+            });
+
+          if (notificationError) {
+            console.error('[RevenueCat Webhook] Error creating notification:', notificationError);
+          }
+        } else {
+          console.log('[RevenueCat Webhook] Business count within free tier limit, clearing flag');
+
+          const { error: clearFlagError } = await supabase
+            .from('user_profiles')
+            .update({ must_choose_businesses: false })
+            .eq('user_id', userId);
+
+          if (clearFlagError) {
+            console.error('[RevenueCat Webhook] Error clearing flag:', clearFlagError);
           }
         }
 
-        console.log('[RevenueCat Webhook] Subscription cancelled/expired');
+        console.log('[RevenueCat Webhook] Subscription', event.type.toLowerCase(), 'processed');
         break;
       }
 
@@ -197,10 +459,13 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error('[RevenueCat Webhook] Error:', error);
+    console.error('[RevenueCat Webhook] Error type:', typeof error);
+    console.error('[RevenueCat Webhook] Error details:', JSON.stringify(error, null, 2));
 
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : String(error),
+        details: error,
       }),
       {
         headers: {

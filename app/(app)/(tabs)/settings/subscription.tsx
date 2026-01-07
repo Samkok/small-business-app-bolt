@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Linking
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info } from 'lucide-react-native';
@@ -34,10 +34,21 @@ export default function SubscriptionScreen() {
     restorePurchases,
     showPaywall,
     tierInfo,
-    ownedBusinessCount
+    ownedBusinessCount,
+    refreshTierInfo,
+    refreshSubscriptionStatus,
+    isIAPAvailable
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[SubscriptionScreen] Screen focused, refreshing subscription state');
+      refreshTierInfo();
+      refreshSubscriptionStatus();
+    }, [refreshTierInfo, refreshSubscriptionStatus])
+  );
 
   const isOwner = user?.id === currentBusiness?.owner_user_id;
 
@@ -164,7 +175,7 @@ export default function SubscriptionScreen() {
                     {t('subscription.totalSales')}
                   </Text>
                   <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {t('subscription.salesCount', { count: salesCountData.salesCount })}
+                    {t('subscription.salesCount', { count: salesCountData.totalSalesAllBusinesses || salesCountData.salesCount })}
                   </Text>
                 </View>
               </View>
@@ -172,12 +183,15 @@ export default function SubscriptionScreen() {
 
             {isOwner ? (
               <>
-                <CustomerCenterButton />
-                <Button
-                  title={t('subscription.manageSubscription')}
-                  onPress={handleManageSubscription}
-                  style={styles.manageButton}
-                />
+                {isIAPAvailable ? (
+                  <CustomerCenterButton />
+                ) : (
+                  <Button
+                    title={t('subscription.manageSubscription')}
+                    onPress={handleManageSubscription}
+                    style={styles.manageButton}
+                  />
+                )}
               </>
             ) : (
               <Card style={styles.infoCard}>

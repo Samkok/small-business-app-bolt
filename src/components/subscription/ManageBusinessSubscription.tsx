@@ -56,7 +56,8 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { userBusinesses, userProfile } = useAuth();
-  const { tierInfo } = useSubscription();
+  const subscription = useSubscription();
+  const { tierInfo } = subscription;
 
   const translateY = useSharedValue(0);
   const context = useSharedValue({ y: 0 });
@@ -199,6 +200,10 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+
+      // Refresh subscription data to reflect the changes
+      await subscription.refreshTierInfo();
+      await subscription.refreshSubscriptionStatus();
 
       Alert.alert('Success', 'Business access settings updated successfully.');
 

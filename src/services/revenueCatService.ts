@@ -442,6 +442,30 @@ class RevenueCatService {
   isAvailable(): boolean {
     return isNativeModuleAvailable;
   }
+
+  async presentCustomerCenter(): Promise<void> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable) {
+      console.log('[RevenueCat] Customer center not available - native module not loaded');
+      return;
+    }
+
+    try {
+      console.log('[RevenueCat] Attempting to load RevenueCat UI module...');
+      const RevenueCatUI = require('react-native-purchases-ui').default;
+
+      if (!RevenueCatUI || typeof RevenueCatUI.presentCustomerCenter !== 'function') {
+        console.error('[RevenueCat] RevenueCat UI module not available');
+        throw new Error('Customer center not available');
+      }
+
+      console.log('[RevenueCat] Presenting customer center...');
+      await RevenueCatUI.presentCustomerCenter();
+      console.log('[RevenueCat] Customer center presented successfully');
+    } catch (error) {
+      console.error('[RevenueCat] Error presenting customer center:', error);
+      throw error;
+    }
+  }
 }
 
 export const revenueCatService = new RevenueCatService();

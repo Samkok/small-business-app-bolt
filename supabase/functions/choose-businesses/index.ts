@@ -16,13 +16,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { userId, selectedBusinessIds } = await req.json();
+    const { userId, selectedBusinessIds, selectOldest, tierLimit } = await req.json();
 
-    if (!userId || !selectedBusinessIds || !Array.isArray(selectedBusinessIds)) {
+    if (!userId) {
       return new Response(
-        JSON.stringify({
-          error: 'Missing or invalid required fields: userId, selectedBusinessIds (must be array)'
-        }),
+        JSON.stringify({ error: 'Missing required field: userId' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -30,41 +28,87 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log('[ChooseBusinesses] Processing selection:', {
-      userId,
-      selectedCount: selectedBusinessIds.length,
-      selectedIds: selectedBusinessIds
-    });
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify all selected businesses are owned by user
-    const { data: verifyBusinesses, error: verifyError } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('owner_user_id', userId)
-      .in('id', selectedBusinessIds);
+    let businessIdsToActivate: string[] = [];
 
-    if (verifyError) {
-      console.error('[ChooseBusinesses] Error verifying businesses:', verifyError);
-      throw verifyError;
+    if (selectOldest) {
+      console.log('[ChooseBusinesses] Auto-selecting oldest businesses:', { userId, tierLimit });
+
+      const limit = tierLimit || 1;
+
+      const { data: allBusinesses, error: fetchError } = await supabase
+        .from('businesses')
+        .select('id, created_at')
+        .eq('owner_user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (fetchError) {
+        console.error('[ChooseBusinesses] Error fetching businesses:', fetchError);
+        throw fetchError;
+      }
+
+      if (!allBusinesses || allBusinesses.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'No businesses found for user' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      businessIdsToActivate = allBusinesses.slice(0, limit).map(b => b.id);
+      console.log('[ChooseBusinesses] Selected oldest businesses:', businessIdsToActivate);
+    } else {
+      if (!selectedBusinessIds || !Array.isArray(selectedBusinessIds)) {
+        return new Response(
+          JSON.stringify({
+            error: 'Missing or invalid required fields: selectedBusinessIds (must be array)'
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+      businessIdsToActivate = selectedBusinessIds;
     }
 
-    if (!verifyBusinesses || verifyBusinesses.length !== selectedBusinessIds.length) {
-      return new Response(
-        JSON.stringify({
-          error: 'Invalid business selection: some businesses are not owned by user'
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
+    console.log('[ChooseBusinesses] Processing selection:', {
+      userId,
+      selectedCount: businessIdsToActivate.length,
+      selectedIds: businessIdsToActivate,
+      selectOldest: !!selectOldest
+    });
+
+    if (!selectOldest) {
+      const { data: verifyBusinesses, error: verifyError } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('owner_user_id', userId)
+        .in('id', businessIdsToActivate);
+
+      if (verifyError) {
+        console.error('[ChooseBusinesses] Error verifying businesses:', verifyError);
+        throw verifyError;
+      }
+
+      if (!verifyBusinesses || verifyBusinesses.length !== businessIdsToActivate.length) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid business selection: some businesses are not owned by user'
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
 
-    // Get user's subscription tier to verify selection count
     const { data: tierData } = await supabase
       .rpc('get_user_subscription_tier', { p_user_id: userId });
 
@@ -80,14 +124,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify selection count matches tier limit
     const maxBusinesses = tierInfo.max_owned_businesses;
-    if (maxBusinesses !== null && selectedBusinessIds.length > maxBusinesses) {
+    if (maxBusinesses !== null && businessIdsToActivate.length > maxBusinesses) {
       return new Response(
         JSON.stringify({
           error: `Too many businesses selected. Your tier allows ${maxBusinesses} active business(es).`,
           maxAllowed: maxBusinesses,
-          selectedCount: selectedBusinessIds.length
+          selectedCount: businessIdsToActivate.length
         }),
         {
           status: 400,
@@ -96,11 +139,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Call activate_selected_businesses function
     console.log('[ChooseBusinesses] Activating selected businesses');
     const { error: activateError } = await supabase.rpc('activate_selected_businesses', {
       p_user_id: userId,
-      p_selected_business_ids: selectedBusinessIds
+      p_selected_business_ids: businessIdsToActivate
     });
 
     if (activateError) {
@@ -108,19 +150,29 @@ Deno.serve(async (req: Request) => {
       throw activateError;
     }
 
-    // Get updated business states
+    console.log('[ChooseBusinesses] Clearing must_choose_businesses flag');
+    const { error: clearFlagError } = await supabase
+      .from('user_profiles')
+      .update({ must_choose_businesses: false })
+      .eq('user_id', userId);
+
+    if (clearFlagError) {
+      console.error('[ChooseBusinesses] Error clearing must_choose_businesses flag:', clearFlagError);
+    }
+
     const { data: updatedBusinesses } = await supabase
       .from('businesses')
       .select('id, business_name, access_state')
       .eq('owner_user_id', userId)
       .order('created_at', { ascending: true });
 
-    console.log('[ChooseBusinesses] Selection saved successfully');
+    console.log('[ChooseBusinesses] Selection saved successfully', { selectOldest: !!selectOldest });
 
     return new Response(
       JSON.stringify({
         success: true,
-        activeBusinesses: selectedBusinessIds,
+        activeBusinesses: businessIdsToActivate,
+        autoSelected: !!selectOldest,
         businesses: (updatedBusinesses || []).map(b => ({
           id: b.id,
           name: b.business_name,

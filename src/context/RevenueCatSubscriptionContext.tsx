@@ -131,7 +131,12 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
+  const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
 
   const initializeRevenueCat = useCallback(async () => {
     console.log("[RevenueCatSubscriptionContext] Initializing subscription system");
@@ -279,10 +284,6 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      if (Platform.OS !== 'web' && isRevenueCatAvailable) {
-        await refreshCustomerInfo();
-      }
-
       const revenueCatSubscribed = customerInfo?.entitlements?.active
         ? Object.keys(customerInfo.entitlements.active).length > 0
         : false;
@@ -298,7 +299,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
     }
-  }, [user?.id, refreshCustomerInfo]);
+  }, [user?.id, customerInfo]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;
@@ -330,15 +331,66 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('must_choose_businesses')
-        .eq('user_id', user.id)
-        .maybeSingle() as { data: { must_choose_businesses: boolean } | null };
+      const [profileResult, tierData, ownedCount] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('must_choose_businesses')
+          .eq('user_id', user.id)
+          .maybeSingle() as Promise<{ data: { must_choose_businesses: boolean } | null }>,
+        subscriptionService.getTierInfo(user.id),
+        subscriptionService.getOwnedBusinessCount(user.id)
+      ]);
 
-      const mustChoose = profile?.must_choose_businesses || false;
+      const profile = profileResult.data;
+      const mustChooseFromDb = profile?.must_choose_businesses || false;
 
-      if (mustChoose) {
+      const maxAllowed = tierData.maxOwnedBusinesses;
+      const limitExceeded = maxAllowed !== null && maxAllowed !== 999999 && ownedCount > maxAllowed;
+
+      console.log('[RevenueCatSubscriptionContext] loadDowngradeData check:', {
+        mustChooseFromDb,
+        maxAllowed,
+        ownedCount,
+        limitExceeded
+      });
+
+      if (limitExceeded && !mustChooseFromDb) {
+        const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
+        const activeCount = businesses.filter((b: any) => b.access_state === 'active').length;
+        const readOnlyCount = businesses.filter((b: any) => b.access_state === 'read_only_sales').length;
+
+        console.log('[RevenueCatSubscriptionContext] Businesses state check:', {
+          activeCount,
+          readOnlyCount,
+          maxAllowed,
+          alreadyConfigured: activeCount === maxAllowed && readOnlyCount > 0
+        });
+
+        if (activeCount === maxAllowed && readOnlyCount > 0) {
+          console.log('[RevenueCatSubscriptionContext] Businesses already in correct state, no action needed');
+          setMustChooseBusinesses(false);
+          setOwnedBusinesses([]);
+          setReadOnlyBusinessIds([]);
+        } else {
+          console.log('[RevenueCatSubscriptionContext] Limit exceeded and not configured, setting must_choose_businesses flag');
+          await supabase
+            .from('user_profiles')
+            .update({ must_choose_businesses: true })
+            .eq('user_id', user.id);
+
+          setOwnedBusinesses(businesses);
+
+          const readOnlyIds = businesses
+            .filter((b: any) => b.access_state === 'read_only_sales')
+            .map((b: any) => b.id);
+          setReadOnlyBusinessIds(readOnlyIds);
+          setMustChooseBusinesses(true);
+
+          setTierInfo(tierData);
+          setOwnedBusinessCount(ownedCount);
+        }
+      } else if (mustChooseFromDb) {
+        console.log('[RevenueCatSubscriptionContext] must_choose_businesses flag is set, showing modal');
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
         setOwnedBusinesses(businesses);
 
@@ -347,7 +399,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           .map((b: any) => b.id);
         setReadOnlyBusinessIds(readOnlyIds);
         setMustChooseBusinesses(true);
+
+        setTierInfo(tierData);
+        setOwnedBusinessCount(ownedCount);
       } else {
+        console.log('[RevenueCatSubscriptionContext] No action needed, clearing modal state');
         setMustChooseBusinesses(false);
         setOwnedBusinesses([]);
         setReadOnlyBusinessIds([]);
@@ -384,6 +440,34 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       setIsLoading(true);
 
+      const currentInfo = await revenueCatService.getCustomerInfo();
+      const activeProductIds = Object.values(currentInfo.entitlements.active)
+        .map((entitlement: any) => entitlement.productIdentifier);
+
+      if (activeProductIds.includes(productId)) {
+        console.log('[RevenueCatSubscriptionContext] User already has this subscription');
+
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
+        return true;
+      }
+
       const pkg = offerings?.current?.availablePackages.find(
         (p: any) => p.product.identifier === productId
       );
@@ -400,19 +484,60 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
 
       setCustomerInfo(newCustomerInfo);
-      await refreshCustomerInfo();
-      await refreshSubscriptionStatus();
-      await refreshTierInfo();
-      await checkFeatureAccess();
+
+      const fullState = await subscriptionService.getFullSubscriptionState(
+        user.id,
+        currentBusiness?.id
+      );
+
+      setSubscriptionStatus(fullState.subscriptionStatus);
+      setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+      setTierInfo(fullState.tierInfo);
+      setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+      if (fullState.salesCountData) {
+        setSalesCountData(fullState.salesCountData);
+      }
+
+      if (fullState.canAccessFeature !== null) {
+        setCanAccessFeature(fullState.canAccessFeature);
+      }
 
       return true;
     } catch (error: any) {
       console.error('[RevenueCatSubscriptionContext] Error purchasing subscription:', error);
+
+      if (error?.code === 'PRODUCT_ALREADY_PURCHASED_ERROR' ||
+          error?.message?.toLowerCase().includes('already purchased') ||
+          error?.message?.toLowerCase().includes('already own')) {
+        console.log('[RevenueCatSubscriptionContext] Product already owned, returning success');
+
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
+        return true;
+      }
+
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [offerings, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [offerings, user?.id, currentBusiness?.id]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable) {
@@ -429,10 +554,24 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const hasActiveEntitlements = Object.keys(restoredInfo.entitlements.active).length > 0;
 
       if (hasActiveEntitlements) {
-        await refreshCustomerInfo();
-        await refreshSubscriptionStatus();
-        await refreshTierInfo();
-        await checkFeatureAccess();
+        const fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+
+        setSubscriptionStatus(fullState.subscriptionStatus);
+        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+        setTierInfo(fullState.tierInfo);
+        setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+        if (fullState.salesCountData) {
+          setSalesCountData(fullState.salesCountData);
+        }
+
+        if (fullState.canAccessFeature !== null) {
+          setCanAccessFeature(fullState.canAccessFeature);
+        }
+
         return true;
       }
 
@@ -443,7 +582,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } finally {
       setIsLoading(false);
     }
-  }, [refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id]);
 
   const showPaywall = useCallback(() => {
     if (!currentBusiness) return;
@@ -465,6 +604,125 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     setIsUnauthorizedModalVisible(false);
   }, []);
 
+  const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.log('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType, '- will retry on next app activity');
+      return;
+    }
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+    reconnectAttempts.current += 1;
+
+    console.log(`[RevenueCatSubscriptionContext] Reconnecting ${channelType} channel in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setupFn();
+    }, delay);
+  }, []);
+
+  const setupBusinessCountSubscription = useCallback(() => {
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    if (businessCountChannelRef.current) {
+      try {
+        businessCountChannelRef.current.unsubscribe();
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing business count channel:', error);
+      }
+      businessCountChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`business-count-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'businesses',
+          filter: `owner_user_id=eq.${user.id}`
+        },
+        async () => {
+          console.log('[RevenueCatSubscriptionContext] Business count change detected');
+
+          try {
+            const count = await subscriptionService.getOwnedBusinessCount(user.id);
+            setOwnedBusinessCount(count);
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error updating business count:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] Business count channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.log('[RevenueCatSubscriptionContext] Business count channel connection issue, attempting reconnect');
+          handleReconnect('business', setupBusinessCountSubscription);
+        }
+      });
+
+    businessCountChannelRef.current = channel;
+  }, [user?.id, handleReconnect]);
+
+  const setupUserProfileSubscription = useCallback(() => {
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    if (userProfileChannelRef.current) {
+      try {
+        userProfileChannelRef.current.unsubscribe();
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing user profile channel:', error);
+      }
+      userProfileChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`user-profile-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload: any) => {
+          console.log('[RevenueCatSubscriptionContext] User profile change detected:', payload);
+
+          const newMustChoose = payload.new?.must_choose_businesses;
+          const oldMustChoose = payload.old?.must_choose_businesses;
+
+          if (newMustChoose !== oldMustChoose) {
+            console.log('[RevenueCatSubscriptionContext] must_choose_businesses changed, reloading downgrade data');
+            await loadDowngradeData();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] User profile channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.log('[RevenueCatSubscriptionContext] User profile channel connection issue, attempting reconnect');
+          handleReconnect('subscription', setupUserProfileSubscription);
+        }
+      });
+
+    userProfileChannelRef.current = channel;
+  }, [user?.id, handleReconnect, loadDowngradeData]);
+
   const setupRealtimeSubscription = useCallback(() => {
     if (!user?.id || !isAppActiveRef.current) {
       return;
@@ -473,7 +731,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (realtimeChannelRef.current) {
       try {
         realtimeChannelRef.current.unsubscribe();
-      } catch (error) {}
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing subscription channel:', error);
+      }
       realtimeChannelRef.current = null;
     }
 
@@ -488,20 +748,48 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           filter: `user_id=eq.${user.id}`
         },
         async () => {
-          if (isRevenueCatAvailable) {
-            await refreshCustomerInfo();
-          }
-          await refreshSubscriptionStatus(true);
-          await refreshTierInfo();
-          if (currentBusiness?.id) {
-            await checkFeatureAccess(true);
+          console.log('[RevenueCatSubscriptionContext] Subscription change detected, refreshing state');
+
+          try {
+            if (isRevenueCatAvailable) {
+              await refreshCustomerInfo();
+            }
+
+            const fullState = await subscriptionService.getFullSubscriptionState(
+              user.id,
+              currentBusiness?.id
+            );
+
+            setSubscriptionStatus(fullState.subscriptionStatus);
+            setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
+            setTierInfo(fullState.tierInfo);
+            setOwnedBusinessCount(fullState.ownedBusinessCount);
+
+            if (fullState.salesCountData) {
+              setSalesCountData(fullState.salesCountData);
+            }
+
+            if (fullState.canAccessFeature !== null) {
+              setCanAccessFeature(fullState.canAccessFeature);
+            }
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error processing subscription change:', error);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] Subscription channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.log('[RevenueCatSubscriptionContext] Subscription channel connection issue, attempting reconnect');
+          handleReconnect('subscription', setupRealtimeSubscription);
+        }
+      });
 
     realtimeChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, refreshCustomerInfo, refreshSubscriptionStatus, refreshTierInfo, checkFeatureAccess]);
+  }, [user?.id, currentBusiness?.id, refreshCustomerInfo, handleReconnect]);
 
   const setupCustomerInfoListener = useCallback(() => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !revenueCatService) return;
@@ -544,23 +832,87 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   }, [user?.id, currentBusiness?.id, refreshSalesCount, checkFeatureAccess]);
 
   useEffect(() => {
+    if (!user?.id || !isInitialized) return;
+
+    const maxAllowed = tierInfo.maxOwnedBusinesses;
+    if (maxAllowed !== null && maxAllowed !== 999999 && ownedBusinessCount > maxAllowed) {
+      console.log('[RevenueCatSubscriptionContext] Business limit exceeded detected via state change, triggering downgrade check');
+      loadDowngradeData();
+    }
+  }, [user?.id, tierInfo.maxOwnedBusinesses, ownedBusinessCount, isInitialized, loadDowngradeData]);
+
+  useEffect(() => {
     if (user?.id && isAppActiveRef.current) {
       setupRealtimeSubscription();
+      setupBusinessCountSubscription();
+      setupUserProfileSubscription();
     }
 
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (realtimeChannelRef.current) {
         try {
           realtimeChannelRef.current.unsubscribe();
-        } catch (error) {}
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up subscription channel:', error);
+        }
         realtimeChannelRef.current = null;
       }
+
+      if (businessCountChannelRef.current) {
+        try {
+          businessCountChannelRef.current.unsubscribe();
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up business count channel:', error);
+        }
+        businessCountChannelRef.current = null;
+      }
+
+      if (userProfileChannelRef.current) {
+        try {
+          userProfileChannelRef.current.unsubscribe();
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up user profile channel:', error);
+        }
+        userProfileChannelRef.current = null;
+      }
     };
-  }, [user?.id, setupRealtimeSubscription]);
+  }, [user?.id, setupRealtimeSubscription, setupBusinessCountSubscription, setupUserProfileSubscription]);
 
   const isBusinessReadOnly = useCallback((businessId: string) => {
     return readOnlyBusinessIds.includes(businessId);
   }, [readOnlyBusinessIds]);
+
+  const handleDowngradeModalDismiss = useCallback(async () => {
+    if (!user?.id || ownedBusinesses.length === 0) return;
+
+    try {
+      console.log('[RevenueCatSubscriptionContext] Modal dismissed, auto-selecting oldest businesses');
+
+      const { data, error } = await supabase.functions.invoke('choose-businesses', {
+        body: {
+          userId: user.id,
+          selectOldest: true,
+          tierLimit: tierInfo.maxOwnedBusinesses || 1,
+        },
+      });
+
+      if (error) {
+        console.error('[RevenueCatSubscriptionContext] Error auto-selecting businesses:', error);
+        throw error;
+      }
+
+      console.log('[RevenueCatSubscriptionContext] Auto-selection complete:', data);
+      await loadDowngradeData();
+    } catch (error) {
+      console.error('[RevenueCatSubscriptionContext] Failed to auto-select businesses:', error);
+      await loadDowngradeData();
+    }
+  }, [user?.id, ownedBusinesses, tierInfo.maxOwnedBusinesses, loadDowngradeData]);
 
   const value: SubscriptionContextType = {
     isSubscribed,
@@ -608,6 +960,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           ownedBusinesses={ownedBusinesses}
           tierLimit={tierInfo.maxOwnedBusinesses || 1}
           onComplete={loadDowngradeData}
+          onDismiss={handleDowngradeModalDismiss}
         />
       )}
     </SubscriptionContext.Provider>

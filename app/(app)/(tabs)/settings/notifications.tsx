@@ -15,6 +15,7 @@ import { useNotifications } from '@/src/context/NotificationContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
+import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -45,6 +46,7 @@ export default function NotificationsScreen() {
   } = useNotifications();
   const { switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness } = useAuth();
   const saleDetailsModal = useSaleDetailsModal();
+  const subscription = useSubscription();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [loadingNotificationId, setLoadingNotificationId] = useState<string | null>(null);
@@ -153,6 +155,10 @@ export default function NotificationsScreen() {
             // Different business - switch first, then open modal
             try {
               await switchBusiness(notification.business_id);
+              await Promise.all([
+                subscription.refreshTierInfo(),
+                subscription.refreshSalesCount()
+              ]);
               await new Promise(resolve => setTimeout(resolve, 300));
 
               if (!notification.is_read) {
@@ -183,6 +189,10 @@ export default function NotificationsScreen() {
       if (currentBusiness?.id !== notification.business_id) {
         try {
           await switchBusiness(notification.business_id);
+          await Promise.all([
+            subscription.refreshTierInfo(),
+            subscription.refreshSalesCount()
+          ]);
           await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
           console.error('Failed to switch business:', error);
@@ -204,7 +214,7 @@ export default function NotificationsScreen() {
       // Clear loading state
       setLoadingNotificationId(null);
     }
-  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification, deleteNotification]);
+  }, [saleDetailsModal, markAsRead, switchBusiness, refreshUserBusinesses, userBusinesses, currentBusiness, router, handleMarkAsRead, handleRoleAssignedNotification, deleteNotification, subscription]);
 
   const handleRoleAssignedNotification = useCallback(async (data: any) => {
     try {
@@ -241,6 +251,10 @@ export default function NotificationsScreen() {
       if (currentBusiness?.id !== businessId) {
         console.log(`Switching to business: ${businessName}`);
         await switchBusiness(businessId);
+        await Promise.all([
+          subscription.refreshTierInfo(),
+          subscription.refreshSalesCount()
+        ]);
         await new Promise(resolve => setTimeout(resolve, 300));
       } else {
         console.log('Already on the assigned business');
@@ -251,7 +265,7 @@ export default function NotificationsScreen() {
       console.error('Error handling role_assigned notification:', error);
       router.push('/(app)/(tabs)/');
     }
-  }, [switchBusiness, router, currentBusiness]);
+  }, [switchBusiness, router, currentBusiness, subscription]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

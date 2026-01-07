@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { AlertCircle, Check, Building2, Users, Calendar, TrendingUp } from 'lucide-react-native';
+import { AlertCircle, Check, Building2, Users, Calendar, TrendingUp, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useLanguage } from '@/src/context/LanguageContext';
@@ -31,6 +31,7 @@ interface DowngradePickProps {
   ownedBusinesses: Business[];
   tierLimit: number;
   onComplete: () => void;
+  onDismiss?: () => void;
 }
 
 export function DowngradePick({
@@ -38,6 +39,7 @@ export function DowngradePick({
   ownedBusinesses,
   tierLimit,
   onComplete,
+  onDismiss,
 }: DowngradePickProps) {
   const { isDark } = useTheme();
   const { t } = useLanguage();
@@ -56,6 +58,7 @@ export function DowngradePick({
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
   const [businesses, setBusinesses] = useState<Business[]>(ownedBusinesses);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -203,10 +206,11 @@ export function DowngradePick({
 
       console.log('[DowngradePick] Business selection successful:', data);
 
+      onComplete();
+
       Alert.alert(
         'Success',
-        `${tierLimit} ${tierLimit === 1 ? 'business' : 'businesses'} activated successfully`,
-        [{ text: 'OK', onPress: onComplete }]
+        `${tierLimit} ${tierLimit === 1 ? 'business' : 'businesses'} activated successfully`
       );
     } catch (error: any) {
       console.error('[DowngradePick] Error confirming business selection:', error);
@@ -221,15 +225,30 @@ export function DowngradePick({
     }
   };
 
-  var isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting;
+  const handleDismiss = async () => {
+    if (!onDismiss || dismissing) return;
+
+    console.log('[DowngradePick] User dismissing modal, will auto-select oldest businesses');
+    setDismissing(true);
+
+    try {
+      await onDismiss();
+    } catch (error) {
+      console.error('[DowngradePick] Error during dismiss:', error);
+    } finally {
+      setDismissing(false);
+    }
+  };
+
+  var isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting || dismissing;
   if (tierLimit === 999999) {
-    isConfirmDisabled = selectedBusinessIds.length == 0 || submitting;
+    isConfirmDisabled = selectedBusinessIds.length == 0 || submitting || dismissing;
   } else if (tierLimit === 3) {
-    isConfirmDisabled = selectedBusinessIds.length > 3 || selectedBusinessIds <= 0 || submitting;
+    isConfirmDisabled = selectedBusinessIds.length > 3 || selectedBusinessIds <= 0 || submitting || dismissing;
   } else if (tierLimit === 1) {
-    isConfirmDisabled = selectedBusinessIds.length > 1 || selectedBusinessIds <= 0 || submitting;
+    isConfirmDisabled = selectedBusinessIds.length > 1 || selectedBusinessIds <= 0 || submitting || dismissing;
   }
-  
+
   return (
     <Modal
       visible={visible}
@@ -239,6 +258,20 @@ export function DowngradePick({
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: Math.max(60, insets.top + 24) }]}>
+          {onDismiss && (
+            <TouchableOpacity
+              style={[styles.closeButton, { backgroundColor: colors.card }]}
+              onPress={handleDismiss}
+              disabled={dismissing || submitting}
+              activeOpacity={0.7}
+            >
+              {dismissing ? (
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              ) : (
+                <X size={24} color={colors.textSecondary} />
+              )}
+            </TouchableOpacity>
+          )}
           <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
             <AlertCircle size={32} color={colors.primary} />
           </View>
@@ -255,6 +288,11 @@ export function DowngradePick({
               Other businesses will be read-only. You can view data and manage products/team, but cannot create sales.
             </Text>
           </View>
+          {onDismiss && (
+            <Text style={[styles.dismissHint, { color: colors.textSecondary }]}>
+              Tap X to skip - oldest {tierLimit === 1 ? 'business' : 'businesses'} will be selected automatically.
+            </Text>
+          )}
         </View>
 
         {loading ? (
@@ -407,6 +445,24 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     alignItems: 'center',
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  dismissHint: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
   iconContainer: {
     width: 64,

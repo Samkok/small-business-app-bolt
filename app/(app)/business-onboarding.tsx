@@ -56,7 +56,11 @@ export default function BusinessOnboardingScreen() {
     setRefreshing(true);
     try {
       console.log('BusinessOnboarding: Manual refresh triggered');
-      const businesses = await refreshUserBusinesses();
+      const [businesses] = await Promise.all([
+        refreshUserBusinesses(),
+        subscription.refreshTierInfo(),
+        subscription.refreshSubscriptionStatus()
+      ]);
 
       // Check if user has been added to any businesses
       if (businesses.length > 0) {
@@ -127,7 +131,7 @@ export default function BusinessOnboardingScreen() {
       return;
     }
 
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.tierInfo.maxOwnedBusinesses > userBusinesses.length) {
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
       Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
       subscription.showPaywall();
       return;
@@ -162,6 +166,9 @@ export default function BusinessOnboardingScreen() {
           setImageLoading(false);
         }
       }
+
+      // Refresh subscription data to update owned business count
+      await subscription.refreshTierInfo();
 
       // Navigate to the main app
       router.replace('/(app)/(tabs)');

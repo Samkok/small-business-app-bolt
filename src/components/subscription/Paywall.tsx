@@ -194,6 +194,10 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
   };
 
   const handlePurchase = async () => {
+    if (purchasing || restoring || isLoading) {
+      return;
+    }
+
     const billingPeriod = billingPeriods[selectedTier];
     const productId = productIdMapper.toAppStoreFormat(selectedTier, billingPeriod);
     const product = products.find(p => p.productId === productId);
@@ -207,9 +211,12 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
       return;
     }
 
+    setPurchasing(true);
+
     try {
-      setPurchasing(true);
       const success = await purchaseSubscription(product.productId);
+
+      setPurchasing(false);
 
       if (success) {
         Alert.alert(
@@ -231,13 +238,12 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
       }
     } catch (error) {
       console.error('Purchase error:', error);
+      setPurchasing(false);
       Alert.alert(
         t('subscription.alerts.purchaseErrorTitle'),
         t('subscription.alerts.purchaseErrorMessage'),
         [{ text: t('common.ok') }]
       );
-    } finally {
-      setPurchasing(false);
     }
   };
 

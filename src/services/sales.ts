@@ -62,8 +62,6 @@ export const salesService = {
       await productService.updateStock(item.product_id, newStock);
     }
 
-    await subscriptionService.incrementSalesCount(saleData.created_by, saleData.business_id);
-
     return sale;
   },
 
