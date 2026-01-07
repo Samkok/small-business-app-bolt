@@ -138,6 +138,7 @@ Deno.serve(async (req: Request) => {
           ? new Date(event.expiration_at_ms).toISOString()
           : null;
 
+        const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .upsert({
@@ -149,7 +150,9 @@ Deno.serve(async (req: Request) => {
             tier: tier,
             max_owned_businesses: maxBusinesses,
             revenuecat_app_user_id: event.original_app_user_id,
-            updated_at: new Date().toISOString(),
+            updated_by: 'webhook',
+            last_webhook_update: now,
+            updated_at: now,
           }, {
             onConflict: 'user_id',
           });
@@ -197,6 +200,7 @@ Deno.serve(async (req: Request) => {
           ? new Date(event.expiration_at_ms).toISOString()
           : null;
 
+        const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .upsert({
@@ -208,7 +212,9 @@ Deno.serve(async (req: Request) => {
             tier: tier,
             max_owned_businesses: maxBusinesses,
             revenuecat_app_user_id: event.original_app_user_id,
-            updated_at: new Date().toISOString(),
+            updated_by: 'webhook',
+            last_webhook_update: now,
+            updated_at: now,
           }, {
             onConflict: 'user_id',
           });
@@ -258,6 +264,7 @@ Deno.serve(async (req: Request) => {
           ? new Date(event.expiration_at_ms).toISOString()
           : null;
 
+        const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .upsert({
@@ -270,7 +277,9 @@ Deno.serve(async (req: Request) => {
             max_owned_businesses: maxBusinesses,
             previous_tier: previousTier,
             revenuecat_app_user_id: event.original_app_user_id,
-            updated_at: new Date().toISOString(),
+            updated_by: 'webhook',
+            last_webhook_update: now,
+            updated_at: now,
           }, {
             onConflict: 'user_id',
           });
@@ -354,6 +363,7 @@ Deno.serve(async (req: Request) => {
 
       case 'CANCELLATION':
       case 'EXPIRATION': {
+        const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .update({
@@ -361,7 +371,9 @@ Deno.serve(async (req: Request) => {
             tier: 'free',
             max_owned_businesses: 1,
             previous_tier: tier,
-            updated_at: new Date().toISOString(),
+            updated_by: 'webhook',
+            last_webhook_update: now,
+            updated_at: now,
           })
           .eq('user_id', userId);
 

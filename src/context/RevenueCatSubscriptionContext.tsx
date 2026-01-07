@@ -227,15 +227,53 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     }
   }, [user?.id]);
 
+  const lastSyncTimeRef = useRef<number>(0);
+  const syncCooldownMs = 5000;
+  const isSyncingRef = useRef(false);
+
   const syncWithSupabase = async (info: any, tier: RevenueCatTier) => {
     if (!user?.id) return;
+
+    const now = Date.now();
+    const timeSinceLastSync = now - lastSyncTimeRef.current;
+
+    if (timeSinceLastSync < syncCooldownMs) {
+      console.log(`[RevenueCatSubscriptionContext] Skipping sync - cooldown active (${timeSinceLastSync}ms since last sync)`);
+      return;
+    }
+
+    if (isSyncingRef.current) {
+      console.log('[RevenueCatSubscriptionContext] Skipping sync - sync already in progress');
+      return;
+    }
+
+    isSyncingRef.current = true;
 
     try {
       const { data: existingSubscription } = await supabase
         .from('user_subscriptions')
-        .select('subscription_status, subscription_expiration_date')
+        .select('subscription_status, subscription_expiration_date, tier, subscription_product_id, last_webhook_update, updated_by, max_owned_businesses')
         .eq('user_id', user.id)
-        .maybeSingle() as { data: { subscription_status: string; subscription_expiration_date: string | null } | null };
+        .maybeSingle() as { data: {
+          subscription_status: string;
+          subscription_expiration_date: string | null;
+          tier: string;
+          subscription_product_id: string | null;
+          last_webhook_update: string | null;
+          updated_by: string | null;
+          max_owned_businesses: number | null;
+        } | null };
+
+      if (existingSubscription?.last_webhook_update) {
+        const webhookUpdateTime = new Date(existingSubscription.last_webhook_update).getTime();
+        const timeSinceWebhookUpdate = now - webhookUpdateTime;
+
+        if (timeSinceWebhookUpdate < 30000) {
+          console.log('[RevenueCatSubscriptionContext] Skipping sync - webhook updated recently (' + timeSinceWebhookUpdate + 'ms ago)');
+          lastSyncTimeRef.current = now;
+          return;
+        }
+      }
 
       const existingIsActive = existingSubscription?.subscription_status === 'active';
       const existingNotExpired = existingSubscription?.subscription_expiration_date
@@ -244,35 +282,65 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const hasValidExistingSubscription = existingIsActive && existingNotExpired;
 
       if (tier === 'free' && hasValidExistingSubscription) {
-        console.log('[RevenueCatSubscriptionContext] Protecting existing subscription during migration - skipping sync');
+        console.log('[RevenueCatSubscriptionContext] Protecting existing active subscription - skipping sync');
+        lastSyncTimeRef.current = now;
         return;
       }
 
-      const activeEntitlement = info?.entitlements?.active ? Object.values(info.entitlements.active)[0] as any : null;
+      const existingIsCancelledOrExpired = existingSubscription?.subscription_status === 'cancelled' ||
+                                           existingSubscription?.subscription_status === 'expired';
+
+      const hasActiveEntitlements = info?.entitlements?.active &&
+                                    Object.keys(info.entitlements.active).length > 0;
+
+      if (existingIsCancelledOrExpired && !hasActiveEntitlements) {
+        console.log('[RevenueCatSubscriptionContext] Protecting cancelled/expired status - no active entitlements in RevenueCat');
+        lastSyncTimeRef.current = now;
+        return;
+      }
+
+      const activeEntitlement = hasActiveEntitlements ? Object.values(info.entitlements.active)[0] as any : null;
       const expirationDate = activeEntitlement?.expirationDate;
+      const newProductId = activeEntitlement?.productIdentifier || null;
 
       const maxBusinesses = isRevenueCatAvailable ? await revenueCatService.getMaxBusinesses() : null;
       const revenueCatAppUserId = info?.originalAppUserId || user.id;
 
+      const dataChanged = !existingSubscription ||
+                         existingSubscription.tier !== tier ||
+                         existingSubscription.subscription_product_id !== newProductId ||
+                         existingSubscription.max_owned_businesses !== maxBusinesses;
+
+      if (!dataChanged) {
+        console.log('[RevenueCatSubscriptionContext] No changes detected - skipping sync');
+        lastSyncTimeRef.current = now;
+        return;
+      }
+
+      console.log('[RevenueCatSubscriptionContext] Syncing to Supabase - changes detected');
       await supabase
         .from('user_subscriptions')
         .upsert({
           user_id: user.id,
           subscription_status: tier !== 'free' ? 'active' : 'trial',
-          subscription_product_id: activeEntitlement?.productIdentifier || null,
+          subscription_product_id: newProductId,
           subscription_expiration_date: expirationDate || null,
           platform: Platform.OS === 'ios' ? 'ios' : 'android',
           tier: tier,
           max_owned_businesses: maxBusinesses,
           revenuecat_app_user_id: revenueCatAppUserId,
+          updated_by: 'client',
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
         });
 
-      console.log('[RevenueCatSubscriptionContext] Synced with Supabase');
+      lastSyncTimeRef.current = now;
+      console.log('[RevenueCatSubscriptionContext] Synced with Supabase successfully');
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error syncing with Supabase:', error);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
@@ -747,11 +815,17 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           table: 'user_subscriptions',
           filter: `user_id=eq.${user.id}`
         },
-        async () => {
-          console.log('[RevenueCatSubscriptionContext] Subscription change detected, refreshing state');
+        async (payload: any) => {
+          console.log('[RevenueCatSubscriptionContext] Subscription change detected');
 
           try {
-            if (isRevenueCatAvailable) {
+            const updatedBy = payload.new?.updated_by;
+            console.log('[RevenueCatSubscriptionContext] Update source:', updatedBy);
+
+            if (updatedBy === 'webhook') {
+              console.log('[RevenueCatSubscriptionContext] Webhook update - skipping refreshCustomerInfo to prevent sync loop');
+            } else if (isRevenueCatAvailable) {
+              console.log('[RevenueCatSubscriptionContext] Non-webhook update - calling refreshCustomerInfo');
               await refreshCustomerInfo();
             }
 
