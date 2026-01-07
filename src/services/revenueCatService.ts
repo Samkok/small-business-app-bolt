@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const REVENUECAT_API_KEY = (Constants.expoConfig?.extra?.revenueCatApiKey || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'test_fkrdKDZMZCmmDvjIvjAjVnSaROY') as string;
+const REVENUECAT_API_KEY = (Constants.expoConfig?.extra?.revenueCatApiKey || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY) as string;
 
 export type RevenueCatTier = 'free' | 'pro' | 'pro_plus' | 'max';
 
