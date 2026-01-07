@@ -359,23 +359,40 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       });
 
       if (limitExceeded && !mustChooseFromDb) {
-        console.log('[RevenueCatSubscriptionContext] Limit exceeded, setting must_choose_businesses flag in DB');
-        await supabase
-          .from('user_profiles')
-          .update({ must_choose_businesses: true })
-          .eq('user_id', user.id);
-
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
-        setOwnedBusinesses(businesses);
+        const activeCount = businesses.filter((b: any) => b.access_state === 'active').length;
+        const readOnlyCount = businesses.filter((b: any) => b.access_state === 'read_only_sales').length;
 
-        const readOnlyIds = businesses
-          .filter((b: any) => b.access_state === 'read_only_sales')
-          .map((b: any) => b.id);
-        setReadOnlyBusinessIds(readOnlyIds);
-        setMustChooseBusinesses(true);
+        console.log('[RevenueCatSubscriptionContext] Businesses state check:', {
+          activeCount,
+          readOnlyCount,
+          maxAllowed,
+          alreadyConfigured: activeCount === maxAllowed && readOnlyCount > 0
+        });
 
-        setTierInfo(tierData);
-        setOwnedBusinessCount(ownedCount);
+        if (activeCount === maxAllowed && readOnlyCount > 0) {
+          console.log('[RevenueCatSubscriptionContext] Businesses already in correct state, no action needed');
+          setMustChooseBusinesses(false);
+          setOwnedBusinesses([]);
+          setReadOnlyBusinessIds([]);
+        } else {
+          console.log('[RevenueCatSubscriptionContext] Limit exceeded and not configured, setting must_choose_businesses flag');
+          await supabase
+            .from('user_profiles')
+            .update({ must_choose_businesses: true })
+            .eq('user_id', user.id);
+
+          setOwnedBusinesses(businesses);
+
+          const readOnlyIds = businesses
+            .filter((b: any) => b.access_state === 'read_only_sales')
+            .map((b: any) => b.id);
+          setReadOnlyBusinessIds(readOnlyIds);
+          setMustChooseBusinesses(true);
+
+          setTierInfo(tierData);
+          setOwnedBusinessCount(ownedCount);
+        }
       } else if (mustChooseFromDb) {
         console.log('[RevenueCatSubscriptionContext] must_choose_businesses flag is set, showing modal');
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
@@ -390,7 +407,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         setTierInfo(tierData);
         setOwnedBusinessCount(ownedCount);
       } else {
-        console.log('[RevenueCatSubscriptionContext] No need to show modal, clearing state');
+        console.log('[RevenueCatSubscriptionContext] No action needed, clearing modal state');
         setMustChooseBusinesses(false);
         setOwnedBusinesses([]);
         setReadOnlyBusinessIds([]);
