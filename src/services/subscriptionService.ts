@@ -352,7 +352,7 @@ export const subscriptionService = {
     try {
       const [salesCount, totalSales, tierInfo] = await Promise.all([
         this.getSalesCount(userId, businessId),
-        this.getTotalSalesCount(userId, businessId),
+        this.getTotalSalesCount(userId),
         this.getTierInfo(userId)
       ]);
       console.log("TOTAL SALES COUNT: ", totalSales);

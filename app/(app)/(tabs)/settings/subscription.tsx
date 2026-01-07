@@ -174,7 +174,7 @@ export default function SubscriptionScreen() {
                     {t('subscription.totalSales')}
                   </Text>
                   <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {t('subscription.salesCount', { count: salesCountData.salesCount })}
+                    {t('subscription.salesCount', { count: salesCountData.totalSalesAllBusinesses || salesCountData.salesCount })}
                   </Text>
                 </View>
               </View>
