@@ -252,7 +252,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       const { data: existingSubscription } = await supabase
         .from('user_subscriptions')
-        .select('subscription_status, subscription_expiration_date, tier, subscription_product_id, last_webhook_update, updated_by, max_owned_businesses')
+        .select('subscription_status, subscription_expiration_date, tier, subscription_product_id, last_webhook_update, updated_by, max_owned_businesses, sync_version')
         .eq('user_id', user.id)
         .maybeSingle() as { data: {
           subscription_status: string;
@@ -262,13 +262,14 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           last_webhook_update: string | null;
           updated_by: string | null;
           max_owned_businesses: number | null;
+          sync_version: number | null;
         } | null };
 
       if (existingSubscription?.last_webhook_update) {
         const webhookUpdateTime = new Date(existingSubscription.last_webhook_update).getTime();
         const timeSinceWebhookUpdate = now - webhookUpdateTime;
 
-        if (timeSinceWebhookUpdate < 30000) {
+        if (timeSinceWebhookUpdate < 300000) {
           console.log('[RevenueCatSubscriptionContext] Skipping sync - webhook updated recently (' + timeSinceWebhookUpdate + 'ms ago)');
           lastSyncTimeRef.current = now;
           return;
@@ -288,10 +289,17 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
 
       const existingIsCancelledOrExpired = existingSubscription?.subscription_status === 'cancelled' ||
-                                           existingSubscription?.subscription_status === 'expired';
+                                           existingSubscription?.subscription_status === 'expired' ||
+                                           existingSubscription?.subscription_status === 'trial';
 
       const hasActiveEntitlements = info?.entitlements?.active &&
                                     Object.keys(info.entitlements.active).length > 0;
+
+      if (existingIsCancelledOrExpired && tier === 'free' && existingSubscription?.updated_by === 'webhook') {
+        console.log('[RevenueCatSubscriptionContext] CRITICAL: Webhook set status to cancelled/expired/trial. Client shows tier=free. Respecting webhook data to prevent downgrade loop.');
+        lastSyncTimeRef.current = now;
+        return;
+      }
 
       if (existingIsCancelledOrExpired && !hasActiveEntitlements) {
         console.log('[RevenueCatSubscriptionContext] Protecting cancelled/expired status - no active entitlements in RevenueCat');
@@ -318,6 +326,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
 
       console.log('[RevenueCatSubscriptionContext] Syncing to Supabase - changes detected');
+      console.log('[RevenueCatSubscriptionContext] Client state: tier=' + tier + ', productId=' + newProductId + ', hasActiveEntitlements=' + hasActiveEntitlements);
+      console.log('[RevenueCatSubscriptionContext] DB state: tier=' + existingSubscription?.tier + ', productId=' + existingSubscription?.subscription_product_id + ', updated_by=' + existingSubscription?.updated_by);
+
+      const currentSyncVersion = existingSubscription?.sync_version || 0;
+
       await supabase
         .from('user_subscriptions')
         .upsert({
@@ -331,6 +344,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           revenuecat_app_user_id: revenueCatAppUserId,
           updated_by: 'client',
           updated_at: new Date().toISOString(),
+          sync_version: currentSyncVersion + 1,
         }, {
           onConflict: 'user_id',
         });
