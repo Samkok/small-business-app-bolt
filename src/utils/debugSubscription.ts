@@ -49,13 +49,18 @@ export const debugSubscription = {
       let tier = 'free';
       let maxOwnedBusinesses = null;
 
-      if (finalProductId.includes('pro_plus')) {
+      const lowerProductId = finalProductId.toLowerCase();
+      const proPlusMatch = lowerProductId.match(/pro[_\s-]?plus/);
+      const maxMatch = lowerProductId.match(/\bmax\b/);
+      const proMatch = lowerProductId.match(/\bpro\b/);
+
+      if (proPlusMatch) {
         tier = 'pro_plus';
         maxOwnedBusinesses = 3;
-      } else if (finalProductId.includes('max')) {
+      } else if (maxMatch) {
         tier = 'max';
         maxOwnedBusinesses = 999999;
-      } else if (finalProductId.includes('pro')) {
+      } else if (proMatch) {
         tier = 'pro';
         maxOwnedBusinesses = 1;
       }

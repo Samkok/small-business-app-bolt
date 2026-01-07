@@ -12,9 +12,15 @@ const corsHeaders = {
 
 function getTierFromProductId(productId: string | null): string {
   if (!productId) return 'free';
-  if (productId.includes('pro_plus')) return 'pro_plus';
-  if (productId.includes('max')) return 'max';
-  if (productId.includes('pro')) return 'pro';
+
+  const lowerProductId = productId.toLowerCase();
+  const proPlusMatch = lowerProductId.match(/pro[_\s-]?plus/);
+  const maxMatch = lowerProductId.match(/\bmax\b/);
+  const proMatch = lowerProductId.match(/\bpro\b/);
+
+  if (proPlusMatch) return 'pro_plus';
+  if (maxMatch) return 'max';
+  if (proMatch) return 'pro';
   return 'free';
 }
 
