@@ -30,11 +30,15 @@ export const productIdMapper = {
   getTierFromProductId(productId: string): TierType | 'free' {
     const lowerProductId = productId.toLowerCase();
 
-    if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
+    const proPlusMatch = lowerProductId.match(/pro[_\s-]?plus/);
+    const maxMatch = lowerProductId.match(/\bmax\b/);
+    const proMatch = lowerProductId.match(/\bpro\b/);
+
+    if (proPlusMatch) {
       return 'pro_plus';
-    } else if (lowerProductId.includes('max')) {
+    } else if (maxMatch) {
       return 'max';
-    } else if (lowerProductId.includes('pro')) {
+    } else if (proMatch) {
       return 'pro';
     }
 

@@ -34,11 +34,15 @@ function getTierFromProductId(productId: string | null | undefined): string {
 
   const lowerProductId = productId.toLowerCase();
 
-  if (lowerProductId.includes('pro_plus') || lowerProductId.includes('proplus')) {
+  const proPlusMatch = lowerProductId.match(/pro[_\s-]?plus/);
+  const maxMatch = lowerProductId.match(/\bmax\b/);
+  const proMatch = lowerProductId.match(/\bpro\b/);
+
+  if (proPlusMatch) {
     return 'pro_plus';
-  } else if (lowerProductId.includes('max')) {
+  } else if (maxMatch) {
     return 'max';
-  } else if (lowerProductId.includes('pro')) {
+  } else if (proMatch) {
     return 'pro';
   }
 
@@ -50,11 +54,11 @@ function getTierFromEntitlements(entitlementIds: string[] | null | undefined): s
     return 'free';
   }
 
-  if (entitlementIds.includes('bizmanage_max')) {
-    return 'max';
-  }
   if (entitlementIds.includes('bizmanage_pro_plus')) {
     return 'pro_plus';
+  }
+  if (entitlementIds.includes('bizmanage_max')) {
+    return 'max';
   }
   if (entitlementIds.includes('bizmanage_pro')) {
     return 'pro';
@@ -116,10 +120,13 @@ Deno.serve(async (req: Request) => {
     const payload: RevenueCatEvent = await req.json();
     const { event } = payload;
 
-    console.log('[RevenueCat Webhook] Received event:', event.type);
+    console.log('[RevenueCat Webhook] ========== EVENT RECEIVED ==========');
+    console.log('[RevenueCat Webhook] Event type:', event.type);
     console.log('[RevenueCat Webhook] User ID:', event.app_user_id);
-    console.log('[RevenueCat Webhook] Product ID:', event.product_id);
-    console.log('[RevenueCat Webhook] Entitlements:', event.entitlement_ids);
+    console.log('[RevenueCat Webhook] Product ID (RAW):', event.product_id);
+    console.log('[RevenueCat Webhook] Entitlements (RAW):', JSON.stringify(event.entitlement_ids));
+    console.log('[RevenueCat Webhook] Store:', event.store);
+    console.log('[RevenueCat Webhook] Original App User ID:', event.original_app_user_id);
 
     const userId = event.app_user_id;
     const tierFromProductId = getTierFromProductId(event.product_id);
@@ -127,9 +134,12 @@ Deno.serve(async (req: Request) => {
     const tier = tierFromProductId !== 'free' ? tierFromProductId : tierFromEntitlements;
     const maxBusinesses = getMaxBusinessesFromTier(tier);
 
+    console.log('[RevenueCat Webhook] ========== TIER DETECTION ==========');
     console.log('[RevenueCat Webhook] Tier from product ID:', tierFromProductId);
     console.log('[RevenueCat Webhook] Tier from entitlements:', tierFromEntitlements);
-    console.log('[RevenueCat Webhook] Final tier:', tier);
+    console.log('[RevenueCat Webhook] Final tier selected:', tier);
+    console.log('[RevenueCat Webhook] Max businesses for tier:', maxBusinesses);
+    console.log('[RevenueCat Webhook] =======================================');
 
     switch (event.type) {
       case 'INITIAL_PURCHASE':

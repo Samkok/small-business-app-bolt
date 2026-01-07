@@ -161,13 +161,14 @@ function decodeJWT(token: string): any {
 }
 
 function extractTierFromProductId(productId: string): string {
-  if (productId.includes('pro_plus') || productId.includes('proplus')) {
-    return 'pro_plus';
-  } else if (productId.includes('max')) {
-    return 'max';
-  } else if (productId.includes('pro')) {
-    return 'pro';
-  }
+  const lowerProductId = productId.toLowerCase();
+  const proPlusMatch = lowerProductId.match(/pro[_\s-]?plus/);
+  const maxMatch = lowerProductId.match(/\bmax\b/);
+  const proMatch = lowerProductId.match(/\bpro\b/);
+
+  if (proPlusMatch) return 'pro_plus';
+  if (maxMatch) return 'max';
+  if (proMatch) return 'pro';
   return 'free';
 }
 
