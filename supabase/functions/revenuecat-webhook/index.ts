@@ -27,7 +27,11 @@ interface RevenueCatEvent {
   };
 }
 
-function getTierFromEntitlements(entitlementIds: string[]): string {
+function getTierFromEntitlements(entitlementIds: string[] | null | undefined): string {
+  if (!entitlementIds || !Array.isArray(entitlementIds)) {
+    return 'free';
+  }
+
   if (entitlementIds.includes('bizmanage_max')) {
     return 'max';
   }
