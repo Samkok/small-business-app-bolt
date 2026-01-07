@@ -150,6 +150,16 @@ Deno.serve(async (req: Request) => {
       throw activateError;
     }
 
+    console.log('[ChooseBusinesses] Clearing must_choose_businesses flag');
+    const { error: clearFlagError } = await supabase
+      .from('user_profiles')
+      .update({ must_choose_businesses: false })
+      .eq('user_id', userId);
+
+    if (clearFlagError) {
+      console.error('[ChooseBusinesses] Error clearing must_choose_businesses flag:', clearFlagError);
+    }
+
     const { data: updatedBusinesses } = await supabase
       .from('businesses')
       .select('id, business_name, access_state')
