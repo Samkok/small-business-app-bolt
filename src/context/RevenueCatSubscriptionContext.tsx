@@ -298,7 +298,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
     }
-  }, [user?.id, refreshCustomerInfo, customerInfo]);
+  }, [user?.id, refreshCustomerInfo]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;

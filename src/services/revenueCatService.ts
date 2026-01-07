@@ -421,6 +421,20 @@ class RevenueCatService {
     }
   }
 
+  addCustomerInfoUpdateListener(callback: (customerInfo: any) => void): void {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
+      console.log('[RevenueCat] Customer info listener not available - native module not loaded');
+      return;
+    }
+
+    try {
+      console.log('[RevenueCat] Setting up customer info update listener');
+      Purchases.addCustomerInfoUpdateListener(callback);
+    } catch (error) {
+      console.error('[RevenueCat] Error setting up customer info listener:', error);
+    }
+  }
+
   isConfigured(): boolean {
     return this.configured;
   }
