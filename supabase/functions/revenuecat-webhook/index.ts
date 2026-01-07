@@ -50,7 +50,7 @@ function getTierFromProductId(productId: string | null | undefined): string {
 }
 
 function getTierFromEntitlements(entitlementIds: string[] | null | undefined): string {
-  if (!entitlementIds || !Array.isArray(entitlementIds)) {
+  if (!entitlementIds || !Array.isArray(entitlementIds) || entitlementIds.length === 0) {
     return 'free';
   }
 
@@ -139,6 +139,7 @@ Deno.serve(async (req: Request) => {
     console.log('[RevenueCat Webhook] Tier from entitlements:', tierFromEntitlements);
     console.log('[RevenueCat Webhook] Final tier selected:', tier);
     console.log('[RevenueCat Webhook] Max businesses for tier:', maxBusinesses);
+    console.log('[RevenueCat Webhook] NOTE: For CANCELLATION/EXPIRATION events, this tier will be IGNORED and set to "free"');
     console.log('[RevenueCat Webhook] =======================================');
 
     switch (event.type) {
@@ -373,14 +374,27 @@ Deno.serve(async (req: Request) => {
 
       case 'CANCELLATION':
       case 'EXPIRATION': {
+        console.log('[RevenueCat Webhook] Processing cancellation/expiration - getting current tier from database');
+
+        const { data: currentSubscription } = await supabase
+          .from('user_subscriptions')
+          .select('tier')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const previousTier = currentSubscription?.tier || 'free';
+        console.log('[RevenueCat Webhook] Current tier from database:', previousTier);
+        console.log('[RevenueCat Webhook] SETTING: subscription_product_id = null, tier = free, max_owned_businesses = 1');
+
         const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .update({
             subscription_status: event.type === 'CANCELLATION' ? 'cancelled' : 'expired',
+            subscription_product_id: null,
             tier: 'free',
             max_owned_businesses: 1,
-            previous_tier: tier,
+            previous_tier: previousTier,
             updated_by: 'webhook',
             last_webhook_update: now,
             updated_at: now,
