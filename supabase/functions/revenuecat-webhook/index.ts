@@ -201,10 +201,13 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error('[RevenueCat Webhook] Error:', error);
+    console.error('[RevenueCat Webhook] Error type:', typeof error);
+    console.error('[RevenueCat Webhook] Error details:', JSON.stringify(error, null, 2));
 
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : String(error),
+        details: error,
       }),
       {
         headers: {
