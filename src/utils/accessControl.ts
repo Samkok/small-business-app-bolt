@@ -1,4 +1,5 @@
 import { subscriptionService, FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import { supabase } from '@/src/config/supabase';
 
 export type Feature =
   | 'create_sale'
@@ -14,17 +15,46 @@ export type Feature =
 
 export interface AccessCheckResult {
   hasAccess: boolean;
-  reason?: 'subscribed' | 'under_limit' | 'at_limit';
+  reason?: 'subscribed' | 'under_limit' | 'at_limit' | 'business_read_only' | 'business_not_selected';
   message?: string;
 }
 
 export const accessControl = {
+  async getBusinessAccessState(businessId: string): Promise<'active' | 'read_only_sales' | 'read_only' | null> {
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('access_state')
+        .eq('id', businessId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching business access state:', error);
+        return null;
+      }
+
+      return data?.access_state || null;
+    } catch (error) {
+      console.error('Error getting business access state:', error);
+      return null;
+    }
+  },
+
   async canCreateSale(userId: string, businessId: string): Promise<AccessCheckResult> {
     try {
-      const [subscription, salesCount] = await Promise.all([
+      const [subscription, salesCount, businessAccessState] = await Promise.all([
         subscriptionService.getSubscriptionStatus(userId),
-        subscriptionService.getSalesCount(userId, businessId)
+        subscriptionService.getSalesCount(userId, businessId),
+        this.getBusinessAccessState(businessId)
       ]);
+
+      if (businessAccessState === 'read_only_sales' || businessAccessState === 'read_only') {
+        return {
+          hasAccess: false,
+          reason: 'business_read_only',
+          message: 'This business is in read-only mode due to subscription limits. Please select this business as active in your subscription settings.'
+        };
+      }
 
       if (subscription.isSubscribed) {
         return {
@@ -64,10 +94,27 @@ export const accessControl = {
     businessId: string
   ): Promise<AccessCheckResult> {
     try {
-      const [subscription, salesCount] = await Promise.all([
+      const [subscription, salesCount, businessAccessState] = await Promise.all([
         subscriptionService.getSubscriptionStatus(userId),
-        subscriptionService.getSalesCount(userId, businessId)
+        subscriptionService.getSalesCount(userId, businessId),
+        this.getBusinessAccessState(businessId)
       ]);
+
+      if (businessAccessState === 'read_only') {
+        return {
+          hasAccess: false,
+          reason: 'business_read_only',
+          message: 'This business is in read-only mode due to subscription limits. Please select this business as active in your subscription settings.'
+        };
+      }
+
+      if (businessAccessState === 'read_only_sales' && (feature === 'create_sale' || feature === 'edit_sale')) {
+        return {
+          hasAccess: false,
+          reason: 'business_read_only',
+          message: 'This business is in read-only mode for sales. Please select this business as active in your subscription settings.'
+        };
+      }
 
       if (subscription.isSubscribed) {
         return {
