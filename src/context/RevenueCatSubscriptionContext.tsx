@@ -832,6 +832,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         async (payload: any) => {
           console.log('[RevenueCatSubscriptionContext] Subscription change detected');
 
+          if (!user?.id) {
+            console.warn('[RevenueCatSubscriptionContext] No user ID available, skipping update');
+            return;
+          }
+
           try {
             const updatedBy = payload.new?.updated_by;
             console.log('[RevenueCatSubscriptionContext] Update source:', updatedBy);
@@ -840,28 +845,52 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
               console.log('[RevenueCatSubscriptionContext] Webhook update - skipping refreshCustomerInfo to prevent sync loop');
             } else if (isRevenueCatAvailable) {
               console.log('[RevenueCatSubscriptionContext] Non-webhook update - calling refreshCustomerInfo');
-              await refreshCustomerInfo();
+              try {
+                await refreshCustomerInfo();
+              } catch (refreshError) {
+                console.error('[RevenueCatSubscriptionContext] Error refreshing customer info:', refreshError);
+              }
             }
 
             const fullState = await subscriptionService.getFullSubscriptionState(
               user.id,
-              currentBusiness?.id
+              currentBusiness?.id || null
             );
 
-            setSubscriptionStatus(fullState.subscriptionStatus);
-            setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-            setTierInfo(fullState.tierInfo);
-            setOwnedBusinessCount(fullState.ownedBusinessCount);
-
-            if (fullState.salesCountData) {
-              setSalesCountData(fullState.salesCountData);
+            if (fullState?.subscriptionStatus) {
+              setSubscriptionStatus(fullState.subscriptionStatus);
+              setIsSubscribed(fullState.subscriptionStatus.isSubscribed || false);
             }
 
-            if (fullState.canAccessFeature !== null) {
+            if (fullState?.tierInfo) {
+              setTierInfo(fullState.tierInfo);
+            }
+
+            if (fullState?.ownedBusinessCount !== undefined) {
+              setOwnedBusinessCount(fullState.ownedBusinessCount);
+            }
+
+            if (fullState?.salesCountData) {
+              setSalesCountData(fullState.salesCountData);
+            } else {
+              setSalesCountData({
+                salesCount: 0,
+                remainingSales: FREE_TIER_LIMIT,
+                isAtLimit: false,
+              });
+            }
+
+            if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
               setCanAccessFeature(fullState.canAccessFeature);
             }
           } catch (error) {
             console.error('[RevenueCatSubscriptionContext] Error processing subscription change:', error);
+
+            setSalesCountData({
+              salesCount: 0,
+              remainingSales: FREE_TIER_LIMIT,
+              isAtLimit: false,
+            });
           }
         }
       )

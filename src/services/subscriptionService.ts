@@ -685,7 +685,7 @@ export const subscriptionService = {
     }
   },
 
-  async getFullSubscriptionState(userId: string, businessId?: string, showErrorAlert = false): Promise<FullSubscriptionState> {
+  async getFullSubscriptionState(userId: string, businessId?: string | null, showErrorAlert = false): Promise<FullSubscriptionState> {
     try {
       return await retryWithBackoff(async () => {
         const { data, error } = await supabase

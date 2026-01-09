@@ -44,9 +44,19 @@ export default function SubscriptionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[SubscriptionScreen] Screen focused, refreshing subscription state');
-      refreshTierInfo();
-      refreshSubscriptionStatus();
+      const refreshData = async () => {
+        try {
+          console.log('[SubscriptionScreen] Screen focused, refreshing subscription state');
+          await Promise.all([
+            refreshTierInfo(),
+            refreshSubscriptionStatus()
+          ]);
+        } catch (error) {
+          console.error('[SubscriptionScreen] Error refreshing subscription data:', error);
+        }
+      };
+
+      refreshData();
     }, [refreshTierInfo, refreshSubscriptionStatus])
   );
 
@@ -85,7 +95,28 @@ export default function SubscriptionScreen() {
     Linking.openURL('https://apps.apple.com/account/subscriptions');
   };
 
-  const progressPercentage = Math.min((salesCountData.salesCount / FREE_TIER_LIMIT) * 100, 100);
+  const progressPercentage = salesCountData?.salesCount
+    ? Math.min((salesCountData.salesCount / FREE_TIER_LIMIT) * 100, 100)
+    : 0;
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color={isDark ? '#ffffff' : '#000000'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>
+            {t('subscription.title')}
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
@@ -175,7 +206,7 @@ export default function SubscriptionScreen() {
                     {t('subscription.totalSales')}
                   </Text>
                   <Text style={[styles.detailValue, isDark && styles.detailValueDark]}>
-                    {t('subscription.salesCount', { count: salesCountData.totalSalesAllBusinesses || salesCountData.salesCount })}
+                    {t('subscription.salesCount', { count: salesCountData?.totalSalesAllBusinesses || salesCountData?.salesCount || 0 })}
                   </Text>
                 </View>
               </View>
@@ -227,7 +258,7 @@ export default function SubscriptionScreen() {
                     {t('subscription.salesUsage')}
                   </Text>
                   <Text style={[styles.progressCount, isDark && styles.progressCountDark]}>
-                    {salesCountData.totalSalesAllBusinesses || salesCountData.salesCount} / {FREE_TIER_LIMIT}
+                    {salesCountData?.totalSalesAllBusinesses || salesCountData?.salesCount || 0} / {FREE_TIER_LIMIT}
                   </Text>
                 </View>
                 <View style={[styles.progressBar, isDark && styles.progressBarDark]}>
@@ -236,15 +267,15 @@ export default function SubscriptionScreen() {
                       styles.progressFill,
                       {
                         width: `${progressPercentage}%`,
-                        backgroundColor: salesCountData.isAtLimit ? '#ef4444' : '#3b82f6'
+                        backgroundColor: salesCountData?.isAtLimit ? '#ef4444' : '#3b82f6'
                       }
                     ]}
                   />
                 </View>
                 <Text style={[styles.progressText, isDark && styles.progressTextDark]}>
-                  {salesCountData.isAtLimit
+                  {salesCountData?.isAtLimit
                     ? t('subscription.limitReached')
-                    : t('subscription.salesRemaining', { count: salesCountData.remainingSales })}
+                    : t('subscription.salesRemaining', { count: salesCountData?.remainingSales || FREE_TIER_LIMIT })}
                 </Text>
                 <Text style={[styles.progressNote, isDark && styles.progressNoteDark]}>
                   Total across all businesses
