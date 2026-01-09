@@ -12,7 +12,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info } from 'lucide-react-native';
+import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -161,6 +161,28 @@ export default function SubscriptionScreen() {
                 </Text>
               )}
             </LinearGradient>
+
+            {subscriptionStatus?.willRenew === false && subscriptionStatus?.expirationDate && (
+              <Card style={[styles.warningCard, isDark && styles.warningCardDark]}>
+                <View style={styles.warningHeader}>
+                  <AlertTriangle size={20} color="#f59e0b" />
+                  <Text style={[styles.warningTitle, isDark && styles.warningTitleDark]}>
+                    Subscription Ending Soon
+                  </Text>
+                </View>
+                <Text style={[styles.warningMessage, isDark && styles.warningMessageDark]}>
+                  Your subscription will end on {new Date(subscriptionStatus.expirationDate).toLocaleDateString()}.
+                  You'll keep your current benefits until then. Resubscribe to continue enjoying unlimited access.
+                </Text>
+                {isOwner && (
+                  <Button
+                    title="Resubscribe"
+                    onPress={showPaywall}
+                    style={styles.resubscribeButton}
+                  />
+                )}
+              </Card>
+            )}
 
             <Card style={styles.detailsCard}>
               {isOwner && (
@@ -608,5 +630,41 @@ const styles = StyleSheet.create({
   },
   infoDescriptionDark: {
     color: '#9ca3af',
+  },
+  warningCard: {
+    marginBottom: 16,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+  },
+  warningCardDark: {
+    backgroundColor: '#451a03',
+    borderColor: '#f59e0b',
+  },
+  warningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  warningTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  warningTitleDark: {
+    color: '#fbbf24',
+  },
+  warningMessage: {
+    fontSize: 14,
+    color: '#78350f',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  warningMessageDark: {
+    color: '#fcd34d',
+  },
+  resubscribeButton: {
+    marginBottom: 0,
   },
 });

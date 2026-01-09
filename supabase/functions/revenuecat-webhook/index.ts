@@ -202,6 +202,7 @@ Deno.serve(async (req: Request) => {
             tier: tier,
             max_owned_businesses: maxBusinesses,
             revenuecat_app_user_id: event.original_app_user_id,
+            will_renew: true,
             updated_by: 'webhook',
             last_webhook_update: now,
             updated_at: now,
@@ -273,6 +274,7 @@ Deno.serve(async (req: Request) => {
 
       case 'UNCANCELLATION': {
         console.log('[RevenueCat Webhook] ========== UNCANCELLATION ==========');
+        console.log('[RevenueCat Webhook] User reactivated subscription - will now auto-renew');
 
         // Log current state before changes
         const { data: beforeState } = await supabase
@@ -310,6 +312,7 @@ Deno.serve(async (req: Request) => {
             tier: tier,
             max_owned_businesses: maxBusinesses,
             revenuecat_app_user_id: event.original_app_user_id,
+            will_renew: true,
             updated_by: 'webhook',
             last_webhook_update: now,
             updated_at: now,
@@ -429,6 +432,7 @@ Deno.serve(async (req: Request) => {
             max_owned_businesses: maxBusinesses,
             previous_tier: previousTier,
             revenuecat_app_user_id: event.original_app_user_id,
+            will_renew: true,
             updated_by: 'webhook',
             last_webhook_update: now,
             updated_at: now,
@@ -563,40 +567,35 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      case 'CANCELLATION':
-      case 'EXPIRATION': {
-        console.log('[RevenueCat Webhook] ========== CANCELLATION/EXPIRATION ==========');
-        console.log('[RevenueCat Webhook] Event type:', event.type);
+      case 'CANCELLATION': {
+        console.log('[RevenueCat Webhook] ========== CANCELLATION ==========');
+        console.log('[RevenueCat Webhook] User cancelled subscription but will retain benefits until expiration date');
 
         // Log current state before changes
         const { data: beforeState } = await supabase
           .from('user_subscriptions')
-          .select('selected_business_ids, tier')
+          .select('selected_business_ids, tier, subscription_expiration_date')
           .eq('user_id', userId)
           .maybeSingle();
 
         console.log('[RevenueCat Webhook] BEFORE - selected_business_ids:', beforeState?.selected_business_ids);
         console.log('[RevenueCat Webhook] BEFORE - tier:', beforeState?.tier);
+        console.log('[RevenueCat Webhook] BEFORE - expiration_date:', beforeState?.subscription_expiration_date);
 
-        const { data: currentSubscription } = await supabase
-          .from('user_subscriptions')
-          .select('tier')
-          .eq('user_id', userId)
-          .maybeSingle();
+        const expirationDate = event.expiration_at_ms
+          ? new Date(event.expiration_at_ms).toISOString()
+          : null;
 
-        const previousTier = currentSubscription?.tier || 'free';
-        console.log('[RevenueCat Webhook] Current tier from database:', previousTier);
-        console.log('[RevenueCat Webhook] SETTING: subscription_product_id = null, tier = free, max_owned_businesses = 1');
+        console.log('[RevenueCat Webhook] Marking subscription as will_renew=false');
+        console.log('[RevenueCat Webhook] User will keep', beforeState?.tier || 'current', 'tier benefits until:', expirationDate);
+        console.log('[RevenueCat Webhook] NOT downgrading immediately - benefits remain active');
 
         const now = new Date().toISOString();
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .update({
-            subscription_status: event.type === 'CANCELLATION' ? 'cancelled' : 'expired',
-            subscription_product_id: null,
-            tier: 'free',
-            max_owned_businesses: 1,
-            previous_tier: previousTier,
+            will_renew: false,
+            subscription_expiration_date: expirationDate,
             updated_by: 'webhook',
             last_webhook_update: now,
             updated_at: now,
@@ -608,7 +607,62 @@ Deno.serve(async (req: Request) => {
           throw subscriptionError;
         }
 
-        console.log('[RevenueCat Webhook] Subscription record updated');
+        console.log('[RevenueCat Webhook] Subscription marked for cancellation');
+        console.log('[RevenueCat Webhook] Status: Active until', expirationDate);
+        console.log('[RevenueCat Webhook] will_renew: false (will not auto-renew)');
+        console.log('[RevenueCat Webhook] NOTE: User retains full benefits until expiration date');
+        console.log('[RevenueCat Webhook] NOTE: Downgrade will occur when EXPIRATION event is received');
+        console.log('[RevenueCat Webhook] ========================================');
+        break;
+      }
+
+      case 'EXPIRATION': {
+        console.log('[RevenueCat Webhook] ========== EXPIRATION ==========');
+        console.log('[RevenueCat Webhook] Subscription has expired - downgrading to free tier');
+
+        // Log current state before changes
+        const { data: beforeState } = await supabase
+          .from('user_subscriptions')
+          .select('selected_business_ids, tier, will_renew')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        console.log('[RevenueCat Webhook] BEFORE - selected_business_ids:', beforeState?.selected_business_ids);
+        console.log('[RevenueCat Webhook] BEFORE - tier:', beforeState?.tier);
+        console.log('[RevenueCat Webhook] BEFORE - will_renew:', beforeState?.will_renew);
+
+        const { data: currentSubscription } = await supabase
+          .from('user_subscriptions')
+          .select('tier')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const previousTier = currentSubscription?.tier || 'free';
+        console.log('[RevenueCat Webhook] Previous tier:', previousTier);
+        console.log('[RevenueCat Webhook] SETTING: subscription_status=expired, tier=free, max_owned_businesses=1');
+
+        const now = new Date().toISOString();
+        const { error: subscriptionError } = await supabase
+          .from('user_subscriptions')
+          .update({
+            subscription_status: 'expired',
+            subscription_product_id: null,
+            tier: 'free',
+            max_owned_businesses: 1,
+            previous_tier: previousTier,
+            will_renew: false,
+            updated_by: 'webhook',
+            last_webhook_update: now,
+            updated_at: now,
+          })
+          .eq('user_id', userId);
+
+        if (subscriptionError) {
+          console.error('[RevenueCat Webhook] Error updating subscription:', subscriptionError);
+          throw subscriptionError;
+        }
+
+        console.log('[RevenueCat Webhook] Subscription record updated to expired/free tier');
 
         const { data: businessCountData } = await supabase
           .rpc('get_user_owned_business_count', { p_user_id: userId });
@@ -637,7 +691,7 @@ Deno.serve(async (req: Request) => {
               user_id: userId,
               business_id: null,
               type: 'subscription_warning',
-              title: event.type === 'CANCELLATION' ? 'Subscription Cancelled' : 'Subscription Expired',
+              title: 'Subscription Expired',
               message: 'Your subscription has ended. Please select 1 business to keep active on the free plan.',
               read: false,
               created_at: new Date().toISOString(),
@@ -672,7 +726,7 @@ Deno.serve(async (req: Request) => {
 
         console.log('[RevenueCat Webhook] AFTER - selected_business_ids:', afterState?.selected_business_ids);
         console.log('[RevenueCat Webhook] AFTER - tier:', afterState?.tier);
-        console.log('[RevenueCat Webhook] Subscription', event.type.toLowerCase(), 'processed successfully');
+        console.log('[RevenueCat Webhook] Subscription expiration processed successfully');
         console.log('[RevenueCat Webhook] ========================================');
         break;
       }
