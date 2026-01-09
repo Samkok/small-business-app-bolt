@@ -13,6 +13,7 @@ interface RevenueCatEvent {
     type: string;
     app_user_id: string;
     original_app_user_id: string;
+    new_product_id: string;
     product_id: string;
     period_type: string;
     purchased_at_ms: number;
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
     console.log('[RevenueCat Webhook] Original App User ID:', event.original_app_user_id);
 
     // Validate product_id
-    let validatedProductId = event.product_id;
+    let validatedProductId = event.product_id || event.new_product_id;
     if (!validatedProductId || validatedProductId === null || validatedProductId === undefined) {
       console.warn('[RevenueCat Webhook] WARNING: product_id is missing or null!');
       console.log('[RevenueCat Webhook] Attempting to derive from entitlements...');
@@ -414,14 +415,14 @@ Deno.serve(async (req: Request) => {
           : null;
 
         const now = new Date().toISOString();
-        console.log('[RevenueCat Webhook] Updating subscription with product_id:', validatedProductId);
+        console.log('[RevenueCat Webhook] Updating subscription with product_id:', event.new_product_id);
 
         const { error: subscriptionError } = await supabase
           .from('user_subscriptions')
           .upsert({
             user_id: userId,
             subscription_status: 'active',
-            subscription_product_id: validatedProductId,
+            subscription_product_id: event.new_product_id,
             subscription_expiration_date: expirationDate,
             platform: event.store === 'APP_STORE' ? 'ios' : 'android',
             tier: tier,
