@@ -4,11 +4,11 @@ export type BillingPeriod = 'monthly' | 'yearly';
 export const productIdMapper = {
   toAppStoreFormat(tier: TierType, period: BillingPeriod): string {
     const periodSuffix = period === 'monthly' ? 'month' : 'year';
-    return `bizmanage.${tier}.${periodSuffix}`;
+    return `premium.${tier}.${periodSuffix}`;
   },
 
   fromAppStoreFormat(productId: string): { tier: TierType | null; period: BillingPeriod | null } {
-    const match = productId.match(/bizmanage\.(pro_plus|pro|max)\.(month|year)/);
+    const match = productId.match(/premium\.(pro_plus|pro|max)\.(month|year)/);
 
     if (!match) {
       return { tier: null, period: null };
