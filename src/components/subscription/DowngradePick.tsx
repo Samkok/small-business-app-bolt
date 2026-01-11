@@ -103,13 +103,13 @@ export function DowngradePick({
 
       const [salesResult, teamResult] = await Promise.all([
         supabase
-          .from('user_sales_counts')
-          .select('business_id, sales_count')
-          .eq('user_id', user.id)
-          .in('business_id', businessIds),
+          .from('sales')
+          .select('business_id, id')
+          .in('business_id', businessIds)
+          .eq('voided', false),
         supabase
           .from('user_business_roles')
-          .select('business_id')
+          .select('business_id, user_id')
           .in('business_id', businessIds)
       ]);
 
@@ -120,8 +120,8 @@ export function DowngradePick({
         console.error('[DowngradePick] Error loading team members:', teamResult.error);
       }
 
-      const salesCount = (salesResult.data || []).reduce((acc, item) => {
-        acc[item.business_id] = item.sales_count;
+      const salesCount = (salesResult.data || []).reduce((acc, sale) => {
+        acc[sale.business_id] = (acc[sale.business_id] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
@@ -129,6 +129,9 @@ export function DowngradePick({
         acc[member.business_id] = (acc[member.business_id] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
+
+      console.log('[DowngradePick] Sales counts:', salesCount);
+      console.log('[DowngradePick] Team member counts:', teamCount);
 
       const enrichedBusinesses = ownedBusinesses.map(business => ({
         ...business,
@@ -144,6 +147,12 @@ export function DowngradePick({
       });
 
       console.log('[DowngradePick] Successfully loaded', enrichedBusinesses.length, 'enriched businesses');
+      console.log('[DowngradePick] Enriched businesses data:', enrichedBusinesses.map(b => ({
+        id: b.id,
+        name: b.name || b.business_name,
+        sales_count: b.sales_count,
+        team_member_count: b.team_member_count
+      })));
       setBusinesses(enrichedBusinesses);
       setError(null);
     } catch (error) {
