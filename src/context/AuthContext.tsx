@@ -171,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signedOutDueToInactivityRef = useRef<boolean>(false);
   const recentlyAuthenticatedRef = useRef<boolean>(false);
   const lastAuthenticationTimeRef = useRef<number>(0);
+  const isLoadingAuthDataRef = useRef<boolean>(false);
 
   // Router context for auto-redirect on business assignment
   const router = useRouter();
@@ -1324,39 +1325,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Load saved current business ID from AsyncStorage
   const determineCurrentBusiness = async (userId: string, businesses: Business[], existingCurrentBusiness: Business | null): Promise<Business | null> => {
     try {
+      // PRIORITY 1: If we have an existing current business and it's still in the list, keep it
+      // This prevents unnecessary switching when the app returns from background
+      if (existingCurrentBusiness) {
+        const stillValid = businesses.find(b => b.id === existingCurrentBusiness.id);
+        if (stillValid) {
+          console.log('determineCurrentBusiness: Preserving existing business:', existingCurrentBusiness.business_name);
+          return existingCurrentBusiness;
+        } else {
+          console.log('determineCurrentBusiness: Existing business no longer accessible, switching');
+        }
+      }
+
+      // PRIORITY 2: Try to load saved business preference
       const savedBusinessId = await AsyncStorage.getItem(`currentBusiness_${userId}`);
       if (savedBusinessId && businesses.length > 0) {
         const business = businesses.find(b => b.id === savedBusinessId);
         if (business) {
-          // If the business ID matches the existing one, return the existing reference to prevent unnecessary re-renders
-          if (existingCurrentBusiness && existingCurrentBusiness.id === business.id) {
-            return existingCurrentBusiness;
-          }
+          console.log('determineCurrentBusiness: Using saved business preference:', business.business_name);
           return business;
         }
       }
-      
-      // If no saved business or saved business not found, use the first one
+
+      // PRIORITY 3: Default to first business (consistently ordered)
       if (businesses.length > 0) {
         const firstBusiness = businesses[0];
-        // If the first business ID matches the existing one, return the existing reference
-        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
-          return existingCurrentBusiness;
-        }
+        console.log('determineCurrentBusiness: Defaulting to first business:', firstBusiness.business_name);
         return firstBusiness;
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Error loading saved business ID:', error);
-      // Default to first business if there's an error
+      console.error('Error in determineCurrentBusiness:', error);
+
+      // Fallback: preserve existing business if possible
+      if (existingCurrentBusiness && businesses.some(b => b.id === existingCurrentBusiness.id)) {
+        return existingCurrentBusiness;
+      }
+
+      // Otherwise default to first business
       if (businesses.length > 0) {
-        const firstBusiness = businesses[0];
-        // If the first business ID matches the existing one, return the existing reference
-        if (existingCurrentBusiness && existingCurrentBusiness.id === firstBusiness.id) {
-          return existingCurrentBusiness;
-        }
-        return firstBusiness;
+        return businesses[0];
       }
       return null;
     }
@@ -1595,6 +1604,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadAuthData = async (userId: string) => {
+    // Prevent concurrent executions to avoid race conditions
+    if (isLoadingAuthDataRef.current) {
+      console.log('loadAuthData already in progress, skipping duplicate call');
+      return;
+    }
+
+    isLoadingAuthDataRef.current = true;
     console.log('loadAuthData started for user:', userId);
     setDataLoadingState('loading');
     try {
@@ -1624,6 +1640,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setLoading(false);
                 setDataLoadingState('loaded');
               }
+              isLoadingAuthDataRef.current = false;
               return;
             }
 
@@ -1647,7 +1664,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserProfile(data);
             }
             
-            // Now fetch the user's businesses
+            // Now fetch the user's businesses (ordered consistently by creation time)
             const { data: businessRoles, error: businessRolesError } = await supabase
               .from('user_business_roles')
               .select(`
@@ -1655,7 +1672,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 role,
                 businesses:business_id(*)
               `)
-              .eq('user_id', userId);
+              .eq('user_id', userId)
+              .order('created_at', { ascending: true });
               
             if (businessRolesError) {
               console.error('Error loading business roles:', businessRolesError);
@@ -1702,6 +1720,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setLoading(false);
               setDataLoadingState('loaded');
             }
+            isLoadingAuthDataRef.current = false;
             return; // Exit the function early on success
           } else {
             console.log('No user profile found for user:', userId, '- attempting to create one');
@@ -1746,6 +1765,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setLoading(false);
                 setDataLoadingState('loaded');
               }
+              isLoadingAuthDataRef.current = false;
               return;
             }
           }
@@ -1758,6 +1778,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setLoading(false);
               setDataLoadingState('loaded');
             }
+            isLoadingAuthDataRef.current = false;
             return;
           }
 
@@ -1787,6 +1808,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setDataLoadingState('loaded');
         }
       }
+      isLoadingAuthDataRef.current = false;
       return;
     } catch (error: any) {
       console.error('Error in loadAuthData:', error);
@@ -1803,6 +1825,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         setDataLoadingState('loaded');
       }
+      isLoadingAuthDataRef.current = false;
       return;
     }
 
@@ -1812,6 +1835,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setDataLoadingState('loaded');
     }
+    isLoadingAuthDataRef.current = false;
   };
 
   // Original loadProfile function (commented out)
@@ -1867,6 +1891,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('refreshUserBusinesses: Starting refresh for user:', user.id);
 
       // Fetch the user's businesses (includes all columns including access_state)
+      // Ordered consistently by creation time to prevent random switching
       const { data: businessRoles, error: businessRolesError } = await supabase
         .from('user_business_roles')
         .select(`
@@ -1874,7 +1899,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role,
           businesses:business_id(*)
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
 
       if (businessRolesError) {
         console.error('refreshUserBusinesses: Error fetching business roles:', businessRolesError);
