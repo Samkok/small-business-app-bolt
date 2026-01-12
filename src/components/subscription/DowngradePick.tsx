@@ -249,13 +249,28 @@ export function DowngradePick({
     }
   };
 
-  var isConfirmDisabled = selectedBusinessIds.length < tierLimit || submitting || dismissing;
+  // Calculate if user must select all businesses (when they have exactly their limit)
+  const userHasExactLimit = ownedBusinesses.length === tierLimit;
+  const userExceedsLimit = ownedBusinesses.length > tierLimit;
+
+  // Validation logic:
+  // - If user has exactly their limit, they MUST select all
+  // - If user exceeds their limit, they MUST select exactly the tier limit
+  // - For unlimited tier (max), they can select any number
+  let isConfirmDisabled: boolean;
+
   if (tierLimit === 999999) {
-    isConfirmDisabled = selectedBusinessIds.length == 0 || submitting || dismissing;
-  } else if (tierLimit === 3) {
-    isConfirmDisabled = selectedBusinessIds.length > 3 || selectedBusinessIds <= 0 || submitting || dismissing;
-  } else if (tierLimit === 1) {
-    isConfirmDisabled = selectedBusinessIds.length > 1 || selectedBusinessIds <= 0 || submitting || dismissing;
+    // Max tier - just need at least one selected
+    isConfirmDisabled = selectedBusinessIds.length === 0 || submitting || dismissing;
+  } else if (userHasExactLimit) {
+    // User has exactly their limit - must select ALL businesses
+    isConfirmDisabled = selectedBusinessIds.length !== ownedBusinesses.length || submitting || dismissing;
+  } else if (userExceedsLimit) {
+    // User exceeds limit - must select exactly the tier limit
+    isConfirmDisabled = selectedBusinessIds.length !== tierLimit || submitting || dismissing;
+  } else {
+    // User has fewer than limit - can select any amount up to what they have
+    isConfirmDisabled = selectedBusinessIds.length === 0 || submitting || dismissing;
   }
 
   return (
@@ -288,15 +303,39 @@ export function DowngradePick({
             Select Active {tierLimit === 1 ? 'Business' : 'Businesses'}
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Your subscription tier includes {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
-            {'\n'}Select which {tierLimit === 1 ? 'one' : 'ones'} to keep active.
+            {userHasExactLimit ? (
+              <>
+                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
+                {'\n'}You must select all {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'} to keep them active.
+              </>
+            ) : userExceedsLimit ? (
+              <>
+                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
+                {'\n'}You own {ownedBusinesses.length} businesses. Select exactly {tierLimit} to keep active.
+              </>
+            ) : (
+              <>
+                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
+                {'\n'}Select which {tierLimit === 1 ? 'one' : 'ones'} to keep active.
+              </>
+            )}
           </Text>
-          <View style={[styles.warningBox, { backgroundColor: colors.warning + '15', borderColor: colors.warning + '40' }]}>
-            <AlertCircle size={20} color={colors.warning} />
-            <Text style={[styles.warningText, { color: colors.warning }]}>
-              Other businesses will be read-only. You can view data and manage products/team, but cannot create sales.
-            </Text>
-          </View>
+          {userExceedsLimit && (
+            <View style={[styles.warningBox, { backgroundColor: colors.warning + '15', borderColor: colors.warning + '40' }]}>
+              <AlertCircle size={20} color={colors.warning} />
+              <Text style={[styles.warningText, { color: colors.warning }]}>
+                Unselected businesses will be read-only. You can view data and manage products/team, but cannot create sales.
+              </Text>
+            </View>
+          )}
+          {userHasExactLimit && (
+            <View style={[styles.warningBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
+              <AlertCircle size={20} color={colors.primary} />
+              <Text style={[styles.warningText, { color: colors.primary }]}>
+                All {tierLimit} businesses will remain active since your plan allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
+              </Text>
+            </View>
+          )}
           {onDismiss && (
             <Text style={[styles.dismissHint, { color: colors.textSecondary }]}>
               Tap X to skip - oldest {tierLimit === 1 ? 'business' : 'businesses'} will be selected automatically.
@@ -418,7 +457,13 @@ export function DowngradePick({
               }
             ]}>
               <Text style={[styles.selectionCount, { color: colors.textSecondary }]}>
-                {selectedBusinessIds.length} of {tierLimit} selected
+                {userHasExactLimit ? (
+                  `${selectedBusinessIds.length} of ${ownedBusinesses.length} selected (all required)`
+                ) : userExceedsLimit ? (
+                  `${selectedBusinessIds.length} of ${tierLimit} selected (exactly ${tierLimit} required)`
+                ) : (
+                  `${selectedBusinessIds.length} of ${tierLimit} selected`
+                )}
               </Text>
               <TouchableOpacity
                 style={[

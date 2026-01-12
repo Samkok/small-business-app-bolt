@@ -319,10 +319,18 @@ async function handleTierChange(
 
       log(eventId, 'INFO', 'Downgrade notification sent');
     } else {
-      await supabase
-        .from('user_profiles')
-        .update({ must_choose_businesses: false })
-        .eq('user_id', userId);
+      // Business count is within new tier limit - activate all businesses
+      log(eventId, 'INFO', 'Business count within downgrade tier limit, activating all businesses');
+
+      const { error: activateError } = await supabase.rpc('activate_all_businesses_and_populate_selection', {
+        p_user_id: userId
+      });
+
+      if (activateError) {
+        log(eventId, 'ERROR', 'Failed to activate businesses', { error: activateError });
+      } else {
+        log(eventId, 'SUCCESS', 'All businesses activated after downgrade');
+      }
     }
   }
 }
@@ -506,10 +514,18 @@ Deno.serve(async (req: Request) => {
 
           log(eventId, 'INFO', 'User downgraded to free tier with business limits');
         } else {
-          await supabase
-            .from('user_profiles')
-            .update({ must_choose_businesses: false })
-            .eq('user_id', userId);
+          // Business count is 1 or 0 - activate all businesses automatically
+          log(eventId, 'INFO', 'User has 1 or 0 businesses, activating all');
+
+          const { error: activateError } = await supabase.rpc('activate_all_businesses_and_populate_selection', {
+            p_user_id: userId
+          });
+
+          if (activateError) {
+            log(eventId, 'ERROR', 'Failed to activate businesses on expiration', { error: activateError });
+          } else {
+            log(eventId, 'SUCCESS', 'All businesses activated on free tier');
+          }
         }
 
         log(eventId, 'SUCCESS', 'Subscription expired and downgraded to free');
