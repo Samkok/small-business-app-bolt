@@ -526,7 +526,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                   </Text>
 
                   <View style={styles.legalLinks}>
-                    <TouchableOpacity onPress={() => Linking.openURL('https://yourdomain.com/privacy')}>
+                    <TouchableOpacity onPress={() => Linking.openURL('https://bizmanage-landing-page.web.app/privacy')}>
                       <Text style={[styles.legalLink, isDark && styles.legalLinkDark]}>
                         Privacy Policy
                       </Text>
