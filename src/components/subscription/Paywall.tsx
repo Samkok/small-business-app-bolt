@@ -440,7 +440,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 style={styles.scrollContainer}
                 contentContainerStyle={[
                   styles.scrollContent,
-                  { paddingBottom: Math.max(24, insets.bottom + 24) }
+                  { paddingBottom: Math.max(100, insets.bottom + 100) }
                 ]}
                 showsVerticalScrollIndicator={false}
               >
@@ -892,6 +892,7 @@ const styles = StyleSheet.create({
   legalSection: {
     gap: 8,
     marginTop: 16,
+    marginBottom: 24,
   },
   legalText: {
     fontSize: 11,
