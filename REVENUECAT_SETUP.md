@@ -20,12 +20,12 @@ BizManage uses RevenueCat SDK for managing in-app subscriptions, providing:
 In your RevenueCat dashboard, create the following products:
 
 **iOS Products (App Store Connect):**
-- `bizmanage.pro.month` - Pro Monthly
-- `bizmanage.pro.year` - Pro Yearly
-- `bizmanage.pro_plus.month` - Pro Plus Monthly
-- `bizmanage.pro_plus.year` - Pro Plus Yearly
-- `bizmanage.max.month` - Max Monthly
-- `bizmanage.max.year` - Max Yearly
+- `premium.pro.month` - Pro Monthly
+- `premium.pro.year` - Pro Yearly
+- `premium.pro_plus.month` - Pro Plus Monthly
+- `premium.pro_plus.year` - Pro Plus Yearly
+- `premium.max.month` - Max Monthly
+- `premium.max.year` - Max Yearly
 
 **Android Products (Google Play Console):**
 - Same product IDs as iOS
@@ -178,7 +178,7 @@ showPaywall();
 const { purchaseSubscription } = useSubscription();
 
 // Purchase a specific product
-const success = await purchaseSubscription('bizmanage.pro.month');
+const success = await purchaseSubscription('premium.pro.month');
 ```
 
 ### Restore Purchases

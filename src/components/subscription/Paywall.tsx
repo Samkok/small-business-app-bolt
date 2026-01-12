@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
   Dimensions,
   TouchableWithoutFeedback,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -435,6 +436,14 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 </TouchableOpacity>
               )}
 
+              <ScrollView
+                style={styles.scrollContainer}
+                contentContainerStyle={[
+                  styles.scrollContent,
+                  { paddingBottom: Math.max(100, insets.bottom + 100) }
+                ]}
+                showsVerticalScrollIndicator={false}
+              >
               <View style={styles.header}>
                 <View style={[styles.badge, isDark && styles.badgeDark]}>
                   <Zap size={18} color="#f59e0b" />
@@ -481,10 +490,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 ))}
               </View>
 
-              <View style={[
-                styles.actionsContainer,
-                { paddingBottom: Math.max(24, insets.bottom + 24) }
-              ]}>
+              <View style={styles.actionsContainer}>
                 <Button
                   title={
                     purchasing
@@ -510,10 +516,36 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                   )}
                 </TouchableOpacity>
 
-                <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
-                  {t('subscription.autoRenewable')}
-                </Text>
+                <View style={styles.legalSection}>
+                  <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
+                    Payment will be charged to your Apple ID account at the confirmation of purchase.
+                  </Text>
+                  <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
+                    Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+                  </Text>
+                  <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
+                    Your account will be charged for renewal within 24 hours prior to the end of the current period.
+                  </Text>
+                  <Text style={[styles.legalText, isDark && styles.legalTextDark]}>
+                    You can manage or cancel your subscription in your App Store account settings.
+                  </Text>
+
+                  <View style={styles.legalLinks}>
+                    <TouchableOpacity onPress={() => Linking.openURL('https://bizmanage-landing-page.web.app/privacy')}>
+                      <Text style={[styles.legalLink, isDark && styles.legalLinkDark]}>
+                        Privacy Policy
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.legalText, isDark && styles.legalTextDark]}> • </Text>
+                    <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula')}>
+                      <Text style={[styles.legalLink, isDark && styles.legalLinkDark]}>
+                        Terms of Use
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
+              </ScrollView>
             </View>
           </Animated.View>
         </GestureDetector>
@@ -550,6 +582,12 @@ const styles = StyleSheet.create({
   },
   bottomSheetDark: {
     backgroundColor: '#1f2937',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   dragIndicatorContainer: {
     alignItems: 'center',
@@ -834,6 +872,7 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 12,
     paddingHorizontal: 20,
+    paddingBottom: 8,
   },
   subscribeButton: {
     marginBottom: 0,
@@ -850,13 +889,33 @@ const styles = StyleSheet.create({
   restoreTextDark: {
     color: '#60a5fa',
   },
+  legalSection: {
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 24,
+  },
   legalText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9ca3af',
     textAlign: 'center',
-    marginTop: 8,
+    lineHeight: 16,
   },
   legalTextDark: {
     color: '#6b7280',
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  legalLink: {
+    fontSize: 11,
+    color: '#3b82f6',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
+  legalLinkDark: {
+    color: '#60a5fa',
   },
 });

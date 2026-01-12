@@ -66,14 +66,39 @@ export default function BusinessSelectionScreen() {
     ]);
   };
 
+  const handleOpenCreateModal = () => {
+    // Check if user has reached their business limit
+    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+      Alert.alert(
+        'Business Limit Reached',
+        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => subscription.showPaywall() }
+        ]
+      );
+      return;
+    }
+
+    setShowCreateBusinessModal(true);
+  };
+
   const handleCreateBusiness = async () => {
     if (!newBusinessName.trim()) {
       Alert.alert('Error', 'Please enter a business name');
       return;
     }
 
+    // Double-check limit before creating (server-side will also check)
     if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
-      Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'} on your current plan. Please upgrade your subscription to create more businesses.`);
+      Alert.alert(
+        'Business Limit Reached',
+        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => subscription.showPaywall() }
+        ]
+      );
       return;
     }
 
@@ -82,7 +107,19 @@ export default function BusinessSelectionScreen() {
       const { error, business } = await createBusiness(newBusinessName.trim());
 
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to create business');
+        // Check if it's a business limit error
+        if (error.message?.includes('BUSINESS_LIMIT_REACHED') || error.message?.includes('maximum number of businesses')) {
+          Alert.alert(
+            'Business Limit Reached',
+            'You\'ve reached your business limit. Please upgrade your plan to create more businesses.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Upgrade', onPress: () => subscription.showPaywall() }
+            ]
+          );
+        } else {
+          Alert.alert('Error', error.message || 'Failed to create business');
+        }
       } else {
         setShowCreateBusinessModal(false);
         setNewBusinessName('');
@@ -256,7 +293,7 @@ export default function BusinessSelectionScreen() {
       <View style={styles.footer}>
         <Button
           title="Create New Business"
-          onPress={() => setShowCreateBusinessModal(true)}
+          onPress={handleOpenCreateModal}
           style={styles.createButton}
         />
         {userBusinesses.length > 1 && (

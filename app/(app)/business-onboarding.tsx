@@ -131,9 +131,16 @@ export default function BusinessOnboardingScreen() {
       return;
     }
 
+    // Check business limit before attempting creation
     if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
-      Alert.alert('Limit Reached', `You can only create up to ${subscription.tierInfo.maxOwnedBusinesses} businesses on your current plan. Please upgrade your subscription to create more businesses.`);
-      subscription.showPaywall();
+      Alert.alert(
+        'Business Limit Reached',
+        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => subscription.showPaywall() }
+        ]
+      );
       return;
     }
 
@@ -142,7 +149,19 @@ export default function BusinessOnboardingScreen() {
       const { error, business } = await createBusiness(businessName.trim());
 
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to create business');
+        // Check if it's a business limit error from server
+        if (error.message?.includes('BUSINESS_LIMIT_REACHED') || error.message?.includes('maximum number of businesses')) {
+          Alert.alert(
+            'Business Limit Reached',
+            'You\'ve reached your business limit. Please upgrade your plan to create more businesses.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Upgrade', onPress: () => subscription.showPaywall() }
+            ]
+          );
+        } else {
+          Alert.alert('Error', error.message || 'Failed to create business');
+        }
         setLoading(false);
         return;
       }
