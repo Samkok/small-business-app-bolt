@@ -436,6 +436,14 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 </TouchableOpacity>
               )}
 
+              <ScrollView
+                style={styles.scrollContainer}
+                contentContainerStyle={[
+                  styles.scrollContent,
+                  { paddingBottom: Math.max(24, insets.bottom + 24) }
+                ]}
+                showsVerticalScrollIndicator={false}
+              >
               <View style={styles.header}>
                 <View style={[styles.badge, isDark && styles.badgeDark]}>
                   <Zap size={18} color="#f59e0b" />
@@ -482,10 +490,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                 ))}
               </View>
 
-              <View style={[
-                styles.actionsContainer,
-                { paddingBottom: Math.max(24, insets.bottom + 24) }
-              ]}>
+              <View style={styles.actionsContainer}>
                 <Button
                   title={
                     purchasing
@@ -540,6 +545,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
                   </View>
                 </View>
               </View>
+              </ScrollView>
             </View>
           </Animated.View>
         </GestureDetector>
@@ -576,6 +582,12 @@ const styles = StyleSheet.create({
   },
   bottomSheetDark: {
     backgroundColor: '#1f2937',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   dragIndicatorContainer: {
     alignItems: 'center',
@@ -860,6 +872,7 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 12,
     paddingHorizontal: 20,
+    paddingBottom: 8,
   },
   subscribeButton: {
     marginBottom: 0,
