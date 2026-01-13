@@ -66,13 +66,16 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   const [saving, setSaving] = useState(false);
 
   const businesses = useMemo(() => {
-    return userBusinesses.map(b => ({
-      id: b.id,
-      business_name: b.business_name,
-      business_image_url: b.business_image_url,
-      access_state: (b as any).access_state || 'active',
-    })) as Business[];
-  }, [userBusinesses]);
+    // Only show businesses owned by the current user
+    return userBusinesses
+      .filter(b => (b as any).owner_id === userProfile?.user_id)
+      .map(b => ({
+        id: b.id,
+        business_name: b.business_name,
+        business_image_url: b.business_image_url,
+        access_state: (b as any).access_state || 'active',
+      })) as Business[];
+  }, [userBusinesses, userProfile?.user_id]);
 
   const activeBusinesses = useMemo(() =>
     businesses.filter(b => b.access_state === 'active'),
@@ -170,6 +173,15 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   };
 
   const handleApplyChanges = async () => {
+    // Additional check: ensure user owns all selected businesses
+    const ownedBusinessIds = businesses.map(b => b.id);
+    const invalidSelection = Array.from(selectedBusinessIds).some(id => !ownedBusinessIds.includes(id));
+
+    if (invalidSelection) {
+      Alert.alert('Error', 'You can only manage businesses that you own.');
+      return;
+    }
+
     const initialActiveIds = new Set(activeBusinesses.map(b => b.id));
     const hasChanges =
       selectedBusinessIds.size !== initialActiveIds.size ||

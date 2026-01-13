@@ -23,6 +23,7 @@ import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { ManageBusinessSubscription } from '@/src/components/subscription/ManageBusinessSubscription';
+import { supabase } from '@/src/config/supabase';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
@@ -30,12 +31,40 @@ export default function BusinessSelectionScreen() {
   const [newBusinessName, setNewBusinessName] = useState('');
   const [creatingBusiness, setCreatingBusiness] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [businessesWithAccess, setBusinessesWithAccess] = useState<any[]>([]);
+
   const router = useRouter();
   const { t } = useTranslation();
   const subscription = useSubscription();
   const { isDark } = useTheme();
   const { user, userProfile, userBusinesses, currentBusiness, switchBusiness, createBusiness, signOut, refreshUserBusinesses, getUserRole } = useAuth();
+
+  // Fetch accurate business data with access_state from database
+  useEffect(() => {
+    const fetchBusinessData = async () => {
+      if (!user?.id || !userBusinesses.length) {
+        setBusinessesWithAccess([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('businesses')
+          .select('id, business_name, business_image_url, owner_id, access_state, created_at')
+          .in('id', userBusinesses.map(b => b.id))
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        setBusinessesWithAccess(data || []);
+      } catch (error) {
+        console.error('Error fetching business data:', error);
+        setBusinessesWithAccess(userBusinesses);
+      }
+    };
+
+    fetchBusinessData();
+  }, [user?.id, userBusinesses]);
 
   const handleSelectBusiness = async (businessId: string) => {
     await switchBusiness(businessId);
@@ -52,6 +81,19 @@ export default function BusinessSelectionScreen() {
         subscription.refreshTierInfo(),
         subscription.refreshSubscriptionStatus()
       ]);
+
+      // Fetch fresh business data with accurate access_state
+      if (user?.id && userBusinesses.length) {
+        const { data, error } = await supabase
+          .from('businesses')
+          .select('id, business_name, business_image_url, owner_id, access_state, created_at')
+          .in('id', userBusinesses.map(b => b.id))
+          .order('created_at', { ascending: true });
+
+        if (!error && data) {
+          setBusinessesWithAccess(data);
+        }
+      }
     } catch (error) {
       console.error('Error refreshing businesses:', error);
     } finally {
@@ -139,72 +181,77 @@ export default function BusinessSelectionScreen() {
     }
   };
 
-  const renderBusinessItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={[
-        styles.businessCard,
-        currentBusiness?.id === item.id && styles.selectedBusinessCard,
-        { backgroundColor: isDark ? '#374151' : '#ffffff' }
-      ]}
-      onPress={() => handleSelectBusiness(item.id)}
-    >
-      <View style={styles.businessInfo}>
-        <View style={styles.businessIconContainer}>
-          {item.business_image_url ? (
-            <OptimizedImage
-              source={{ uri: item.business_image_url }}
-              style={styles.businessImage}
-              resizeMode="cover"
-              alt={item.business_name}
-            />
-          ) : (
-            <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
-              <Briefcase size={24} color="#2563eb" />
-            </View>
-          )}
-        </View>
-        <View style={styles.businessDetails}>
-          <View style={styles.businessNameRow}>
-            <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {item.business_name}
-            </Text>
-            {item.owner_user_id === user?.id && (
-              <View style={[styles.ownerBadge, { backgroundColor: isDark ? '#1e3a8a' : '#dbeafe' }]}>
-                <Text style={[styles.ownerBadgeText, { color: isDark ? '#93c5fd' : '#1e40af' }]}>
-                  Owner
-                </Text>
+  const renderBusinessItem = ({ item }: { item: any }) => {
+    const isOwner = item.owner_id === user?.id;
+    const accessState = item.access_state || 'active';
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.businessCard,
+          currentBusiness?.id === item.id && styles.selectedBusinessCard,
+          { backgroundColor: isDark ? '#374151' : '#ffffff' }
+        ]}
+        onPress={() => handleSelectBusiness(item.id)}
+      >
+        <View style={styles.businessInfo}>
+          <View style={styles.businessIconContainer}>
+            {item.business_image_url ? (
+              <OptimizedImage
+                source={{ uri: item.business_image_url }}
+                style={styles.businessImage}
+                resizeMode="cover"
+                alt={item.business_name}
+              />
+            ) : (
+              <View style={[styles.businessIcon, { backgroundColor: '#2563eb20' }]}>
+                <Briefcase size={24} color="#2563eb" />
               </View>
             )}
           </View>
-          <Text style={[styles.businessRole, { color: '#2563eb' }]}>
-            {getUserRole(item.id) === 'admin' ? 'Admin' : 'Staff'}
-          </Text>
-          <View style={[
-            styles.statusBadge,
-            {
-              backgroundColor: (item as any).access_state === 'active'
-                ? (isDark ? '#065f46' : '#d1fae5')
-                : (isDark ? '#78350f' : '#fef3c7')
-            }
-          ]}>
-            <Text style={[
-              styles.statusBadgeText,
+          <View style={styles.businessDetails}>
+            <View style={styles.businessNameRow}>
+              <Text style={[styles.businessName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {item.business_name}
+              </Text>
+              {isOwner && (
+                <View style={[styles.ownerBadge, { backgroundColor: isDark ? '#1e3a8a' : '#dbeafe' }]}>
+                  <Text style={[styles.ownerBadgeText, { color: isDark ? '#93c5fd' : '#1e40af' }]}>
+                    Owner
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.businessRole, { color: '#2563eb' }]}>
+              {getUserRole(item.id) === 'admin' ? 'Admin' : 'Staff'}
+            </Text>
+            <View style={[
+              styles.statusBadge,
               {
-                color: (item as any).access_state === 'active'
-                  ? (isDark ? '#6ee7b7' : '#047857')
-                  : (isDark ? '#fbbf24' : '#92400e')
+                backgroundColor: accessState === 'active'
+                  ? (isDark ? '#065f46' : '#d1fae5')
+                  : (isDark ? '#78350f' : '#fef3c7')
               }
             ]}>
-              {(item as any).access_state === 'active' ? 'Active' : 'Read Only'}
-            </Text>
+              <Text style={[
+                styles.statusBadgeText,
+                {
+                  color: accessState === 'active'
+                    ? (isDark ? '#6ee7b7' : '#047857')
+                    : (isDark ? '#fbbf24' : '#92400e')
+                }
+              ]}>
+                {accessState === 'active' ? 'Active' : 'Read Only'}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-      <View style={styles.businessArrow}>
-        <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.businessArrow}>
+          <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
@@ -264,7 +311,7 @@ export default function BusinessSelectionScreen() {
       </View>
 
       <FlatList
-        data={userBusinesses}
+        data={businessesWithAccess}
         renderItem={renderBusinessItem}
         keyExtractor={(item) => item.id}
         style={styles.businessList}
@@ -296,7 +343,7 @@ export default function BusinessSelectionScreen() {
           onPress={handleOpenCreateModal}
           style={styles.createButton}
         />
-        {userBusinesses.length > 1 && (
+        {businessesWithAccess.filter(b => b.owner_id === user?.id).length > 1 && (
           <TouchableOpacity
             style={[
               styles.manageButton,

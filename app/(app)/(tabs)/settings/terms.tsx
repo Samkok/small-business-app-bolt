@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 
@@ -34,6 +36,14 @@ export default function TermsAndConditionsScreen() {
     </View>
   );
 
+  const Link = ({ url, children }: { url: string; children: React.ReactNode }) => (
+    <TouchableOpacity onPress={() => Linking.openURL(url)}>
+      <Text style={[styles.link, { color: isDark ? '#60a5fa' : '#2563eb' }]}>
+        {children}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
@@ -44,10 +54,10 @@ export default function TermsAndConditionsScreen() {
           Terms and Conditions
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: December 4, 2025
+          Last Updated: January 13, 2026
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.2.0
+          Version 1.3.0
         </Text>
       </View>
 
@@ -451,7 +461,45 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
       </Section>
 
-      <Section title="20. Acknowledgment">
+      <Section title="20. App Store Subscription Terms">
+        <Paragraph>
+          20.1. Apple App Store Subscriptions: For subscriptions purchased through the Apple App Store, the following terms apply:
+        </Paragraph>
+        <BulletPoint>Payment will be charged to your Apple ID account at the confirmation of purchase.</BulletPoint>
+        <BulletPoint>Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.</BulletPoint>
+        <BulletPoint>Your account will be charged for renewal within 24 hours prior to the end of the current period.</BulletPoint>
+        <BulletPoint>You can manage or cancel your subscription in your App Store account settings.</BulletPoint>
+        <Paragraph>
+          20.2. Google Play Store Subscriptions: For subscriptions purchased through the Google Play Store, similar terms apply as governed by Google's subscription policies. You can manage subscriptions through your Google Play account settings.
+        </Paragraph>
+        <Paragraph>
+          20.3. Important Links:
+        </Paragraph>
+        <View style={styles.linkContainer}>
+          <Paragraph>
+            Privacy Policy: <Link url="https://bizmanage-landing-page.web.app/privacy">View Privacy Policy</Link>
+          </Paragraph>
+          <Paragraph>
+            Apple Terms of Use (EULA): <Link url="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">View Standard EULA</Link>
+          </Paragraph>
+        </View>
+        <Paragraph>
+          20.4. Subscription Management: To manage your subscription, including viewing your subscription status, changing plans, or canceling:
+        </Paragraph>
+        <BulletPoint>iOS Users: Open Settings app → tap your name → Subscriptions → select BizManage</BulletPoint>
+        <BulletPoint>Android Users: Open Google Play Store → Menu → Subscriptions → select BizManage</BulletPoint>
+        <Paragraph>
+          20.5. Cancellation Policy: You may cancel your subscription at any time. Cancellation takes effect at the end of your current billing period. You will retain access to premium features until the end of the paid period.
+        </Paragraph>
+        <Paragraph>
+          20.6. No Partial Refunds: If you cancel your subscription before the end of the current billing period, you will not receive a refund for the remaining time in that period unless required by applicable law or app store policy.
+        </Paragraph>
+        <Paragraph>
+          20.7. Free Trial Terms: If we offer a free trial period, you will be charged the subscription fee at the end of the trial period unless you cancel before the trial ends. The trial period and its terms will be clearly displayed during the subscription purchase flow.
+        </Paragraph>
+      </Section>
+
+      <Section title="21. Acknowledgment">
         <Paragraph>
           By using BizManage, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
         </Paragraph>
@@ -521,6 +569,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 22,
+  },
+  linkContainer: {
+    paddingLeft: 8,
+    marginBottom: 12,
+  },
+  link: {
+    fontSize: 14,
+    lineHeight: 22,
+    textDecorationLine: 'underline',
   },
   footer: {
     marginTop: 32,

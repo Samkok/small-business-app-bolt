@@ -687,6 +687,41 @@ export const subscriptionService = {
     }
   },
 
+  async getBusinessOwnerSubscriptionTier(businessId: string): Promise<{
+    ownerId: string;
+    tier: SubscriptionTier;
+    subscriptionStatus: string;
+    expirationDate: string | null;
+    maxOwnedBusinesses: number | null;
+    isExpired: boolean;
+  } | null> {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_business_owner_subscription_tier', {
+          p_business_id: businessId
+        });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return null;
+      }
+
+      const ownerData = data[0];
+      return {
+        ownerId: ownerData.owner_id,
+        tier: ownerData.tier as SubscriptionTier,
+        subscriptionStatus: ownerData.subscription_status,
+        expirationDate: ownerData.expiration_date,
+        maxOwnedBusinesses: ownerData.max_owned_businesses,
+        isExpired: ownerData.is_expired
+      };
+    } catch (error) {
+      console.error('Error getting business owner subscription tier:', error);
+      return null;
+    }
+  },
+
   async getFullSubscriptionState(userId: string, businessId?: string | null, showErrorAlert = false): Promise<FullSubscriptionState> {
     try {
       return await retryWithBackoff(async () => {

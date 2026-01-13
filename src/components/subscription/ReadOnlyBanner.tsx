@@ -15,6 +15,8 @@ interface ReadOnlyBannerProps {
   dismissible?: boolean;
   showSelectBusinesses?: boolean;
   variant?: 'sales_limit' | 'business_readonly';
+  isOwner?: boolean;
+  ownershipMessage?: string;
 }
 
 export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
@@ -26,13 +28,18 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   onDismiss,
   dismissible = false,
   showSelectBusinesses = false,
-  variant = 'sales_limit'
+  variant = 'sales_limit',
+  isOwner = true,
+  ownershipMessage
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const getTitle = () => {
+    if (!isOwner && ownershipMessage) {
+      return 'Business in Read-Only Mode';
+    }
     if (variant === 'business_readonly') {
       return businessName
         ? `'${businessName}' is in read-only mode`
@@ -42,6 +49,9 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   };
 
   const getMessage = () => {
+    if (!isOwner && ownershipMessage) {
+      return ownershipMessage;
+    }
     if (variant === 'business_readonly') {
       return 'You can view data and manage products, but cannot create sales transactions.';
     }
@@ -94,18 +104,20 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
           </TouchableOpacity>
         ) : (
           <>
-            <TouchableOpacity
-              style={[
-                styles.upgradeButton,
-                isDark && styles.upgradeButtonDark,
-                variant === 'business_readonly' && styles.upgradeButtonWarning,
-                variant === 'business_readonly' && isDark && styles.upgradeButtonWarningDark
-              ]}
-              onPress={onUpgrade}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
-            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity
+                style={[
+                  styles.upgradeButton,
+                  isDark && styles.upgradeButtonDark,
+                  variant === 'business_readonly' && styles.upgradeButtonWarning,
+                  variant === 'business_readonly' && isDark && styles.upgradeButtonWarningDark
+                ]}
+                onPress={onUpgrade}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
+              </TouchableOpacity>
+            )}
             {variant === 'business_readonly' && onSwitchBusiness && (
               <TouchableOpacity
                 style={[styles.secondaryButton, isDark && styles.secondaryButtonDark]}

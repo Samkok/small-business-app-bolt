@@ -491,44 +491,32 @@ Deno.serve(async (req: Request) => {
           throw subscriptionError;
         }
 
-        const { data: businessCountData } = await supabase
-          .rpc('get_user_owned_business_count', { p_user_id: userId });
+        // Set ALL businesses to read-only when subscription expires
+        // No business selection needed - trigger will handle this automatically
+        log(eventId, 'INFO', 'Setting all businesses to read-only due to expiration');
 
-        const businessCount = businessCountData || 0;
+        const { error: readOnlyError } = await supabase.rpc('set_all_businesses_read_only_on_expiration', {
+          p_user_id: userId
+        });
 
-        if (businessCount > 1) {
-          await supabase.rpc('set_read_only_businesses', {
-            p_user_id: userId,
-            p_max_active_businesses: 1
-          });
-
-          await supabase.from('notifications').insert({
-            user_id: userId,
-            business_id: null,
-            type: 'subscription_warning',
-            title: 'Subscription Expired',
-            message: 'Your subscription has ended. Please select 1 business to keep active on the free plan.',
-            read: false,
-            created_at: now,
-          });
-
-          log(eventId, 'INFO', 'User downgraded to free tier with business limits');
+        if (readOnlyError) {
+          log(eventId, 'ERROR', 'Failed to set businesses to read-only', { error: readOnlyError });
         } else {
-          // Business count is 1 or 0 - activate all businesses automatically
-          log(eventId, 'INFO', 'User has 1 or 0 businesses, activating all');
-
-          const { error: activateError } = await supabase.rpc('activate_all_businesses_and_populate_selection', {
-            p_user_id: userId
-          });
-
-          if (activateError) {
-            log(eventId, 'ERROR', 'Failed to activate businesses on expiration', { error: activateError });
-          } else {
-            log(eventId, 'SUCCESS', 'All businesses activated on free tier');
-          }
+          log(eventId, 'SUCCESS', 'All businesses set to read-only');
         }
 
-        log(eventId, 'SUCCESS', 'Subscription expired and downgraded to free');
+        // Send notification
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          business_id: null,
+          type: 'subscription_warning',
+          title: 'Subscription Expired',
+          message: 'Your subscription has ended. All your businesses are now in read-only mode. Upgrade to continue creating sales.',
+          read: false,
+          created_at: now,
+        });
+
+        log(eventId, 'SUCCESS', 'Subscription expired and all businesses set to read-only');
         break;
       }
 

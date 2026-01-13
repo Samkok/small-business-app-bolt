@@ -12,6 +12,8 @@ interface WarningBannerProps {
   onUpgrade: () => void;
   onDismiss?: () => void;
   dismissible?: boolean;
+  isOwner?: boolean;
+  ownershipMessage?: string;
 }
 
 export const WarningBanner: React.FC<WarningBannerProps> = ({
@@ -20,7 +22,9 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
   totalLimit,
   onUpgrade,
   onDismiss,
-  dismissible = true
+  dismissible = true,
+  isOwner = true,
+  ownershipMessage
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -54,23 +58,29 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
         <AlertTriangle size={20} color={colors.icon} />
         <View style={styles.textContainer}>
           <Text style={[styles.title, { color: colors.title }]}>
-            {isHighWarning ? t('subscription.almostAtFreeLimit') : t('subscription.approachingFreeLimit')}
+            {!isOwner && ownershipMessage
+              ? 'Business in Read-Only Mode'
+              : isHighWarning ? t('subscription.almostAtFreeLimit') : t('subscription.approachingFreeLimit')}
           </Text>
           <Text style={[styles.message, { color: colors.text }]}>
-            {remainingSales === 1
+            {!isOwner && ownershipMessage
+              ? ownershipMessage
+              : remainingSales === 1
               ? t('subscription.onlyOneSaleRemaining', { current: salesCount, limit: totalLimit })
               : t('subscription.salesRemainingCount', { remaining: remainingSales, current: salesCount, limit: totalLimit })}
           </Text>
         </View>
       </View>
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.upgradeButton}
-          onPress={onUpgrade}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
-        </TouchableOpacity>
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.upgradeButton}
+            onPress={onUpgrade}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
+          </TouchableOpacity>
+        )}
         {dismissible && onDismiss && (
           <TouchableOpacity
             onPress={onDismiss}
