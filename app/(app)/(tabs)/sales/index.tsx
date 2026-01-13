@@ -45,8 +45,9 @@ import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
 import { errorHandler } from '@/src/utils/errorHandler';
 import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
-import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
+import { FREE_TIER_LIMIT, subscriptionService } from '@/src/services/subscriptionService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/src/config/supabase';
 
 const SALES_PER_PAGE = 10;
 const WARNING_BANNER_DISMISSED_KEY = 'warning_banner_dismissed_';
@@ -69,6 +70,8 @@ export default function SalesScreen() {
   const [voidingInProgress, setVoidingInProgress] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [warningBannerDismissed, setWarningBannerDismissed] = useState(false);
+  const [isBusinessOwner, setIsBusinessOwner] = useState(true);
+  const [ownerSubscriptionMessage, setOwnerSubscriptionMessage] = useState<string | null>(null);
 
   // Analytics states
   const [analytics, setAnalytics] = useState({
@@ -267,6 +270,50 @@ export default function SalesScreen() {
     loadWarningBannerState();
   }, [currentBusiness?.id, salesCountData.salesCount]);
 
+  // Check ownership and fetch owner subscription status
+  useEffect(() => {
+    const checkOwnershipAndFetchOwnerStatus = async () => {
+      if (!currentBusiness?.id || !userProfile?.user_id) return;
+
+      try {
+        // Check if current user is the owner
+        const { data: business, error: businessError } = await supabase
+          .from('businesses')
+          .select('owner_id')
+          .eq('id', currentBusiness.id)
+          .maybeSingle();
+
+        if (businessError) throw businessError;
+
+        const isOwner = business?.owner_id === userProfile.user_id;
+        setIsBusinessOwner(isOwner);
+
+        // If not owner and business is read-only, fetch owner's subscription status
+        if (!isOwner && !canAccessFeature) {
+          const ownerTier = await subscriptionService.getBusinessOwnerSubscriptionTier(currentBusiness.id);
+
+          if (ownerTier && ownerTier.isExpired) {
+            setOwnerSubscriptionMessage(
+              "This business is in read-only mode because the owner's subscription has expired. Please contact the business owner."
+            );
+          } else {
+            setOwnerSubscriptionMessage(
+              "This business is in read-only mode. Please contact the business owner for more information."
+            );
+          }
+        } else {
+          setOwnerSubscriptionMessage(null);
+        }
+      } catch (error) {
+        console.error('Error checking ownership:', error);
+        setIsBusinessOwner(true); // Default to true on error
+        setOwnerSubscriptionMessage(null);
+      }
+    };
+
+    checkOwnershipAndFetchOwnerStatus();
+  }, [currentBusiness?.id, userProfile?.user_id, canAccessFeature]);
+
   const handleDismissWarning = useCallback(async () => {
     if (!currentBusiness?.id) return;
     try {
@@ -287,7 +334,8 @@ export default function SalesScreen() {
     if (salesCountData.isAtLimit || isSubscribed || warningBannerDismissed) {
       return false;
     }
-    const percentageUsed = (salesCountData.salesCount / FREE_TIER_LIMIT) * 100;
+    const totalSales = salesCountData.totalSalesAllBusinesses || 0;
+    const percentageUsed = (totalSales / FREE_TIER_LIMIT) * 100;
     return percentageUsed >= 80;
   }, [salesCountData, isSubscribed, warningBannerDismissed]);
 
@@ -879,17 +927,21 @@ export default function SalesScreen() {
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       { subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
         <WarningBanner
-          salesCount={salesCountData.salesCount}
+          salesCount={salesCountData.totalSalesAllBusinesses || 0}
           remainingSales={salesCountData.remainingSales}
           totalLimit={FREE_TIER_LIMIT}
           onUpgrade={showPaywall}
           onDismiss={handleDismissWarning}
           dismissible={true}
+          isOwner={isBusinessOwner}
+          ownershipMessage={ownerSubscriptionMessage || undefined}
         />
       ) : salesCountData.isAtLimit || !canAccessFeature ? (
         <ReadOnlyBanner
-          salesCount={salesCountData.salesCount}
+          salesCount={salesCountData.totalSalesAllBusinesses || 0}
           onUpgrade={showPaywall}
+          isOwner={isBusinessOwner}
+          ownershipMessage={ownerSubscriptionMessage || undefined}
         />
       ) : null}
       <View style={styles.header}>
