@@ -477,7 +477,7 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
         <View style={styles.linkContainer}>
           <Paragraph>
-            Privacy Policy: <Link url="https://github.com/samnmbuguah/BizManage">View Privacy Policy</Link>
+            Privacy Policy: <Link url="https://bizmanage-landing-page.web.app/privacy">View Privacy Policy</Link>
           </Paragraph>
           <Paragraph>
             Apple Terms of Use (EULA): <Link url="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">View Standard EULA</Link>
