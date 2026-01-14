@@ -194,13 +194,6 @@ async function handleSubscriptionActivated(
 ) {
   console.log(`Activating subscription for user ${userId}: ${tier}`);
 
-  const { count: ownedCount } = await supabase
-    .from('businesses')
-    .select('id', { count: 'exact', head: true })
-    .eq('owner_user_id', userId);
-
-  const shouldChooseBusinesses = maxBusinesses !== null && ownedCount && ownedCount > maxBusinesses;
-
   // Update user_subscriptions table with subscription fields
   await supabase
     .from('user_subscriptions')
@@ -213,26 +206,14 @@ async function handleSubscriptionActivated(
     })
     .eq('user_id', userId);
 
-  // Update user_profiles table with must_choose_businesses flag using correct column name
-  await supabase
-    .from('user_profiles')
-    .update({
-      must_choose_businesses: shouldChooseBusinesses,
-    })
-    .eq('user_id', userId);
+  // Use centralized business selection logic
+  const { data: selectionResult, error: selectionError } = await supabase
+    .rpc('check_business_selection_requirement', { p_user_id: userId });
 
-  if (maxBusinesses === null) {
-    await supabase.rpc('set_all_businesses_active', { p_user_id: userId });
-    console.log(`Unlimited tier - all businesses activated for user ${userId}`);
-  } else if (ownedCount && ownedCount > maxBusinesses) {
-    await supabase.rpc('set_read_only_businesses', {
-      p_user_id: userId,
-      p_max_active_businesses: maxBusinesses
-    });
-    console.log(`User ${userId} has ${ownedCount} businesses, downgraded to tier allowing ${maxBusinesses}. Downgrade modal triggered.`);
+  if (selectionError) {
+    console.error(`Error checking business selection for user ${userId}:`, selectionError);
   } else {
-    await supabase.rpc('set_all_businesses_active', { p_user_id: userId });
-    console.log(`User ${userId} has ${ownedCount} businesses within tier limit of ${maxBusinesses}. All businesses activated.`);
+    console.log(`Business selection check result for user ${userId}:`, selectionResult);
   }
 
   console.log(`Subscription activated for user ${userId}`);
@@ -267,26 +248,14 @@ async function handleSubscriptionExpired(supabase: any, userId: string) {
     })
     .eq('user_id', userId);
 
-  const { count: ownedCount } = await supabase
-    .from('businesses')
-    .select('id', { count: 'exact', head: true })
-    .eq('owner_user_id', userId);
+  // Use centralized business selection logic
+  const { data: selectionResult, error: selectionError } = await supabase
+    .rpc('check_business_selection_requirement', { p_user_id: userId });
 
-  if (ownedCount && ownedCount > 1) {
-    await supabase.rpc('set_read_only_businesses', {
-      p_user_id: userId,
-      p_max_active_businesses: 1
-    });
-
-    // Update user_profiles table with must_choose_businesses flag using correct column name
-    await supabase
-      .from('user_profiles')
-      .update({
-        must_choose_businesses: true,
-      })
-      .eq('user_id', userId);
-
-    console.log(`User ${userId} has ${ownedCount} businesses, downgrade modal triggered`);
+  if (selectionError) {
+    console.error(`Error checking business selection for user ${userId}:`, selectionError);
+  } else {
+    console.log(`Business selection check result for user ${userId}:`, selectionResult);
   }
 
   console.log(`Subscription expired for user ${userId}, downgraded to free tier`);
@@ -306,24 +275,14 @@ async function handleRefund(supabase: any, userId: string) {
     })
     .eq('user_id', userId);
 
-  const { count: ownedCount } = await supabase
-    .from('businesses')
-    .select('id', { count: 'exact', head: true })
-    .eq('owner_user_id', userId);
+  // Use centralized business selection logic
+  const { data: selectionResult, error: selectionError } = await supabase
+    .rpc('check_business_selection_requirement', { p_user_id: userId });
 
-  if (ownedCount && ownedCount > 1) {
-    await supabase.rpc('set_read_only_businesses', {
-      p_user_id: userId,
-      p_max_active_businesses: 1
-    });
-
-    // Update user_profiles table with must_choose_businesses flag using correct column name
-    await supabase
-      .from('user_profiles')
-      .update({
-        must_choose_businesses: true,
-      })
-      .eq('user_id', userId);
+  if (selectionError) {
+    console.error(`Error checking business selection for user ${userId}:`, selectionError);
+  } else {
+    console.log(`Business selection check result for user ${userId}:`, selectionResult);
   }
 
   console.log(`Refund processed for user ${userId}, immediate downgrade`);

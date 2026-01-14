@@ -414,6 +414,18 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
+      // Trigger server-side business selection check
+      // This will automatically set/clear the must_choose_businesses flag and handle business states
+      const { data: selectionResult, error: selectionError } = await supabase
+        .rpc('check_business_selection_requirement', { p_user_id: user.id });
+
+      if (selectionError) {
+        console.error('[RevenueCatSubscriptionContext] Error checking business selection:', selectionError);
+      } else {
+        console.log('[RevenueCatSubscriptionContext] Server-side business selection check result:', selectionResult);
+      }
+
+      // Now fetch the current state from database
       const [profileResult, tierData, ownedCount] = await Promise.all([
         supabase
           .from('user_profiles')
@@ -437,6 +449,15 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         limitExceeded
       });
 
+      // NOTE: Business selection flag setting logic has been moved to server-side
+      // The database function check_business_selection_requirement now handles:
+      // - Checking if limit is exceeded
+      // - Checking if businesses are already properly configured
+      // - Setting/clearing the must_choose_businesses flag
+      // - Auto-activating businesses when within limit
+      // This client code now only reads the flag and displays the modal
+
+      /* COMMENTED OUT - Logic moved to server-side check_business_selection_requirement function
       if (limitExceeded && !mustChooseFromDb) {
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
         const activeCount = businesses.filter((b: any) => b.access_state === 'active').length;
@@ -472,7 +493,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           setTierInfo(tierData);
           setOwnedBusinessCount(ownedCount);
         }
-      } else if (mustChooseFromDb) {
+      } else */ if (mustChooseFromDb) {
         console.log('[RevenueCatSubscriptionContext] must_choose_businesses flag is set, showing modal');
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
         setOwnedBusinesses(businesses);
