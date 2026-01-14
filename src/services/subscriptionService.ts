@@ -772,7 +772,8 @@ export const subscriptionService = {
           salesCountData: data.salesCountData ? {
             salesCount: data.salesCountData.salesCount,
             remainingSales: data.salesCountData.remainingSales,
-            isAtLimit: data.salesCountData.isAtLimit
+            isAtLimit: data.salesCountData.isAtLimit,
+            totalSalesAllBusinesses: data.salesCountData.totalSalesAllBusinesses
           } : null,
           canAccessFeature: data.canAccessFeature
         };
@@ -799,7 +800,8 @@ export const subscriptionService = {
         salesCountData: businessId ? {
           salesCount: 0,
           remainingSales: FREE_TIER_LIMIT,
-          isAtLimit: false
+          isAtLimit: false,
+          totalSalesAllBusinesses: 0
         } : null,
         canAccessFeature: businessId ? true : null
       };
