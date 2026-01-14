@@ -133,6 +133,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
   const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
+  const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -805,6 +806,61 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     userProfileChannelRef.current = channel;
   }, [user?.id, handleReconnect, loadDowngradeData]);
 
+  const setupSalesCountSubscription = useCallback(() => {
+    if (!user?.id || !isAppActiveRef.current) {
+      return;
+    }
+
+    if (salesCountChannelRef.current) {
+      try {
+        salesCountChannelRef.current.unsubscribe();
+      } catch (error) {
+        console.error('[RevenueCatSubscriptionContext] Error unsubscribing sales count channel:', error);
+      }
+      salesCountChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`sales-count-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_sales_counts',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload: any) => {
+          console.log('[RevenueCatSubscriptionContext] Sales count change detected:', payload);
+
+          try {
+            if (!currentBusiness?.id) {
+              console.log('[RevenueCatSubscriptionContext] No current business, skipping sales count update');
+              return;
+            }
+
+            const countData = await subscriptionService.getSalesCountData(user.id, currentBusiness.id);
+            console.log('[RevenueCatSubscriptionContext] Updated sales count data:', countData);
+            setSalesCountData(countData);
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error updating sales count:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[RevenueCatSubscriptionContext] Sales count channel status:', status);
+
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempts.current = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.log('[RevenueCatSubscriptionContext] Sales count channel connection issue, attempting reconnect');
+          handleReconnect('subscription', setupSalesCountSubscription);
+        }
+      });
+
+    salesCountChannelRef.current = channel;
+  }, [user?.id, currentBusiness?.id, handleReconnect]);
+
   const setupRealtimeSubscription = useCallback(() => {
     if (!user?.id || !isAppActiveRef.current) {
       return;
@@ -963,6 +1019,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setupRealtimeSubscription();
       setupBusinessCountSubscription();
       setupUserProfileSubscription();
+      setupSalesCountSubscription();
     }
 
     return () => {
@@ -997,8 +1054,17 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         }
         userProfileChannelRef.current = null;
       }
+
+      if (salesCountChannelRef.current) {
+        try {
+          salesCountChannelRef.current.unsubscribe();
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error cleaning up sales count channel:', error);
+        }
+        salesCountChannelRef.current = null;
+      }
     };
-  }, [user?.id, setupRealtimeSubscription, setupBusinessCountSubscription, setupUserProfileSubscription]);
+  }, [user?.id, setupRealtimeSubscription, setupBusinessCountSubscription, setupUserProfileSubscription, setupSalesCountSubscription]);
 
   const isBusinessReadOnly = useCallback((businessId: string) => {
     return readOnlyBusinessIds.includes(businessId);
