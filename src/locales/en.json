@@ -742,6 +742,17 @@
       "message": "Only the business owner can upgrade to BizManage Pro.",
       "info": "This business is owned by someone else. Please ask the business owner to upgrade if you need access to premium features."
     },
+    "teamMemberUpgrade": {
+      "title": "Upgrade Your Businesses",
+      "message": "Upgrading will only affect businesses that you own. This will not change the status of businesses you're assigned to as a team member.",
+      "currentBusinessNote": "You're currently viewing '{{businessName}}' which you don't own. The upgrade will not affect this business.",
+      "affectedBusinesses": "Your owned businesses that will be upgraded:",
+      "confirmUpgrade": "Continue to Upgrade"
+    },
+    "inactiveBusinessTeamMember": {
+      "title": "Business Inactive",
+      "message": "This business is currently inactive. Please contact the business owner to reactivate it."
+    },
     "ownerOnly": {
       "title": "Owner-Only Feature",
       "managementMessage": "Only the business owner can manage subscription settings. Contact the owner if you need to make changes.",

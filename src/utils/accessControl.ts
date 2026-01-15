@@ -198,5 +198,33 @@ export const accessControl = {
   getWarningMessage(salesCount: number): string {
     const remaining = FREE_TIER_LIMIT - salesCount;
     return `${remaining} sales remaining on your free plan. Upgrade to Pro for unlimited sales.`;
+  },
+
+  async getUserOwnedBusinesses(userId: string): Promise<{ count: number; businesses: Array<{ id: string; business_name: string }> }> {
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('id, business_name')
+        .eq('owner_user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching user owned businesses:', error);
+        return { count: 0, businesses: [] };
+      }
+
+      return {
+        count: data?.length || 0,
+        businesses: data || []
+      };
+    } catch (error) {
+      console.error('Error getting user owned businesses:', error);
+      return { count: 0, businesses: [] };
+    }
+  },
+
+  async doesUserOwnAnyBusiness(userId: string): Promise<boolean> {
+    const { count } = await this.getUserOwnedBusinesses(userId);
+    return count > 0;
   }
 };

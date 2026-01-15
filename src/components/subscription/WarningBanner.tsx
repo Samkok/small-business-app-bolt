@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, X } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { accessControl } from '@/src/utils/accessControl';
 
 interface WarningBannerProps {
   salesCount: number;
@@ -28,7 +30,23 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const [userOwnsAnyBusiness, setUserOwnsAnyBusiness] = useState(false);
+
+  useEffect(() => {
+    const checkUserOwnedBusinesses = async () => {
+      if (user?.id) {
+        const ownsAny = await accessControl.doesUserOwnAnyBusiness(user.id);
+        setUserOwnsAnyBusiness(ownsAny);
+      }
+    };
+
+    checkUserOwnedBusinesses();
+  }, [user?.id]);
+
+  const canUpgrade = isOwner || userOwnsAnyBusiness;
 
   const percentageUsed = (salesCount / totalLimit) * 100;
   const isHighWarning = percentageUsed >= 90;
@@ -72,7 +90,7 @@ export const WarningBanner: React.FC<WarningBannerProps> = ({
         </View>
       </View>
       <View style={styles.actions}>
-        {isOwner && (
+        {canUpgrade && (
           <TouchableOpacity
             style={styles.upgradeButton}
             onPress={onUpgrade}

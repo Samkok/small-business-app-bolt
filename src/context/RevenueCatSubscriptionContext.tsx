@@ -4,10 +4,12 @@ import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMI
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
+import { TeamMemberUpgradeInfoModal } from '@/src/components/subscription/TeamMemberUpgradeInfoModal';
 import { DowngradePick } from '@/src/components/subscription/DowngradePick';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { businessService } from '@/src/services/business';
 import { Paywall } from '@/src/components/subscription/Paywall';
+import { accessControl } from '@/src/utils/accessControl';
 
 let revenueCatService: any = null;
 let isRevenueCatAvailable = false;
@@ -125,6 +127,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [isUnauthorizedModalVisible, setIsUnauthorizedModalVisible] = useState(false);
+  const [isTeamMemberUpgradeModalVisible, setIsTeamMemberUpgradeModalVisible] = useState(false);
+  const [teamMemberOwnedBusinesses, setTeamMemberOwnedBusinesses] = useState<Array<{ id: string; business_name: string }>>([]);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
   const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
@@ -688,13 +692,21 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     }
   }, [user?.id, currentBusiness?.id]);
 
-  const showPaywall = useCallback(() => {
+  const showPaywall = useCallback(async () => {
     if (!currentBusiness) return;
 
     const isOwner = user?.id === currentBusiness.owner_user_id;
 
     if (isOwner) {
       setIsPaywallVisible(true);
+    } else if (user?.id) {
+      const result = await accessControl.getUserOwnedBusinesses(user.id);
+      if (result.count > 0) {
+        setTeamMemberOwnedBusinesses(result.businesses);
+        setIsTeamMemberUpgradeModalVisible(true);
+      } else {
+        setIsUnauthorizedModalVisible(true);
+      }
     } else {
       setIsUnauthorizedModalVisible(true);
     }
@@ -706,6 +718,15 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
   const hideUnauthorizedModal = useCallback(() => {
     setIsUnauthorizedModalVisible(false);
+  }, []);
+
+  const hideTeamMemberUpgradeModal = useCallback(() => {
+    setIsTeamMemberUpgradeModalVisible(false);
+  }, []);
+
+  const handleTeamMemberUpgradeConfirm = useCallback(() => {
+    setIsTeamMemberUpgradeModalVisible(false);
+    setIsPaywallVisible(true);
   }, []);
 
   const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
@@ -1157,6 +1178,13 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       <UnauthorizedUpgradeModal
         visible={isUnauthorizedModalVisible}
         onClose={hideUnauthorizedModal}
+      />
+      <TeamMemberUpgradeInfoModal
+        visible={isTeamMemberUpgradeModalVisible}
+        onClose={hideTeamMemberUpgradeModal}
+        onConfirm={handleTeamMemberUpgradeConfirm}
+        ownedBusinesses={teamMemberOwnedBusinesses}
+        currentBusinessName={currentBusiness?.business_name}
       />
       {mustChooseBusinesses && ownedBusinesses.length > 0 && (
         <DowngradePick

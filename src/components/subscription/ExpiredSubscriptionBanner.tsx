@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { accessControl } from '@/src/utils/accessControl';
 
 interface ExpiredSubscriptionBannerProps {
   onUpgrade: () => void;
@@ -18,7 +19,21 @@ export const ExpiredSubscriptionBanner: React.FC<ExpiredSubscriptionBannerProps>
   const { currentBusiness, user } = useAuth();
   const insets = useSafeAreaInsets();
 
+  const [userOwnsAnyBusiness, setUserOwnsAnyBusiness] = useState(false);
+
+  useEffect(() => {
+    const checkUserOwnedBusinesses = async () => {
+      if (user?.id) {
+        const ownsAny = await accessControl.doesUserOwnAnyBusiness(user.id);
+        setUserOwnsAnyBusiness(ownsAny);
+      }
+    };
+
+    checkUserOwnedBusinesses();
+  }, [user?.id]);
+
   const isOwner = user?.id === currentBusiness?.owner_user_id;
+  const canUpgrade = isOwner || userOwnsAnyBusiness;
 
   return (
     <View
@@ -36,11 +51,13 @@ export const ExpiredSubscriptionBanner: React.FC<ExpiredSubscriptionBannerProps>
         <AlertCircle size={20} color="#ef4444" />
         <View style={styles.textContainer}>
           <Text style={[styles.title, isDark && styles.titleDark]}>
-            {isOwner ? t('subscription.subscriptionExpired') : t('subscription.subscriptionExpiredNonOwner')}
+            {canUpgrade ? t('subscription.subscriptionExpired') : t('subscription.subscriptionExpiredNonOwner')}
           </Text>
           <Text style={[styles.message, isDark && styles.messageDark]}>
             {isOwner
               ? t('subscription.renewToUnlock')
+              : userOwnsAnyBusiness
+              ? 'Upgrade your businesses to unlock full features'
               : t('subscription.contactOwnerToRenew')
             }
           </Text>
@@ -53,7 +70,7 @@ export const ExpiredSubscriptionBanner: React.FC<ExpiredSubscriptionBannerProps>
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.upgradeText}>
-            {isOwner ? t('subscription.renew') : t('subscription.contactOwner')}
+            {isOwner ? t('subscription.renew') : userOwnsAnyBusiness ? t('subscription.upgrade') : t('subscription.contactOwner')}
           </Text>
         </TouchableOpacity>
       </View>

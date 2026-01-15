@@ -733,6 +733,17 @@
       "message": "只有企业所有者可以升级到 BizManage Pro。",
       "info": "此企业归其他人所有。如果您需要使用高级功能，请要求企业所有者进行升级。"
     },
+    "teamMemberUpgrade": {
+      "title": "升级您的企业",
+      "message": "升级只会影响您拥有的企业。不会改变您作为团队成员分配到的企业的状态。",
+      "currentBusinessNote": "您正在查看 '{{businessName}}'，您不是该企业的所有者。升级不会影响此企业。",
+      "affectedBusinesses": "将要升级的您拥有的企业：",
+      "confirmUpgrade": "继续升级"
+    },
+    "inactiveBusinessTeamMember": {
+      "title": "企业未激活",
+      "message": "此企业目前处于未激活状态。请联系企业所有者以重新激活。"
+    },
     "ownerOnly": {
       "title": "仅限所有者功能",
       "managementMessage": "只有企业所有者可以管理订阅设置。如需进行更改，请联系所有者。",

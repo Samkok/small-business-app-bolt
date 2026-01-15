@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Crown, Calendar, CreditCard, RefreshCw, TrendingUp, Zap, Info, AlertTriangle, Building2 } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
@@ -20,6 +20,8 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 import { CustomerCenterButton } from '@/src/components/subscription/CustomerCenter';
+import { TeamMemberUpgradeInfoModal } from '@/src/components/subscription/TeamMemberUpgradeInfoModal';
+import { accessControl } from '@/src/utils/accessControl';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
@@ -41,6 +43,9 @@ export default function SubscriptionScreen() {
   } = useSubscription();
 
   const [restoring, setRestoring] = useState(false);
+  const [userOwnsAnyBusiness, setUserOwnsAnyBusiness] = useState(false);
+  const [ownedBusinesses, setOwnedBusinesses] = useState<Array<{ id: string; business_name: string }>>([]);
+  const [showTeamMemberUpgradeModal, setShowTeamMemberUpgradeModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -60,7 +65,20 @@ export default function SubscriptionScreen() {
     }, [refreshTierInfo, refreshSubscriptionStatus])
   );
 
+  useEffect(() => {
+    const checkUserOwnedBusinesses = async () => {
+      if (user?.id) {
+        const result = await accessControl.getUserOwnedBusinesses(user.id);
+        setUserOwnsAnyBusiness(result.count > 0);
+        setOwnedBusinesses(result.businesses);
+      }
+    };
+
+    checkUserOwnedBusinesses();
+  }, [user?.id]);
+
   const isOwner = user?.id === currentBusiness?.owner_user_id;
+  const isTeamMember = !isOwner && userOwnsAnyBusiness;
 
   const handleRestore = async () => {
     try {
@@ -93,6 +111,19 @@ export default function SubscriptionScreen() {
 
   const handleManageSubscription = () => {
     Linking.openURL('https://apps.apple.com/account/subscriptions');
+  };
+
+  const handleUpgrade = () => {
+    if (isTeamMember) {
+      setShowTeamMemberUpgradeModal(true);
+    } else {
+      showPaywall();
+    }
+  };
+
+  const handleTeamMemberUpgradeConfirm = () => {
+    setShowTeamMemberUpgradeModal(false);
+    showPaywall();
   };
 
   const progressPercentage = salesCountData?.salesCount
@@ -246,6 +277,21 @@ export default function SubscriptionScreen() {
                   />
                 )}
               </>
+            ) : isTeamMember ? (
+              <Card style={styles.teamMemberInfoCard}>
+                <View style={styles.teamMemberInfoHeader}>
+                  <Building2 size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                  <Text style={[styles.infoTitle, isDark && styles.infoTitleDark]}>
+                    Team Member View
+                  </Text>
+                </View>
+                <Text style={[styles.infoDescription, isDark && styles.infoDescriptionDark]}>
+                  You're viewing a business you're assigned to. Subscription management for this business is controlled by the owner.
+                </Text>
+                <Text style={[styles.teamMemberNote, isDark && styles.teamMemberNoteDark]}>
+                  You own {ownedBusinesses.length} business{ownedBusinesses.length !== 1 ? 'es' : ''}. You can upgrade your own businesses in the plans section.
+                </Text>
+              </Card>
             ) : (
               <Card style={styles.infoCard}>
                 <View style={styles.infoHeader}>
@@ -305,41 +351,63 @@ export default function SubscriptionScreen() {
               </View>
             </Card>
 
-            {isOwner ? (
+            {isOwner || isTeamMember ? (
               <>
                 <Card style={styles.upgradeCard}>
                   <View style={styles.upgradeHeader}>
                     <Zap size={24} color="#f59e0b" />
                     <Text style={[styles.upgradeTitle, isDark && styles.upgradeTitleDark]}>
-                      {t('subscription.upgradeToPro')}
+                      {isTeamMember ? 'Upgrade Your Businesses' : t('subscription.upgradeToPro')}
                     </Text>
                   </View>
                   <Text style={[styles.upgradeDescription, isDark && styles.upgradeDescriptionDark]}>
-                    {t('subscription.upgradeToProFullDescription')}
+                    {isTeamMember
+                      ? 'Upgrade your owned businesses to unlock unlimited sales and premium features.'
+                      : t('subscription.upgradeToProFullDescription')}
                   </Text>
                   <Button
                     title={t('subscription.seePlans')}
-                    onPress={showPaywall}
+                    onPress={handleUpgrade}
                     style={styles.upgradeButton}
                   />
                 </Card>
 
-                <TouchableOpacity
-                  style={styles.restoreButton}
-                  onPress={handleRestore}
-                  disabled={restoring}
-                >
-                  {restoring ? (
-                    <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#3b82f6'} />
-                  ) : (
-                    <>
-                      <RefreshCw size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                      <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
-                        {t('subscription.restorePurchases')}
+                {isOwner && (
+                  <TouchableOpacity
+                    style={styles.restoreButton}
+                    onPress={handleRestore}
+                    disabled={restoring}
+                  >
+                    {restoring ? (
+                      <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#3b82f6'} />
+                    ) : (
+                      <>
+                        <RefreshCw size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                        <Text style={[styles.restoreText, isDark && styles.restoreTextDark]}>
+                          {t('subscription.restorePurchases')}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {isTeamMember && (
+                  <Card style={styles.teamMemberInfoCard}>
+                    <View style={styles.teamMemberInfoHeader}>
+                      <Building2 size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                      <Text style={[styles.infoTitle, isDark && styles.infoTitleDark]}>
+                        Your Owned Businesses
                       </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                    </View>
+                    <View style={styles.businessList}>
+                      {ownedBusinesses.map((business, index) => (
+                        <Text key={business.id} style={[styles.businessListItem, isDark && styles.businessListItemDark]}>
+                          • {business.business_name}
+                        </Text>
+                      ))}
+                    </View>
+                  </Card>
+                )}
               </>
             ) : (
               <Card style={styles.infoCard}>
@@ -357,6 +425,14 @@ export default function SubscriptionScreen() {
           </>
         )}
       </ScrollView>
+
+      <TeamMemberUpgradeInfoModal
+        visible={showTeamMemberUpgradeModal}
+        onClose={() => setShowTeamMemberUpgradeModal(false)}
+        onConfirm={handleTeamMemberUpgradeConfirm}
+        ownedBusinesses={ownedBusinesses}
+        currentBusinessName={currentBusiness?.business_name}
+      />
     </View>
   );
 }
@@ -666,5 +742,43 @@ const styles = StyleSheet.create({
   },
   resubscribeButton: {
     marginBottom: 0,
+  },
+  teamMemberInfoCard: {
+    marginBottom: 16,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  teamMemberInfoCardDark: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#3b82f6',
+  },
+  teamMemberInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  teamMemberNote: {
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  teamMemberNoteDark: {
+    color: '#93c5fd',
+  },
+  businessList: {
+    marginTop: 8,
+    gap: 4,
+  },
+  businessListItem: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  businessListItemDark: {
+    color: '#d1d5db',
   },
 });
