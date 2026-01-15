@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
     const { data: businesses, error: bizError } = await supabase
       .from('businesses')
       .select('id, business_name, access_state, created_at')
-      .eq('owner_id', userId)
+      .eq('owner_user_id', userId)
       .order('created_at', { ascending: true });
 
     if (bizError) {

@@ -68,7 +68,7 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   const businesses = useMemo(() => {
     // Only show businesses owned by the current user
     return userBusinesses
-      .filter(b => (b as any).owner_id === userProfile?.user_id)
+      .filter(b => (b as any).owner_user_id === userProfile?.user_id)
       .map(b => ({
         id: b.id,
         business_name: b.business_name,

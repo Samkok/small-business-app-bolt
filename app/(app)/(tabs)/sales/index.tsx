@@ -279,13 +279,13 @@ export default function SalesScreen() {
         // Check if current user is the owner
         const { data: business, error: businessError } = await supabase
           .from('businesses')
-          .select('owner_id')
+          .select('owner_user_id')
           .eq('id', currentBusiness.id)
           .maybeSingle();
 
         if (businessError) throw businessError;
 
-        const isOwner = business?.owner_id === userProfile.user_id;
+        const isOwner = business?.owner_user_id === userProfile.user_id;
         setIsBusinessOwner(isOwner);
 
         // If not owner and business is read-only, fetch owner's subscription status
@@ -305,8 +305,7 @@ export default function SalesScreen() {
           setOwnerSubscriptionMessage(null);
         }
       } catch (error) {
-        console.error('Error checking ownership:', error);
-        setIsBusinessOwner(true); // Default to true on error
+        setIsBusinessOwner(true);
         setOwnerSubscriptionMessage(null);
       }
     };
