@@ -186,50 +186,15 @@ Deno.serve(async (req: Request) => {
         throw error;
       }
 
-      // Handle downgrade: check owned business count and set read-only if needed
-      if (isDowngradeDetected && maxOwnedBusinesses !== null) {
-        const { count } = await supabase
-          .from('businesses')
-          .select('*', { count: 'exact', head: true })
-          .eq('owner_id', userId);
+      // Use centralized business selection logic
+      console.log('[ValidateReceipt] Checking business selection requirement');
+      const { data: selectionResult, error: selectionError } = await supabase
+        .rpc('check_business_selection_requirement', { p_user_id: userId });
 
-        console.log('[ValidateReceipt] User owns', count, 'businesses, tier allows', maxOwnedBusinesses);
-
-        if (count && count > maxOwnedBusinesses) {
-          console.log('[ValidateReceipt] Downgrade detected: setting read-only businesses');
-
-          // Call set_read_only_businesses function
-          const { error: funcError } = await supabase.rpc('set_read_only_businesses', {
-            p_user_id: userId,
-            p_max_active_businesses: maxOwnedBusinesses
-          });
-
-          if (funcError) {
-            console.error('[ValidateReceipt] Error setting read-only businesses:', funcError);
-          } else {
-            console.log('[ValidateReceipt] Read-only businesses set successfully');
-          }
-        }
-      }
-
-      // If upgrading, activate all businesses
-      if (!isDowngradeDetected && previousTier !== 'free') {
-        console.log('[ValidateReceipt] Upgrade detected: activating all businesses');
-
-        const { error: updateError } = await supabase
-          .from('businesses')
-          .update({ access_state: 'active' })
-          .eq('owner_id', userId);
-
-        if (updateError) {
-          console.error('[ValidateReceipt] Error activating businesses:', updateError);
-        }
-
-        // Clear must_choose_businesses flag
-        await supabase
-          .from('user_profiles')
-          .update({ must_choose_businesses: false })
-          .eq('user_id', userId);
+      if (selectionError) {
+        console.error('[ValidateReceipt] Error checking business selection:', selectionError);
+      } else {
+        console.log('[ValidateReceipt] Business selection check result:', selectionResult);
       }
 
       console.log('[ValidateReceipt] Subscription updated successfully');

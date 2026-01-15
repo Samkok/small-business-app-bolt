@@ -28,6 +28,7 @@
     "pullToRefresh": "下拉刷新",
     "ok": "确定",
     "retry": "重试",
+    "reload": "重新加载",
     "somethingWentWrong": "出现问题。请重试。",
     "understood": "明白了"
   },
@@ -47,7 +48,10 @@
     "passwordTooShort": "密码至少需要6个字符",
     "passwordsDontMatch": "密码不匹配",
     "emailNotFound": "邮箱未找到",
-    "emailAlreadyExists": "邮箱已存在"
+    "emailAlreadyExists": "邮箱已存在",
+    "agreeToTermsPrefix": "勾选此框即表示您同意我们的",
+    "termsAndConditions": "条款和条件",
+    "mustAgreeToTerms": "您必须同意条款和条件"
   },
   "navigation": {
     "dashboard": "仪表板",
@@ -427,7 +431,8 @@
     "loadFailed": "无法加载产品详情",
     "checkStatusFailed": "无法检查产品状态。请重试。",
     "productNotFound": "找不到产品",
-    "productNotFoundMessage": "您要找的产品不存在或已被删除。"
+    "productNotFoundMessage": "您要找的产品不存在或已被删除。",
+    "loadingSubscriptionFailed": "无法加载订阅数据。请重新加载。"
   },
   "search": {
     "foundResults": "找到 {{count}} 个产品",
@@ -732,6 +737,17 @@
       "title": "需要所有者权限",
       "message": "只有企业所有者可以升级到 BizManage Pro。",
       "info": "此企业归其他人所有。如果您需要使用高级功能，请要求企业所有者进行升级。"
+    },
+    "teamMemberUpgrade": {
+      "title": "升级您的企业",
+      "message": "升级只会影响您拥有的企业。不会改变您作为团队成员分配到的企业的状态。",
+      "currentBusinessNote": "您正在查看 '{{businessName}}'，您不是该企业的所有者。升级不会影响此企业。",
+      "affectedBusinesses": "将要升级的您拥有的企业：",
+      "confirmUpgrade": "继续升级"
+    },
+    "inactiveBusinessTeamMember": {
+      "title": "企业未激活",
+      "message": "此企业目前处于未激活状态。请联系企业所有者以重新激活。"
     },
     "ownerOnly": {
       "title": "仅限所有者功能",

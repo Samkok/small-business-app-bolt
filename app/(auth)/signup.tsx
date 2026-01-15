@@ -18,6 +18,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
 
 export default function SignUpScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
@@ -25,6 +26,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
   const { isDark } = useTheme();
@@ -33,6 +35,11 @@ export default function SignUpScreen() {
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword || !fullName) {
       Alert.alert(t('common.error'), 'Please fill in all fields');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      Alert.alert(t('common.error'), t('auth.mustAgreeToTerms'));
       return;
     }
 
@@ -71,6 +78,10 @@ export default function SignUpScreen() {
         'Account created successfully! Please sign in to create your business.'
       );
     }
+  };
+
+  const toggleAgreedToTerms = () => {
+    setAgreedToTerms(!agreedToTerms);
   };
 
   return (
@@ -127,10 +138,33 @@ export default function SignUpScreen() {
               required
             />
 
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={toggleAgreedToTerms}
+                activeOpacity={0.7}
+              >
+                {agreedToTerms ? (
+                  <CheckSquare size={20} color="#2563eb" />
+                ) : (
+                  <Square size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.termsTextContainer}>
+                <Text style={[styles.termsText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('auth.agreeToTermsPrefix')}{' '}
+                  <Link href="/(auth)/terms" style={styles.termsLink}>
+                    {t('auth.termsAndConditions')}
+                  </Link>
+                </Text>
+              </View>
+            </View>
+
             <Button
               title={t('auth.signUp')}
               onPress={handleSignUp}
               loading={loading}
+              disabled={!agreedToTerms}
               style={styles.button}
             />
 
@@ -174,6 +208,32 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     width: '100%',
     alignSelf: 'center',
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  checkboxContainer: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  termsTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingTop: 12,
+  },
+  termsText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#2563eb',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   button: {
     marginTop: 8,

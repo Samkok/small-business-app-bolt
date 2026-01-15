@@ -2,6 +2,7 @@ export { Paywall } from './Paywall';
 export { RevenueCatPaywall } from './RevenueCatPaywall';
 export { CustomerCenterButton } from './CustomerCenter';
 export { UnauthorizedUpgradeModal } from './UnauthorizedUpgradeModal';
+export { TeamMemberUpgradeInfoModal } from './TeamMemberUpgradeInfoModal';
 export { DowngradePick } from './DowngradePick';
 export { ExpiredSubscriptionBanner } from './ExpiredSubscriptionBanner';
 export { ReadOnlyBanner } from './ReadOnlyBanner';

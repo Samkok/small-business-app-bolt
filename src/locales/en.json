@@ -28,6 +28,7 @@
     "pullToRefresh": "Pull to refresh",
     "ok": "OK",
     "retry": "Retry",
+    "reload": "Reload",
     "somethingWentWrong": "Something went wrong. Please try again.",
     "deleted": "deleted",
     "filters": "Filters",
@@ -52,7 +53,10 @@
     "passwordTooShort": "Password must be at least 6 characters",
     "passwordsDontMatch": "Passwords don't match",
     "emailNotFound": "Email Not Found",
-    "emailAlreadyExists": "Email Already Exists"
+    "emailAlreadyExists": "Email Already Exists",
+    "agreeToTermsPrefix": "By checking this box, you've agreed to our",
+    "termsAndConditions": "Terms and Conditions",
+    "mustAgreeToTerms": "You must agree to the terms and conditions"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -436,7 +440,8 @@
     "loadFailed": "Failed to load product details",
     "checkStatusFailed": "Failed to check product status. Please try again.",
     "productNotFound": "Product Not Found",
-    "productNotFoundMessage": "The product you're looking for doesn't exist or has been deleted."
+    "productNotFoundMessage": "The product you're looking for doesn't exist or has been deleted.",
+    "loadingSubscriptionFailed": "Failed to load subscription data. Please reload."
   },
   "search": {
     "foundResults": "Found {{count}} product(s)",
@@ -741,6 +746,17 @@
       "title": "Owner Permission Required",
       "message": "Only the business owner can upgrade to BizManage Pro.",
       "info": "This business is owned by someone else. Please ask the business owner to upgrade if you need access to premium features."
+    },
+    "teamMemberUpgrade": {
+      "title": "Upgrade Your Businesses",
+      "message": "Upgrading will only affect businesses that you own. This will not change the status of businesses you're assigned to as a team member.",
+      "currentBusinessNote": "You're currently viewing '{{businessName}}' which you don't own. The upgrade will not affect this business.",
+      "affectedBusinesses": "Your owned businesses that will be upgraded:",
+      "confirmUpgrade": "Continue to Upgrade"
+    },
+    "inactiveBusinessTeamMember": {
+      "title": "Business Inactive",
+      "message": "This business is currently inactive. Please contact the business owner to reactivate it."
     },
     "ownerOnly": {
       "title": "Owner-Only Feature",

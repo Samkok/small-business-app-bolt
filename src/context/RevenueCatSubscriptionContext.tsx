@@ -4,10 +4,12 @@ import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMI
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
+import { TeamMemberUpgradeInfoModal } from '@/src/components/subscription/TeamMemberUpgradeInfoModal';
 import { DowngradePick } from '@/src/components/subscription/DowngradePick';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { businessService } from '@/src/services/business';
 import { Paywall } from '@/src/components/subscription/Paywall';
+import { accessControl } from '@/src/utils/accessControl';
 
 let revenueCatService: any = null;
 let isRevenueCatAvailable = false;
@@ -71,6 +73,8 @@ interface SubscriptionContextType {
   isBusinessReadOnly: (businessId: string) => boolean;
   offerings: any | null;
   customerInfo: any | null;
+  hasError: boolean;
+  retryInitialization: () => Promise<void>;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -123,12 +127,16 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [customerInfo, setCustomerInfo] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [isUnauthorizedModalVisible, setIsUnauthorizedModalVisible] = useState(false);
+  const [isTeamMemberUpgradeModalVisible, setIsTeamMemberUpgradeModalVisible] = useState(false);
+  const [teamMemberOwnedBusinesses, setTeamMemberOwnedBusinesses] = useState<Array<{ id: string; business_name: string }>>([]);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
   const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
+  const isFirstLoadRef = useRef(true);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
@@ -363,7 +371,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
-      const status = await subscriptionService.getSubscriptionStatus(user.id, forceRefresh);
+      const shouldForceRefresh = forceRefresh || isFirstLoadRef.current;
+      const status = await subscriptionService.getSubscriptionStatus(user.id, shouldForceRefresh);
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
@@ -379,8 +388,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         subscriptionStatus: actuallySubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
       });
       setIsSubscribed(actuallySubscribed);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id, customerInfo]);
 
@@ -390,8 +402,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       const countData = await subscriptionService.getSalesCountData(user.id, currentBusiness.id);
       setSalesCountData(countData);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing sales count:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id, currentBusiness?.id]);
 
@@ -405,8 +420,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       ]);
       setTierInfo(tierData);
       setOwnedBusinessCount(ownedCount);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing tier info:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id]);
 
@@ -414,6 +432,18 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
+      // Trigger server-side business selection check
+      // This will automatically set/clear the must_choose_businesses flag and handle business states
+      const { data: selectionResult, error: selectionError } = await supabase
+        .rpc('check_business_selection_requirement', { p_user_id: user.id });
+
+      if (selectionError) {
+        console.error('[RevenueCatSubscriptionContext] Error checking business selection:', selectionError);
+      } else {
+        console.log('[RevenueCatSubscriptionContext] Server-side business selection check result:', selectionResult);
+      }
+
+      // Now fetch the current state from database
       const [profileResult, tierData, ownedCount] = await Promise.all([
         supabase
           .from('user_profiles')
@@ -437,6 +467,15 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         limitExceeded
       });
 
+      // NOTE: Business selection flag setting logic has been moved to server-side
+      // The database function check_business_selection_requirement now handles:
+      // - Checking if limit is exceeded
+      // - Checking if businesses are already properly configured
+      // - Setting/clearing the must_choose_businesses flag
+      // - Auto-activating businesses when within limit
+      // This client code now only reads the flag and displays the modal
+
+      /* COMMENTED OUT - Logic moved to server-side check_business_selection_requirement function
       if (limitExceeded && !mustChooseFromDb) {
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
         const activeCount = businesses.filter((b: any) => b.access_state === 'active').length;
@@ -472,7 +511,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           setTierInfo(tierData);
           setOwnedBusinessCount(ownedCount);
         }
-      } else if (mustChooseFromDb) {
+      } else */ if (mustChooseFromDb) {
         console.log('[RevenueCatSubscriptionContext] must_choose_businesses flag is set, showing modal');
         const businesses = await businessService.getUserOwnedBusinessesWithState(user.id);
         setOwnedBusinesses(businesses);
@@ -667,13 +706,21 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     }
   }, [user?.id, currentBusiness?.id]);
 
-  const showPaywall = useCallback(() => {
+  const showPaywall = useCallback(async () => {
     if (!currentBusiness) return;
 
     const isOwner = user?.id === currentBusiness.owner_user_id;
 
     if (isOwner) {
       setIsPaywallVisible(true);
+    } else if (user?.id) {
+      const result = await accessControl.getUserOwnedBusinesses(user.id);
+      if (result.count > 0) {
+        setTeamMemberOwnedBusinesses(result.businesses);
+        setIsTeamMemberUpgradeModalVisible(true);
+      } else {
+        setIsUnauthorizedModalVisible(true);
+      }
     } else {
       setIsUnauthorizedModalVisible(true);
     }
@@ -686,6 +733,46 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const hideUnauthorizedModal = useCallback(() => {
     setIsUnauthorizedModalVisible(false);
   }, []);
+
+  const hideTeamMemberUpgradeModal = useCallback(() => {
+    setIsTeamMemberUpgradeModalVisible(false);
+  }, []);
+
+  const handleTeamMemberUpgradeConfirm = useCallback(() => {
+    setIsTeamMemberUpgradeModalVisible(false);
+    setIsPaywallVisible(true);
+  }, []);
+
+  const retryInitialization = useCallback(async () => {
+    if (!user?.id) return;
+
+    console.log('[RevenueCatSubscriptionContext] Retrying initialization...');
+    setIsLoading(true);
+    setHasError(false);
+    isFirstLoadRef.current = true;
+
+    try {
+      await Promise.all([
+        refreshSubscriptionStatus(true),
+        refreshTierInfo(),
+        loadDowngradeData()
+      ]);
+
+      if (currentBusiness?.id) {
+        await Promise.all([
+          refreshSalesCount(),
+          checkFeatureAccess(true)
+        ]);
+      }
+
+      isFirstLoadRef.current = false;
+    } catch (error) {
+      console.error('[RevenueCatSubscriptionContext] Retry failed:', error);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData, refreshSalesCount, checkFeatureAccess]);
 
   const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
     if (reconnectAttempts.current >= maxReconnectAttempts) {
@@ -991,16 +1078,38 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
   useEffect(() => {
     if (user?.id) {
-      refreshSubscriptionStatus();
-      refreshTierInfo();
-      loadDowngradeData();
+      const loadInitialData = async () => {
+        try {
+          await Promise.all([
+            refreshSubscriptionStatus(),
+            refreshTierInfo(),
+            loadDowngradeData()
+          ]);
+          isFirstLoadRef.current = false;
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error loading initial subscription data:', error);
+          setHasError(true);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadInitialData();
     }
   }, [user?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData]);
 
   useEffect(() => {
     if (user?.id && currentBusiness?.id) {
-      refreshSalesCount();
-      checkFeatureAccess();
+      const loadBusinessData = async () => {
+        try {
+          await Promise.all([
+            refreshSalesCount(),
+            checkFeatureAccess()
+          ]);
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error loading business data:', error);
+        }
+      };
+      loadBusinessData();
     }
   }, [user?.id, currentBusiness?.id, refreshSalesCount, checkFeatureAccess]);
 
@@ -1114,6 +1223,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     isBusinessReadOnly,
     offerings,
     customerInfo,
+    hasError,
+    retryInitialization,
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,
@@ -1136,6 +1247,13 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       <UnauthorizedUpgradeModal
         visible={isUnauthorizedModalVisible}
         onClose={hideUnauthorizedModal}
+      />
+      <TeamMemberUpgradeInfoModal
+        visible={isTeamMemberUpgradeModalVisible}
+        onClose={hideTeamMemberUpgradeModal}
+        onConfirm={handleTeamMemberUpgradeConfirm}
+        ownedBusinesses={teamMemberOwnedBusinesses}
+        currentBusinessName={currentBusiness?.business_name}
       />
       {mustChooseBusinesses && ownedBusinesses.length > 0 && (
         <DowngradePick

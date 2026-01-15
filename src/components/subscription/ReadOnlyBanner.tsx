@@ -37,6 +37,9 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   const insets = useSafeAreaInsets();
 
   const getTitle = () => {
+    if (!isOwner && variant === 'business_readonly') {
+      return t('subscription.inactiveBusinessTeamMember.title');
+    }
     if (!isOwner && ownershipMessage) {
       return 'Business in Read-Only Mode';
     }
@@ -49,6 +52,9 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   };
 
   const getMessage = () => {
+    if (!isOwner && variant === 'business_readonly') {
+      return t('subscription.inactiveBusinessTeamMember.message');
+    }
     if (!isOwner && ownershipMessage) {
       return ownershipMessage;
     }
@@ -104,7 +110,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
           </TouchableOpacity>
         ) : (
           <>
-            {isOwner && (
+            {!(!isOwner && variant === 'business_readonly') && isOwner && (
               <TouchableOpacity
                 style={[
                   styles.upgradeButton,
@@ -118,7 +124,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
                 <Text style={styles.upgradeText}>{t('subscription.upgrade')}</Text>
               </TouchableOpacity>
             )}
-            {variant === 'business_readonly' && onSwitchBusiness && (
+            {variant === 'business_readonly' && onSwitchBusiness && isOwner && (
               <TouchableOpacity
                 style={[styles.secondaryButton, isDark && styles.secondaryButtonDark]}
                 onPress={onSwitchBusiness}

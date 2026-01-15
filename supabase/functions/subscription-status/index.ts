@@ -18,6 +18,7 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     const userId = url.searchParams.get('userId');
+    const checkBusinessSelection = url.searchParams.get('checkBusinessSelection') === 'true';
 
     if (!userId) {
       return new Response(
@@ -34,6 +35,19 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Optionally check business selection requirement
+    if (checkBusinessSelection) {
+      console.log('[SubscriptionStatus] Checking business selection requirement');
+      const { data: selectionResult, error: selectionError } = await supabase
+        .rpc('check_business_selection_requirement', { p_user_id: userId });
+
+      if (selectionError) {
+        console.error('[SubscriptionStatus] Error checking business selection:', selectionError);
+      } else {
+        console.log('[SubscriptionStatus] Business selection check result:', selectionResult);
+      }
+    }
 
     // Get subscription info
     const { data: subscription, error: subError } = await supabase
@@ -64,7 +78,7 @@ Deno.serve(async (req: Request) => {
     const { data: businesses, error: bizError } = await supabase
       .from('businesses')
       .select('id, business_name, access_state, created_at')
-      .eq('owner_id', userId)
+      .eq('owner_user_id', userId)
       .order('created_at', { ascending: true });
 
     if (bizError) {
