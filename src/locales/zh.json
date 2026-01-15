@@ -47,7 +47,10 @@
     "passwordTooShort": "密码至少需要6个字符",
     "passwordsDontMatch": "密码不匹配",
     "emailNotFound": "邮箱未找到",
-    "emailAlreadyExists": "邮箱已存在"
+    "emailAlreadyExists": "邮箱已存在",
+    "agreeToTermsPrefix": "勾选此框即表示您同意我们的",
+    "termsAndConditions": "条款和条件",
+    "mustAgreeToTerms": "您必须同意条款和条件"
   },
   "navigation": {
     "dashboard": "仪表板",

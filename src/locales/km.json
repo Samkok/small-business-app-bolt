@@ -47,7 +47,10 @@
     "passwordTooShort": "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ",
     "passwordsDontMatch": "ពាក្យសម្ងាត់មិនដូចគ្នា",
     "emailNotFound": "រកមិនឃើញអុីម៉ែល",
-    "emailAlreadyExists": "អុីម៉ែលមានរួចហើយ"
+    "emailAlreadyExists": "អុីម៉ែលមានរួចហើយ",
+    "agreeToTermsPrefix": "តាមរយៈការធីកប្រអប់នេះ អ្នកបានយល់ព្រមនឹង",
+    "termsAndConditions": "លក្ខខណ្ឌនិងកិច្ចព្រមព្រៀង",
+    "mustAgreeToTerms": "អ្នកត្រូវតែយល់ព្រមនឹងលក្ខខណ្ឌនិងកិច្ចព្រមព្រៀង"
   },
   "navigation": {
     "dashboard": "ផ្ទាំងគ្រប់គ្រង",

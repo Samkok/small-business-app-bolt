@@ -52,7 +52,10 @@
     "passwordTooShort": "Password must be at least 6 characters",
     "passwordsDontMatch": "Passwords don't match",
     "emailNotFound": "Email Not Found",
-    "emailAlreadyExists": "Email Already Exists"
+    "emailAlreadyExists": "Email Already Exists",
+    "agreeToTermsPrefix": "By checking this box, you've agreed to our",
+    "termsAndConditions": "Terms and Conditions",
+    "mustAgreeToTerms": "You must agree to the terms and conditions"
   },
   "navigation": {
     "dashboard": "Dashboard",
