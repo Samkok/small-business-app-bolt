@@ -25,12 +25,12 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { TabButton } from '@/src/components/ui/TabButton';
-import { SkeletonSaleCard, SkeletonList } from '@/src/components/ui/SkeletonLoader';
+import { SkeletonSaleCard, SkeletonList, SkeletonButtonGroup, SkeletonSubscriptionBanner } from '@/src/components/ui/SkeletonLoader';
 import { SaleCard } from '@/src/components/sales/SaleCard';
 import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap, RefreshCw } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -102,7 +102,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
-  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus } = useSubscription();
+  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -924,7 +924,17 @@ export default function SalesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      { subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
+      {subscriptionLoading ? (
+        <SkeletonSubscriptionBanner />
+      ) : subscriptionError ? (
+        <View style={[styles.errorBanner, { backgroundColor: isDark ? '#7f1d1d' : '#fee2e2' }]}>
+          <View style={styles.errorContent}>
+            <Text style={[styles.errorText, { color: isDark ? '#fca5a5' : '#dc2626' }]}>
+              {t('errors.loadingSubscriptionFailed')}
+            </Text>
+          </View>
+        </View>
+      ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
         <WarningBanner
           salesCount={salesCountData.totalSalesAllBusinesses || 0}
           remainingSales={salesCountData.remainingSales}
@@ -948,33 +958,50 @@ export default function SalesScreen() {
           {t('sales.title')}
         </Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
-                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
-              }
-            ]}
-            onPress={salesCountData.isAtLimit || !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
-            disabled={salesCountData.isAtLimit || !canAccessFeature}
-          >
-            <Zap size={24} color="#ffffff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
-                marginLeft: 8,
-                opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
-              }
-            ]}
-            onPress={handleNewSale}
-            disabled={salesCountData.isAtLimit || !canAccessFeature}
-          >
-            <Plus size={24} color="#ffffff" />
-          </TouchableOpacity>
+          {subscriptionLoading ? (
+            <SkeletonButtonGroup />
+          ) : subscriptionError ? (
+            <TouchableOpacity
+              style={[
+                styles.reloadButton,
+                { backgroundColor: isDark ? '#dc2626' : '#ef4444' }
+              ]}
+              onPress={retryInitialization}
+            >
+              <RefreshCw size={20} color="#ffffff" />
+              <Text style={styles.reloadButtonText}>{t('common.reload')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                    opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
+                  }
+                ]}
+                onPress={salesCountData.isAtLimit || !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+                disabled={salesCountData.isAtLimit || !canAccessFeature}
+              >
+                <Zap size={24} color="#ffffff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
+                    marginLeft: 8,
+                    opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
+                  }
+                ]}
+                onPress={handleNewSale}
+                disabled={salesCountData.isAtLimit || !canAccessFeature}
+              >
+                <Plus size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -1338,6 +1365,35 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorBanner: {
+    marginHorizontal: 16,
+    marginTop: 60,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 12,
+  },
+  errorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  reloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    gap: 8,
+  },
+  reloadButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   tabs: {
     flexDirection: 'row',

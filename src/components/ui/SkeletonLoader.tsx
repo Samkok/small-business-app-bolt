@@ -409,6 +409,19 @@ const styles = StyleSheet.create({
     marginVertical: 16,
     paddingHorizontal: 16,
   },
+  buttonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  subscriptionBanner: {
+    padding: 12,
+    marginBottom: 12,
+    marginHorizontal: 16,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 });
 
 export function SkeletonTeamMemberCard() {
@@ -425,6 +438,29 @@ export function SkeletonTeamMemberCard() {
       <View style={styles.teamMemberActions}>
         <SkeletonLoader height={36} width={36} borderRadius={18} style={{ marginRight: 8 }} />
         <SkeletonLoader height={36} width={36} borderRadius={18} />
+      </View>
+    </SkeletonCard>
+  );
+}
+
+export function SkeletonButtonGroup() {
+  return (
+    <View style={styles.buttonGroup}>
+      <SkeletonLoader height={48} width={48} borderRadius={24} style={{ marginRight: 8 }} />
+      <SkeletonLoader height={48} width={48} borderRadius={24} />
+    </View>
+  );
+}
+
+export function SkeletonSubscriptionBanner() {
+  return (
+    <SkeletonCard style={styles.subscriptionBanner}>
+      <View style={styles.bannerContent}>
+        <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <SkeletonLoader height={16} width="80%" style={{ marginBottom: 6 }} />
+          <SkeletonLoader height={14} width="60%" />
+        </View>
       </View>
     </SkeletonCard>
   );

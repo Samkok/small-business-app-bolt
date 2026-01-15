@@ -73,6 +73,8 @@ interface SubscriptionContextType {
   isBusinessReadOnly: (businessId: string) => boolean;
   offerings: any | null;
   customerInfo: any | null;
+  hasError: boolean;
+  retryInitialization: () => Promise<void>;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -125,6 +127,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [customerInfo, setCustomerInfo] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   const [isUnauthorizedModalVisible, setIsUnauthorizedModalVisible] = useState(false);
   const [isTeamMemberUpgradeModalVisible, setIsTeamMemberUpgradeModalVisible] = useState(false);
@@ -133,6 +136,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
+  const isFirstLoadRef = useRef(true);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
@@ -367,7 +371,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     if (!user?.id) return;
 
     try {
-      const status = await subscriptionService.getSubscriptionStatus(user.id, forceRefresh);
+      const shouldForceRefresh = forceRefresh || isFirstLoadRef.current;
+      const status = await subscriptionService.getSubscriptionStatus(user.id, shouldForceRefresh);
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
@@ -383,8 +388,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         subscriptionStatus: actuallySubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
       });
       setIsSubscribed(actuallySubscribed);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id, customerInfo]);
 
@@ -394,8 +402,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       const countData = await subscriptionService.getSalesCountData(user.id, currentBusiness.id);
       setSalesCountData(countData);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing sales count:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id, currentBusiness?.id]);
 
@@ -409,8 +420,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       ]);
       setTierInfo(tierData);
       setOwnedBusinessCount(ownedCount);
+      setHasError(false);
     } catch (error) {
       console.error('Error refreshing tier info:', error);
+      setHasError(true);
+      throw error;
     }
   }, [user?.id]);
 
@@ -729,6 +743,37 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     setIsPaywallVisible(true);
   }, []);
 
+  const retryInitialization = useCallback(async () => {
+    if (!user?.id) return;
+
+    console.log('[RevenueCatSubscriptionContext] Retrying initialization...');
+    setIsLoading(true);
+    setHasError(false);
+    isFirstLoadRef.current = true;
+
+    try {
+      await Promise.all([
+        refreshSubscriptionStatus(true),
+        refreshTierInfo(),
+        loadDowngradeData()
+      ]);
+
+      if (currentBusiness?.id) {
+        await Promise.all([
+          refreshSalesCount(),
+          checkFeatureAccess(true)
+        ]);
+      }
+
+      isFirstLoadRef.current = false;
+    } catch (error) {
+      console.error('[RevenueCatSubscriptionContext] Retry failed:', error);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData, refreshSalesCount, checkFeatureAccess]);
+
   const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
     if (reconnectAttempts.current >= maxReconnectAttempts) {
       console.log('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType, '- will retry on next app activity');
@@ -1033,16 +1078,38 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
   useEffect(() => {
     if (user?.id) {
-      refreshSubscriptionStatus();
-      refreshTierInfo();
-      loadDowngradeData();
+      const loadInitialData = async () => {
+        try {
+          await Promise.all([
+            refreshSubscriptionStatus(),
+            refreshTierInfo(),
+            loadDowngradeData()
+          ]);
+          isFirstLoadRef.current = false;
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error loading initial subscription data:', error);
+          setHasError(true);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadInitialData();
     }
   }, [user?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData]);
 
   useEffect(() => {
     if (user?.id && currentBusiness?.id) {
-      refreshSalesCount();
-      checkFeatureAccess();
+      const loadBusinessData = async () => {
+        try {
+          await Promise.all([
+            refreshSalesCount(),
+            checkFeatureAccess()
+          ]);
+        } catch (error) {
+          console.error('[RevenueCatSubscriptionContext] Error loading business data:', error);
+        }
+      };
+      loadBusinessData();
     }
   }, [user?.id, currentBusiness?.id, refreshSalesCount, checkFeatureAccess]);
 
@@ -1156,6 +1223,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     isBusinessReadOnly,
     offerings,
     customerInfo,
+    hasError,
+    retryInitialization,
     purchaseSubscription,
     restorePurchases,
     refreshSubscriptionStatus,

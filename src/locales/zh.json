@@ -28,6 +28,7 @@
     "pullToRefresh": "下拉刷新",
     "ok": "确定",
     "retry": "重试",
+    "reload": "重新加载",
     "somethingWentWrong": "出现问题。请重试。",
     "understood": "明白了"
   },
@@ -430,7 +431,8 @@
     "loadFailed": "无法加载产品详情",
     "checkStatusFailed": "无法检查产品状态。请重试。",
     "productNotFound": "找不到产品",
-    "productNotFoundMessage": "您要找的产品不存在或已被删除。"
+    "productNotFoundMessage": "您要找的产品不存在或已被删除。",
+    "loadingSubscriptionFailed": "无法加载订阅数据。请重新加载。"
   },
   "search": {
     "foundResults": "找到 {{count}} 个产品",

@@ -28,6 +28,7 @@
     "pullToRefresh": "Pull to refresh",
     "ok": "OK",
     "retry": "Retry",
+    "reload": "Reload",
     "somethingWentWrong": "Something went wrong. Please try again.",
     "deleted": "deleted",
     "filters": "Filters",
@@ -439,7 +440,8 @@
     "loadFailed": "Failed to load product details",
     "checkStatusFailed": "Failed to check product status. Please try again.",
     "productNotFound": "Product Not Found",
-    "productNotFoundMessage": "The product you're looking for doesn't exist or has been deleted."
+    "productNotFoundMessage": "The product you're looking for doesn't exist or has been deleted.",
+    "loadingSubscriptionFailed": "Failed to load subscription data. Please reload."
   },
   "search": {
     "foundResults": "Found {{count}} product(s)",
