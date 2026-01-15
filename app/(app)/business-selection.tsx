@@ -50,7 +50,7 @@ export default function BusinessSelectionScreen() {
       try {
         const { data, error } = await supabase
           .from('businesses')
-          .select('id, business_name, business_image_url, owner_id, access_state, created_at')
+          .select('id, business_name, business_image_url, owner_user_id, access_state, created_at')
           .in('id', userBusinesses.map(b => b.id))
           .order('created_at', { ascending: true });
 
@@ -58,7 +58,6 @@ export default function BusinessSelectionScreen() {
 
         setBusinessesWithAccess(data || []);
       } catch (error) {
-        console.error('Error fetching business data:', error);
         setBusinessesWithAccess(userBusinesses);
       }
     };
@@ -86,7 +85,7 @@ export default function BusinessSelectionScreen() {
       if (user?.id && userBusinesses.length) {
         const { data, error } = await supabase
           .from('businesses')
-          .select('id, business_name, business_image_url, owner_id, access_state, created_at')
+          .select('id, business_name, business_image_url, owner_user_id, access_state, created_at')
           .in('id', userBusinesses.map(b => b.id))
           .order('created_at', { ascending: true });
 
@@ -182,7 +181,7 @@ export default function BusinessSelectionScreen() {
   };
 
   const renderBusinessItem = ({ item }: { item: any }) => {
-    const isOwner = item.owner_id === user?.id;
+    const isOwner = item.owner_user_id === user?.id;
     const accessState = item.access_state || 'active';
 
     return (
@@ -343,7 +342,7 @@ export default function BusinessSelectionScreen() {
           onPress={handleOpenCreateModal}
           style={styles.createButton}
         />
-        {businessesWithAccess.filter(b => b.owner_id === user?.id).length > 1 && (
+        {businessesWithAccess.filter(b => b.owner_user_id === user?.id).length > 1 && (
           <TouchableOpacity
             style={[
               styles.manageButton,
