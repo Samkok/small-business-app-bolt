@@ -43,6 +43,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [costAmountInputs, setCostAmountInputs] = useState<Map<string, string>>(new Map());
+  const [itemCostInputs, setItemCostInputs] = useState<Map<string, string>>(new Map());
 
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
@@ -156,9 +157,17 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     }
   };
 
-  const updateItemCost = (itemId: string, cost: number) => {
+  const updateItemCost = (itemId: string, costString: string) => {
+    const validatedText = validateDecimalInput(costString);
+    // Store the string representation separately
+    setItemCostInputs(prev => {
+      const newMap = new Map(prev);
+      newMap.set(itemId, validatedText);
+      return newMap;
+    });
+    // Store the numeric value for calculations
     setSelectedItems(selectedItems.map(item =>
-      item.id === itemId ? { ...item, base_unit_cost_per_item: cost } : item
+      item.id === itemId ? { ...item, base_unit_cost_per_item: parseFloat(validatedText) || 0 } : item
     ));
   };
 
@@ -496,10 +505,9 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                             color: isDark ? '#f9fafb' : '#111827',
                             opacity: isEditable ? 1 : 0.7
                           }]}
-                          value={item.base_unit_cost_per_item?.toString() || '0'}
+                          value={itemCostInputs.get(item.id) || item.base_unit_cost_per_item?.toString() || '0'}
                           onChangeText={(text) => {
-                            const validatedText = validateDecimalInput(text);
-                            updateItemCost(item.id, parseFloat(validatedText) || 0);
+                            updateItemCost(item.id, text);
                           }}
                           keyboardType="decimal-pad"
                           placeholder="0.00"
