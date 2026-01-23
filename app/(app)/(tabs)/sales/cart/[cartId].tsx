@@ -464,11 +464,19 @@ export default function CartScreen() {
     );
 
     // Only reset when the itemId changes (i.e., opening modal for a different item)
-    // Don't reset when item properties change during refresh
+    // Don't reset when cart refreshes (which would change item object reference)
     const itemIdRef = useRef(itemId);
+    const hasInitialized = useRef(false);
+
     useEffect(() => {
+      // Only run when itemId changes, not when item object reference changes
       if (itemIdRef.current !== itemId) {
         itemIdRef.current = itemId;
+        hasInitialized.current = false;
+      }
+
+      if (!hasInitialized.current) {
+        hasInitialized.current = true;
         if (item) {
           setDiscountType(item.item_discount_type || 'percentage');
           setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
@@ -479,7 +487,7 @@ export default function CartScreen() {
           setDiscountScope('total');
         }
       }
-    }, [itemId, item]);
+    }, [itemId]); // Only depend on itemId, not item
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
