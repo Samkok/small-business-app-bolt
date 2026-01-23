@@ -37,8 +37,20 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [status, setStatus] = useState<'pending' | 'completed'>('pending');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isMarkingAsArrived, setIsMarkingAsArrived] = useState(false);
-  
+
   const { isDark } = useTheme();
+
+  const validateDecimalInput = (text: string): string => {
+    if (text === '') return '';
+    if (text === '.') return '0.';
+    const regex = /^\d*\.?\d*$/;
+    if (regex.test(text)) {
+      const parts = text.split('.');
+      if (parts.length > 2) return text.slice(0, -1);
+      return text;
+    }
+    return text.slice(0, -1);
+  };
 
   useEffect(() => {
     if (importRecord) {
@@ -69,7 +81,12 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
 
   const updateCost = (index: number, field: string, value: string) => {
     const updated = [...additionalCosts];
-    updated[index] = { ...updated[index], [field]: value };
+    if (field === 'amount') {
+      const validatedValue = validateDecimalInput(value);
+      updated[index] = { ...updated[index], [field]: validatedValue };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
     setAdditionalCosts(updated);
   };
 
@@ -290,8 +307,12 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
             <Input
               label="Base Unit Cost"
               value={baseUnitCost}
-              onChangeText={setBaseUnitCost}
+              onChangeText={(text) => {
+                const validatedText = validateDecimalInput(text);
+                setBaseUnitCost(validatedText);
+              }}
               placeholder="0.00"
+              keyboardType="decimal-pad"
               required
               editable={isEditable}
               style={{ opacity: isEditable ? 1 : 0.7 }}
@@ -344,6 +365,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   value={cost.amount?.toString() || ''}
                   onChangeText={(text) => updateCost(index, 'amount', text)}
                   placeholder="0.00"
+                  keyboardType="decimal-pad"
                   editable={isEditable}
                   style={{ opacity: isEditable ? 1 : 0.7 }}
                 />

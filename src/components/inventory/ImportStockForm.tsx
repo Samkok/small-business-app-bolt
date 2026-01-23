@@ -45,6 +45,18 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
 
+  const validateDecimalInput = (text: string): string => {
+    if (text === '') return '';
+    if (text === '.') return '0.';
+    const regex = /^\d*\.?\d*$/;
+    if (regex.test(text)) {
+      const parts = text.split('.');
+      if (parts.length > 2) return text.slice(0, -1);
+      return text;
+    }
+    return text.slice(0, -1);
+  };
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -134,7 +146,12 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
   const updateCost = (index: number, field: keyof BatchImportCost, value: any) => {
     const updated = [...additionalCosts];
-    updated[index] = { ...updated[index], [field]: value };
+    if (field === 'amount') {
+      const validatedValue = validateDecimalInput(value.toString());
+      updated[index] = { ...updated[index], [field]: parseFloat(validatedValue) || 0 };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
     setAdditionalCosts(updated);
   };
 
@@ -419,15 +436,17 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                         }]}
                         value={itemCostInputs.get(item.product_id) || item.base_unit_cost_per_item?.toString() || '0'}
                         onChangeText={(text) => {
+                          const validatedText = validateDecimalInput(text);
                           // Store the text input for display
                           setItemCostInputs(prev => {
                             const updated = new Map(prev);
-                            updated.set(item.product_id, text);
+                            updated.set(item.product_id, validatedText);
                             return updated;
                           });
                           // Update the actual cost value for calculations
-                          updateItemCost(item.product_id, parseFloat(text) || 0);
+                          updateItemCost(item.product_id, parseFloat(validatedText) || 0);
                         }}
+                        keyboardType="decimal-pad"
                         placeholder="0.00"
                       />
                     </View>
@@ -485,9 +504,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                 label="Amount"
                 value={cost.amount?.toString() || '0'}
                 onChangeText={(text) => {
-                  updateCost(index, 'amount', parseFloat(text) || 0);
+                  updateCost(index, 'amount', text);
                 }}
                 placeholder="0.00"
+                keyboardType="decimal-pad"
               />
               
               <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>

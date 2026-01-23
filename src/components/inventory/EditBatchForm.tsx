@@ -42,11 +42,23 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
 
   const isEditable = batch.status === 'pending';
+
+  const validateDecimalInput = (text: string): string => {
+    if (text === '') return '';
+    if (text === '.') return '0.';
+    const regex = /^\d*\.?\d*$/;
+    if (regex.test(text)) {
+      const parts = text.split('.');
+      if (parts.length > 2) return text.slice(0, -1);
+      return text;
+    }
+    return text.slice(0, -1);
+  };
 
   useEffect(() => {
     loadProducts();
@@ -159,8 +171,8 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     const updated = additionalCosts.map(cost => {
       if (cost.id === costId) {
         if (field === 'amount') {
-          // Store the raw string value to preserve decimal input
-          return { ...cost, [field]: value };
+          const validatedValue = validateDecimalInput(value);
+          return { ...cost, [field]: validatedValue };
         }
         return { ...cost, [field]: value };
       }
@@ -469,8 +481,9 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                             opacity: isEditable ? 1 : 0.7
                           }]}
                           value={item.base_unit_cost_per_item?.toString() || '0'}
-                          onChangeText={(value) => {
-                            updateItemCost(item.id, parseFloat(value) || 0);
+                          onChangeText={(text) => {
+                            const validatedText = validateDecimalInput(text);
+                            updateItemCost(item.id, parseFloat(validatedText) || 0);
                           }}
                           keyboardType="decimal-pad"
                           placeholder="0.00"
@@ -549,6 +562,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                       updateCost(cost.id, 'amount', value);
                     }}
                     placeholder="0.00"
+                    keyboardType="decimal-pad"
                     editable={isEditable}
                     style={{ opacity: isEditable ? 1 : 0.7 }}
                   />
