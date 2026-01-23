@@ -419,20 +419,16 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                         }]}
                         value={itemCostInputs.get(item.product_id) || item.base_unit_cost_per_item?.toString() || '0'}
                         onChangeText={(text) => {
-                          // Allow digits, decimal point, and empty string
-                          if (text === '' || /^\d*\.?\d*$/.test(text)) {
-                            // Store the text input for display
-                            setItemCostInputs(prev => {
-                              const updated = new Map(prev);
-                              updated.set(item.product_id, text);
-                              return updated;
-                            });
-                            // Update the actual cost value for calculations
-                            updateItemCost(item.product_id, parseFloat(text) || 0);
-                          }
+                          // Store the text input for display
+                          setItemCostInputs(prev => {
+                            const updated = new Map(prev);
+                            updated.set(item.product_id, text);
+                            return updated;
+                          });
+                          // Update the actual cost value for calculations
+                          updateItemCost(item.product_id, parseFloat(text) || 0);
                         }}
                         placeholder="0.00"
-                        keyboardType="numeric"
                       />
                     </View>
                     
@@ -489,13 +485,9 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                 label="Amount"
                 value={cost.amount?.toString() || '0'}
                 onChangeText={(text) => {
-                  // Allow digits, decimal point, and empty string
-                  if (text === '' || /^\d*\.?\d*$/.test(text)) {
-                    updateCost(index, 'amount', parseFloat(text) || 0);
-                  }
+                  updateCost(index, 'amount', parseFloat(text) || 0);
                 }}
                 placeholder="0.00"
-                keyboardType="numeric"
               />
               
               <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>

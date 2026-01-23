@@ -470,12 +470,9 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                           }]}
                           value={item.base_unit_cost_per_item?.toString() || '0'}
                           onChangeText={(value) => {
-                            if (/^\d*\.?\d*$/.test(value) || value === '') {
-                              updateItemCost(item.id, parseFloat(value) || 0);
-                            }
+                            updateItemCost(item.id, parseFloat(value) || 0);
                           }}
                           placeholder="0.00"
-                          keyboardType="numeric"
                           editable={isEditable}
                         />
                       </View>
@@ -548,13 +545,9 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                     label="Amount"
                     value={cost.amount?.toString() || ''}
                     onChangeText={(value) => {
-                      // Allow digits, decimal point, and empty string
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        updateCost(cost.id, 'amount', value);
-                      }
+                      updateCost(cost.id, 'amount', value);
                     }}
                     placeholder="0.00"
-                    keyboardType="numeric"
                     editable={isEditable}
                     style={{ opacity: isEditable ? 1 : 0.7 }}
                   />
