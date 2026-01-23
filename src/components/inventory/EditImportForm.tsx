@@ -37,19 +37,28 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [status, setStatus] = useState<'pending' | 'completed'>('pending');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isMarkingAsArrived, setIsMarkingAsArrived] = useState(false);
+  const [costAmountInputs, setCostAmountInputs] = useState<Map<number, string>>(new Map());
 
   const { isDark } = useTheme();
 
   const validateDecimalInput = (text: string): string => {
     if (text === '') return '';
     if (text === '.') return '0.';
+
     const regex = /^\d*\.?\d*$/;
-    if (regex.test(text)) {
-      const parts = text.split('.');
-      if (parts.length > 2) return text.slice(0, -1);
-      return text;
+    if (!regex.test(text)) {
+      return text.slice(0, -1);
     }
-    return text.slice(0, -1);
+
+    const parts = text.split('.');
+    if (parts.length > 2) return text.slice(0, -1);
+
+    // Remove leading zeros unless followed by a decimal point
+    if (parts[0].length > 1 && parts[0].startsWith('0') && parts.length === 1) {
+      return text.slice(1);
+    }
+
+    return text;
   };
 
   useEffect(() => {
@@ -83,7 +92,14 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
     const updated = [...additionalCosts];
     if (field === 'amount') {
       const validatedValue = validateDecimalInput(value);
-      updated[index] = { ...updated[index], [field]: validatedValue };
+      // Store the string representation separately
+      setCostAmountInputs(prev => {
+        const newMap = new Map(prev);
+        newMap.set(index, validatedValue);
+        return newMap;
+      });
+      // Store the numeric value for calculations
+      updated[index] = { ...updated[index], [field]: parseFloat(validatedValue) || 0 };
     } else {
       updated[index] = { ...updated[index], [field]: value };
     }
@@ -362,7 +378,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                 
                 <Input
                   label="Amount"
-                  value={cost.amount?.toString() || ''}
+                  value={costAmountInputs.get(index) || cost.amount?.toString() || ''}
                   onChangeText={(text) => updateCost(index, 'amount', text)}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
