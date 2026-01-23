@@ -442,9 +442,28 @@ export default function CartScreen() {
     onApply: (type: 'percentage' | 'fixed', value: number, scope: 'per_unit' | 'total') => void;
     onCancel: () => void;
   }) => {
-    const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
-    const [discountValue, setDiscountValue] = useState('');
-    const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>('total');
+    const item = cart?.items.find(i => i.id === itemId);
+    const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
+      item?.item_discount_type || 'percentage'
+    );
+    const [discountValue, setDiscountValue] = useState(
+      item?.item_discount_value ? item.item_discount_value.toString() : ''
+    );
+    const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>(
+      item?.item_discount_scope || 'total'
+    );
+
+    useEffect(() => {
+      if (item) {
+        setDiscountType(item.item_discount_type || 'percentage');
+        setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
+        setDiscountScope(item.item_discount_scope || 'total');
+      } else {
+        setDiscountType('percentage');
+        setDiscountValue('');
+        setDiscountScope('total');
+      }
+    }, [itemId, item?.item_discount_type, item?.item_discount_value, item?.item_discount_scope]);
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
