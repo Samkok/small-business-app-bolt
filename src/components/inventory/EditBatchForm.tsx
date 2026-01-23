@@ -462,7 +462,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                           Unit Cost:
                         </Text>
                         <TextInput
-                          style={[styles.costTextInput, { 
+                          style={[styles.costTextInput, {
                             backgroundColor: isDark ? '#374151' : '#f9fafb',
                             borderColor: isDark ? '#4b5563' : '#d1d5db',
                             color: isDark ? '#f9fafb' : '#111827',
@@ -472,6 +472,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                           onChangeText={(value) => {
                             updateItemCost(item.id, parseFloat(value) || 0);
                           }}
+                          keyboardType="decimal-pad"
                           placeholder="0.00"
                           editable={isEditable}
                         />
