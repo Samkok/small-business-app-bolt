@@ -17,10 +17,12 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
 
 export default function CartScreen() {
+  const { t } = useTranslation();
   const [showDiscountModal, setShowDiscountModal] = useState<string | null>(null);
   const [showCartDiscountModal, setShowCartDiscountModal] = useState(false);
   const [deliveryCost, setDeliveryCost] = useState('');
@@ -311,12 +313,12 @@ export default function CartScreen() {
     });
   }, []);
 
-  const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => {
+  const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope: 'per_unit' | 'total' = 'total') => {
     if (!cart) return;
 
     setUpdating(itemId);
     try {
-      await applyItemDiscount(cart.id, itemId, discountType, discountValue);
+      await applyItemDiscount(cart.id, itemId, discountType, discountValue, discountScope);
       setLocalItemDiscounts(prev => {
         const updated = new Map(prev);
         updated.set(itemId, { type: discountType, value: discountValue });
@@ -437,11 +439,12 @@ export default function CartScreen() {
 
   const DiscountModal = ({ itemId, onApply, onCancel }: {
     itemId: string;
-    onApply: (type: 'percentage' | 'fixed', value: number) => void;
+    onApply: (type: 'percentage' | 'fixed', value: number, scope: 'per_unit' | 'total') => void;
     onCancel: () => void;
   }) => {
     const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
     const [discountValue, setDiscountValue] = useState('');
+    const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>('total');
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
@@ -453,7 +456,7 @@ export default function CartScreen() {
         Alert.alert('Error', 'Percentage discount cannot exceed 100%');
         return;
       }
-      onApply(discountType, value);
+      onApply(discountType, value, discountScope);
     };
 
     return (
@@ -462,7 +465,7 @@ export default function CartScreen() {
           <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
             Apply Discount
           </Text>
-          
+
           <View style={styles.discountTypeButtons}>
             <TouchableOpacity
               style={[
@@ -482,7 +485,7 @@ export default function CartScreen() {
                 Percentage
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[
                 styles.discountTypeButton,
@@ -502,7 +505,46 @@ export default function CartScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-          
+
+          <View style={styles.discountScopeSection}>
+            <Text style={[styles.discountScopeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {t('sales.discountScope')}
+            </Text>
+            <View style={styles.discountScopeButtons}>
+              <TouchableOpacity
+                style={[styles.discountScopeButton, {
+                  backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                  borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+                }]}
+                onPress={() => setDiscountScope('per_unit')}
+              >
+                {discountScope === 'per_unit' && (
+                  <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                )}
+                <Text style={[styles.discountScopeButtonText, { color: discountScope === 'per_unit' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                  {t('sales.perUnit')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.discountScopeButton, {
+                  backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                  borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+                }]}
+                onPress={() => setDiscountScope('total')}
+              >
+                {discountScope === 'total' && (
+                  <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                )}
+                <Text style={[styles.discountScopeButtonText, { color: discountScope === 'total' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                  {t('sales.toTotal')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.discountScopeDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              {discountScope === 'per_unit' ? t('sales.perUnitDescription') : t('sales.toTotalDescription')}
+            </Text>
+          </View>
+
           <Input
             label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
             value={discountValue}
@@ -510,7 +552,7 @@ export default function CartScreen() {
             placeholder={discountType === 'percentage' ? '10' : '5.00'}
             keyboardType="decimal-pad"
           />
-          
+
           <View style={styles.modalActions}>
             <Button
               title="Cancel"
@@ -919,7 +961,7 @@ export default function CartScreen() {
       {showDiscountModal && (
         <DiscountModal
           itemId={showDiscountModal}
-          onApply={(type, value) => handleItemDiscount(showDiscountModal, type, value)}
+          onApply={(type, value, scope) => handleItemDiscount(showDiscountModal, type, value, scope)}
           onCancel={() => setShowDiscountModal(null)}
         />
       )}
@@ -1231,6 +1273,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  discountScopeSection: {
+    marginBottom: 16,
+  },
+  discountScopeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  discountScopeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  discountScopeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  discountScopeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  discountScopeDescription: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   modalActions: {
     flexDirection: 'row',
