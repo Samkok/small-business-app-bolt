@@ -453,6 +453,10 @@ export default function CartScreen() {
     onCancel: () => void;
   }) => {
     const item = cart?.items.find(i => i.id === itemId);
+
+    // Track if user has made changes to prevent reset during save
+    const hasUserChanges = useRef(false);
+
     const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
       item?.item_discount_type || 'percentage'
     );
@@ -463,19 +467,20 @@ export default function CartScreen() {
       item?.item_discount_scope || 'total'
     );
 
-    // Only reset when the itemId changes (i.e., opening modal for a different item)
-    // Don't reset when cart refreshes (which would change item object reference)
+    // Initialize state only once when modal opens for this item
     const itemIdRef = useRef(itemId);
     const hasInitialized = useRef(false);
 
     useEffect(() => {
-      // Only run when itemId changes, not when item object reference changes
+      // Reset when itemId changes (opening modal for different item)
       if (itemIdRef.current !== itemId) {
         itemIdRef.current = itemId;
         hasInitialized.current = false;
+        hasUserChanges.current = false;
       }
 
-      if (!hasInitialized.current) {
+      // Initialize state once, and don't reset if user has made changes
+      if (!hasInitialized.current && !hasUserChanges.current) {
         hasInitialized.current = true;
         if (item) {
           setDiscountType(item.item_discount_type || 'percentage');
@@ -487,7 +492,23 @@ export default function CartScreen() {
           setDiscountScope('total');
         }
       }
-    }, [itemId]); // Only depend on itemId, not item
+    }, [itemId]); // Only depend on itemId
+
+    // Wrap state setters to track user changes
+    const handleSetDiscountType = (type: 'percentage' | 'fixed') => {
+      hasUserChanges.current = true;
+      setDiscountType(type);
+    };
+
+    const handleSetDiscountValue = (value: string) => {
+      hasUserChanges.current = true;
+      setDiscountValue(value);
+    };
+
+    const handleSetDiscountScope = (scope: 'per_unit' | 'total') => {
+      hasUserChanges.current = true;
+      setDiscountScope(scope);
+    };
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
@@ -518,7 +539,7 @@ export default function CartScreen() {
                   borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
                 }
               ]}
-              onPress={() => setDiscountType('percentage')}
+              onPress={() => handleSetDiscountType('percentage')}
             >
               <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
               <Text style={[
@@ -537,7 +558,7 @@ export default function CartScreen() {
                   borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
                 }
               ]}
-              onPress={() => setDiscountType('fixed')}
+              onPress={() => handleSetDiscountType('fixed')}
             >
               <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
               <Text style={[
@@ -559,7 +580,7 @@ export default function CartScreen() {
                   backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
                   borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
                 }]}
-                onPress={() => setDiscountScope('per_unit')}
+                onPress={() => handleSetDiscountScope('per_unit')}
               >
                 {discountScope === 'per_unit' && (
                   <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
@@ -573,7 +594,7 @@ export default function CartScreen() {
                   backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
                   borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
                 }]}
-                onPress={() => setDiscountScope('total')}
+                onPress={() => handleSetDiscountScope('total')}
               >
                 {discountScope === 'total' && (
                   <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
@@ -591,7 +612,7 @@ export default function CartScreen() {
           <Input
             label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
             value={discountValue}
-            onChangeText={setDiscountValue}
+            onChangeText={handleSetDiscountValue}
             placeholder={discountType === 'percentage' ? '10' : '5.00'}
             keyboardType="decimal-pad"
           />
