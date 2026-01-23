@@ -290,9 +290,14 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
             <Input
               label="Base Unit Cost"
               value={baseUnitCost}
-              onChangeText={setBaseUnitCost}
+              onChangeText={(text) => {
+                // Allow digits, decimal point, and empty string
+                if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                  setBaseUnitCost(text);
+                }
+              }}
               placeholder="0.00"
-              keyboardType="decimal-pad"
+              keyboardType="numeric"
               required
               editable={isEditable}
               style={{ opacity: isEditable ? 1 : 0.7 }}
@@ -343,9 +348,14 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                 <Input
                   label="Amount"
                   value={cost.amount?.toString() || ''}
-                  onChangeText={(value) => updateCost(index, 'amount', value)}
+                  onChangeText={(text) => {
+                    // Allow digits, decimal point, and empty string
+                    if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                      updateCost(index, 'amount', text);
+                    }
+                  }}
                   placeholder="0.00"
-                  keyboardType="decimal-pad"
+                  keyboardType="numeric"
                   editable={isEditable}
                   style={{ opacity: isEditable ? 1 : 0.7 }}
                 />

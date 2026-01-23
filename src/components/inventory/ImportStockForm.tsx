@@ -40,7 +40,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [itemCostInputs, setItemCostInputs] = useState<Map<string, string>>(new Map());
+
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
 
@@ -411,15 +412,27 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                         Unit Cost:
                       </Text>
                       <TextInput
-                        style={[styles.costTextInput, { 
+                        style={[styles.costTextInput, {
                           backgroundColor: isDark ? '#374151' : '#f9fafb',
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item ?? item.base_unit_cost_per_item.toString()}
-                        onChangeText={(value) => updateItemCost(item.product_id, parseFloat(value) || 0)}
+                        value={itemCostInputs.get(item.product_id) || item.base_unit_cost_per_item?.toString() || '0'}
+                        onChangeText={(text) => {
+                          // Allow digits, decimal point, and empty string
+                          if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                            // Store the text input for display
+                            setItemCostInputs(prev => {
+                              const updated = new Map(prev);
+                              updated.set(item.product_id, text);
+                              return updated;
+                            });
+                            // Update the actual cost value for calculations
+                            updateItemCost(item.product_id, parseFloat(text) || 0);
+                          }
+                        }}
                         placeholder="0.00"
-                        keyboardType="decimal-pad"
+                        keyboardType="numeric"
                       />
                     </View>
                     
@@ -474,10 +487,15 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount ?? cost.amount.toString()}
-                onChangeText={(value) => updateCost(index, 'amount', parseFloat(value) || 0)}
+                value={cost.amount?.toString() || '0'}
+                onChangeText={(text) => {
+                  // Allow digits, decimal point, and empty string
+                  if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                    updateCost(index, 'amount', parseFloat(text) || 0);
+                  }
+                }}
                 placeholder="0.00"
-                keyboardType="decimal-pad"
+                keyboardType="numeric"
               />
               
               <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#374151' }]}>
