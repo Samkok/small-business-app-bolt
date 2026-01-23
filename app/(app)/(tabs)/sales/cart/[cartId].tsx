@@ -211,13 +211,23 @@ export default function CartScreen() {
       const originalSubtotal = quantity * item.unit_price;
       itemsOriginalTotal += originalSubtotal;
 
-      // Calculate item discount
+      // Calculate item discount with scope support
       let itemDiscountAmount = 0;
       if (item.item_discount_type && item.item_discount_value) {
+        const discountScope = item.item_discount_scope || 'total';
+
         if (item.item_discount_type === 'percentage') {
-          itemDiscountAmount = originalSubtotal * (item.item_discount_value / 100);
-        } else {
-          itemDiscountAmount = Math.min(item.item_discount_value, originalSubtotal);
+          if (discountScope === 'per_unit') {
+            itemDiscountAmount = (item.unit_price * (item.item_discount_value / 100)) * quantity;
+          } else {
+            itemDiscountAmount = originalSubtotal * (item.item_discount_value / 100);
+          }
+        } else if (item.item_discount_type === 'fixed') {
+          if (discountScope === 'per_unit') {
+            itemDiscountAmount = Math.min(item.item_discount_value, item.unit_price) * quantity;
+          } else {
+            itemDiscountAmount = Math.min(item.item_discount_value, originalSubtotal);
+          }
         }
       }
 
@@ -453,17 +463,23 @@ export default function CartScreen() {
       item?.item_discount_scope || 'total'
     );
 
+    // Only reset when the itemId changes (i.e., opening modal for a different item)
+    // Don't reset when item properties change during refresh
+    const itemIdRef = useRef(itemId);
     useEffect(() => {
-      if (item) {
-        setDiscountType(item.item_discount_type || 'percentage');
-        setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
-        setDiscountScope(item.item_discount_scope || 'total');
-      } else {
-        setDiscountType('percentage');
-        setDiscountValue('');
-        setDiscountScope('total');
+      if (itemIdRef.current !== itemId) {
+        itemIdRef.current = itemId;
+        if (item) {
+          setDiscountType(item.item_discount_type || 'percentage');
+          setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
+          setDiscountScope(item.item_discount_scope || 'total');
+        } else {
+          setDiscountType('percentage');
+          setDiscountValue('');
+          setDiscountScope('total');
+        }
       }
-    }, [itemId, item?.item_discount_type, item?.item_discount_value, item?.item_discount_scope]);
+    }, [itemId, item]);
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
