@@ -326,7 +326,10 @@ export default function CartScreen() {
   const handleItemDiscount = useCallback(async (itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope: 'per_unit' | 'total' = 'total') => {
     if (!cart) return;
 
+    // Close modal immediately to prevent flashing during cart refresh
+    setShowDiscountModal(null);
     setUpdating(itemId);
+
     try {
       await applyItemDiscount(cart.id, itemId, discountType, discountValue, discountScope);
       setLocalItemDiscounts(prev => {
@@ -334,7 +337,6 @@ export default function CartScreen() {
         updated.set(itemId, { type: discountType, value: discountValue });
         return updated;
       });
-      setShowDiscountModal(null);
     } catch (error) {
       console.error('Error applying discount:', error);
       Alert.alert('Error', 'Failed to apply discount');
@@ -364,13 +366,15 @@ export default function CartScreen() {
 
   const handleCartDiscount = useCallback(async (discountType: 'percentage' | 'fixed', discountValue: number) => {
     if (!cart) return;
-    
+
+    // Close modal immediately to prevent flashing during cart refresh
+    setShowCartDiscountModal(false);
+
     try {
       await updateCart(cart.id, {
         discount_type: discountType,
         discount_value: discountValue
       });
-      setShowCartDiscountModal(false);
     } catch (error) {
       console.error('Error applying cart discount:', error);
       Alert.alert('Error', 'Failed to apply cart discount');
@@ -454,9 +458,6 @@ export default function CartScreen() {
   }) => {
     const item = cart?.items.find(i => i.id === itemId);
 
-    // Track if user has made changes to prevent reset during save
-    const hasUserChanges = useRef(false);
-
     const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
       item?.item_discount_type || 'percentage'
     );
@@ -467,48 +468,25 @@ export default function CartScreen() {
       item?.item_discount_scope || 'total'
     );
 
-    // Initialize state only once when modal opens for this item
+    // Initialize state only once when modal opens
     const itemIdRef = useRef(itemId);
     const hasInitialized = useRef(false);
 
     useEffect(() => {
-      // Reset when itemId changes (opening modal for different item)
+      // Reset when opening modal for a different item
       if (itemIdRef.current !== itemId) {
         itemIdRef.current = itemId;
         hasInitialized.current = false;
-        hasUserChanges.current = false;
       }
 
-      // Initialize state once, and don't reset if user has made changes
-      if (!hasInitialized.current && !hasUserChanges.current) {
+      // Initialize state once
+      if (!hasInitialized.current && item) {
         hasInitialized.current = true;
-        if (item) {
-          setDiscountType(item.item_discount_type || 'percentage');
-          setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
-          setDiscountScope(item.item_discount_scope || 'total');
-        } else {
-          setDiscountType('percentage');
-          setDiscountValue('');
-          setDiscountScope('total');
-        }
+        setDiscountType(item.item_discount_type || 'percentage');
+        setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
+        setDiscountScope(item.item_discount_scope || 'total');
       }
-    }, [itemId]); // Only depend on itemId
-
-    // Wrap state setters to track user changes
-    const handleSetDiscountType = (type: 'percentage' | 'fixed') => {
-      hasUserChanges.current = true;
-      setDiscountType(type);
-    };
-
-    const handleSetDiscountValue = (value: string) => {
-      hasUserChanges.current = true;
-      setDiscountValue(value);
-    };
-
-    const handleSetDiscountScope = (scope: 'per_unit' | 'total') => {
-      hasUserChanges.current = true;
-      setDiscountScope(scope);
-    };
+    }, [itemId, item]);
 
     const handleApply = () => {
       const value = parseFloat(discountValue);
@@ -539,7 +517,7 @@ export default function CartScreen() {
                   borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
                 }
               ]}
-              onPress={() => handleSetDiscountType('percentage')}
+              onPress={() => setDiscountType('percentage')}
             >
               <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
               <Text style={[
@@ -558,7 +536,7 @@ export default function CartScreen() {
                   borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
                 }
               ]}
-              onPress={() => handleSetDiscountType('fixed')}
+              onPress={() => setDiscountType('fixed')}
             >
               <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
               <Text style={[
@@ -580,7 +558,7 @@ export default function CartScreen() {
                   backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
                   borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
                 }]}
-                onPress={() => handleSetDiscountScope('per_unit')}
+                onPress={() => setDiscountScope('per_unit')}
               >
                 {discountScope === 'per_unit' && (
                   <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
@@ -594,7 +572,7 @@ export default function CartScreen() {
                   backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
                   borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
                 }]}
-                onPress={() => handleSetDiscountScope('total')}
+                onPress={() => setDiscountScope('total')}
               >
                 {discountScope === 'total' && (
                   <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
@@ -612,7 +590,7 @@ export default function CartScreen() {
           <Input
             label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
             value={discountValue}
-            onChangeText={handleSetDiscountValue}
+            onChangeText={setDiscountValue}
             placeholder={discountType === 'percentage' ? '10' : '5.00'}
             keyboardType="decimal-pad"
           />
