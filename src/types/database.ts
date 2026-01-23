@@ -425,6 +425,7 @@ export interface Database {
           item_discount_type?: 'percentage' | 'fixed';
           item_discount_value?: number;
           item_discount_amount?: number;
+          item_discount_scope?: 'per_unit' | 'total';
           original_subtotal?: number;
           created_at: string;
           updated_at: string;
@@ -441,6 +442,7 @@ export interface Database {
           item_discount_type?: 'percentage' | 'fixed';
           item_discount_value?: number;
           item_discount_amount?: number;
+          item_discount_scope?: 'per_unit' | 'total';
           original_subtotal?: number;
           created_at?: string;
           updated_at?: string;
@@ -457,6 +459,7 @@ export interface Database {
           item_discount_type?: 'percentage' | 'fixed';
           item_discount_value?: number;
           item_discount_amount?: number;
+          item_discount_scope?: 'per_unit' | 'total';
           original_subtotal?: number;
           created_at?: string;
           updated_at?: string;

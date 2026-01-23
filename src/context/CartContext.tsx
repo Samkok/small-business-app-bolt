@@ -18,6 +18,7 @@ export interface CartItem {
   item_discount_type?: 'percentage' | 'fixed';
   item_discount_value?: number;
   item_discount_amount?: number;
+  item_discount_scope?: 'per_unit' | 'total';
   subtotal: number;
 }
 
@@ -122,21 +123,37 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return Math.max(0, discountAmount);
   }, []);
 
-  const calculateItemSubtotal = useCallback((quantity: number, unitPrice: number, discountType?: 'percentage' | 'fixed', discountValue?: number): { subtotal: number; discountAmount: number } => {
+  const calculateItemSubtotal = useCallback((
+    quantity: number,
+    unitPrice: number,
+    discountType?: 'percentage' | 'fixed',
+    discountValue?: number,
+    discountScope?: 'per_unit' | 'total'
+  ): { subtotal: number; discountAmount: number } => {
     const originalSubtotal = quantity * unitPrice;
-    
+
     if (!discountType || !discountValue) {
       return { subtotal: originalSubtotal, discountAmount: 0 };
     }
 
+    const scope = discountScope || 'total';
     let discountAmount = 0;
+
     if (discountType === 'percentage') {
-      discountAmount = originalSubtotal * (discountValue / 100);
+      if (scope === 'per_unit') {
+        discountAmount = unitPrice * (discountValue / 100) * quantity;
+      } else {
+        discountAmount = originalSubtotal * (discountValue / 100);
+      }
     } else if (discountType === 'fixed') {
-      discountAmount = Math.min(discountValue, originalSubtotal);
+      if (scope === 'per_unit') {
+        discountAmount = Math.min(discountValue, unitPrice) * quantity;
+      } else {
+        discountAmount = Math.min(discountValue, originalSubtotal);
+      }
     }
 
-    return { 
+    return {
       subtotal: Math.max(0, originalSubtotal - discountAmount),
       discountAmount
     };
