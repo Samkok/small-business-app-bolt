@@ -180,6 +180,7 @@ export const cartService = {
   async addItemToCart(cartItem: CartItemInsert & {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;
+    item_discount_scope?: 'per_unit' | 'total';
   }) {
     const { data: existingItem } = await supabase
       .from('cart_items')
@@ -197,6 +198,7 @@ export const cartService = {
           quantity: newQuantity,
           item_discount_type: cartItem.item_discount_type || existingItem.item_discount_type,
           item_discount_value: cartItem.item_discount_value ?? existingItem.item_discount_value,
+          item_discount_scope: cartItem.item_discount_scope || existingItem.item_discount_scope,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingItem.id)
@@ -230,6 +232,7 @@ export const cartService = {
   async updateCartItem(itemId: string, updates: CartItemUpdate & {
     item_discount_type?: 'percentage' | 'fixed';
     item_discount_value?: number;
+    item_discount_scope?: 'per_unit' | 'total';
   }) {
     const { data: item } = await supabase
       .from('cart_items')
@@ -278,7 +281,7 @@ export const cartService = {
     );
   },
 
-  async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) {
+  async applyItemDiscount(itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope: 'per_unit' | 'total' = 'total') {
     if (typeof itemId !== 'string' || !itemId) return;
 
     const { data: item } = await supabase
@@ -294,6 +297,7 @@ export const cartService = {
       .update({
         item_discount_type: discountType,
         item_discount_value: discountValue,
+        item_discount_scope: discountScope,
         updated_at: new Date().toISOString()
       })
       .eq('id', itemId)
@@ -325,6 +329,7 @@ export const cartService = {
       .update({
         item_discount_type: null,
         item_discount_value: null,
+        item_discount_scope: null,
         updated_at: new Date().toISOString()
       })
       .eq('id', itemId)

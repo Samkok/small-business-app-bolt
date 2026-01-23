@@ -13,6 +13,7 @@ interface CartItemProps {
   subtotal: number;
   itemDiscountType?: 'percentage' | 'fixed';
   itemDiscountValue?: number;
+  itemDiscountScope?: 'per_unit' | 'total';
   initialQuantity: number;
   availableStock: number;
   onQuantityChange: (itemId: string, quantity: number) => void;
@@ -31,6 +32,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
   subtotal,
   itemDiscountType,
   itemDiscountValue,
+  itemDiscountScope,
   initialQuantity,
   availableStock,
   onQuantityChange,
@@ -182,6 +184,10 @@ const CartItemComponent: React.FC<CartItemProps> = ({
                 ? `${itemDiscountValue}% off`
                 : `$${itemDiscountValue} off`
               }
+              {' '}
+              <Text style={[styles.itemDiscountScope, { color: '#9ca3af' }]}>
+                ({itemDiscountScope === 'per_unit' ? 'per unit' : 'total'})
+              </Text>
             </Text>
             <TouchableOpacity
               onPress={() => onRemoveDiscount(itemId)}
@@ -268,6 +274,7 @@ export const CartItem = memo(CartItemComponent, (prevProps, nextProps) => {
     prevProps.subtotal === nextProps.subtotal &&
     prevProps.itemDiscountType === nextProps.itemDiscountType &&
     prevProps.itemDiscountValue === nextProps.itemDiscountValue &&
+    prevProps.itemDiscountScope === nextProps.itemDiscountScope &&
     prevProps.isUpdating === nextProps.isUpdating
   );
 });
@@ -329,6 +336,10 @@ const styles = StyleSheet.create({
   itemDiscountText: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  itemDiscountScope: {
+    fontSize: 10,
+    fontWeight: '400',
   },
   removeDiscountButton: {
     marginLeft: 6,

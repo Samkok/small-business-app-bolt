@@ -11,6 +11,7 @@ import {
   TextInput,
   FlatList,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
@@ -57,6 +58,7 @@ export function InstantCheckoutModal() {
     setDeliveryCost,
   } = useInstantCheckout();
 
+  const { t } = useTranslation();
   const router = useRouter();
   const { salesCountData, canAccessFeature, showPaywall, refreshSalesCount } = useSubscription();
   const [completing, setCompleting] = useState(false);
@@ -71,6 +73,7 @@ export function InstantCheckoutModal() {
   const [selectedItemForDiscount, setSelectedItemForDiscount] = useState<string | null>(null);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState('');
+  const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>('total');
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
@@ -165,10 +168,11 @@ export function InstantCheckoutModal() {
       return;
     }
 
-    applyItemDiscount(selectedItemForDiscount, discountType, value);
+    applyItemDiscount(selectedItemForDiscount, discountType, value, discountScope);
     setShowItemDiscountModal(false);
     setSelectedItemForDiscount(null);
     setDiscountValue('');
+    setDiscountScope('total');
   };
 
   const handleApplyCartDiscount = () => {
@@ -689,6 +693,51 @@ export function InstantCheckoutModal() {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.discountScopeSection}>
+              <Text style={[styles.discountScopeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                {t('sales.discountScope')}
+              </Text>
+              <View style={styles.discountScopeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.discountScopeButton,
+                    {
+                      backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => setDiscountScope('per_unit')}
+                >
+                  {discountScope === 'per_unit' && (
+                    <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                  )}
+                  <Text style={[styles.discountScopeButtonText, { color: discountScope === 'per_unit' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                    {t('sales.perUnit')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.discountScopeButton,
+                    {
+                      backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                      borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+                    }
+                  ]}
+                  onPress={() => setDiscountScope('total')}
+                >
+                  {discountScope === 'total' && (
+                    <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                  )}
+                  <Text style={[styles.discountScopeButtonText, { color: discountScope === 'total' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                    {t('sales.toTotal')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.discountScopeDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {discountScope === 'per_unit' ? t('sales.perUnitDescription') : t('sales.toTotalDescription')}
+              </Text>
+            </View>
+
             <Input
               label={discountType === 'percentage' ? 'Discount (%)' : 'Discount ($)'}
               value={discountValue}
@@ -1060,6 +1109,37 @@ const styles = StyleSheet.create({
   discountTypeText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  discountScopeSection: {
+    marginBottom: 16,
+  },
+  discountScopeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  discountScopeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  discountScopeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  discountScopeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  discountScopeDescription: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   modalActions: {
     flexDirection: 'row',

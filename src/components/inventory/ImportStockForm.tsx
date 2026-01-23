@@ -40,9 +40,31 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [itemCostInputs, setItemCostInputs] = useState<Map<string, string>>(new Map());
+  const [costAmountInputs, setCostAmountInputs] = useState<Map<number, string>>(new Map());
+
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
+
+  const validateDecimalInput = (text: string): string => {
+    if (text === '') return '';
+    if (text === '.') return '0.';
+
+    const regex = /^\d*\.?\d*$/;
+    if (!regex.test(text)) {
+      return text.slice(0, -1);
+    }
+
+    const parts = text.split('.');
+    if (parts.length > 2) return text.slice(0, -1);
+
+    // Remove leading zeros unless followed by a decimal point
+    if (parts[0].length > 1 && parts[0].startsWith('0') && parts.length === 1) {
+      return text.slice(1);
+    }
+
+    return text;
+  };
 
   useEffect(() => {
     loadProducts();
@@ -133,7 +155,19 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
   const updateCost = (index: number, field: keyof BatchImportCost, value: any) => {
     const updated = [...additionalCosts];
-    updated[index] = { ...updated[index], [field]: value };
+    if (field === 'amount') {
+      const validatedValue = validateDecimalInput(value.toString());
+      // Store the string representation separately
+      setCostAmountInputs(prev => {
+        const newMap = new Map(prev);
+        newMap.set(index, validatedValue);
+        return newMap;
+      });
+      // Store the numeric value for calculations
+      updated[index] = { ...updated[index], [field]: parseFloat(validatedValue) || 0 };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
     setAdditionalCosts(updated);
   };
 
@@ -411,15 +445,25 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                         Unit Cost:
                       </Text>
                       <TextInput
-                        style={[styles.costTextInput, { 
+                        style={[styles.costTextInput, {
                           backgroundColor: isDark ? '#374151' : '#f9fafb',
                           borderColor: isDark ? '#4b5563' : '#d1d5db',
                           color: isDark ? '#f9fafb' : '#111827'
                         }]}
-                        value={item.base_unit_cost_per_item ?? item.base_unit_cost_per_item.toString()}
-                        onChangeText={(value) => updateItemCost(item.product_id, parseFloat(value) || 0)}
-                        placeholder="0.00"
+                        value={itemCostInputs.get(item.product_id) || item.base_unit_cost_per_item?.toString() || '0'}
+                        onChangeText={(text) => {
+                          const validatedText = validateDecimalInput(text);
+                          // Store the text input for display
+                          setItemCostInputs(prev => {
+                            const updated = new Map(prev);
+                            updated.set(item.product_id, validatedText);
+                            return updated;
+                          });
+                          // Update the actual cost value for calculations
+                          updateItemCost(item.product_id, parseFloat(validatedText) || 0);
+                        }}
                         keyboardType="decimal-pad"
+                        placeholder="0.00"
                       />
                     </View>
                     
@@ -474,8 +518,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               
               <Input
                 label="Amount"
-                value={cost.amount ?? cost.amount.toString()}
-                onChangeText={(value) => updateCost(index, 'amount', parseFloat(value) || 0)}
+                value={costAmountInputs.get(index) || cost.amount?.toString() || '0'}
+                onChangeText={(text) => {
+                  updateCost(index, 'amount', text);
+                }}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
               />

@@ -231,7 +231,6 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               value={price}
               onChangeText={setPrice}
               placeholder="0.00"
-              keyboardType="decimal-pad"
               required
             />
           </View>
@@ -249,15 +248,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               value={currentStock}
               onChangeText={setCurrentStock}
               placeholder="0"
-              keyboardType="number-pad"
             />
-            
+
             <Input
               label="Minimum Stock Level"
               value={minStockLevel}
               onChangeText={setMinStockLevel}
               placeholder="0"
-              keyboardType="number-pad"
             />
           </View>
 

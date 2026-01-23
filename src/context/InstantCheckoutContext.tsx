@@ -16,6 +16,7 @@ export interface InstantCheckoutItem {
   item_discount_type?: 'percentage' | 'fixed';
   item_discount_value?: number;
   item_discount_amount?: number;
+  item_discount_scope?: 'per_unit' | 'total';
   subtotal: number;
   available_stock: number;
 }
@@ -116,16 +117,29 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
   }, [resetAutoSaveTimer]);
 
   const calculateItemDiscount = useCallback((
+    quantity: number,
+    unitPrice: number,
     subtotal: number,
     discountType?: 'percentage' | 'fixed',
-    discountValue?: number
+    discountValue?: number,
+    discountScope?: 'per_unit' | 'total'
   ): number => {
     if (!discountType || !discountValue) return 0;
 
+    const scope = discountScope || 'total';
+
     if (discountType === 'percentage') {
-      return subtotal * (discountValue / 100);
+      if (scope === 'per_unit') {
+        return unitPrice * (discountValue / 100) * quantity;
+      } else {
+        return subtotal * (discountValue / 100);
+      }
     } else {
-      return Math.min(discountValue, subtotal);
+      if (scope === 'per_unit') {
+        return Math.min(discountValue, unitPrice) * quantity;
+      } else {
+        return Math.min(discountValue, subtotal);
+      }
     }
   }, []);
 
@@ -153,9 +167,12 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
         const newQuantity = existingItem.quantity + quantity;
         const originalSubtotal = product.price * newQuantity;
         const itemDiscountAmount = calculateItemDiscount(
+          newQuantity,
+          product.price,
           originalSubtotal,
           existingItem.item_discount_type,
-          existingItem.item_discount_value
+          existingItem.item_discount_value,
+          existingItem.item_discount_scope
         );
 
         updatedItems[existingItemIndex] = {
@@ -215,9 +232,12 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
         if (item.product_id === productId) {
           const originalSubtotal = item.unit_price * quantity;
           const itemDiscountAmount = calculateItemDiscount(
+            quantity,
+            item.unit_price,
             originalSubtotal,
             item.item_discount_type,
-            item.item_discount_value
+            item.item_discount_value,
+            item.item_discount_scope
           );
 
           return {
@@ -240,7 +260,8 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
   const applyItemDiscount = useCallback((
     productId: string,
     discountType: 'percentage' | 'fixed',
-    discountValue: number
+    discountValue: number,
+    discountScope: 'per_unit' | 'total' = 'total'
   ) => {
     setSession((prev) => {
       if (!prev) return null;
@@ -248,15 +269,19 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
       const updatedItems = prev.items.map(item => {
         if (item.product_id === productId) {
           const itemDiscountAmount = calculateItemDiscount(
+            item.quantity,
+            item.unit_price,
             item.original_subtotal,
             discountType,
-            discountValue
+            discountValue,
+            discountScope
           );
 
           return {
             ...item,
             item_discount_type: discountType,
             item_discount_value: discountValue,
+            item_discount_scope: discountScope,
             item_discount_amount: itemDiscountAmount,
             subtotal: item.original_subtotal - itemDiscountAmount,
           };
@@ -281,6 +306,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
             item_discount_type: undefined,
             item_discount_value: undefined,
             item_discount_amount: undefined,
+            item_discount_scope: undefined,
             subtotal: item.original_subtotal,
           };
         }

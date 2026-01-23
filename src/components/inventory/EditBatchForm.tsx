@@ -42,11 +42,33 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [costAmountInputs, setCostAmountInputs] = useState<Map<string, string>>(new Map());
+  const [itemCostInputs, setItemCostInputs] = useState<Map<string, string>>(new Map());
+
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
 
   const isEditable = batch.status === 'pending';
+
+  const validateDecimalInput = (text: string): string => {
+    if (text === '') return '';
+    if (text === '.') return '0.';
+
+    const regex = /^\d*\.?\d*$/;
+    if (!regex.test(text)) {
+      return text.slice(0, -1);
+    }
+
+    const parts = text.split('.');
+    if (parts.length > 2) return text.slice(0, -1);
+
+    // Remove leading zeros unless followed by a decimal point
+    if (parts[0].length > 1 && parts[0].startsWith('0') && parts.length === 1) {
+      return text.slice(1);
+    }
+
+    return text;
+  };
 
   useEffect(() => {
     loadProducts();
@@ -135,9 +157,17 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     }
   };
 
-  const updateItemCost = (itemId: string, cost: number) => {
+  const updateItemCost = (itemId: string, costString: string) => {
+    const validatedText = validateDecimalInput(costString);
+    // Store the string representation separately
+    setItemCostInputs(prev => {
+      const newMap = new Map(prev);
+      newMap.set(itemId, validatedText);
+      return newMap;
+    });
+    // Store the numeric value for calculations
     setSelectedItems(selectedItems.map(item =>
-      item.id === itemId ? { ...item, base_unit_cost_per_item: cost } : item
+      item.id === itemId ? { ...item, base_unit_cost_per_item: parseFloat(validatedText) || 0 } : item
     ));
   };
 
@@ -159,8 +189,15 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     const updated = additionalCosts.map(cost => {
       if (cost.id === costId) {
         if (field === 'amount') {
-          // Store the raw string value to preserve decimal input
-          return { ...cost, [field]: value };
+          const validatedValue = validateDecimalInput(value);
+          // Store the string representation separately
+          setCostAmountInputs(prev => {
+            const newMap = new Map(prev);
+            newMap.set(costId, validatedValue);
+            return newMap;
+          });
+          // Store the numeric value for calculations
+          return { ...cost, [field]: parseFloat(validatedValue) || 0 };
         }
         return { ...cost, [field]: value };
       }
@@ -462,20 +499,18 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                           Unit Cost:
                         </Text>
                         <TextInput
-                          style={[styles.costTextInput, { 
+                          style={[styles.costTextInput, {
                             backgroundColor: isDark ? '#374151' : '#f9fafb',
                             borderColor: isDark ? '#4b5563' : '#d1d5db',
                             color: isDark ? '#f9fafb' : '#111827',
                             opacity: isEditable ? 1 : 0.7
                           }]}
-                          value={item.base_unit_cost_per_item?.toString()}
-                          onChangeText={(value) => {
-                            if (/^\d*\.?\d*$/.test(value) || value === '') {
-                              updateItemCost(item.id, parseFloat(value) || 0);
-                            }
+                          value={itemCostInputs.get(item.id) || item.base_unit_cost_per_item?.toString() || '0'}
+                          onChangeText={(text) => {
+                            updateItemCost(item.id, text);
                           }}
-                          placeholder="0.00"
                           keyboardType="decimal-pad"
+                          placeholder="0.00"
                           editable={isEditable}
                         />
                       </View>
@@ -546,8 +581,10 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   
                   <Input
                     label="Amount"
-                    value={cost.amount?.toString() || ''}
-                    onChangeText={(value) => updateCost(cost.id, 'amount', value)}
+                    value={costAmountInputs.get(cost.id) || cost.amount?.toString() || ''}
+                    onChangeText={(value) => {
+                      updateCost(cost.id, 'amount', value);
+                    }}
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     editable={isEditable}
