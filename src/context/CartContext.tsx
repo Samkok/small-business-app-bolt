@@ -59,7 +59,7 @@ interface CartContextType {
   addItemToCart: (cartId: string, product: any, quantity?: number) => Promise<CartItem>;
   updateCartItem: (cartId: string, itemId: string, updates: Partial<Omit<CartItem, 'id'>>) => Promise<CartItem>;
   removeCartItem: (cartId: string, itemId: string) => Promise<void>;
-  applyItemDiscount: (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number) => Promise<CartItem>;
+  applyItemDiscount: (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope?: 'per_unit' | 'total') => Promise<CartItem>;
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
   completeSale: (cartId: string, paymentMethod: string) => Promise<{ success: boolean; saleId?: string; error?: string }>;
@@ -230,6 +230,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           item_discount_type: item.item_discount_type as 'percentage' | 'fixed' | undefined,
           item_discount_value: item.item_discount_value,
           item_discount_amount: item.item_discount_amount || 0,
+          item_discount_scope: item.item_discount_scope as 'per_unit' | 'total' | undefined,
           subtotal: item.subtotal
         })) || []
       }));
@@ -426,9 +427,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshCarts]);
 
-  const applyItemDiscount = useCallback(async (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number): Promise<CartItem> => {
+  const applyItemDiscount = useCallback(async (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope: 'per_unit' | 'total' = 'total'): Promise<CartItem> => {
     try {
-      await cartService.applyItemDiscount(itemId, discountType, discountValue);
+      await cartService.applyItemDiscount(itemId, discountType, discountValue, discountScope);
       await refreshCarts(true);
 
       const updatedCart = carts.find(cart => cart.id === cartId);
