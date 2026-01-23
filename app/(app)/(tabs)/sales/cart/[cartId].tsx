@@ -769,6 +769,30 @@ export default function CartScreen() {
             const initialQuantity = initialState.items.get(item.id) || 0;
             const availableStock = stockLookup.get(item.product_id) || 0;
 
+            // Calculate subtotal properly based on discount scope
+            const originalSubtotal = displayQuantity * item.unit_price;
+            let itemDiscountAmount = 0;
+
+            if (item.item_discount_type && item.item_discount_value) {
+              const discountScope = item.item_discount_scope || 'total';
+
+              if (item.item_discount_type === 'percentage') {
+                if (discountScope === 'per_unit') {
+                  itemDiscountAmount = (item.unit_price * (item.item_discount_value / 100)) * displayQuantity;
+                } else {
+                  itemDiscountAmount = originalSubtotal * (item.item_discount_value / 100);
+                }
+              } else if (item.item_discount_type === 'fixed') {
+                if (discountScope === 'per_unit') {
+                  itemDiscountAmount = Math.min(item.item_discount_value, item.unit_price) * displayQuantity;
+                } else {
+                  itemDiscountAmount = Math.min(item.item_discount_value, originalSubtotal);
+                }
+              }
+            }
+
+            const subtotal = originalSubtotal - itemDiscountAmount;
+
             return (
               <CartItem
                 key={item.id}
@@ -777,10 +801,11 @@ export default function CartScreen() {
                 productName={item.product_name}
                 unitPrice={item.unit_price}
                 quantity={displayQuantity}
-                originalSubtotal={displayQuantity * item.unit_price}
-                subtotal={displayQuantity * item.unit_price - (item.item_discount_amount || 0)}
+                originalSubtotal={originalSubtotal}
+                subtotal={subtotal}
                 itemDiscountType={item.item_discount_type}
                 itemDiscountValue={item.item_discount_value}
+                itemDiscountScope={item.item_discount_scope}
                 initialQuantity={initialQuantity}
                 availableStock={availableStock}
                 onQuantityChange={handleQuantityChange}

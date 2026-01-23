@@ -329,6 +329,7 @@ export const cartService = {
       .update({
         item_discount_type: null,
         item_discount_value: null,
+        item_discount_scope: null,
         updated_at: new Date().toISOString()
       })
       .eq('id', itemId)
