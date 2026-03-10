@@ -1230,14 +1230,16 @@ export default function InventoryScreen() {
         </TouchableOpacity>
       )}
 
-      <View style={styles.fab}>
-        <TouchableOpacity
-          style={styles.fabButton}
-          onPress={() => setShowProductForm(true)}
-        >
-          <Plus size={24} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
+      {activeTab === 'products' && (
+        <View style={styles.fab}>
+          <TouchableOpacity
+            style={styles.fabButton}
+            onPress={() => setShowProductForm(true)}
+          >
+            <Plus size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Modal
         visible={showProductForm}

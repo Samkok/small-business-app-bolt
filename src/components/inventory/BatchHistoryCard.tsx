@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck } from 'lucide-react-native';
+import { Pencil, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck } from 'lucide-react-native';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface BatchHistoryCardProps {
@@ -142,7 +142,7 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
                 style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
                 onPress={() => onEdit(batch)}
               >
-                <Edit size={16} color="#2563eb" />
+                <Pencil size={16} color="#2563eb" />
               </TouchableOpacity>
             )}
 
