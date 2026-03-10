@@ -310,6 +310,8 @@
     "deleteAccount": "Delete Account",
     "deleteAccountSubtitle": "Permanently delete your account and all data",
     "deleteAccountWarning": "This will permanently delete your account, all your businesses, and all associated data. This action cannot be undone. Are you sure?",
+    "changePassword": "Change Password",
+    "changePasswordSubtitle": "Update your account password",
     "featureNotImplemented": "This feature is not yet implemented",
     "deleteBusinessUnauthorized": "You don't have permission to delete this business",
     "deleteBusinessUnauthorizedMessage": "Only the business owner can delete this business. Please contact the owner if you believe this is an error."

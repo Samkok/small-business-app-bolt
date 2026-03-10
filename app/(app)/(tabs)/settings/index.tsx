@@ -29,7 +29,8 @@ import {
   Bell,
   Trash2,
   TriangleAlert as AlertTriangle,
-  Crown
+  Crown,
+  KeyRound
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
@@ -237,6 +238,13 @@ export default function SettingsScreen() {
           title={t('settings.profile')}
           subtitle={t('settings.profileSubtitle')}
           onPress={() => router.push('/settings/profile')}
+        />
+
+        <SettingItem
+          icon={<KeyRound size={20} color="#0891b2" />}
+          title={t('settings.changePassword')}
+          subtitle={t('settings.changePasswordSubtitle')}
+          onPress={() => router.push('/settings/change-password')}
         />
 
         <SettingItem
