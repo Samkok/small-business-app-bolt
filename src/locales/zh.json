@@ -301,6 +301,8 @@
     "deleteAccount": "删除账户",
     "deleteAccountSubtitle": "永久删除您的账户及所有数据",
     "deleteAccountWarning": "这将永久删除您的账户、所有企业及所有相关数据。此操作无法撤销。您确定吗？",
+    "changePassword": "修改密码",
+    "changePasswordSubtitle": "更新您的账户密码",
     "featureNotImplemented": "此功能尚未实现",
     "deleteBusinessUnauthorized": "您没有权限删除此企业",
     "deleteBusinessUnauthorizedMessage": "只有企业所有者才能删除此企业。如果您认为这是错误，请联系所有者。"

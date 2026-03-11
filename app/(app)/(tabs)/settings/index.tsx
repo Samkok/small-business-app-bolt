@@ -29,7 +29,8 @@ import {
   Bell,
   Trash2,
   TriangleAlert as AlertTriangle,
-  Crown
+  Crown,
+  KeyRound
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';

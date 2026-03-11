@@ -7,7 +7,8 @@ import {
   Alert,
   TextInput,
   FlatList,
-  Modal
+  Modal,
+  Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -244,6 +245,17 @@ export default function ProductSelectionScreen() {
 
     return (
       <Card style={styles.productCard}>
+        {item.image_url ? (
+          <Image
+            source={{ uri: item.image_url }}
+            style={styles.productImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.productImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+            <Package size={28} color={isDark ? '#6b7280' : '#9ca3af'} />
+          </View>
+        )}
         <View style={styles.productInfo}>
           <View style={styles.productHeader}>
             <Text style={[styles.productName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
@@ -586,11 +598,28 @@ const styles = StyleSheet.create({
   },
   productCard: {
     width: '48%',
-    padding: 12,
+    padding: 0,
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: '100%',
+    height: 100,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: 100,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productInfo: {
-    marginBottom: 12,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingTop: 8,
   },
   productName: {
     fontSize: 14,
@@ -620,6 +649,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   quantityControls: {
     flexDirection: 'row',

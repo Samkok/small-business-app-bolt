@@ -215,9 +215,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -228,7 +229,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Sale Information */}
         <Card style={styles.saleInfoCard}>
           <View style={styles.saleInfoHeader}>

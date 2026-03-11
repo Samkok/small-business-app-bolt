@@ -46,15 +46,19 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
       setExpenseDate(expense.expense_date?.split('T')[0] || '');
       setNotes(expense.notes || '');
     } else {
-      // Set today's date as default
       const today = new Date();
-      setExpenseDate(today.toISOString().split('T')[0]);
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      setExpenseDate(`${year}-${month}-${day}`);
     }
   }, [expense]);
 
   const handleDateConfirm = (date: Date) => {
-    const formattedDate = date.toISOString().split('T')[0];
-    setExpenseDate(formattedDate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setExpenseDate(`${year}-${month}-${day}`);
     setShowDatePicker(false);
   };
 

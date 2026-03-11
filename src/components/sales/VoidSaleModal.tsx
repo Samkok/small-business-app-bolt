@@ -9,6 +9,8 @@ import {
   Switch,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Button } from '@/src/components/ui/Button';
@@ -145,6 +147,10 @@ export default function VoidSaleModal({
       animationType="fade"
       onRequestClose={handleCancel}
     >
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <View style={styles.modalOverlay}>
         <View style={[styles.modal, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
           <View style={styles.modalHeader}>
@@ -367,11 +373,15 @@ export default function VoidSaleModal({
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

@@ -10,6 +10,7 @@ import {
   Platform,
   TextInput,
   FlatList,
+  Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -18,7 +19,7 @@ import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { instantCheckoutService } from '@/src/services/instantCheckout';
 import { useRouter } from 'expo-router';
-import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode } from 'lucide-react-native';
+import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode, Package } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import Input from '@/src/components/ui/Input';
 import { Button } from '../ui/Button';
@@ -601,6 +602,13 @@ export function InstantCheckoutModal() {
                 style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
                 onPress={() => handleAddProduct(item)}
               >
+                {item.image_url ? (
+                  <Image source={{ uri: item.image_url }} style={styles.productItemImage} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                    <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                  </View>
+                )}
                 <View style={styles.productItemInfo}>
                   <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
                     {item.name}
@@ -1046,11 +1054,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 12,
     marginHorizontal: 16,
     marginBottom: 8,
     borderRadius: 8,
     borderWidth: 1,
+    gap: 12,
+  },
+  productItemImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 6,
+  },
+  productItemImagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productItemInfo: {
     flex: 1,
