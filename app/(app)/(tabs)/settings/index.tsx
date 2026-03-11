@@ -240,8 +240,6 @@ export default function SettingsScreen() {
           onPress={() => router.push('/settings/profile')}
         />
 
-        
-
         <SettingItem
           icon={<Crown size={20} color={isSubscribed ? "#f59e0b" : "#9ca3af"} />}
           title={t('subscription.title')}
