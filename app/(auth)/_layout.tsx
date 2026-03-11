@@ -4,13 +4,13 @@ import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 
 export default function AuthLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, isPasswordRecovery } = useAuth();
 
   if (loading) {
     return <LoadingSpinner text="Loading..." />;
   }
 
-  if (session) {
+  if (session && !isPasswordRecovery) {
     return <Redirect href="/(app)" />;
   }
 

@@ -127,6 +127,8 @@ interface AuthContextType {
   refreshUserBusinesses: () => Promise<Business[]>;
   signedOutDueToInactivity: boolean;
   resetInactivitySignOutFlag: () => void;
+  isPasswordRecovery: boolean;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -149,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [dataLoadingState, setDataLoadingState] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [signedOutDueToInactivity, setSignedOutDueToInactivity] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [businessAccessHistory, setBusinessAccessHistory] = useState<BusinessAccessHistory>({});
   const [isExplicitSignOut, setIsExplicitSignOut] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
@@ -822,6 +825,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         console.log('Auth state change:', event);
         console.log('AuthContext: Session object on auth state change:', session);
+
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('AuthContext: PASSWORD_RECOVERY event received');
+          if (mounted.current) {
+            setIsPasswordRecovery(true);
+            setSession(session);
+            setUser(session?.user ?? null);
+          }
+          return;
+        }
 
         // Handle sign out events
         if (event === 'SIGNED_OUT') {
@@ -1588,6 +1601,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignedOutDueToInactivity(false);
   };
 
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
+
   // Helper function to compare business arrays by IDs and access_state to prevent unnecessary re-renders
   const businessArraysEqual = (arr1: Business[], arr2: Business[]): boolean => {
     if (arr1.length !== arr2.length) return false;
@@ -2216,6 +2233,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUserBusinesses,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
+    isPasswordRecovery,
+    clearPasswordRecovery,
   }), [
     session,
     user,
@@ -2241,6 +2260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUserBusinesses,
     signedOutDueToInactivity,
     resetInactivitySignOutFlag,
+    isPasswordRecovery,
+    clearPasswordRecovery,
   ]);
 
   return (
