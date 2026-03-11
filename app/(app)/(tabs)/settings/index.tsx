@@ -240,12 +240,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/settings/profile')}
         />
 
-        <SettingItem
-          icon={<KeyRound size={20} color="#0891b2" />}
-          title={t('settings.changePassword')}
-          subtitle={t('settings.changePasswordSubtitle')}
-          onPress={() => router.push('/settings/change-password')}
-        />
+        
 
         <SettingItem
           icon={<Crown size={20} color={isSubscribed ? "#f59e0b" : "#9ca3af"} />}
