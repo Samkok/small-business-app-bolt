@@ -66,19 +66,22 @@ export default function ChangePasswordScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error('User not found');
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: currentPassword,
       });
 
-      if (signInError) {
+      if (signInError || !signInData.session) {
         setErrors({ currentPassword: 'Current password is incorrect' });
         return;
       }
 
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
+      await supabase.auth.setSession({
+        access_token: signInData.session.access_token,
+        refresh_token: signInData.session.refresh_token,
       });
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
       if (updateError) throw updateError;
 
