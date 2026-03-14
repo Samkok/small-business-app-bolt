@@ -132,18 +132,13 @@ export default function CashFlowScreen() {
             <SkeletonLoader height={14} width="40%" />
             <SkeletonLoader height={14} width="30%" />
           </View>
-          
-          <View style={styles.row}>
-            <SkeletonLoader height={14} width="40%" />
-            <SkeletonLoader height={14} width="30%" />
-          </View>
-          
+
           <View style={[styles.row, styles.subtotalRow]}>
             <SkeletonLoader height={14} width="50%" />
             <SkeletonLoader height={14} width="30%" />
           </View>
         </View>
-        
+
         {/* Investing Activities */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -302,16 +297,18 @@ export default function CashFlowScreen() {
                 ${cashFlowData.netIncome.toFixed(2)}
               </Text>
             </View>
-            
-            <View style={styles.row}>
-              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Inventory Changes
-              </Text>
-              <Text style={[styles.value, { color: cashFlowData.inventoryChanges >= 0 ? '#059669' : '#dc2626' }]}>
-                ${cashFlowData.inventoryChanges.toFixed(2)}
-              </Text>
-            </View>
-            
+
+            {cashFlowData.equipmentPurchases > 0 && (
+              <View style={styles.row}>
+                <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Add Back: Capital Items
+                </Text>
+                <Text style={[styles.value, { color: '#059669' }]}>
+                  ${cashFlowData.equipmentPurchases.toFixed(2)}
+                </Text>
+              </View>
+            )}
+
             <View style={[styles.row, styles.subtotalRow]}>
               <Text style={[styles.subtotalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Net Cash from Operations

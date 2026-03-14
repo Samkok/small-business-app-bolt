@@ -796,10 +796,8 @@ export const reportsService = {
 
       const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
 
-      // Calculate inventory changes (total cost of imports)
-      const inventoryChanges = inventoryData.reduce((sum, item) => sum + item.total_cost_for_item, 0);
-
-      // Identify equipment purchases (expenses in equipment category)
+      // Identify equipment/capital purchases from expenses
+      // These are reclassified as investing activities, not operating expenses
       const equipmentPurchases = expensesData
         .filter(expense => {
           const categoryName = expense.expense_categories?.name?.toLowerCase() || '';
@@ -807,28 +805,31 @@ export const reportsService = {
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
 
-      // For this example, we'll use placeholder values for owner contributions and withdrawals
-      // In a real app, you would have a separate table to track these
-      const ownerContributions = 0; // Placeholder
-      const ownerWithdrawals = 0; // Placeholder
+      const ownerContributions = 0;
+      const ownerWithdrawals = 0;
 
       // Calculate net income (revenue - COGS - expenses - loss amounts) to align with dashboard
       const grossProfit = totalRevenue - monthlyCOGS;
       const netIncome = grossProfit - totalExpenses - totalLossAmount;
-      
-      // Calculate cash flows
-      const operatingCashFlow = netIncome - inventoryChanges;
+
+      // Operating cash flow (indirect method):
+      // Start with net income and add back capital items that were included in expenses
+      // but are reclassified to investing activities. No separate inventory adjustment
+      // is needed here because COGS already reflects the cost of goods sold.
+      const operatingCashFlow = netIncome + equipmentPurchases;
+
+      // Investing activities: capital/equipment purchases (cash outflow)
       const investingCashFlow = -equipmentPurchases;
+
       const financingCashFlow = ownerContributions - ownerWithdrawals;
-      
+
       // Calculate net cash flow
       const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
-      
+
       return {
         period: `${month + 1}/${year}`,
         netIncome,
         totalLossAmount,
-        inventoryChanges,
         operatingCashFlow,
         equipmentPurchases,
         investingCashFlow,
