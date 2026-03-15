@@ -8,6 +8,7 @@ import {
   RefreshControl,
   FlatList,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -142,16 +143,15 @@ export default function ProductSalesScreen() {
 
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
+    setShowDateFilterModal(false);
 
     if (filter === 'custom') {
-      setShowDateFilterModal(false);
-      setShowCustomDatePicker(true);
+      setTimeout(() => setShowCustomDatePicker(true), 300);
     } else {
       const { start, end, text } = calculateDatesForFilter(filter);
       setStartDate(start);
       setEndDate(end);
       setDateRangeText(text);
-      setShowDateFilterModal(false);
     }
   }, [calculateDatesForFilter]);
 
@@ -596,34 +596,29 @@ export default function ProductSalesScreen() {
       {/* Custom Date Range Picker */}
       <Modal
         visible={showCustomDatePicker}
-        transparent={true}
-        animationType="fade"
+        transparent={false}
+        animationType="slide"
         onRequestClose={() => setShowCustomDatePicker(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCustomDatePicker(false)}
-        >
-          <View
-            style={[
-              styles.dateFilterModal,
-              { backgroundColor: isDark ? '#374151' : '#ffffff' }
-            ]}
-            onStartShouldSetResponder={() => true}
-          >
-            <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        <View style={[styles.datePickerScreen, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+          <View style={[styles.datePickerHeader, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+            <TouchableOpacity onPress={() => setShowCustomDatePicker(false)} style={styles.datePickerBack}>
+              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            </TouchableOpacity>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Select Custom Date Range
             </Text>
-
+            <View style={styles.datePickerHeaderRight} />
+          </View>
+          <ScrollView contentContainerStyle={styles.datePickerContent} showsVerticalScrollIndicator={false}>
             <DateRangePicker
               startDate={startDate}
               endDate={endDate}
               onConfirm={handleDateRangeConfirm}
               onCancel={() => setShowCustomDatePicker(false)}
             />
-          </View>
-        </TouchableOpacity>
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -807,6 +802,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  datePickerScreen: {
+    flex: 1,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  datePickerBack: {
+    padding: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  datePickerHeaderRight: {
+    width: 40,
+  },
+  datePickerContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   dateFilterModal: {
     width: '90%',

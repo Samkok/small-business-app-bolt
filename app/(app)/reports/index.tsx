@@ -258,11 +258,10 @@ export default function ReportsScreen() {
 
   const handleDateFilterChange = (filter: 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
     setDateRange(filter);
-    
+    setShowDateRangeModal(false);
+
     if (filter === 'custom') {
-      setShowCustomDateRangePicker(true);
-    } else {
-      setShowDateRangeModal(false);
+      setTimeout(() => setShowCustomDateRangePicker(true), 300);
     }
   };
 

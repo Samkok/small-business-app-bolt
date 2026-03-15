@@ -30,7 +30,7 @@ import { SaleCard } from '@/src/components/sales/SaleCard';
 import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap, RefreshCw } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap, RefreshCw, ArrowLeft } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -603,17 +603,15 @@ export default function SalesScreen() {
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
     setCurrentPage(0);
-    
+    setShowDateFilterTypeModal(false);
+
     if (filter === 'custom') {
-      setShowDateFilterTypeModal(false);
-      setShowCustomDateRangePicker(true);
+      setTimeout(() => setShowCustomDateRangePicker(true), 300);
     } else {
-      // Calculate and set the dates for non-custom filters
       const { start, end, text } = calculateDatesForFilter(filter);
       setStartDate(start);
       setEndDate(end);
       setDateRangeText(text);
-      setShowDateFilterTypeModal(false);
     }
   }, [calculateDatesForFilter]);
 
@@ -787,34 +785,29 @@ export default function SalesScreen() {
   const renderCustomDateRangePicker = useCallback(() => (
     <Modal
       visible={showCustomDateRangePicker}
-      transparent={true}
-      animationType="fade"
+      transparent={false}
+      animationType="slide"
       onRequestClose={() => setShowCustomDateRangePicker(false)}
     >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowCustomDateRangePicker(false)}
-      >
-        <View 
-          style={[
-            styles.dateFilterModal,
-            { backgroundColor: isDark ? '#374151' : '#ffffff' }
-          ]}
-          onStartShouldSetResponder={() => true}
-        >
-          <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+      <View style={[styles.datePickerScreen, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={[styles.datePickerHeader, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+          <TouchableOpacity onPress={() => setShowCustomDateRangePicker(false)} style={styles.datePickerBack}>
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {t('sales.selectCustomDateRange')}
           </Text>
-          
+          <View style={styles.datePickerHeaderRight} />
+        </View>
+        <ScrollView contentContainerStyle={styles.datePickerContent} showsVerticalScrollIndicator={false}>
           <DateRangePicker
             startDate={startDate}
             endDate={endDate}
             onConfirm={handleDateRangeConfirm}
             onCancel={() => setShowCustomDateRangePicker(false)}
           />
-        </View>
-      </TouchableOpacity>
+        </ScrollView>
+      </View>
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
@@ -1445,6 +1438,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  datePickerScreen: {
+    flex: 1,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  datePickerBack: {
+    padding: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  datePickerHeaderRight: {
+    width: 40,
+  },
+  datePickerContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   dateFilterModal: {
     width: '90%',
