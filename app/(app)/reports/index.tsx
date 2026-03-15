@@ -1148,28 +1148,28 @@ export default function ReportsScreen() {
       {/* Custom Date Range Picker Modal */}
       <Modal
         visible={showCustomDateRangePicker}
-        transparent={true}
-        animationType="fade"
+        transparent={false}
+        animationType="slide"
         onRequestClose={() => setShowCustomDateRangePicker(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setShowCustomDateRangePicker(false)}
-          />
-          <Card style={[styles.modalContent, { zIndex: 1 }]}>
-            <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        <View style={[styles.datePickerScreen, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+          <View style={[styles.datePickerHeader, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+            <TouchableOpacity onPress={() => setShowCustomDateRangePicker(false)} style={styles.datePickerBack}>
+              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            </TouchableOpacity>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('reports.customRange')}
             </Text>
-
+            <View style={styles.datePickerHeaderRight} />
+          </View>
+          <ScrollView contentContainerStyle={styles.datePickerContent} showsVerticalScrollIndicator={false}>
             <DateRangePicker
               startDate={customStartDate}
               endDate={customEndDate}
               onConfirm={handleDateRangeConfirm}
               onCancel={() => setShowCustomDateRangePicker(false)}
             />
-          </Card>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -1422,6 +1422,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 12,
+  },
+  datePickerScreen: {
+    flex: 1,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  datePickerBack: {
+    padding: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  datePickerHeaderRight: {
+    width: 40,
+  },
+  datePickerContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   // Keep this for backward compatibility but it's not used anymore
   dateRangeSelector: {
