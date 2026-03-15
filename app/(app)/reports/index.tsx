@@ -196,7 +196,6 @@ export default function ReportsScreen() {
       ];
 
       if (Platform.OS === 'web') {
-        // For web, trigger individual downloads
         filesToExport.forEach(file => {
           const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
@@ -210,23 +209,23 @@ export default function ReportsScreen() {
         });
         Alert.alert('Success', 'Reports downloaded successfully. Check your downloads folder.');
       } else {
-        // For mobile, share each file individually
-        for (const file of filesToExport) {
-          const fileUri = `${FileSystem.documentDirectory}${file.name}`;
-          await FileSystem.writeAsStringAsync(fileUri, file.content, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
-          
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(fileUri, {
-              mimeType: 'text/csv',
-              dialogTitle: `Export ${file.name}`,
-              UTI: 'public.comma-separated-values-text'
-            });
-          } else {
-            Alert.alert('Error', 'Sharing is not available on this device');
-            break; // Stop if sharing is not available
-          }
+        const combinedContent = filesToExport
+          .map(file => `========== ${file.name} ==========\n\n${file.content}`)
+          .join('\n\n');
+
+        const combinedFileName = `${EXPORT_FILE_PREFIX}_All_${dateRangeLabel}.csv`;
+        const fileUri = `${FileSystem.documentDirectory}${combinedFileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, combinedContent, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/plain',
+            dialogTitle: 'Export All Reports',
+            UTI: 'public.plain-text'
+          });
+        } else {
+          Alert.alert('Error', 'Sharing is not available on this device');
         }
-        Alert.alert('Success', 'Reports prepared for sharing.');
       }
     } catch (error) {
       console.error('Error downloading all reports:', error);
