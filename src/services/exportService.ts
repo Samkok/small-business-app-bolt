@@ -105,22 +105,23 @@ export const exportService = {
         if (sale.carts?.cart_items && sale.carts.cart_items.length > 0) {
           const productStrings = sale.carts.cart_items.map(item => {
             const productName = item.products?.name || 'Unknown Product';
-            totalItems += item.quantity;
-            return `${productName} (${item.quantity}x$${item.unit_price.toFixed(2)})`;
+            totalItems += item.quantity ?? 0;
+            const unitPrice = item.unit_price != null ? Number(item.unit_price).toFixed(2) : '0.00';
+            return `${productName} (${item.quantity ?? 0}x$${unitPrice})`;
           });
           productsString = productStrings.join('; ');
         } else {
           productsString = 'No items';
         }
-        
+
         // Extract cost breakdown from discount details
-        const originalSubtotal = discountDetails?.items_original_total?.toFixed(2) || '0.00';
-        const itemDiscounts = discountDetails?.items_total_discount?.toFixed(2) || '0.00';
+        const originalSubtotal = discountDetails?.items_original_total != null ? Number(discountDetails.items_original_total).toFixed(2) : '0.00';
+        const itemDiscounts = discountDetails?.items_total_discount != null ? Number(discountDetails.items_total_discount).toFixed(2) : '0.00';
         const cartDiscountType = discountDetails?.cart_discount_type || '';
-        const cartDiscountValue = discountDetails?.cart_discount_value?.toFixed(2) || '';
-        const cartDiscountAmount = discountDetails?.cart_discount_amount?.toFixed(2) || '0.00';
-        const deliveryCost = discountDetails?.delivery_cost?.toFixed(2) || '0.00';
-        const finalTotal = sale.total_amount.toFixed(2);
+        const cartDiscountValue = discountDetails?.cart_discount_value != null ? Number(discountDetails.cart_discount_value).toFixed(2) : '';
+        const cartDiscountAmount = discountDetails?.cart_discount_amount != null ? Number(discountDetails.cart_discount_amount).toFixed(2) : '0.00';
+        const deliveryCost = discountDetails?.delivery_cost != null ? Number(discountDetails.delivery_cost).toFixed(2) : '0.00';
+        const finalTotal = sale.total_amount != null ? Number(sale.total_amount).toFixed(2) : '0.00';
         
         // Escape any commas in text fields by wrapping in quotes
         const escapedCustomer = customer.includes(',') ? `"${customer}"` : customer;
@@ -219,25 +220,26 @@ export const exportService = {
       let csv = 'CASH FLOW STATEMENT\n';
       csv += `Period: ${new Date(year, month, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}\n\n`;
       
+      const fmt = (v: number | undefined) => (v != null ? Number(v).toFixed(2) : '0.00');
+
       // Operating Activities
       csv += 'OPERATING ACTIVITIES\n';
-      csv += `Net Income,${cashFlowData.netIncome.toFixed(2)}\n`;
-      csv += `Inventory Changes,${cashFlowData.inventoryChanges.toFixed(2)}\n`;
-      csv += `Net Cash from Operations,${cashFlowData.operatingCashFlow.toFixed(2)}\n\n`;
-      
+      csv += `Net Income,${fmt(cashFlowData.netIncome)}\n`;
+      csv += `Net Cash from Operations,${fmt(cashFlowData.operatingCashFlow)}\n\n`;
+
       // Investing Activities
       csv += 'INVESTING ACTIVITIES\n';
-      csv += `Equipment Purchases,${cashFlowData.equipmentPurchases.toFixed(2)}\n`;
-      csv += `Net Cash from Investing,${cashFlowData.investingCashFlow.toFixed(2)}\n\n`;
-      
+      csv += `Equipment Purchases,${fmt(cashFlowData.equipmentPurchases)}\n`;
+      csv += `Net Cash from Investing,${fmt(cashFlowData.investingCashFlow)}\n\n`;
+
       // Financing Activities
       csv += 'FINANCING ACTIVITIES\n';
-      csv += `Owner Contributions,${cashFlowData.ownerContributions.toFixed(2)}\n`;
-      csv += `Owner Withdrawals,${cashFlowData.ownerWithdrawals.toFixed(2)}\n`;
-      csv += `Net Cash from Financing,${cashFlowData.financingCashFlow.toFixed(2)}\n\n`;
-      
+      csv += `Owner Contributions,${fmt(cashFlowData.ownerContributions)}\n`;
+      csv += `Owner Withdrawals,${fmt(cashFlowData.ownerWithdrawals)}\n`;
+      csv += `Net Cash from Financing,${fmt(cashFlowData.financingCashFlow)}\n\n`;
+
       // Net Cash Flow
-      csv += `NET CHANGE IN CASH,${cashFlowData.netCashFlow.toFixed(2)}\n`;
+      csv += `NET CHANGE IN CASH,${fmt(cashFlowData.netCashFlow)}\n`;
       
       return csv;
     } catch (error) {
