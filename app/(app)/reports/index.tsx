@@ -1152,26 +1152,25 @@ export default function ReportsScreen() {
         animationType="fade"
         onRequestClose={() => setShowCustomDateRangePicker(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCustomDateRangePicker(false)}
-        >
-          <Card 
-            style={styles.modalContent}
-          >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setShowCustomDateRangePicker(false)}
+          />
+          <Card style={[styles.modalContent, { zIndex: 1 }]}>
             <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('reports.customRange')}
             </Text>
-            
-            {showCustomDateRangePicker && <DateRangePicker
+
+            <DateRangePicker
               startDate={customStartDate}
               endDate={customEndDate}
               onConfirm={handleDateRangeConfirm}
               onCancel={() => setShowCustomDateRangePicker(false)}
-            />}
+            />
           </Card>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
