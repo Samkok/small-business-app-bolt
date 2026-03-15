@@ -25,7 +25,7 @@ import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import { format } from 'date-fns';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const ITEMS_PER_PAGE = 20;

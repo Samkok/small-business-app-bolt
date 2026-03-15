@@ -20,7 +20,7 @@ import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucid
 import { supabase } from '@/src/config/supabase';
 import { expenseService } from '@/src/services/expenses';
 import { exportService } from '@/src/services/exportService';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 export default function IncomeStatementScreen() {

@@ -19,7 +19,7 @@ import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 export default function CashFlowScreen() {
