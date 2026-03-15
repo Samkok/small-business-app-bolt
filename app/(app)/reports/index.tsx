@@ -179,12 +179,12 @@ export default function ReportsScreen() {
     setChartsLoading(true);
     try {
       const { startDate, endDate } = getDateRange();
-      const formattedStartDate = startDate;
-      const formattedEndDate = endDate;
+      const startDateIso = startDate.toISOString();
+      const endDateIso = endDate.toISOString();
       const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
 
-      const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
-      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, startDateIso, endDateIso);
+      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, startDateIso, endDateIso);
       const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
       const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
 
@@ -195,33 +195,36 @@ export default function ReportsScreen() {
         { name: `${EXPORT_FILE_PREFIX}_Products.csv`, content: productsCsv },
       ];
 
-      if (Platform.OS === 'web') {
-        filesToExport.forEach(file => {
-          const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = file.name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        });
-        Alert.alert('Success', 'Reports downloaded successfully. Check your downloads folder.');
-      } else {
-        const combinedContent = filesToExport
-          .map(file => `========== ${file.name} ==========\n\n${file.content}`)
-          .join('\n\n');
+      const sectionSeparator = '\n\n\n';
+      const combinedContent = filesToExport
+        .map(file => {
+          const sectionTitle = file.name.replace('.csv', '').replace(/_/g, ' ');
+          return `"### ${sectionTitle} ###"\n\n${file.content}`;
+        })
+        .join(sectionSeparator);
 
-        const combinedFileName = `${EXPORT_FILE_PREFIX}_All_${dateRangeLabel}.csv`;
+      const combinedFileName = `${EXPORT_FILE_PREFIX}_All_${dateRangeLabel}.csv`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([combinedContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = combinedFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'All reports downloaded. Check your downloads folder.');
+      } else {
         const fileUri = `${FileSystem.documentDirectory}${combinedFileName}`;
         await FileSystem.writeAsStringAsync(fileUri, combinedContent, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/plain',
+            mimeType: 'text/csv',
             dialogTitle: 'Export All Reports',
-            UTI: 'public.plain-text'
+            UTI: 'public.comma-separated-values-text'
           });
         } else {
           Alert.alert('Error', 'Sharing is not available on this device');
