@@ -75,10 +75,13 @@ export default function SalesHistoryScreen() {
       const page = reset ? 0 : currentPage;
       const offset = page * ITEMS_PER_PAGE;
 
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
       const data = await reportsService.getSalesHistoryReport(
         currentBusiness.id,
         startDate.toISOString(),
-        endDate.toISOString(),
+        endOfDay.toISOString(),
         {
           status: selectedStatus !== 'all' ? selectedStatus : undefined,
           paymentMethod: selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined,

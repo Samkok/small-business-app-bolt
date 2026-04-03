@@ -50,7 +50,7 @@ export const exportService = {
       }
       
       if (endDate) {
-        salesQuery = salesQuery.lte('sale_date', endDate);
+        salesQuery = salesQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
       }
       
       const { data: salesData, error: salesError } = await salesQuery.order('sale_date', { ascending: false });
@@ -69,7 +69,7 @@ export const exportService = {
       }
       
       if (endDate) {
-        discountQuery = discountQuery.lte('sale_date', endDate);
+        discountQuery = discountQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
       }
       
       const { data: discountData, error: discountError } = await discountQuery;
