@@ -781,5 +781,14 @@
       "webMessage": "Subscription management is not available on web. Please use the mobile app.",
       "errorMessage": "An error occurred while opening subscription management. Please try again."
     }
+  },
+  "network": {
+    "noConnection": "No Internet Connection",
+    "noConnectionMessage": "We couldn't load your data. Please check your connection and try again.",
+    "autoReconnect": "Will reconnect automatically when back online",
+    "retry": "Retry",
+    "retrying": "Retrying...",
+    "backOnline": "Back online",
+    "offlineBanner": "No internet connection"
   }
 }

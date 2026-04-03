@@ -766,5 +766,14 @@
       "managementMessage": "只有企业所有者可以管理订阅设置。如需进行更改，请联系所有者。",
       "upgradeMessage": "只有企业所有者可以升级订阅。如需使用高级功能，请联系所有者。"
     }
+  },
+  "network": {
+    "noConnection": "无网络连接",
+    "noConnectionMessage": "无法加载您的数据。请检查网络连接后重试。",
+    "autoReconnect": "恢复网络后将自动重新连接",
+    "retry": "重试",
+    "retrying": "正在重试...",
+    "backOnline": "已恢复在线",
+    "offlineBanner": "无网络连接"
   }
 }
