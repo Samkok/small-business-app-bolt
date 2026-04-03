@@ -836,21 +836,23 @@ export default function InventoryScreen() {
                   <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                     {totalProducts}
                   </Text>
-                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Products
-                  </Text>
+                  <View style={styles.summaryLabelRow}>
+                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Total Products
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}
+                      onPress={() => router.push('/inventory/product-insight')}
+                      activeOpacity={0.75}
+                    >
+                      <Animated.View style={{ opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }), transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) }] }}>
+                        <Sparkles size={12} color="#2563eb" />
+                      </Animated.View>
+                      <Text style={styles.insightButtonText}>Insight</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-              <TouchableOpacity
-                style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}
-                onPress={() => router.push('/inventory/product-insight')}
-                activeOpacity={0.75}
-              >
-                <Animated.View style={{ opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }), transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) }] }}>
-                  <Sparkles size={14} color="#2563eb" />
-                </Animated.View>
-                <Text style={styles.insightButtonText}>Insight</Text>
-              </TouchableOpacity>
             </Card>
 
             <TouchableOpacity onPress={handleLowStockPress}>
@@ -1505,20 +1507,23 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 12,
+  },
+  summaryLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 2,
   },
   insightButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 20,
-    gap: 5,
+    gap: 4,
   },
   insightButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#2563eb',
   },
