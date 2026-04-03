@@ -833,24 +833,31 @@ export default function InventoryScreen() {
               <View style={styles.summaryContent}>
                 <Package size={24} color="#2563eb" />
                 <View style={styles.summaryText}>
-                  <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {totalProducts}
-                  </Text>
-                  <View style={styles.summaryLabelRow}>
-                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Total Products
+                  <View style={styles.summaryTopRow}>
+                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {totalProducts}
                     </Text>
-                    <TouchableOpacity
-                      style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}
-                      onPress={() => router.push('/inventory/product-insight')}
-                      activeOpacity={0.75}
-                    >
-                      <Animated.View style={{ opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }), transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) }] }}>
-                        <Sparkles size={12} color="#2563eb" />
-                      </Animated.View>
-                      <Text style={styles.insightButtonText}>Insight</Text>
-                    </TouchableOpacity>
+                    <Animated.View style={{
+                      opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                      transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.05] }) }],
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.8] }) as any,
+                      shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 8] }) as any,
+                    }}>
+                      <TouchableOpacity
+                        style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}
+                        onPress={() => router.push('/inventory/product-insight')}
+                        activeOpacity={0.75}
+                      >
+                        <Sparkles size={14} color="#2563eb" />
+                        <Text style={styles.insightButtonText}>Insight</Text>
+                      </TouchableOpacity>
+                    </Animated.View>
                   </View>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Total Products
+                  </Text>
                 </View>
               </View>
             </Card>
@@ -1508,22 +1515,22 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
   },
-  summaryLabelRow: {
+  summaryTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
+    gap: 8,
+    marginBottom: 2,
   },
   insightButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
-    gap: 4,
+    gap: 5,
   },
   insightButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#2563eb',
   },
