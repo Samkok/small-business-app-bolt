@@ -291,9 +291,7 @@ export default function ProductInsightScreen() {
           </Animated.View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Product Insight</Text>
         </View>
-        <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.settingsBtn}>
-          <Settings2 size={22} color={colors.subtext} />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
@@ -331,10 +329,39 @@ export default function ProductInsightScreen() {
         <View style={styles.statGrid}>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <Package size={22} color="#2563eb" />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {data?.totalActiveProducts ?? 0}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.subtext }]}>Active Products</Text>
+            <View style={styles.statCardBottom}>
+              <View>
+                <Text style={[styles.statValue, { color: colors.text }]}>
+                  {data?.totalActiveProducts ?? 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: colors.subtext }]}>Active Products</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSettingsVisible(true)}
+                style={styles.settingsBtnCard}
+              >
+                <Animated.View
+                  style={{
+                    opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
+                    transform: [
+                      { scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) },
+                    ],
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.settingsGlow,
+                      {
+                        shadowColor: '#2563eb',
+                        shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.7] }) as any,
+                      },
+                    ]}
+                  >
+                    <Settings2 size={20} color="#2563eb" />
+                  </View>
+                </Animated.View>
+              </TouchableOpacity>
+            </View>
           </Card>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <Layers size={22} color="#0891b2" />
@@ -597,11 +624,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  settingsBtn: {
-    width: 40,
-    height: 40,
+  statCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    flex: 1,
+    width: '100%',
+  },
+  settingsBtnCard: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 2,
+  },
+  settingsGlow: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563eb18',
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10,
+    elevation: 4,
   },
   loadingContainer: {
     flex: 1,
@@ -642,6 +686,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'flex-start',
     gap: 6,
+    minHeight: 100,
   },
   statValue: {
     fontSize: 22,
