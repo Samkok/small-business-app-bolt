@@ -170,7 +170,51 @@ export default function SalesHistoryScreen() {
     }
   };
 
-  const renderSaleItem = ({ item }: { item: any }) => {
+  const groupedSales = useCallback(() => {
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number }> = {};
+
+    sales.forEach((item) => {
+      const dateKey = format(new Date(item.sale_date), 'yyyy-MM-dd');
+      if (!groups[dateKey]) {
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0 };
+      }
+
+      const displayAmount = item.status === 'voided'
+        ? 0
+        : item.status === 'partially_returned'
+        ? item.total_amount - (item.sale_actions?.reduce((sum: number, a: any) =>
+            a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
+        : item.total_amount;
+
+      const productCount = item.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) || 0;
+
+      groups[dateKey].sales.push(item);
+      groups[dateKey].totalOrders += 1;
+      groups[dateKey].totalProducts += productCount;
+      groups[dateKey].totalRevenue += displayAmount;
+    });
+
+    return Object.entries(groups)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, data]) => ({ date, ...data }));
+  }, [sales]);
+
+  type FlatItem =
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number }
+    | { type: 'sale'; item: any };
+
+  const flatListData = useCallback((): FlatItem[] => {
+    const result: FlatItem[] = [];
+    for (const group of groupedSales()) {
+      result.push({ type: 'header', date: group.date, totalOrders: group.totalOrders, totalProducts: group.totalProducts, totalRevenue: group.totalRevenue });
+      for (const sale of group.sales) {
+        result.push({ type: 'sale', item: sale });
+      }
+    }
+    return result;
+  }, [groupedSales]);
+
+  const renderSaleItem = (item: any) => {
     const displayAmount = item.status === 'voided'
       ? 0
       : item.status === 'partially_returned'
@@ -185,8 +229,8 @@ export default function SalesHistoryScreen() {
       <Card style={[styles.saleCard, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
         <View style={styles.saleHeader}>
           <View style={styles.saleHeaderLeft}>
-            <Text style={[styles.saleDate, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {format(new Date(item.sale_date), 'MMM dd, yyyy HH:mm')}
+            <Text style={[styles.saleTime, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {format(new Date(item.sale_date), 'HH:mm')}
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
               <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -226,6 +270,42 @@ export default function SalesHistoryScreen() {
         </View>
       </Card>
     );
+  };
+
+  const renderDateHeader = (date: string, totalOrders: number, totalProducts: number, totalRevenue: number) => (
+    <View style={[styles.dateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+      <View style={styles.dateHeaderTop}>
+        <View style={[styles.datePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
+          <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <Text style={[styles.dateHeaderText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {format(new Date(date + 'T00:00:00'), 'EEEE, MMM dd, yyyy')}
+          </Text>
+        </View>
+      </View>
+      <View style={[styles.dateSummaryRow, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
+        <View style={styles.dateSummaryItem}>
+          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalOrders}</Text>
+          <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Orders</Text>
+        </View>
+        <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.dateSummaryItem}>
+          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalProducts}</Text>
+          <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
+        </View>
+        <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.dateSummaryItem}>
+          <Text style={[styles.dateSummaryValue, { color: '#059669' }]}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderFlatItem = ({ item }: { item: FlatItem }) => {
+    if (item.type === 'header') {
+      return renderDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue);
+    }
+    return renderSaleItem(item.item);
   };
 
   const renderFilterModal = () => (
@@ -440,9 +520,9 @@ export default function SalesHistoryScreen() {
       )}
 
       <FlatList
-        data={sales}
-        renderItem={renderSaleItem}
-        keyExtractor={(item) => item.id}
+        data={flatListData()}
+        renderItem={renderFlatItem}
+        keyExtractor={(item, index) => item.type === 'header' ? `header-${item.date}` : `sale-${item.item.id}`}
         contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
@@ -534,11 +614,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContent: {
-    padding: 16,
-    paddingTop: 0,
+    paddingBottom: 16,
   },
   saleCard: {
     marginBottom: 12,
+    marginHorizontal: 16,
     padding: 16,
   },
   saleHeader: {
@@ -551,9 +631,55 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  saleDate: {
+  saleTime: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  dateHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  dateHeaderTop: {
+    marginBottom: 8,
+  },
+  datePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  dateHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dateSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  dateSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dateSummaryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  dateSummaryLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  dateSummarySeparator: {
+    width: 1,
+    height: 28,
   },
   statusBadge: {
     alignSelf: 'flex-start',
