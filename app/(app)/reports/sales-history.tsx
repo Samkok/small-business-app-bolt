@@ -75,13 +75,16 @@ export default function SalesHistoryScreen() {
       const page = reset ? 0 : currentPage;
       const offset = page * ITEMS_PER_PAGE;
 
-      const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999);
+      const toLocalDateString = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      const startISO = `${toLocalDateString(startDate)}T00:00:00.000`;
+      const endISO = `${toLocalDateString(endDate)}T23:59:59.999`;
 
       const data = await reportsService.getSalesHistoryReport(
         currentBusiness.id,
-        startDate.toISOString(),
-        endOfDay.toISOString(),
+        startISO,
+        endISO,
         {
           status: selectedStatus !== 'all' ? selectedStatus : undefined,
           paymentMethod: selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined,
@@ -132,10 +135,13 @@ export default function SalesHistoryScreen() {
     }
 
     try {
+      const toLocalDateString = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
       const csvData = await exportService.exportSalesToCsv(
         currentBusiness.id,
-        startDate.toISOString().split('T')[0],
-        endDate.toISOString().split('T')[0],
+        toLocalDateString(startDate),
+        toLocalDateString(endDate),
         selectedStatus !== 'all' ? selectedStatus : undefined,
         selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
       );
