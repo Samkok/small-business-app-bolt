@@ -28,7 +28,7 @@ const CATEGORY_CONFIG: Record<
     emptyMessage: 'No products are out of stock',
   },
   must_order: {
-    label: 'Should Order',
+    label: 'Must Order',
     color: '#ea580c',
     icon: AlertTriangle,
     emptyMessage: 'No urgent reorders needed',
@@ -40,7 +40,7 @@ const CATEGORY_CONFIG: Record<
     emptyMessage: 'No hot sellers in this period',
   },
   do_not_order: {
-    label: 'No Need to Order',
+    label: 'Do Not Order',
     color: '#2563eb',
     icon: PackageX,
     emptyMessage: 'No overstocked products',
