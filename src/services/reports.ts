@@ -1312,7 +1312,8 @@ export const reportsService = {
             total_amount,
             discount_type,
             discount_value,
-            delivery_cost
+            delivery_cost,
+            cart_items(quantity)
           ),
           sale_actions(
             id,

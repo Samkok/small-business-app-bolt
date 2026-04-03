@@ -189,7 +189,7 @@ export default function SalesHistoryScreen() {
             a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
         : item.total_amount;
 
-      const productCount = item.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) || 0;
+      const productCount = item.carts?.cart_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) || 0;
 
       groups[dateKey].sales.push(item);
       groups[dateKey].totalOrders += 1;
@@ -229,6 +229,10 @@ export default function SalesHistoryScreen() {
     const isDeleted = creatorName.includes('deleted');
 
     return (
+      <TouchableOpacity
+        onPress={() => router.push(`/(app)/(tabs)/sales/details/${item.id}`)}
+        activeOpacity={0.7}
+      >
       <Card style={[styles.saleCard, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
         <View style={styles.saleHeader}>
           <View style={styles.saleHeaderLeft}>
@@ -272,6 +276,7 @@ export default function SalesHistoryScreen() {
           </View>
         </View>
       </Card>
+      </TouchableOpacity>
     );
   };
 
