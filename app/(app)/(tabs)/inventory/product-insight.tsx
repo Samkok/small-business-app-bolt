@@ -48,6 +48,7 @@ interface SettingsState {
   reorder_warning_days: number;
   overstock_days_threshold: number;
   default_low_stock_level: number;
+  lead_time_days: number;
 }
 
 const ACTION_CATEGORIES: ProductCategory[] = ['out_of_stock', 'must_order'];
@@ -71,6 +72,7 @@ export default function ProductInsightScreen() {
       reorder_warning_days: defaults.reorder_warning_days,
       overstock_days_threshold: defaults.overstock_days_threshold,
       default_low_stock_level: defaults.default_low_stock_level,
+      lead_time_days: defaults.lead_time_days,
     };
   });
 
@@ -147,6 +149,7 @@ export default function ProductInsightScreen() {
             reorder_warning_days: saved.reorder_warning_days,
             overstock_days_threshold: saved.overstock_days_threshold,
             default_low_stock_level: saved.default_low_stock_level,
+            lead_time_days: (saved as any).lead_time_days ?? 0,
           };
           setSettings(resolvedSettings);
         }
@@ -216,6 +219,7 @@ export default function ProductInsightScreen() {
       reorder_warning_days: number;
       overstock_days_threshold: number;
       default_low_stock_level: number;
+      lead_time_days: number;
     }) => {
       setSavingSettings(true);
       try {
@@ -557,6 +561,7 @@ export default function ProductInsightScreen() {
           reorder_warning_days: settings.reorder_warning_days,
           overstock_days_threshold: settings.overstock_days_threshold,
           default_low_stock_level: settings.default_low_stock_level,
+          lead_time_days: settings.lead_time_days,
         }}
         onApply={handleSettingsApply}
         saving={savingSettings}

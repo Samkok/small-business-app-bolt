@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { X, RotateCcw } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -21,6 +22,7 @@ interface SettingsValues {
   reorder_warning_days: number;
   overstock_days_threshold: number;
   default_low_stock_level: number;
+  lead_time_days: number;
 }
 
 interface InsightSettingsSheetProps {
@@ -30,6 +32,8 @@ interface InsightSettingsSheetProps {
   onApply: (settings: SettingsValues) => void;
   saving: boolean;
 }
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function InsightSettingsSheet({
   visible,
@@ -51,27 +55,31 @@ export default function InsightSettingsSheet({
 
   const colors = {
     bg: isDark ? '#111827' : '#ffffff',
-    card: isDark ? '#1f2937' : '#f9fafb',
+    sectionBg: isDark ? '#1f2937' : '#f9fafb',
     text: isDark ? '#f9fafb' : '#111827',
     subtext: isDark ? '#9ca3af' : '#6b7280',
     border: isDark ? '#374151' : '#e5e7eb',
-    input: isDark ? '#374151' : '#ffffff',
+    input: isDark ? '#111827' : '#ffffff',
+    inputBorder: isDark ? '#4b5563' : '#d1d5db',
     error: '#dc2626',
+    accent: '#2563eb',
+    highlight: isDark ? '#1e3a5f' : '#eff6ff',
   };
 
   const validate = (vals: SettingsValues): Record<string, string> => {
     const errs: Record<string, string> = {};
+    if (vals.hot_selling_min_units_per_day <= 0) errs.hot_selling_min_units_per_day = 'Must be > 0';
+    if (vals.slow_selling_max_units_per_day < 0) errs.slow_selling_max_units_per_day = 'Must be >= 0';
     if (vals.hot_selling_min_units_per_day <= vals.slow_selling_max_units_per_day) {
       errs.hot_selling_min_units_per_day = 'Must be greater than slow selling rate';
     }
+    if (vals.reorder_warning_days <= 0) errs.reorder_warning_days = 'Must be > 0';
+    if (vals.overstock_days_threshold <= 0) errs.overstock_days_threshold = 'Must be > 0';
     if (vals.reorder_warning_days >= vals.overstock_days_threshold) {
       errs.reorder_warning_days = 'Must be less than overstock threshold';
     }
-    if (vals.hot_selling_min_units_per_day <= 0) errs.hot_selling_min_units_per_day = 'Must be > 0';
-    if (vals.slow_selling_max_units_per_day < 0) errs.slow_selling_max_units_per_day = 'Must be >= 0';
-    if (vals.reorder_warning_days <= 0) errs.reorder_warning_days = 'Must be > 0';
-    if (vals.overstock_days_threshold <= 0) errs.overstock_days_threshold = 'Must be > 0';
     if (vals.default_low_stock_level <= 0) errs.default_low_stock_level = 'Must be > 0';
+    if (vals.lead_time_days < 0) errs.lead_time_days = 'Must be >= 0';
     return errs;
   };
 
@@ -91,33 +99,51 @@ export default function InsightSettingsSheet({
       reorder_warning_days: defaults.reorder_warning_days,
       overstock_days_threshold: defaults.overstock_days_threshold,
       default_low_stock_level: defaults.default_low_stock_level,
+      lead_time_days: defaults.lead_time_days,
     });
     setErrors({});
   };
 
   const updateValue = (key: keyof SettingsValues, text: string) => {
-    const num = parseFloat(text) || 0;
-    setValues((prev) => ({ ...prev, [key]: num }));
+    const num = parseFloat(text);
+    setValues((prev) => ({ ...prev, [key]: isNaN(num) ? 0 : num }));
   };
 
   const renderField = (
     label: string,
     key: keyof SettingsValues,
     unit: string,
-    description: string
+    description: string,
+    highlighted?: boolean
   ) => (
-    <View style={styles.fieldGroup} key={key}>
+    <View
+      key={key}
+      style={[
+        styles.fieldGroup,
+        highlighted && { backgroundColor: colors.highlight, borderRadius: 10, padding: 12 },
+      ]}
+    >
       <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
       <Text style={[styles.fieldDesc, { color: colors.subtext }]}>{description}</Text>
-      <View style={[styles.inputRow, { borderColor: errors[key] ? colors.error : colors.border }]}>
+      <View
+        style={[
+          styles.inputRow,
+          {
+            borderColor: errors[key] ? colors.error : colors.inputBorder,
+            backgroundColor: colors.input,
+          },
+        ]}
+      >
         <TextInput
-          style={[styles.input, { color: colors.text, backgroundColor: colors.input }]}
+          style={[styles.input, { color: colors.text }]}
           value={String(values[key])}
           onChangeText={(t) => updateValue(key, t)}
           keyboardType="decimal-pad"
           selectTextOnFocus
         />
-        <Text style={[styles.unitText, { color: colors.subtext }]}>{unit}</Text>
+        <View style={[styles.unitBadge, { backgroundColor: colors.sectionBg }]}>
+          <Text style={[styles.unitText, { color: colors.subtext }]}>{unit}</Text>
+        </View>
       </View>
       {errors[key] && <Text style={[styles.errorText, { color: colors.error }]}>{errors[key]}</Text>}
     </View>
@@ -127,9 +153,9 @@ export default function InsightSettingsSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.sheet, { backgroundColor: colors.bg }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.bg, maxHeight: SCREEN_HEIGHT * 0.85 }]}>
           <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.sheetTitle, { color: colors.text }]}>Insight Settings</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -142,43 +168,70 @@ export default function InsightSettingsSheet({
             contentContainerStyle={styles.sheetBodyContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            bounces={false}
           >
+            <Text style={[styles.sectionTitle, { color: colors.subtext }]}>CLASSIFICATION THRESHOLDS</Text>
+
             {renderField(
               'Hot selling rate',
               'hot_selling_min_units_per_day',
               'units/day',
-              'Daily rate above which a product is considered "hot selling"'
+              'Daily sales rate above which a product is "hot selling"'
             )}
             {renderField(
               'Slow selling rate',
               'slow_selling_max_units_per_day',
               'units/day',
-              'Daily rate below which a product is "slow moving"'
-            )}
-            {renderField(
-              'Reorder warning',
-              'reorder_warning_days',
-              'days',
-              'Flag as "must order" when stock runs out within this many days'
+              'Daily sales rate below which a product is "slow moving"'
             )}
             {renderField(
               'Overstock threshold',
               'overstock_days_threshold',
               'days',
-              'Flag as "do not order" when stock lasts longer than this'
+              'Flag as "do not order" when stock lasts longer than this many days'
             )}
             {renderField(
               'Default low stock level',
               'default_low_stock_level',
               'units',
-              'Fallback for products without a min stock level set'
+              'Fallback minimum stock for products without a custom level set'
             )}
+
+            <Text style={[styles.sectionTitle, { color: colors.subtext, marginTop: 8 }]}>REORDER SETTINGS</Text>
+
+            {renderField(
+              'Lead time',
+              'lead_time_days',
+              'days',
+              'Estimated days between placing an order and receiving stock. "Must Order" triggers earlier to account for delivery time.',
+              true
+            )}
+            {renderField(
+              'Reorder warning buffer',
+              'reorder_warning_days',
+              'days',
+              'Extra buffer days before stock-out to flag as "must order" (added on top of lead time)'
+            )}
+
+            <View style={[styles.infoBox, { backgroundColor: colors.sectionBg, borderColor: colors.border }]}>
+              <Text style={[styles.infoText, { color: colors.subtext }]}>
+                A product is flagged{' '}
+                <Text style={{ fontWeight: '700', color: colors.accent }}>"Must Order"</Text>
+                {' '}when its stock will run out within{' '}
+                <Text style={{ fontWeight: '700', color: colors.text }}>
+                  {(values.reorder_warning_days || 0) + (values.lead_time_days || 0)} days
+                </Text>
+                {' '}({values.reorder_warning_days || 0} buffer + {values.lead_time_days || 0} lead time).
+              </Text>
+            </View>
+
+            <View style={{ height: 8 }} />
           </ScrollView>
 
-          <View style={[styles.sheetFooter, { borderTopColor: colors.border }]}>
+          <View style={[styles.sheetFooter, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
             <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
               <RotateCcw size={16} color={colors.subtext} />
-              <Text style={[styles.resetText, { color: colors.subtext }]}>Reset</Text>
+              <Text style={[styles.resetText, { color: colors.subtext }]}>Reset defaults</Text>
             </TouchableOpacity>
             <Button title="Apply" onPress={handleApply} loading={saving} style={styles.applyBtn} />
           </View>
@@ -197,7 +250,7 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
+    overflow: 'hidden',
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -218,11 +271,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetBody: {
-    flex: 1,
+    flexGrow: 0,
   },
   sheetBodyContent: {
     padding: 20,
-    gap: 20,
+    gap: 16,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 2,
   },
   fieldGroup: {
     gap: 4,
@@ -233,7 +292,8 @@ const styles = StyleSheet.create({
   },
   fieldDesc: {
     fontSize: 12,
-    marginBottom: 6,
+    lineHeight: 16,
+    marginBottom: 4,
   },
   inputRow: {
     flexDirection: 'row',
@@ -249,14 +309,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  unitText: {
+  unitBadge: {
     paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: 'transparent',
+  },
+  unitText: {
     fontSize: 13,
     fontWeight: '500',
   },
   errorText: {
     fontSize: 12,
     marginTop: 2,
+  },
+  infoBox: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  infoText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   sheetFooter: {
     flexDirection: 'row',
@@ -271,7 +346,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 4,
   },
   resetText: {
     fontSize: 14,

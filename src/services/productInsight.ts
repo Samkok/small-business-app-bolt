@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS: Omit<InsightSettings, 'id' | 'business_id' | 'created_at
   reorder_warning_days: 7,
   overstock_days_threshold: 90,
   default_low_stock_level: 10,
+  lead_time_days: 0,
 };
 
 export const productInsightService = {
@@ -151,7 +152,7 @@ export const productInsightService = {
     products: any[],
     salesByProduct: Record<string, { totalQty: number; totalRevenue: number }>,
     settings: Omit<InsightSettings, 'id' | 'business_id' | 'created_at' | 'updated_at'>,
-    lookbackDays: number
+    lookbackDays: number,
   ): InsightSummary {
     const active = products.filter((p) => !p.is_archived);
     const archived = products.filter((p) => p.is_archived);
@@ -187,6 +188,8 @@ export const productInsightService = {
       else if (stock <= minLevel) lowStockCount++;
       else inStockCount++;
 
+      const mustOrderThreshold = settings.reorder_warning_days + (settings.lead_time_days || 0);
+
       let category: ProductCategory;
 
       if (stock <= 0) {
@@ -194,7 +197,7 @@ export const productInsightService = {
       } else if (
         dailyRate > settings.slow_selling_max_units_per_day &&
         daysRemaining !== null &&
-        daysRemaining <= settings.reorder_warning_days
+        daysRemaining <= mustOrderThreshold
       ) {
         category = 'must_order';
       } else if (dailyRate >= settings.hot_selling_min_units_per_day) {
