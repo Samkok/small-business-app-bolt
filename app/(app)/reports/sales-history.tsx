@@ -140,7 +140,7 @@ export default function SalesHistoryScreen() {
         selectedPaymentMethod !== 'all' ? selectedPaymentMethod : undefined
       );
 
-      const fileName = `sales_history_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      const fileName = `sales_history_${format(startDate, 'yyyy-MM-dd')}_to_${format(endDate, 'yyyy-MM-dd')}.csv`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(fileUri, csvData, {

@@ -10,11 +10,17 @@ export const exportService = {
    * @param endDate End date for export range
    * @returns CSV string
    */
-  async exportSalesToCsv(businessId: string, startDate?: string, endDate?: string) {
+  async exportSalesToCsv(
+    businessId: string,
+    startDate?: string,
+    endDate?: string,
+    status?: string,
+    paymentMethod?: string
+  ) {
     if (typeof businessId !== 'string' || !businessId) return '';
     if (typeof startDate !== 'string' || !startDate) return '';
     if (typeof endDate !== 'string' || !endDate) return '';
-    
+
     try {
       // Get detailed sales data with cart items and products
       let salesQuery = supabase
@@ -42,32 +48,46 @@ export const exportService = {
             )
           )
         `)
-        .eq('business_id', businessId)
-        .eq('status', 'completed');
-      
+        .eq('business_id', businessId);
+
+      if (status) {
+        salesQuery = salesQuery.eq('status', status);
+      }
+
+      if (paymentMethod) {
+        salesQuery = salesQuery.eq('payment_method', paymentMethod);
+      }
+
       if (startDate) {
         salesQuery = salesQuery.gte('sale_date', startDate);
       }
-      
+
       if (endDate) {
         salesQuery = salesQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
       }
-      
+
       const { data: salesData, error: salesError } = await salesQuery.order('sale_date', { ascending: false });
-      
+
       if (salesError) throw salesError;
-      
+
       // Get sales with discount details for cost breakdown
       let discountQuery = supabase
         .from('sales_with_discount_details')
         .select('*')
-        .eq('business_id', businessId)
-        .eq('status', 'completed');
-      
+        .eq('business_id', businessId);
+
+      if (status) {
+        discountQuery = discountQuery.eq('status', status);
+      }
+
+      if (paymentMethod) {
+        discountQuery = discountQuery.eq('payment_method', paymentMethod);
+      }
+
       if (startDate) {
         discountQuery = discountQuery.gte('sale_date', startDate);
       }
-      
+
       if (endDate) {
         discountQuery = discountQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
       }
