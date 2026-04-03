@@ -78,7 +78,6 @@ export default function ProductInsightScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const glowAnim = useRef(new Animated.Value(0)).current;
-  const settingsLoadedRef = useRef(false);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -100,30 +99,6 @@ export default function ProductInsightScreen() {
     loop.start();
     return () => loop.stop();
   }, [glowAnim]);
-
-  const loadSettings = useCallback(async () => {
-    if (!currentBusiness?.id) return;
-    try {
-      const saved = await productInsightService.getSettings(currentBusiness.id);
-      if (saved) {
-        setSettings({
-          lookback_days: saved.lookback_days,
-          use_custom_range: saved.use_custom_range,
-          custom_start_date: saved.custom_start_date,
-          custom_end_date: saved.custom_end_date,
-          hot_selling_min_units_per_day: saved.hot_selling_min_units_per_day,
-          slow_selling_max_units_per_day: saved.slow_selling_max_units_per_day,
-          reorder_warning_days: saved.reorder_warning_days,
-          overstock_days_threshold: saved.overstock_days_threshold,
-          default_low_stock_level: saved.default_low_stock_level,
-        });
-      }
-      settingsLoadedRef.current = true;
-    } catch (e) {
-      console.error('Failed to load insight settings:', e);
-      settingsLoadedRef.current = true;
-    }
-  }, [currentBusiness?.id]);
 
   const loadInsights = useCallback(
     async (currentSettings: SettingsState) => {
@@ -154,16 +129,34 @@ export default function ProductInsightScreen() {
 
   useEffect(() => {
     const init = async () => {
-      await loadSettings();
+      if (!currentBusiness?.id) {
+        setLoading(false);
+        return;
+      }
+      let resolvedSettings = settings;
+      try {
+        const saved = await productInsightService.getSettings(currentBusiness.id);
+        if (saved) {
+          resolvedSettings = {
+            lookback_days: saved.lookback_days,
+            use_custom_range: saved.use_custom_range,
+            custom_start_date: saved.custom_start_date,
+            custom_end_date: saved.custom_end_date,
+            hot_selling_min_units_per_day: saved.hot_selling_min_units_per_day,
+            slow_selling_max_units_per_day: saved.slow_selling_max_units_per_day,
+            reorder_warning_days: saved.reorder_warning_days,
+            overstock_days_threshold: saved.overstock_days_threshold,
+            default_low_stock_level: saved.default_low_stock_level,
+          };
+          setSettings(resolvedSettings);
+        }
+      } catch (e) {
+        console.error('Failed to load insight settings:', e);
+      }
+      await loadInsights(resolvedSettings);
     };
     init();
-  }, [loadSettings]);
-
-  useEffect(() => {
-    if (settingsLoadedRef.current) {
-      loadInsights(settings);
-    }
-  }, [settings, loadInsights]);
+  }, [currentBusiness?.id]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
