@@ -167,6 +167,7 @@ export default function ProductInsightScreen() {
     async (days: number) => {
       const updated = { ...settings, lookback_days: days, use_custom_range: false };
       setSettings(updated);
+      setLoading(true);
       if (currentBusiness?.id) {
         try {
           await productInsightService.upsertSettings(currentBusiness.id, {
@@ -177,8 +178,9 @@ export default function ProductInsightScreen() {
           console.error('Failed to save period:', e);
         }
       }
+      await loadInsights(updated);
     },
-    [settings, currentBusiness?.id]
+    [settings, currentBusiness?.id, loadInsights]
   );
 
   const handleCustomRange = useCallback(
@@ -190,6 +192,7 @@ export default function ProductInsightScreen() {
         custom_end_date: end.toISOString(),
       };
       setSettings(updated);
+      setLoading(true);
       if (currentBusiness?.id) {
         try {
           await productInsightService.upsertSettings(currentBusiness.id, {
@@ -201,8 +204,9 @@ export default function ProductInsightScreen() {
           console.error('Failed to save custom range:', e);
         }
       }
+      await loadInsights(updated);
     },
-    [settings, currentBusiness?.id]
+    [settings, currentBusiness?.id, loadInsights]
   );
 
   const handleSettingsApply = useCallback(
@@ -221,13 +225,14 @@ export default function ProductInsightScreen() {
           await productInsightService.upsertSettings(currentBusiness.id, vals);
         }
         setSettingsVisible(false);
+        await loadInsights(updated);
       } catch (e) {
         console.error('Failed to save settings:', e);
       } finally {
         setSavingSettings(false);
       }
     },
-    [settings, currentBusiness?.id]
+    [settings, currentBusiness?.id, loadInsights]
   );
 
   const colors = {
