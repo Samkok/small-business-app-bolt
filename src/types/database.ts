@@ -697,6 +697,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      product_insight_settings: {
+        Row: {
+          id: string;
+          business_id: string;
+          lookback_days: number;
+          custom_start_date?: string;
+          custom_end_date?: string;
+          use_custom_range: boolean;
+          hot_selling_min_units_per_day: number;
+          slow_selling_max_units_per_day: number;
+          reorder_warning_days: number;
+          overstock_days_threshold: number;
+          default_low_stock_level: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          lookback_days?: number;
+          custom_start_date?: string;
+          custom_end_date?: string;
+          use_custom_range?: boolean;
+          hot_selling_min_units_per_day?: number;
+          slow_selling_max_units_per_day?: number;
+          reorder_warning_days?: number;
+          overstock_days_threshold?: number;
+          default_low_stock_level?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          lookback_days?: number;
+          custom_start_date?: string;
+          custom_end_date?: string;
+          use_custom_range?: boolean;
+          hot_selling_min_units_per_day?: number;
+          slow_selling_max_units_per_day?: number;
+          reorder_warning_days?: number;
+          overstock_days_threshold?: number;
+          default_low_stock_level?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

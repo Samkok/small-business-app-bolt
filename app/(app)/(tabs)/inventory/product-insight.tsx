@@ -17,166 +17,225 @@ import { Card } from '@/src/components/ui/Card';
 import {
   ArrowLeft,
   Package,
-  TrendingUp,
-  TrendingDown,
-  TriangleAlert as AlertTriangle,
-  Archive,
+  Layers,
   DollarSign,
   BarChart3,
   Sparkles,
-  ShoppingCart,
   CheckCircle2,
+  TriangleAlert as AlertTriangle,
   XCircle,
-  Layers,
+  Archive,
+  Settings2,
 } from 'lucide-react-native';
-import { supabase } from '@/src/config/supabase';
+import {
+  productInsightService,
+  InsightSummary,
+  ProductCategory,
+} from '@/src/services/productInsight';
+import TimePeriodSelector from '@/src/components/inventory/TimePeriodSelector';
+import InsightSettingsSheet from '@/src/components/inventory/InsightSettingsSheet';
+import ProductCategorySection, {
+  CATEGORY_CONFIG,
+} from '@/src/components/inventory/ProductCategorySection';
 
-interface InsightData {
-  totalProducts: number;
-  totalActiveProducts: number;
-  totalArchivedProducts: number;
-  totalStockValue: number;
-  totalUnitsInStock: number;
-  outOfStockCount: number;
-  lowStockCount: number;
-  inStockCount: number;
-  topSellingProducts: { id: string; name: string; totalQty: number; totalRevenue: number }[];
-  slowMovingProducts: { id: string; name: string; totalQty: number; current_stock: number }[];
-  highestValueProducts: { id: string; name: string; price: number; current_stock: number; value: number }[];
-  avgSellingPrice: number;
-  categoryCounts: { category: string; count: number }[];
+interface SettingsState {
+  lookback_days: number;
+  use_custom_range: boolean;
+  custom_start_date?: string;
+  custom_end_date?: string;
+  hot_selling_min_units_per_day: number;
+  slow_selling_max_units_per_day: number;
+  reorder_warning_days: number;
+  overstock_days_threshold: number;
+  default_low_stock_level: number;
 }
 
+const ACTION_CATEGORIES: ProductCategory[] = ['out_of_stock', 'must_order'];
+const INFO_CATEGORIES: ProductCategory[] = ['hot_selling', 'do_not_order', 'slow_moving', 'healthy'];
+
 export default function ProductInsightScreen() {
-  const [data, setData] = useState<InsightData | null>(null);
+  const [data, setData] = useState<InsightSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settings, setSettings] = useState<SettingsState>(() => {
+    const defaults = productInsightService.getDefaultSettings();
+    return {
+      lookback_days: defaults.lookback_days,
+      use_custom_range: defaults.use_custom_range,
+      custom_start_date: defaults.custom_start_date,
+      custom_end_date: defaults.custom_end_date,
+      hot_selling_min_units_per_day: defaults.hot_selling_min_units_per_day,
+      slow_selling_max_units_per_day: defaults.slow_selling_max_units_per_day,
+      reorder_warning_days: defaults.reorder_warning_days,
+      overstock_days_threshold: defaults.overstock_days_threshold,
+      default_low_stock_level: defaults.default_low_stock_level,
+    };
+  });
 
   const router = useRouter();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const settingsLoadedRef = useRef(false);
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [glowAnim]);
 
-  const loadInsights = useCallback(async () => {
+  const loadSettings = useCallback(async () => {
     if (!currentBusiness?.id) return;
-
     try {
-      const [productsRes, saleItemsRes] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, name, price, current_stock, low_stock_threshold, is_archived')
-          .eq('business_id', currentBusiness.id),
-        supabase
-          .from('sale_items')
-          .select('product_id, quantity, unit_price, products!inner(name, business_id)')
-          .eq('products.business_id', currentBusiness.id),
-      ]);
-
-      const products = productsRes.data || [];
-      const saleItems = saleItemsRes.data || [];
-
-      const active = products.filter((p) => !p.is_archived);
-      const archived = products.filter((p) => p.is_archived);
-
-      const outOfStock = active.filter((p) => p.current_stock <= 0);
-      const lowStock = active.filter(
-        (p) => p.current_stock > 0 && p.current_stock <= (p.low_stock_threshold || 10)
-      );
-      const inStock = active.filter(
-        (p) => p.current_stock > (p.low_stock_threshold || 10)
-      );
-
-      const totalUnitsInStock = active.reduce((s, p) => s + (p.current_stock || 0), 0);
-      const totalStockValue = active.reduce((s, p) => s + (p.current_stock || 0) * (p.price || 0), 0);
-      const avgSellingPrice =
-        active.length > 0 ? active.reduce((s, p) => s + (p.price || 0), 0) / active.length : 0;
-
-      const salesByProduct: Record<string, { name: string; totalQty: number; totalRevenue: number }> = {};
-      saleItems.forEach((si: any) => {
-        const pid = si.product_id;
-        if (!pid) return;
-        if (!salesByProduct[pid]) {
-          salesByProduct[pid] = { name: si.products?.name || 'Unknown', totalQty: 0, totalRevenue: 0 };
-        }
-        salesByProduct[pid].totalQty += si.quantity || 0;
-        salesByProduct[pid].totalRevenue += (si.quantity || 0) * (si.unit_price || 0);
-      });
-
-      const topSelling = Object.entries(salesByProduct)
-        .map(([id, v]) => ({ id, ...v }))
-        .sort((a, b) => b.totalQty - a.totalQty)
-        .slice(0, 5);
-
-      const productSalesQtyMap: Record<string, number> = {};
-      Object.entries(salesByProduct).forEach(([id, v]) => {
-        productSalesQtyMap[id] = v.totalQty;
-      });
-
-      const slowMoving = active
-        .filter((p) => p.current_stock > 0)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          totalQty: productSalesQtyMap[p.id] || 0,
-          current_stock: p.current_stock,
-        }))
-        .sort((a, b) => a.totalQty - b.totalQty)
-        .slice(0, 5);
-
-      const highestValue = active
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: p.price || 0,
-          current_stock: p.current_stock || 0,
-          value: (p.current_stock || 0) * (p.price || 0),
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5);
-
-      setData({
-        totalProducts: products.length,
-        totalActiveProducts: active.length,
-        totalArchivedProducts: archived.length,
-        totalStockValue,
-        totalUnitsInStock,
-        outOfStockCount: outOfStock.length,
-        lowStockCount: lowStock.length,
-        inStockCount: inStock.length,
-        topSellingProducts: topSelling,
-        slowMovingProducts: slowMoving,
-        highestValueProducts: highestValue,
-        avgSellingPrice,
-        categoryCounts: [],
-      });
+      const saved = await productInsightService.getSettings(currentBusiness.id);
+      if (saved) {
+        setSettings({
+          lookback_days: saved.lookback_days,
+          use_custom_range: saved.use_custom_range,
+          custom_start_date: saved.custom_start_date,
+          custom_end_date: saved.custom_end_date,
+          hot_selling_min_units_per_day: saved.hot_selling_min_units_per_day,
+          slow_selling_max_units_per_day: saved.slow_selling_max_units_per_day,
+          reorder_warning_days: saved.reorder_warning_days,
+          overstock_days_threshold: saved.overstock_days_threshold,
+          default_low_stock_level: saved.default_low_stock_level,
+        });
+      }
+      settingsLoadedRef.current = true;
     } catch (e) {
-      console.error('Error loading product insights:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      console.error('Failed to load insight settings:', e);
+      settingsLoadedRef.current = true;
     }
   }, [currentBusiness?.id]);
 
+  const loadInsights = useCallback(
+    async (currentSettings: SettingsState) => {
+      if (!currentBusiness?.id) return;
+      try {
+        const { startDate, endDate, lookbackDays } = productInsightService.getDateRange(currentSettings);
+        const { products, salesByProduct } = await productInsightService.fetchProductsAndSales(
+          currentBusiness.id,
+          startDate,
+          endDate
+        );
+        const summary = productInsightService.classifyProducts(
+          products,
+          salesByProduct,
+          currentSettings,
+          lookbackDays
+        );
+        setData(summary);
+      } catch (e) {
+        console.error('Error loading product insights:', e);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [currentBusiness?.id]
+  );
+
   useEffect(() => {
-    loadInsights();
-  }, [loadInsights]);
+    const init = async () => {
+      await loadSettings();
+    };
+    init();
+  }, [loadSettings]);
+
+  useEffect(() => {
+    if (settingsLoadedRef.current) {
+      loadInsights(settings);
+    }
+  }, [settings, loadInsights]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    loadInsights();
-  }, [loadInsights]);
+    loadInsights(settings);
+  }, [loadInsights, settings]);
+
+  const handlePresetSelect = useCallback(
+    async (days: number) => {
+      const updated = { ...settings, lookback_days: days, use_custom_range: false };
+      setSettings(updated);
+      if (currentBusiness?.id) {
+        try {
+          await productInsightService.upsertSettings(currentBusiness.id, {
+            lookback_days: days,
+            use_custom_range: false,
+          });
+        } catch (e) {
+          console.error('Failed to save period:', e);
+        }
+      }
+    },
+    [settings, currentBusiness?.id]
+  );
+
+  const handleCustomRange = useCallback(
+    async (start: Date, end: Date) => {
+      const updated = {
+        ...settings,
+        use_custom_range: true,
+        custom_start_date: start.toISOString(),
+        custom_end_date: end.toISOString(),
+      };
+      setSettings(updated);
+      if (currentBusiness?.id) {
+        try {
+          await productInsightService.upsertSettings(currentBusiness.id, {
+            use_custom_range: true,
+            custom_start_date: start.toISOString(),
+            custom_end_date: end.toISOString(),
+          });
+        } catch (e) {
+          console.error('Failed to save custom range:', e);
+        }
+      }
+    },
+    [settings, currentBusiness?.id]
+  );
+
+  const handleSettingsApply = useCallback(
+    async (vals: {
+      hot_selling_min_units_per_day: number;
+      slow_selling_max_units_per_day: number;
+      reorder_warning_days: number;
+      overstock_days_threshold: number;
+      default_low_stock_level: number;
+    }) => {
+      setSavingSettings(true);
+      try {
+        const updated = { ...settings, ...vals };
+        setSettings(updated);
+        if (currentBusiness?.id) {
+          await productInsightService.upsertSettings(currentBusiness.id, vals);
+        }
+        setSettingsVisible(false);
+      } catch (e) {
+        console.error('Failed to save settings:', e);
+      } finally {
+        setSavingSettings(false);
+      }
+    },
+    [settings, currentBusiness?.id]
+  );
 
   const colors = {
     bg: isDark ? '#111827' : '#f9fafb',
@@ -186,6 +245,11 @@ export default function ProductInsightScreen() {
     subtext: isDark ? '#9ca3af' : '#6b7280',
     muted: isDark ? '#374151' : '#f3f4f6',
   };
+
+  const actionProducts = data
+    ? data.classifiedProducts.filter((p) => ACTION_CATEGORIES.includes(p.category))
+    : [];
+  const hasActionItems = actionProducts.length > 0;
 
   if (loading) {
     return (
@@ -215,7 +279,9 @@ export default function ProductInsightScreen() {
           <Animated.View
             style={{
               opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
-              transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.1] }) }],
+              transform: [
+                { scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.1] }) },
+              ],
               marginRight: 6,
             }}
           >
@@ -223,7 +289,9 @@ export default function ProductInsightScreen() {
           </Animated.View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Product Insight</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.settingsBtn}>
+          <Settings2 size={22} color={colors.subtext} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -231,32 +299,66 @@ export default function ProductInsightScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#2563eb']} tintColor="#2563eb" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#2563eb']}
+            tintColor="#2563eb"
+          />
         }
       >
-        {/* Overview Section */}
+        <TimePeriodSelector
+          selectedDays={settings.lookback_days}
+          useCustomRange={settings.use_custom_range}
+          customStartDate={
+            settings.custom_start_date ? new Date(settings.custom_start_date) : undefined
+          }
+          customEndDate={settings.custom_end_date ? new Date(settings.custom_end_date) : undefined}
+          onSelectPreset={handlePresetSelect}
+          onSelectCustomRange={handleCustomRange}
+        />
+
+        {data?.periodLabel && (
+          <Text style={[styles.periodLabel, { color: colors.subtext }]}>
+            Based on sales from {data.periodLabel}
+          </Text>
+        )}
+
+        {/* Overview */}
         <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Overview</Text>
         <View style={styles.statGrid}>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <Package size={22} color="#2563eb" />
-            <Text style={[styles.statValue, { color: colors.text }]}>{data?.totalActiveProducts ?? 0}</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {data?.totalActiveProducts ?? 0}
+            </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Active Products</Text>
           </Card>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
-            <Layers size={22} color="#7c3aed" />
-            <Text style={[styles.statValue, { color: colors.text }]}>{data?.totalUnitsInStock ?? 0}</Text>
+            <Layers size={22} color="#0891b2" />
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {data?.totalUnitsInStock ?? 0}
+            </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Units in Stock</Text>
           </Card>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <DollarSign size={22} color="#059669" />
-            <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            <Text
+              style={[styles.statValue, { color: colors.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               ${(data?.totalStockValue ?? 0).toFixed(0)}
             </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Stock Value</Text>
           </Card>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <BarChart3 size={22} color="#ea580c" />
-            <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            <Text
+              style={[styles.statValue, { color: colors.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               ${(data?.avgSellingPrice ?? 0).toFixed(2)}
             </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Price</Text>
@@ -265,29 +367,39 @@ export default function ProductInsightScreen() {
 
         {/* Stock Health */}
         <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Stock Health</Text>
-        <Card style={[styles.healthCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Card
+          style={[styles.healthCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
           <View style={styles.healthRow}>
             <View style={styles.healthItem}>
               <CheckCircle2 size={20} color="#059669" />
-              <Text style={[styles.healthValue, { color: colors.text }]}>{data?.inStockCount ?? 0}</Text>
+              <Text style={[styles.healthValue, { color: colors.text }]}>
+                {data?.inStockCount ?? 0}
+              </Text>
               <Text style={[styles.healthLabel, { color: colors.subtext }]}>Healthy</Text>
             </View>
             <View style={[styles.healthDivider, { backgroundColor: colors.border }]} />
             <View style={styles.healthItem}>
               <AlertTriangle size={20} color="#f59e0b" />
-              <Text style={[styles.healthValue, { color: colors.text }]}>{data?.lowStockCount ?? 0}</Text>
+              <Text style={[styles.healthValue, { color: colors.text }]}>
+                {data?.lowStockCount ?? 0}
+              </Text>
               <Text style={[styles.healthLabel, { color: colors.subtext }]}>Low Stock</Text>
             </View>
             <View style={[styles.healthDivider, { backgroundColor: colors.border }]} />
             <View style={styles.healthItem}>
               <XCircle size={20} color="#dc2626" />
-              <Text style={[styles.healthValue, { color: colors.text }]}>{data?.outOfStockCount ?? 0}</Text>
+              <Text style={[styles.healthValue, { color: colors.text }]}>
+                {data?.outOfStockCount ?? 0}
+              </Text>
               <Text style={[styles.healthLabel, { color: colors.subtext }]}>Out of Stock</Text>
             </View>
             <View style={[styles.healthDivider, { backgroundColor: colors.border }]} />
             <View style={styles.healthItem}>
               <Archive size={20} color="#6b7280" />
-              <Text style={[styles.healthValue, { color: colors.text }]}>{data?.totalArchivedProducts ?? 0}</Text>
+              <Text style={[styles.healthValue, { color: colors.text }]}>
+                {data?.totalArchivedProducts ?? 0}
+              </Text>
               <Text style={[styles.healthLabel, { color: colors.subtext }]}>Archived</Text>
             </View>
           </View>
@@ -327,88 +439,130 @@ export default function ProductInsightScreen() {
           )}
         </Card>
 
-        {/* Top Selling Products */}
-        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Top Selling Products</Text>
-        <Card style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {(data?.topSellingProducts ?? []).length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.subtext }]}>No sales data yet</Text>
-          ) : (
-            (data?.topSellingProducts ?? []).map((p, i) => (
-              <View key={p.id}>
-                <View style={styles.rankRow}>
-                  <View style={[styles.rankBadge, { backgroundColor: i === 0 ? '#2563eb' : colors.muted }]}>
-                    <Text style={[styles.rankText, { color: i === 0 ? '#ffffff' : colors.subtext }]}>#{i + 1}</Text>
-                  </View>
-                  <View style={styles.rankInfo}>
-                    <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>{p.name}</Text>
-                    <Text style={[styles.rankSub, { color: colors.subtext }]}>{p.totalQty} units sold</Text>
-                  </View>
-                  <Text style={[styles.rankRevenue, { color: '#059669' }]}>${p.totalRevenue.toFixed(2)}</Text>
-                </View>
-                {i < (data?.topSellingProducts ?? []).length - 1 && (
-                  <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-                )}
-              </View>
-            ))
-          )}
-        </Card>
-
-        {/* Highest Stock Value Products */}
-        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Highest Stock Value</Text>
-        <Card style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {(data?.highestValueProducts ?? []).length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.subtext }]}>No products found</Text>
-          ) : (
-            (data?.highestValueProducts ?? []).map((p, i) => (
-              <View key={p.id}>
-                <View style={styles.rankRow}>
-                  <View style={[styles.rankBadge, { backgroundColor: i === 0 ? '#059669' : colors.muted }]}>
-                    <Text style={[styles.rankText, { color: i === 0 ? '#ffffff' : colors.subtext }]}>#{i + 1}</Text>
-                  </View>
-                  <View style={styles.rankInfo}>
-                    <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>{p.name}</Text>
-                    <Text style={[styles.rankSub, { color: colors.subtext }]}>{p.current_stock} units @ ${p.price.toFixed(2)}</Text>
-                  </View>
-                  <Text style={[styles.rankRevenue, { color: '#059669' }]}>${p.value.toFixed(2)}</Text>
-                </View>
-                {i < (data?.highestValueProducts ?? []).length - 1 && (
-                  <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-                )}
-              </View>
-            ))
-          )}
-        </Card>
-
-        {/* Slow Moving Products */}
-        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Slow Moving / Unsold Products</Text>
-        <Card style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {(data?.slowMovingProducts ?? []).length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.subtext }]}>No data available</Text>
-          ) : (
-            (data?.slowMovingProducts ?? []).map((p, i) => (
-              <View key={p.id}>
-                <View style={styles.rankRow}>
-                  <View style={[styles.rankBadge, { backgroundColor: colors.muted }]}>
-                    <TrendingDown size={14} color="#ea580c" />
-                  </View>
-                  <View style={styles.rankInfo}>
-                    <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>{p.name}</Text>
-                    <Text style={[styles.rankSub, { color: colors.subtext }]}>{p.current_stock} in stock</Text>
-                  </View>
-                  <Text style={[styles.rankRevenue, { color: p.totalQty === 0 ? '#dc2626' : '#ea580c' }]}>
-                    {p.totalQty === 0 ? 'Never sold' : `${p.totalQty} sold`}
+        {/* Category Summary Badges */}
+        {data && (
+          <View style={styles.categoryBadgeRow}>
+            {(Object.keys(data.categoryCounts) as ProductCategory[]).map((cat) => {
+              const count = data.categoryCounts[cat];
+              if (count === 0) return null;
+              const config = CATEGORY_CONFIG[cat];
+              return (
+                <View
+                  key={cat}
+                  style={[styles.categoryBadge, { backgroundColor: `${config.color}12` }]}
+                >
+                  <Text style={[styles.categoryBadgeText, { color: config.color }]}>
+                    {count} {config.label}
                   </Text>
                 </View>
-                {i < (data?.slowMovingProducts ?? []).length - 1 && (
-                  <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-                )}
-              </View>
-            ))
-          )}
-        </Card>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Action Required Section */}
+        {hasActionItems ? (
+          <>
+            {ACTION_CATEGORIES.map((cat) => {
+              const products = data!.classifiedProducts.filter((p) => p.category === cat);
+              if (products.length === 0) return null;
+              return (
+                <ProductCategorySection key={cat} category={cat} products={products} />
+              );
+            })}
+          </>
+        ) : (
+          data &&
+          data.totalActiveProducts > 0 && (
+            <Card
+              style={[
+                styles.allGoodCard,
+                { backgroundColor: colors.card, borderColor: '#05966920' },
+              ]}
+            >
+              <CheckCircle2 size={24} color="#059669" />
+              <Text style={[styles.allGoodTitle, { color: colors.text }]}>All stocked up!</Text>
+              <Text style={[styles.allGoodSub, { color: colors.subtext }]}>
+                No products require immediate attention
+              </Text>
+            </Card>
+          )
+        )}
+
+        {/* Info Categories */}
+        {INFO_CATEGORIES.map((cat) => {
+          const products = data?.classifiedProducts.filter((p) => p.category === cat) || [];
+          if (products.length === 0) return null;
+          return <ProductCategorySection key={cat} category={cat} products={products} />;
+        })}
+
+        {/* Highest Stock Value */}
+        {(data?.highestValueProducts ?? []).length > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
+              Highest Stock Value
+            </Text>
+            <Card
+              style={[
+                styles.listCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              {(data?.highestValueProducts ?? []).map((p, i) => (
+                <View key={p.id}>
+                  <View style={styles.rankRow}>
+                    <View
+                      style={[
+                        styles.rankBadge,
+                        { backgroundColor: i === 0 ? '#059669' : colors.muted },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.rankText,
+                          { color: i === 0 ? '#ffffff' : colors.subtext },
+                        ]}
+                      >
+                        #{i + 1}
+                      </Text>
+                    </View>
+                    <View style={styles.rankInfo}>
+                      <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <Text style={[styles.rankSub, { color: colors.subtext }]}>
+                        {p.currentStock} units @ ${p.price.toFixed(2)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.rankRevenue, { color: '#059669' }]}>
+                      ${p.value.toFixed(2)}
+                    </Text>
+                  </View>
+                  {i < (data?.highestValueProducts ?? []).length - 1 && (
+                    <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <InsightSettingsSheet
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+        currentSettings={{
+          hot_selling_min_units_per_day: settings.hot_selling_min_units_per_day,
+          slow_selling_max_units_per_day: settings.slow_selling_max_units_per_day,
+          reorder_warning_days: settings.reorder_warning_days,
+          overstock_days_threshold: settings.overstock_days_threshold,
+          default_low_stock_level: settings.default_low_stock_level,
+        }}
+        onApply={handleSettingsApply}
+        saving={savingSettings}
+      />
     </View>
   );
 }
@@ -440,6 +594,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -454,6 +614,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+  },
+  periodLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 4,
   },
   sectionLabel: {
     fontSize: 12,
@@ -525,6 +690,37 @@ const styles = StyleSheet.create({
   stockBarSegment: {
     height: 6,
   },
+  categoryBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 16,
+  },
+  categoryBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  allGoodCard: {
+    marginTop: 16,
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  allGoodTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  allGoodSub: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
   listCard: {
     padding: 12,
     borderWidth: 1,
@@ -564,10 +760,5 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 13,
-    paddingVertical: 20,
   },
 });
