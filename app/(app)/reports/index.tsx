@@ -25,7 +25,7 @@ import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const screenWidth = Dimensions.get('window').width;
@@ -179,12 +179,12 @@ export default function ReportsScreen() {
     setChartsLoading(true);
     try {
       const { startDate, endDate } = getDateRange();
-      const formattedStartDate = startDate;
-      const formattedEndDate = endDate;
+      const startDateIso = startDate.toISOString();
+      const endDateIso = endDate.toISOString();
       const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
 
-      const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
-      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, formattedStartDate, formattedEndDate);
+      const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, startDateIso, endDateIso);
+      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, startDateIso, endDateIso);
       const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
       const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
 
@@ -195,38 +195,40 @@ export default function ReportsScreen() {
         { name: `${EXPORT_FILE_PREFIX}_Products.csv`, content: productsCsv },
       ];
 
+      const sectionSeparator = '\n\n\n';
+      const combinedContent = filesToExport
+        .map(file => {
+          const sectionTitle = file.name.replace('.csv', '').replace(/_/g, ' ');
+          return `"### ${sectionTitle} ###"\n\n${file.content}`;
+        })
+        .join(sectionSeparator);
+
+      const combinedFileName = `${EXPORT_FILE_PREFIX}_All_${dateRangeLabel}.csv`;
+
       if (Platform.OS === 'web') {
-        // For web, trigger individual downloads
-        filesToExport.forEach(file => {
-          const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = file.name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        });
-        Alert.alert('Success', 'Reports downloaded successfully. Check your downloads folder.');
+        const blob = new Blob([combinedContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = combinedFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'All reports downloaded. Check your downloads folder.');
       } else {
-        // For mobile, share each file individually
-        for (const file of filesToExport) {
-          const fileUri = `${FileSystem.documentDirectory}${file.name}`;
-          await FileSystem.writeAsStringAsync(fileUri, file.content, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
-          
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(fileUri, {
-              mimeType: 'text/csv',
-              dialogTitle: `Export ${file.name}`,
-              UTI: 'public.comma-separated-values-text'
-            });
-          } else {
-            Alert.alert('Error', 'Sharing is not available on this device');
-            break; // Stop if sharing is not available
-          }
+        const fileUri = `${FileSystem.documentDirectory}${combinedFileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, combinedContent, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Export All Reports',
+            UTI: 'public.comma-separated-values-text'
+          });
+        } else {
+          Alert.alert('Error', 'Sharing is not available on this device');
         }
-        Alert.alert('Success', 'Reports prepared for sharing.');
       }
     } catch (error) {
       console.error('Error downloading all reports:', error);
@@ -258,11 +260,10 @@ export default function ReportsScreen() {
 
   const handleDateFilterChange = (filter: 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
     setDateRange(filter);
-    
+    setShowDateRangeModal(false);
+
     if (filter === 'custom') {
-      setShowCustomDateRangePicker(true);
-    } else {
-      setShowDateRangeModal(false);
+      setTimeout(() => setShowCustomDateRangePicker(true), 300);
     }
   };
 
@@ -1148,30 +1149,29 @@ export default function ReportsScreen() {
       {/* Custom Date Range Picker Modal */}
       <Modal
         visible={showCustomDateRangePicker}
-        transparent={true}
-        animationType="fade"
+        transparent={false}
+        animationType="slide"
         onRequestClose={() => setShowCustomDateRangePicker(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCustomDateRangePicker(false)}
-        >
-          <Card 
-            style={styles.modalContent}
-          >
-            <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+        <View style={[styles.datePickerScreen, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+          <View style={[styles.datePickerHeader, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+            <TouchableOpacity onPress={() => setShowCustomDateRangePicker(false)} style={styles.datePickerBack}>
+              <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+            </TouchableOpacity>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('reports.customRange')}
             </Text>
-            
-            {showCustomDateRangePicker && <DateRangePicker
+            <View style={styles.datePickerHeaderRight} />
+          </View>
+          <ScrollView contentContainerStyle={styles.datePickerContent} showsVerticalScrollIndicator={false}>
+            <DateRangePicker
               startDate={customStartDate}
               endDate={customEndDate}
               onConfirm={handleDateRangeConfirm}
               onCancel={() => setShowCustomDateRangePicker(false)}
-            />}
-          </Card>
-        </TouchableOpacity>
+            />
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -1423,6 +1423,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 12,
+  },
+  datePickerScreen: {
+    flex: 1,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  datePickerBack: {
+    padding: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  datePickerHeaderRight: {
+    width: 40,
+  },
+  datePickerContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   // Keep this for backward compatibility but it's not used anymore
   dateRangeSelector: {

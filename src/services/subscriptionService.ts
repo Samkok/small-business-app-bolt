@@ -2,61 +2,10 @@ import { supabase } from '@/src/config/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { Platform, Alert } from 'react-native';
 import { productIdMapper } from '@/src/utils/productIdMapper';
+import { isNetworkError, retryWithBackoff } from '@/src/lib/network';
 
 export const FREE_TIER_LIMIT = 50;
 const CACHE_TTL_MS = 2 * 60 * 1000;
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000;
-
-function isNetworkError(error: any): boolean {
-  if (!error) return false;
-
-  const errorMessage = error.message?.toLowerCase() || '';
-  const errorCode = error.code?.toLowerCase() || '';
-
-  const networkIndicators = [
-    'network',
-    'fetch failed',
-    'failed to fetch',
-    'timeout',
-    'connection',
-    'offline',
-    'no internet',
-    'econnrefused',
-    'enotfound',
-    'etimedout',
-  ];
-
-  return networkIndicators.some(indicator =>
-    errorMessage.includes(indicator) || errorCode.includes(indicator)
-  );
-}
-
-async function retryWithBackoff<T>(
-  operation: () => Promise<T>,
-  context: string,
-  retries = MAX_RETRIES
-): Promise<T> {
-  let lastError: any;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-
-      if (!isNetworkError(error) || attempt === retries - 1) {
-        throw error;
-      }
-
-      const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-      console.log(`[SubscriptionService] Retry ${attempt + 1}/${retries} for ${context} after ${delay}ms`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-}
 
 function showNetworkErrorAlert(context: string) {
   Alert.alert(

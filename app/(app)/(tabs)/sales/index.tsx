@@ -30,7 +30,8 @@ import { SaleCard } from '@/src/components/sales/SaleCard';
 import VoidSaleModal from '@/src/components/sales/VoidSaleModal';
 import { ActiveCartCard } from '@/src/components/sales/ActiveCartCard';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap, RefreshCw } from 'lucide-react-native';
+import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, Download, ChevronDown, ChevronUp, X, Zap, RefreshCw, ArrowLeft, Package } from 'lucide-react-native';
+import { format } from 'date-fns';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -603,17 +604,15 @@ export default function SalesScreen() {
   const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
     setDateFilter(filter);
     setCurrentPage(0);
-    
+    setShowDateFilterTypeModal(false);
+
     if (filter === 'custom') {
-      setShowDateFilterTypeModal(false);
-      setShowCustomDateRangePicker(true);
+      setTimeout(() => setShowCustomDateRangePicker(true), 300);
     } else {
-      // Calculate and set the dates for non-custom filters
       const { start, end, text } = calculateDatesForFilter(filter);
       setStartDate(start);
       setEndDate(end);
       setDateRangeText(text);
-      setShowDateFilterTypeModal(false);
     }
   }, [calculateDatesForFilter]);
 
@@ -787,44 +786,115 @@ export default function SalesScreen() {
   const renderCustomDateRangePicker = useCallback(() => (
     <Modal
       visible={showCustomDateRangePicker}
-      transparent={true}
-      animationType="fade"
+      transparent={false}
+      animationType="slide"
       onRequestClose={() => setShowCustomDateRangePicker(false)}
     >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowCustomDateRangePicker(false)}
-      >
-        <View 
-          style={[
-            styles.dateFilterModal,
-            { backgroundColor: isDark ? '#374151' : '#ffffff' }
-          ]}
-          onStartShouldSetResponder={() => true}
-        >
-          <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+      <View style={[styles.datePickerScreen, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <View style={[styles.datePickerHeader, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+          <TouchableOpacity onPress={() => setShowCustomDateRangePicker(false)} style={styles.datePickerBack}>
+            <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+          <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {t('sales.selectCustomDateRange')}
           </Text>
-          
+          <View style={styles.datePickerHeaderRight} />
+        </View>
+        <ScrollView contentContainerStyle={styles.datePickerContent} showsVerticalScrollIndicator={false}>
           <DateRangePicker
             startDate={startDate}
             endDate={endDate}
             onConfirm={handleDateRangeConfirm}
             onCancel={() => setShowCustomDateRangePicker(false)}
           />
-        </View>
-      </TouchableOpacity>
+        </ScrollView>
+      </View>
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
-  const renderSaleItem = useCallback(({ item }: { item: any }) => (
-    <SaleCard
-      sale={item}
-      onVoid={handleVoidSale}
-      showCreator={true}
-    />
-  ), [handleVoidSale]);
+  type SaleFlatItem =
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number }
+    | { type: 'sale'; item: any };
+
+  const buildGroupedSalesList = useCallback((salesData: any[]): SaleFlatItem[] => {
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number }> = {};
+
+    salesData.forEach((sale) => {
+      const dateKey = format(new Date(sale.sale_date), 'yyyy-MM-dd');
+      if (!groups[dateKey]) {
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0 };
+      }
+
+      const displayAmount = sale.status === 'voided'
+        ? 0
+        : sale.status === 'partially_returned'
+        ? sale.total_amount - (sale.sale_actions?.reduce((sum: number, a: any) =>
+            a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
+        : sale.total_amount;
+
+      const productCount =
+        sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
+        sale.carts?.cart_items?.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0) ||
+        0;
+
+      groups[dateKey].sales.push(sale);
+      groups[dateKey].totalOrders += 1;
+      groups[dateKey].totalProducts += productCount;
+      groups[dateKey].totalRevenue += displayAmount;
+    });
+
+    const result: SaleFlatItem[] = [];
+    Object.entries(groups)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .forEach(([date, data]) => {
+        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue });
+        data.sales.forEach(sale => result.push({ type: 'sale', item: sale }));
+      });
+
+    return result;
+  }, []);
+
+  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, totalRevenue: number) => (
+    <View style={[styles.saleDateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+      <View style={styles.saleDatePillRow}>
+        <View style={[styles.saleDatePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
+          <Calendar size={13} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <Text style={[styles.saleDatePillText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {format(new Date(date + 'T00:00:00'), 'EEEE, MMM dd, yyyy')}
+          </Text>
+        </View>
+      </View>
+      <View style={[styles.saleDateSummary, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
+        <View style={styles.saleDateSummaryItem}>
+          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalOrders}</Text>
+          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Orders</Text>
+        </View>
+        <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.saleDateSummaryItem}>
+          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalProducts}</Text>
+          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
+        </View>
+        <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.saleDateSummaryItem}>
+          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+        </View>
+      </View>
+    </View>
+  ), [isDark]);
+
+  const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
+    if (item.type === 'header') {
+      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue);
+    }
+    return (
+      <SaleCard
+        sale={item.item}
+        onVoid={handleVoidSale}
+        showCreator={true}
+      />
+    );
+  }, [handleVoidSale, renderSaleDateHeader]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -1241,9 +1311,9 @@ export default function SalesScreen() {
             ) : null}
 
             <FlatList
-              data={filteredSales}
+              data={buildGroupedSalesList(filteredSales)}
               renderItem={renderSaleItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => item.type === 'header' ? `header-${item.date}` : `sale-${item.item.id}`}
               style={styles.salesList}
               showsVerticalScrollIndicator={false}
               refreshControl={
@@ -1271,7 +1341,7 @@ export default function SalesScreen() {
                     </View>
                   );
                 }
-                
+
                 if (!hasMoreSales && filteredSales.length > 0 && !searchQuery.trim()) {
                   return (
                     <View style={styles.endOfList}>
@@ -1281,7 +1351,7 @@ export default function SalesScreen() {
                     </View>
                   );
                 }
-                
+
                 return null;
               }}
             />
@@ -1445,6 +1515,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  datePickerScreen: {
+    flex: 1,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  datePickerBack: {
+    padding: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  datePickerHeaderRight: {
+    width: 40,
+  },
+  datePickerContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   dateFilterModal: {
     width: '90%',
@@ -1704,5 +1803,51 @@ const styles = StyleSheet.create({
   },
   voidModalButton: {
     flex: 1,
+  },
+  saleDateHeader: {
+    paddingHorizontal: 0,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  saleDatePillRow: {
+    marginBottom: 6,
+  },
+  saleDatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 5,
+  },
+  saleDatePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  saleDateSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  saleDateSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  saleDateSummaryValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 1,
+  },
+  saleDateSummaryLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  saleDateSummarySep: {
+    width: 1,
+    height: 26,
   },
 });

@@ -249,7 +249,7 @@ export default function ProductSelectionScreen() {
           <Image
             source={{ uri: item.image_url }}
             style={styles.productImage}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         ) : (
           <View style={[styles.productImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
@@ -604,13 +604,13 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 100,
+    aspectRatio: 1,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
   },
   productImagePlaceholder: {
     width: '100%',
-    height: 100,
+    aspectRatio: 1,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
     alignItems: 'center',

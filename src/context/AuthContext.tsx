@@ -12,6 +12,7 @@ import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
 import { dataCleanupRegistry } from '../utils/dataCleanupRegistry';
+import { isNetworkError } from '../lib/network';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
@@ -1858,24 +1859,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Original loadProfile function (commented out)
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error && isNetworkError(error)) {
+        return { error: { ...error, isNetworkError: true } };
+      }
+      return { error };
+    } catch (err: any) {
+      if (isNetworkError(err)) {
+        return { error: { message: 'Network request failed. Please check your connection.', isNetworkError: true } };
+      }
+      return { error: err };
+    }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
 
-    if (error) return { error };
+      if (error) {
+        if (isNetworkError(error)) {
+          return { error: { ...error, isNetworkError: true } };
+        }
+        return { error };
+      }
 
-    if (data.user) {
-      try {
-        // Create user profile only
+      if (data.user) {
         const { error: profileError } = await supabase
           .from('user_profiles')
           .insert({
@@ -1889,13 +1904,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         return { error: null };
-      } catch (createError) {
-        console.error('Error in signup process:', createError);
-        return { error: createError };
       }
-    }
 
-    return { error: null };
+      return { error: null };
+    } catch (err: any) {
+      console.error('Error in signup process:', err);
+      if (isNetworkError(err)) {
+        return { error: { message: 'Network request failed. Please check your connection.', isNetworkError: true } };
+      }
+      return { error: err };
+    }
   }, []);
 
   const refreshUserBusinesses = useCallback(async (): Promise<Business[]> => {
