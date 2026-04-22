@@ -734,19 +734,23 @@ export default function InventoryScreen() {
         <View style={styles.tabContent}>
           <View style={styles.summaryCards}>
             <SkeletonCard style={styles.summaryCard}>
-              <View style={styles.summaryContent}>
-                <SkeletonLoader height={24} width={24} borderRadius={12} />
-                <View style={styles.summaryText}>
-                  <SkeletonLoader height={20} width="60%" style={{ marginBottom: 4 }} />
-                  <SkeletonLoader height={12} width="80%" />
-                </View>
-              </View>
+              <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={24} width="50%" style={{ marginBottom: 6 }} />
+              <SkeletonLoader height={12} width="70%" />
             </SkeletonCard>
             <SkeletonCard style={styles.summaryCard}>
+              <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={24} width="50%" style={{ marginBottom: 6 }} />
+              <SkeletonLoader height={12} width="70%" />
+            </SkeletonCard>
+          </View>
+          <View>
+            <SkeletonCard style={{ marginBottom: 16, padding: 12 }}>
               <View style={styles.summaryContent}>
-                <SkeletonLoader height={24} width={24} borderRadius={12} />
+                <SkeletonLoader height={16} width={16} borderRadius={8} />
                 <View style={styles.summaryText}>
-                  <SkeletonLoader height={20} width="60%" style={{ marginBottom: 4 }} />
+                  <SkeletonLoader height={14} width="60%" style={{ marginBottom: 4 }} />
+                  <SkeletonLoader height={12} width="80%"  />
                   <SkeletonLoader height={12} width="80%" />
                 </View>
               </View>
@@ -828,77 +832,70 @@ export default function InventoryScreen() {
         </View>
 
         {!showArchived && (
-          <View style={styles.summaryCards}>
-            <Card style={styles.summaryCard}>
-              <View style={styles.summaryContent}>
-                <Package size={24} color="#2563eb" />
-                <View style={styles.summaryText}>
-                  <View style={styles.summaryTopRow}>
-                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {totalProducts}
-                    </Text>
-                    <Animated.View style={{
-                      opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-                      transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.05] }) }],
-                      shadowColor: '#2563eb',
-                      shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.8] }) as any,
-                      shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 8] }) as any,
-                    }}>
-                      <TouchableOpacity
-                        style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}
-                        onPress={() => router.push('/inventory/product-insight')}
-                        activeOpacity={0.75}
-                      >
-                        <Sparkles size={14} color="#2563eb" />
-                        <Text style={styles.insightButtonText}>Insight</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  </View>
-                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Products
+          <>
+            <View style={styles.summaryCards}>
+              <Card style={styles.summaryCard}>
+                <View style={styles.summaryIconRow}>
+                  <Package size={20} color="#2563eb" />
+                  <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {totalProducts}
                   </Text>
                 </View>
-              </View>
-            </Card>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Total Products
+                </Text>
+                <Animated.View style={{
+                  marginTop: 8,
+                  opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                  transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] }) }],
+                }}>
+                  <TouchableOpacity
+                    style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}
+                    onPress={() => router.push('/inventory/product-insight')}
+                    activeOpacity={0.75}
+                  >
+                    <Sparkles size={13} color="#2563eb" />
+                    <Text style={styles.insightButtonText}>View Insight</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              </Card>
 
-            <TouchableOpacity onPress={handleLowStockPress}>
-              <Card style={styles.summaryCard}>
-                <View style={styles.summaryContent}>
-                  <AlertTriangle size={24} color="#ea580c" />
-                  <View style={styles.summaryText}>
-                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              <TouchableOpacity onPress={handleLowStockPress} style={styles.summaryCard}>
+                <Card style={styles.summaryCardInner}>
+                  <View style={styles.summaryIconRow}>
+                    <AlertTriangle size={20} color={lowStockCount > 0 ? '#ea580c' : (isDark ? '#9ca3af' : '#6b7280')} />
+                    <Text style={[styles.summaryValue, { color: lowStockCount > 0 ? '#ea580c' : (isDark ? '#f9fafb' : '#111827') }]}>
                       {lowStockCount}
                     </Text>
-                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('inventory.lowStock')}
-                    </Text>
+                    {lowStockCount > 0 && (
+                      <View style={styles.alertDot} />
+                    )}
                   </View>
-                </View>
-                {lowStockCount > 0 && (
-                  <View style={styles.alertIndicator}>
-                    <Text style={styles.alertText}>!</Text>
-                  </View>
-                )}
-              </Card>
-            </TouchableOpacity>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {t('inventory.lowStock')}
+                  </Text>
+                  <Text style={[styles.summaryAction, { color: '#ea580c' }]}>
+                    Tap to view →
+                  </Text>
+                </Card>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity onPress={() => router.push('/inventory/unit-groups')}>
-              <Card style={styles.summaryCard}>
-                <View style={styles.summaryContent}>
-                  <Layers size={24} color="#0d9488" />
-                  <View style={styles.summaryText}>
-                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      Units
-                    </Text>
-                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Box / Pack / Bottle
-                    </Text>
-                  </View>
-                </View>
-              </Card>
+            <TouchableOpacity
+              style={[styles.unitGroupsChip, { backgroundColor: isDark ? '#134e4a' : '#f0fdfa', borderColor: isDark ? '#0d9488' : '#99f6e4' }]}
+              onPress={() => router.push('/inventory/unit-groups')}
+              activeOpacity={0.7}
+            >
+              <Layers size={16} color="#0d9488" />
+              <Text style={[styles.unitGroupsChipText, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>
+                Unit Groups
+              </Text>
+              <Text style={[styles.unitGroupsChipSub, { color: isDark ? '#5eead4' : '#14b8a6' }]}>
+                Manage Box, Pack, Bottle &amp; more
+              </Text>
+              <Text style={[styles.unitGroupsChipArrow, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>›</Text>
             </TouchableOpacity>
-          </View>
+          </>
         )}
 
         {isSearching && (
@@ -1509,13 +1506,22 @@ const styles = StyleSheet.create({
   },
   summaryCards: {
     flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 10,
+    gap: 10,
   },
   summaryCard: {
     flex: 1,
-    padding: 16,
-    position: 'relative',
+    padding: 14,
+  },
+  summaryCardInner: {
+    flex: 1,
+    padding: 14,
+  },
+  summaryIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   summaryContent: {
     flexDirection: 'row',
@@ -1525,21 +1531,49 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
   },
   summaryLabel: {
     fontSize: 12,
+    marginBottom: 6,
   },
-  summaryTopRow: {
+  summaryAction: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  alertDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ea580c',
+  },
+  unitGroupsChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
     gap: 8,
-    marginBottom: 2,
+  },
+  unitGroupsChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  unitGroupsChipSub: {
+    flex: 1,
+    fontSize: 12,
+  },
+  unitGroupsChipArrow: {
+    fontSize: 18,
+    fontWeight: '300',
   },
   insightButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
