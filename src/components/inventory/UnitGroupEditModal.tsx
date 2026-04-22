@@ -170,38 +170,37 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
     setSaving(true);
     setFormError('');
     try {
-      // 1. Update group name if changed
-      if (groupName.trim() !== group.name) {
-        await unitService.updateUnitGroup(group.id, { name: groupName.trim() });
-      }
-
-      // 2. Delete units marked for deletion
+      const active = drafts.filter(d => !(d.kind === 'existing' && d.pendingDelete));
       const toDelete = drafts.filter(
         (d): d is ExistingUnitDraft => d.kind === 'existing' && d.pendingDelete,
       );
-      for (const d of toDelete) {
-        await unitService.deleteUnit(d.unit.id);
-      }
 
-      // Recalculate conversion factors for the active chain (largest → smallest).
-      // Active drafts in order, base is last.
-      const active = drafts.filter(d => !(d.kind === 'existing' && d.pendingDelete));
-
-      // Rebuild running factors from the bottom up.
-      // The base unit always has factor=1. Each unit above it multiplies its own conversion.
+      // Rebuild conversion factors from the bottom up (base unit = 1, each unit above multiplies).
       let runningFactor = 1;
       const factors: number[] = new Array(active.length);
       for (let i = active.length - 1; i >= 0; i--) {
         if (i === active.length - 1) {
-          factors[i] = 1; // base unit
+          factors[i] = 1;
         } else {
-          const conv = parseInt(active[i].conversion, 10);
-          runningFactor = runningFactor * conv;
+          runningFactor = runningFactor * parseInt(active[i].conversion, 10);
           factors[i] = runningFactor;
         }
       }
 
-      // 3. Update existing units
+      // Build all promises and fire them in parallel.
+      const ops: Promise<unknown>[] = [];
+
+      // Group rename
+      if (groupName.trim() !== group.name) {
+        ops.push(unitService.updateUnitGroup(group.id, { name: groupName.trim() }));
+      }
+
+      // Deletions
+      for (const d of toDelete) {
+        ops.push(unitService.deleteUnit(d.unit.id));
+      }
+
+      // Updates for changed existing units
       for (let i = 0; i < active.length; i++) {
         const d = active[i];
         if (d.kind !== 'existing') continue;
@@ -210,34 +209,42 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
         const changed =
           d.name.trim() !== d.unit.name ||
           newFactor !== d.unit.conversion_factor_to_base ||
-          newBarcode !== d.unit.barcode;
+          newBarcode !== d.unit.barcode ||
+          i + 1 !== d.unit.sort_order;
         if (changed) {
-          await unitService.updateUnit(d.unit.id, {
-            name: d.name.trim(),
-            conversion_factor_to_base: newFactor,
-            sort_order: i + 1,
-            barcode: newBarcode,
-          });
+          ops.push(
+            unitService.updateUnit(d.unit.id, {
+              name: d.name.trim(),
+              conversion_factor_to_base: newFactor,
+              sort_order: i + 1,
+              barcode: newBarcode,
+            }),
+          );
         }
       }
 
-      // 4. Create new units
-      const existingCount = initialUnits.filter(
+      // New unit inserts (sort_order continues after the surviving existing units)
+      const survivingExistingCount = initialUnits.filter(
         u => !toDelete.some(td => td.unit.id === u.id),
       ).length;
-      let newSortBase = existingCount + 1;
+      let newSortBase = survivingExistingCount + 1;
       for (let i = 0; i < active.length; i++) {
         const d = active[i];
         if (d.kind !== 'new') continue;
-        await unitService.createUnit({
-          unit_group_id: group.id,
-          name: d.name.trim(),
-          conversion_factor_to_base: factors[i],
-          sort_order: newSortBase++,
-          is_base_unit: false,
-          barcode: d.barcode.trim() || null,
-        });
+        const sortOrder = newSortBase++;
+        ops.push(
+          unitService.createUnit({
+            unit_group_id: group.id,
+            name: d.name.trim(),
+            conversion_factor_to_base: factors[i],
+            sort_order: sortOrder,
+            is_base_unit: false,
+            barcode: d.barcode.trim() || null,
+          }),
+        );
       }
+
+      await Promise.all(ops);
 
       onSaved();
       onClose();
