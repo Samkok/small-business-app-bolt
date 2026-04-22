@@ -53,6 +53,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
   const [unitBarcodes, setUnitBarcodes] = useState<Record<string, string>>({});
+  const [unitBarcodeErrors, setUnitBarcodeErrors] = useState<Record<string, string>>({});
   const [scanningUnitId, setScanningUnitId] = useState<string | null>(null);
   const [showCurrencyEditor, setShowCurrencyEditor] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
@@ -152,21 +153,39 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     setImageUrl('');
   };
 
-  const validateBarcode = (value: string) => {
-    if (!value.trim()) {
-      setBarcodeError('');
-      return true;
-    }
+  const validateBarcode = (value: string): boolean => {
     const cleaned = value.trim();
-    if (!/^\d+$/.test(cleaned)) {
-      setBarcodeError('Barcode must contain only digits');
+    if (!cleaned) {
+      setBarcodeError('Barcode is required');
       return false;
     }
-    if (![8, 12, 13, 14].includes(cleaned.length)) {
-      setBarcodeError('Barcode must be 8, 12, 13, or 14 digits');
+    if (!/^[0-9A-Za-z\-]+$/.test(cleaned)) {
+      setBarcodeError('Barcode may only contain letters, digits, and hyphens');
+      return false;
+    }
+    if (cleaned.length < 4 || cleaned.length > 50) {
+      setBarcodeError('Barcode must be between 4 and 50 characters');
       return false;
     }
     setBarcodeError('');
+    return true;
+  };
+
+  const validateUnitBarcode = (unitId: string, value: string): boolean => {
+    const cleaned = value.trim();
+    if (!cleaned) {
+      setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: 'Barcode is required' }));
+      return false;
+    }
+    if (!/^[0-9A-Za-z\-]+$/.test(cleaned)) {
+      setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: 'Barcode may only contain letters, digits, and hyphens' }));
+      return false;
+    }
+    if (cleaned.length < 4 || cleaned.length > 50) {
+      setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: 'Barcode must be between 4 and 50 characters' }));
+      return false;
+    }
+    setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: '' }));
     return true;
   };
 
@@ -196,9 +215,32 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       return;
     }
 
-    if (barcodeError) {
-      Alert.alert('Error', 'Please fix the barcode before saving');
+    if (!validateBarcode(barcode)) {
+      Alert.alert('Error', barcodeError || 'Product barcode is required');
       return;
+    }
+
+    // Each unit must have a barcode when a unit group is assigned
+    if (selectedUnitGroupId && units.length > 0) {
+      let unitBarcodesValid = true;
+      for (const unit of units) {
+        if (!validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) {
+          unitBarcodesValid = false;
+        }
+      }
+      if (!unitBarcodesValid) {
+        Alert.alert('Error', 'All unit barcodes are required');
+        return;
+      }
+      const barcodeList = units.map(u => (unitBarcodes[u.id] || '').trim().toUpperCase());
+      if (new Set(barcodeList).size !== barcodeList.length) {
+        Alert.alert('Error', 'Each unit must have a unique barcode');
+        return;
+      }
+      if (barcodeList.includes(barcode.trim().toUpperCase())) {
+        Alert.alert('Error', 'Unit barcodes must differ from the product barcode');
+        return;
+      }
     }
 
     const priceValue = parseFloat(price);
@@ -242,7 +284,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         name: name.trim(),
         price: priceValue,
         description: description.trim() || undefined,
-        barcode: barcode.trim() || undefined,
+        barcode: barcode.trim(),
         current_stock: stockValue,
         min_stock_level: minStockValue,
         image_url: finalImageUrl || undefined,
@@ -348,6 +390,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 onChangeText={handleBarcodeChange}
                 onBlur={() => validateBarcode(barcode)}
                 placeholder="Scan or enter barcode"
+                required
               />
               {barcodeError ? (
                 <Text style={styles.barcodeErrorText}>{barcodeError}</Text>
@@ -503,11 +546,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                       </View>
                       <View style={styles.unitCardField}>
                         <Input
-                          label="Barcode (optional)"
+                          label="Barcode"
                           value={unitBarcodes[unit.id] || ''}
-                          onChangeText={(val: string) => setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }))}
+                          onChangeText={(val: string) => {
+                            setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }));
+                            validateUnitBarcode(unit.id, val);
+                          }}
+                          onBlur={() => validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')}
                           placeholder="Scan or enter"
+                          required
                         />
+                        {unitBarcodeErrors[unit.id] ? (
+                          <Text style={styles.barcodeErrorText}>{unitBarcodeErrors[unit.id]}</Text>
+                        ) : null}
                         <TouchableOpacity
                           style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }]}
                           onPress={() => {
