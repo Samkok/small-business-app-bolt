@@ -52,6 +52,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
+  const [unitBarcodes, setUnitBarcodes] = useState<Record<string, string>>({});
+  const [scanningUnitId, setScanningUnitId] = useState<string | null>(null);
   const [showCurrencyEditor, setShowCurrencyEditor] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
   const [showUnitGroupEditor, setShowUnitGroupEditor] = useState(false);
@@ -94,10 +96,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   // Load units when selectedUnitGroupId changes
   useEffect(() => {
     if (selectedUnitGroupId) {
-      unitService.getUnits(selectedUnitGroupId).then(setUnits).catch(console.error);
+      unitService.getUnits(selectedUnitGroupId).then((loaded) => {
+        setUnits(loaded);
+        // Pre-fill any existing barcodes from the units themselves
+        const barcodeMap: Record<string, string> = {};
+        loaded.forEach(u => {
+          if (u.barcode) barcodeMap[u.id] = u.barcode;
+        });
+        setUnitBarcodes(barcodeMap);
+      }).catch(console.error);
     } else {
       setUnits([]);
       setUnitPrices({});
+      setUnitBarcodes({});
     }
   }, [selectedUnitGroupId]);
 
@@ -168,9 +179,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   };
 
   const handleBarcodeScanned = (scannedBarcode: string) => {
-    setBarcode(scannedBarcode);
-    setBarcodeError('');
-    validateBarcode(scannedBarcode);
+    if (scanningUnitId) {
+      setUnitBarcodes(prev => ({ ...prev, [scanningUnitId]: scannedBarcode }));
+      setScanningUnitId(null);
+    } else {
+      setBarcode(scannedBarcode);
+      setBarcodeError('');
+      validateBarcode(scannedBarcode);
+    }
     setShowBarcodeScanner(false);
   };
 
@@ -248,6 +264,20 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           .filter(([_, val]) => val && parseFloat(val) > 0)
           .map(([unitId, val]) => ({ unit_id: unitId, price: parseFloat(val) }));
         await unitService.setProductUnitPrices(savedProduct.id, pricesToSave);
+      }
+
+      // Save barcodes onto each unit
+      if (selectedUnitGroupId && units.length > 0) {
+        await Promise.all(
+          units.map(unit => {
+            const newBarcode = (unitBarcodes[unit.id] || '').trim() || null;
+            const oldBarcode = unit.barcode || null;
+            if (newBarcode !== oldBarcode) {
+              return unitService.updateUnit(unit.id, { barcode: newBarcode });
+            }
+            return Promise.resolve();
+          })
+        );
       }
 
       Alert.alert('Success', `Product ${product ? 'updated' : 'created'} successfully`);
@@ -448,27 +478,47 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             {selectedUnitGroupId && units.length > 0 && (
               <View style={styles.unitPricesSection}>
-                <Text style={[styles.unitPricesTitle, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                  Price per Unit
-                </Text>
                 {units.map((unit) => (
-                  <View key={unit.id} style={styles.unitPriceRow}>
-                    <View style={styles.unitPriceLabelContainer}>
+                  <View
+                    key={unit.id}
+                    style={[styles.unitCard, { backgroundColor: isDark ? '#1f2937' : '#f8fafc', borderColor: isDark ? '#374151' : '#e2e8f0' }]}
+                  >
+                    <View style={styles.unitCardHeader}>
                       <Text style={[styles.unitPriceName, { color: isDark ? '#f9fafb' : '#111827' }]}>
                         {unit.name}
                       </Text>
                       <Text style={[styles.unitPriceDetail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                         {unit.is_base_unit ? 'Base unit' : `1 ${unit.name} = ${unit.conversion_factor_to_base} base`}
-                        {unit.barcode ? ` - Barcode: ${unit.barcode}` : ''}
                       </Text>
                     </View>
-                    <View style={styles.unitPriceInputContainer}>
-                      <Input
-                        value={unitPrices[unit.id] || ''}
-                        onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: val }))}
-                        placeholder="0.00"
-                        style={styles.unitPriceInput}
-                      />
+                    <View style={styles.unitCardFields}>
+                      <View style={styles.unitCardField}>
+                        <Input
+                          label="Price"
+                          value={unitPrices[unit.id] || ''}
+                          onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: val }))}
+                          placeholder="0.00"
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={styles.unitCardField}>
+                        <Input
+                          label="Barcode (optional)"
+                          value={unitBarcodes[unit.id] || ''}
+                          onChangeText={(val: string) => setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }))}
+                          placeholder="Scan or enter"
+                        />
+                        <TouchableOpacity
+                          style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }]}
+                          onPress={() => {
+                            setScanningUnitId(unit.id);
+                            setShowBarcodeScanner(true);
+                          }}
+                        >
+                          <Barcode size={18} color="#2563eb" />
+                          <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>Scan</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 ))}
@@ -781,33 +831,30 @@ const styles = StyleSheet.create({
   },
   unitPricesSection: {
     marginTop: 12,
-  },
-  unitPricesTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  unitPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
     gap: 12,
   },
-  unitPriceLabelContainer: {
-    flex: 1,
+  unitCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 4,
+  },
+  unitCardHeader: {
+    marginBottom: 8,
   },
   unitPriceName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   unitPriceDetail: {
     fontSize: 12,
     marginTop: 2,
   },
-  unitPriceInputContainer: {
-    width: 120,
+  unitCardFields: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  unitPriceInput: {
-    textAlign: 'right',
+  unitCardField: {
+    flex: 1,
   },
 });

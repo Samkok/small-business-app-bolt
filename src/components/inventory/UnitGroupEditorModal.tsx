@@ -9,14 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Plus, X, Barcode } from 'lucide-react-native';
+import { Plus, X } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { unitService, UnitGroup } from '@/src/services/units';
-import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
-type UnitDraft = { name: string; conversion: string; barcode: string };
+type UnitDraft = { name: string; conversion: string };
 
 interface UnitGroupEditorModalProps {
   visible: boolean;
@@ -36,21 +35,20 @@ export function UnitGroupEditorModal({
   const [draftUnits, setDraftUnits] = useState<UnitDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [scanTarget, setScanTarget] = useState<number | null>(null);
 
   useEffect(() => {
     if (visible) {
       setGroupName('');
       setDraftUnits([
-        { name: 'Box', conversion: '24', barcode: '' },
-        { name: 'Bottle', conversion: '1', barcode: '' },
+        { name: 'Box', conversion: '24' },
+        { name: 'Bottle', conversion: '1' },
       ]);
       setFormError('');
     }
   }, [visible]);
 
   const addDraftUnit = () => {
-    setDraftUnits(prev => [...prev, { name: '', conversion: '1', barcode: '' }]);
+    setDraftUnits(prev => [...prev, { name: '', conversion: '1' }]);
   };
 
   const removeDraftUnit = (idx: number) => {
@@ -75,7 +73,6 @@ export function UnitGroupEditorModal({
     const cleaned = draftUnits.map((u, idx) => ({
       name: u.name.trim(),
       conversion: idx === draftUnits.length - 1 ? 1 : parseInt(u.conversion, 10),
-      barcode: u.barcode.trim(),
       idx,
     }));
 
@@ -93,7 +90,7 @@ export function UnitGroupEditorModal({
     }
 
     let runningFactor = 1;
-    const unitsForApi: Array<{ name: string; conversion_factor_to_base: number; barcode?: string | null }> = [];
+    const unitsForApi: Array<{ name: string; conversion_factor_to_base: number }> = [];
     for (let i = cleaned.length - 1; i >= 0; i--) {
       const u = cleaned[i];
       if (i === cleaned.length - 1) {
@@ -104,7 +101,6 @@ export function UnitGroupEditorModal({
       unitsForApi.unshift({
         name: u.name,
         conversion_factor_to_base: runningFactor,
-        barcode: u.barcode || null,
       });
     }
 
@@ -186,23 +182,6 @@ export function UnitGroupEditorModal({
                       keyboardType="number-pad"
                     />
                   )}
-                  <View style={styles.barcodeRow}>
-                    <View style={{ flex: 1 }}>
-                      <Input
-                        label="Barcode (optional)"
-                        value={u.barcode}
-                        onChangeText={v => updateDraftUnit(idx, { barcode: v })}
-                        placeholder="Scan or enter"
-                      />
-                    </View>
-                    <TouchableOpacity
-                      style={styles.scanBtn}
-                      onPress={() => setScanTarget(idx)}
-                      accessibilityLabel="Scan barcode"
-                    >
-                      <Barcode size={20} color="#2563eb" />
-                    </TouchableOpacity>
-                  </View>
                 </View>
               );
             })}
@@ -221,20 +200,6 @@ export function UnitGroupEditorModal({
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      <Modal
-        visible={scanTarget !== null}
-        animationType="slide"
-        onRequestClose={() => setScanTarget(null)}
-      >
-        <BarcodeScanner
-          onBarcodeScan={code => {
-            if (scanTarget !== null) updateDraftUnit(scanTarget, { barcode: code });
-            setScanTarget(null);
-          }}
-          onClose={() => setScanTarget(null)}
-        />
-      </Modal>
     </Modal>
   );
 }
@@ -261,8 +226,6 @@ const styles = StyleSheet.create({
   },
   draftTitle: { fontSize: 14, fontWeight: '600' },
   iconButton: { padding: 8, borderRadius: 8 },
-  barcodeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  scanBtn: { padding: 12, borderRadius: 8, backgroundColor: '#eff6ff', marginBottom: 4 },
   addUnitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
