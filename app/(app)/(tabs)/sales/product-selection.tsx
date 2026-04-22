@@ -281,7 +281,7 @@ export default function ProductSelectionScreen() {
     if (unitId) {
       const units = unitGroupsMap[productId];
       const unit = units?.find(u => u.id === unitId);
-      return unit?.abbreviation || unit?.name || '';
+      return unit?.name || '';
     }
     return '';
   }, [selectedUnits, unitGroupsMap]);
@@ -568,7 +568,7 @@ export default function ProductSelectionScreen() {
                 >
                   <View>
                     <Text style={[styles.unitOptionName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {unit.name} ({unit.abbreviation})
+                      {unit.name}
                     </Text>
                     <Text style={[styles.unitOptionDetail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                       {unit.is_base_unit ? 'Base unit' : `= ${unit.conversion_factor_to_base} base units`}

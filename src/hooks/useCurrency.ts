@@ -38,10 +38,24 @@ export function useCurrency(businessId?: string) {
 
   const formatPrice = useCallback((amount: number, currencyId?: string): string => {
     const symbol = getSymbol(currencyId);
-    const c = currencyId ? currencies.find(cur => cur.id === currencyId) : defaultCurrency;
-    const decimals = c?.decimal_places ?? 2;
-    return formatCurrency(amount, symbol, decimals);
-  }, [currencies, defaultCurrency, getSymbol]);
+    return formatCurrency(amount, symbol, 2);
+  }, [getSymbol]);
+
+  const convertToDefault = useCallback((amount: number, fromCurrencyId?: string): number => {
+    if (!fromCurrencyId || !defaultCurrency) return amount;
+    const from = currencies.find(c => c.id === fromCurrencyId);
+    if (!from || from.id === defaultCurrency.id) return amount;
+    const usd = amount / Number(from.exchange_rate_to_usd || 1);
+    return usd * Number(defaultCurrency.exchange_rate_to_usd || 1);
+  }, [currencies, defaultCurrency]);
+
+  const convertBetween = useCallback((amount: number, fromCurrencyId?: string, toCurrencyId?: string): number => {
+    const from = fromCurrencyId ? currencies.find(c => c.id === fromCurrencyId) : defaultCurrency;
+    const to = toCurrencyId ? currencies.find(c => c.id === toCurrencyId) : defaultCurrency;
+    if (!from || !to || from.id === to.id) return amount;
+    const usd = amount / Number(from.exchange_rate_to_usd || 1);
+    return usd * Number(to.exchange_rate_to_usd || 1);
+  }, [currencies, defaultCurrency]);
 
   return {
     currencies,
@@ -49,6 +63,8 @@ export function useCurrency(businessId?: string) {
     loading,
     formatPrice,
     getSymbol,
+    convertToDefault,
+    convertBetween,
     refreshCurrencies: loadCurrencies,
   };
 }

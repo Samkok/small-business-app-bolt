@@ -146,7 +146,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const handleBarcodeChange = (value: string) => {
     setBarcode(value);
-    if (barcodeError) {
+    setBarcodeError('');
+    if (value) {
       validateBarcode(value);
     }
   };
@@ -236,9 +237,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
       Alert.alert('Success', `Product ${product ? 'updated' : 'created'} successfully`);
       onSave(savedProduct);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving product:', error);
-      Alert.alert('Error', `Failed to ${product ? 'update' : 'create'} product`);
+      const isDuplicateBarcode =
+        error?.code === '23505' ||
+        (typeof error?.message === 'string' &&
+          (error.message.toLowerCase().includes('duplicate') ||
+            error.message.toLowerCase().includes('unique')));
+      if (isDuplicateBarcode) {
+        setBarcodeError('This barcode is already used by another product');
+        Alert.alert('Duplicate Barcode', 'Another product in this business already uses this barcode.');
+      } else {
+        Alert.alert('Error', `Failed to ${product ? 'update' : 'create'} product`);
+      }
     } finally {
       setLoading(false);
     }
@@ -398,7 +409,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                         {unit.name}
                       </Text>
                       <Text style={[styles.unitPriceDetail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                        {unit.abbreviation}{unit.is_base_unit ? ' (base)' : ` = ${unit.conversion_factor_to_base}x base`}
+                        {unit.is_base_unit ? 'Base unit' : `1 ${unit.name} = ${unit.conversion_factor_to_base} base`}
+                        {unit.barcode ? ` - Barcode: ${unit.barcode}` : ''}
                       </Text>
                     </View>
                     <View style={styles.unitPriceInputContainer}>
@@ -545,10 +557,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   }}
                 >
                   <Text style={[styles.pickerOptionText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {group.name} ({group.base_unit_name})
+                    {group.name}
                   </Text>
                 </TouchableOpacity>
               ))}
+              <Text style={[styles.pickerHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Manage unit groups in Settings - Units
+              </Text>
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -674,6 +689,12 @@ const styles = StyleSheet.create({
   },
   pickerOptionText: {
     fontSize: 15,
+  },
+  pickerHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontStyle: 'italic',
   },
   unitPricesSection: {
     marginTop: 12,

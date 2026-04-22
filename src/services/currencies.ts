@@ -6,9 +6,8 @@ export interface Currency {
   code: string;
   name: string;
   symbol: string;
-  exchange_rate: number;
+  exchange_rate_to_usd: number;
   is_default: boolean;
-  decimal_places: number;
   created_at: string;
   updated_at: string;
 }
@@ -49,20 +48,42 @@ export const currencyService = {
     return data as Currency | null;
   },
 
-  async createCurrency(currency: Omit<Currency, 'id' | 'created_at' | 'updated_at'>): Promise<Currency> {
+  async createCurrency(input: {
+    business_id: string;
+    code: string;
+    name: string;
+    symbol: string;
+    exchange_rate_to_usd: number;
+    is_default?: boolean;
+  }): Promise<Currency> {
     const { data, error } = await supabase
       .from('currencies')
-      .insert(currency)
+      .insert({
+        business_id: input.business_id,
+        code: input.code.toUpperCase().trim(),
+        name: input.name.trim(),
+        symbol: input.symbol.trim(),
+        exchange_rate_to_usd: input.exchange_rate_to_usd,
+        is_default: input.is_default ?? false,
+      })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      if ((error as any).code === '23505') {
+        throw new Error('A currency with this code already exists for this business');
+      }
+      throw error;
+    }
     return data as Currency;
   },
 
-  async updateCurrency(id: string, updates: Partial<Currency>): Promise<Currency> {
+  async updateCurrency(
+    id: string,
+    updates: Partial<Pick<Currency, 'name' | 'symbol' | 'exchange_rate_to_usd'>>,
+  ): Promise<Currency> {
     const { data, error } = await supabase
       .from('currencies')
-      .update(updates)
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -71,10 +92,12 @@ export const currencyService = {
   },
 
   async deleteCurrency(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('currencies')
-      .delete()
-      .eq('id', id);
+    const existing = await this.getCurrency(id);
+    if (!existing) return;
+    if (existing.is_default) {
+      throw new Error('Cannot delete the default currency');
+    }
+    const { error } = await supabase.from('currencies').delete().eq('id', id);
     if (error) throw error;
   },
 
@@ -90,5 +113,12 @@ export const currencyService = {
       .update({ is_default: true })
       .eq('id', currencyId);
     if (setError) throw setError;
+  },
+
+  convertToDefault(amount: number, fromRateToUsd: number, defaultRateToUsd: number): number {
+    if (!fromRateToUsd || !defaultRateToUsd) return amount;
+    if (fromRateToUsd === defaultRateToUsd) return amount;
+    const usdAmount = amount / fromRateToUsd;
+    return usdAmount * defaultRateToUsd;
   },
 };

@@ -30,7 +30,9 @@ import {
   Trash2,
   TriangleAlert as AlertTriangle,
   Crown,
-  KeyRound
+  KeyRound,
+  Coins,
+  Layers
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
@@ -259,6 +261,20 @@ export default function SettingsScreen() {
           title={t('settings.teamMembers')}
           subtitle={t('settings.teamSubtitle')}
           onPress={() => router.push('/settings/team')}
+        />
+
+        <SettingItem
+          icon={<Coins size={20} color="#0891b2" />}
+          title="Currencies"
+          subtitle="Manage currencies and exchange rates"
+          onPress={() => router.push('/settings/currencies')}
+        />
+
+        <SettingItem
+          icon={<Layers size={20} color="#0d9488" />}
+          title="Unit Groups"
+          subtitle="Define product units like Box, Pack, Bottle"
+          onPress={() => router.push('/settings/unit-groups')}
         />
 
         <SettingItem

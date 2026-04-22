@@ -11,6 +11,8 @@ export default function SettingsLayout() {
       <Stack.Screen name="terms" />
       <Stack.Screen name="privacy" />
       <Stack.Screen name="change-password" />
+      <Stack.Screen name="currencies" />
+      <Stack.Screen name="unit-groups" />
     </Stack>
   );
 }

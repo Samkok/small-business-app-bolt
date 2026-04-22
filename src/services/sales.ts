@@ -37,7 +37,53 @@ export const salesService = {
     const cartSummary = await cartService.getCartSummary(saleData.cart_id);
     const cart = await cartService.getCart(saleData.cart_id);
 
-    // Create sale record with discount information
+    // Pre-validate stock for every cart item in base units before creating the sale
+    const deductions: Array<{ productId: string; baseQuantity: number; newStock: number }> = [];
+    for (const item of cart.cart_items) {
+      const product = await productService.getProduct(item.product_id);
+      let baseQuantity = item.quantity;
+      if (item.unit_id) {
+        const conversionFactor = await unitService.getConversionFactor(item.unit_id);
+        baseQuantity = item.quantity * conversionFactor;
+      }
+      const currentStock = product.current_stock ?? 0;
+      if (baseQuantity > currentStock) {
+        throw new Error(
+          `INSUFFICIENT_STOCK:${product.name}:requested ${baseQuantity} base units, available ${currentStock}`,
+        );
+      }
+      deductions.push({
+        productId: item.product_id,
+        baseQuantity,
+        newStock: currentStock - baseQuantity,
+      });
+    }
+
+    // Snapshot currency and exchange rate at the moment of sale so reports stay accurate
+    // even if the business later edits exchange rates.
+    let currencyIdForSale: string | null = (saleData as any).currency_id ?? null;
+    let exchangeRateAtSale: number = 1;
+    if (!currencyIdForSale) {
+      const { data: defaultCurrency } = await supabase
+        .from('currencies')
+        .select('id, exchange_rate_to_usd')
+        .eq('business_id', saleData.business_id)
+        .eq('is_default', true)
+        .maybeSingle();
+      if (defaultCurrency) {
+        currencyIdForSale = defaultCurrency.id;
+        exchangeRateAtSale = Number(defaultCurrency.exchange_rate_to_usd ?? 1);
+      }
+    } else {
+      const { data: cur } = await supabase
+        .from('currencies')
+        .select('exchange_rate_to_usd')
+        .eq('id', currencyIdForSale)
+        .maybeSingle();
+      exchangeRateAtSale = Number(cur?.exchange_rate_to_usd ?? 1);
+    }
+
+    // Create sale record with discount information and currency snapshot
     const { data: sale, error: saleError } = await supabase
       .from('sales')
       .insert({
@@ -46,7 +92,9 @@ export const salesService = {
         subtotal_before_discount: cartSummary.itemsOriginalTotal,
         sale_discount_type: cart.discount_type,
         sale_discount_value: cart.discount_value,
-        sale_discount_amount: cartSummary.cartDiscountAmount
+        sale_discount_amount: cartSummary.cartDiscountAmount,
+        currency_id: currencyIdForSale,
+        exchange_rate_at_sale: exchangeRateAtSale,
       })
       .select()
       .single();
@@ -56,16 +104,9 @@ export const salesService = {
     // Update cart status to completed
     await cartService.updateCart(saleData.cart_id, { status: 'completed' });
 
-    // Update product stock levels
-    for (const item of cart.cart_items) {
-      const product = await productService.getProduct(item.product_id);
-      let baseQuantity = item.quantity;
-      if (item.unit_id) {
-        const conversionFactor = await unitService.getConversionFactor(item.unit_id);
-        baseQuantity = item.quantity * conversionFactor;
-      }
-      const newStock = Math.max(0, product.current_stock - baseQuantity);
-      await productService.updateStock(item.product_id, newStock);
+    // Apply pre-validated stock deductions
+    for (const d of deductions) {
+      await productService.updateStock(d.productId, d.newStock);
     }
 
     return sale;
