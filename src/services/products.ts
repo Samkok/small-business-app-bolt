@@ -217,27 +217,21 @@ export const productService = {
     if (error && error.code !== 'PGRST116') throw error;
     if (data) return data;
 
-    // Fall back to unit barcodes: a scanned code may identify a specific unit (box/pack/bottle)
-    const { data: unitMatches, error: unitError } = await supabase
-      .from('units')
-      .select('unit_group_id, unit_groups!inner(business_id)')
-      .eq('barcode', barcode)
-      .eq('unit_groups.business_id', businessId)
-      .limit(1);
-
-    if (unitError) throw unitError;
-    if (!unitMatches || unitMatches.length === 0) return null;
-
-    const { data: product } = await supabase
-      .from('products')
-      .select('*')
+    // Fall back to per-product variant barcodes (product_unit_prices.barcode).
+    // A scanned code may identify a specific unit variant (e.g. Box vs Bottle) of a product.
+    const { data: variantMatches, error: variantError } = await supabase
+      .from('product_unit_prices')
+      .select('product_id, products(*)')
       .eq('business_id', businessId)
-      .eq('unit_group_id', unitMatches[0].unit_group_id)
-      .eq('is_archived', false)
+      .eq('barcode', barcode)
       .limit(1)
       .maybeSingle();
 
-    return product ?? null;
+    if (variantError && variantError.code !== 'PGRST116') throw variantError;
+    if (!variantMatches) return null;
+    const matchedProduct: any = (variantMatches as any).products;
+    if (!matchedProduct || matchedProduct.is_archived) return null;
+    return matchedProduct;
   },
 
   async getLowStockProducts(businessId: string) {

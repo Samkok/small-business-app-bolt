@@ -21,7 +21,7 @@ import { productService } from '@/src/services/products';
 import { storageService } from '@/src/services/storage';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
-import { unitService, UnitGroup, Unit, ProductUnitPrice } from '@/src/services/units';
+import { unitService, UnitGroup, Unit } from '@/src/services/units';
 import { Currency } from '@/src/services/currencies';
 import { CurrencyEditorModal } from '@/src/components/settings/CurrencyEditorModal';
 import { UnitGroupEditorModal } from '@/src/components/inventory/UnitGroupEditorModal';
@@ -52,8 +52,10 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
+  const [unitVariantNames, setUnitVariantNames] = useState<Record<string, string>>({});
   const [unitBarcodes, setUnitBarcodes] = useState<Record<string, string>>({});
   const [unitBarcodeErrors, setUnitBarcodeErrors] = useState<Record<string, string>>({});
+  const [unitNameErrors, setUnitNameErrors] = useState<Record<string, string>>({});
   const [scanningUnitId, setScanningUnitId] = useState<string | null>(null);
   const [showCurrencyEditor, setShowCurrencyEditor] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
@@ -62,6 +64,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { currencies, defaultCurrency, formatPrice, refreshCurrencies } = useCurrency(currentBusiness?.id);
+  const isMultiUnit = Boolean(selectedUnitGroupId) && units.length > 0;
 
   const reloadUnitGroups = async () => {
     if (!currentBusiness?.id) return;
@@ -97,33 +100,33 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   // Load units when selectedUnitGroupId changes
   useEffect(() => {
     if (selectedUnitGroupId) {
-      unitService.getUnits(selectedUnitGroupId).then((loaded) => {
-        setUnits(loaded);
-        // Pre-fill any existing barcodes from the units themselves
-        const barcodeMap: Record<string, string> = {};
-        loaded.forEach(u => {
-          if (u.barcode) barcodeMap[u.id] = u.barcode;
-        });
-        setUnitBarcodes(barcodeMap);
-      }).catch(console.error);
+      unitService.getUnits(selectedUnitGroupId).then(setUnits).catch(console.error);
     } else {
       setUnits([]);
       setUnitPrices({});
+      setUnitVariantNames({});
       setUnitBarcodes({});
+      setUnitBarcodeErrors({});
+      setUnitNameErrors({});
     }
   }, [selectedUnitGroupId]);
 
-  // Load product unit prices when product.id is available
+  // Load existing product-unit rows (name, barcode, price) when editing a product
   useEffect(() => {
-    if (product?.id) {
-      unitService.getProductUnitPrices(product.id).then((prices) => {
-        const priceMap: Record<string, string> = {};
-        prices.forEach((p) => {
-          priceMap[p.unit_id] = p.price.toString();
-        });
-        setUnitPrices(priceMap);
-      }).catch(console.error);
-    }
+    if (!product?.id) return;
+    unitService.getProductUnits(product.id).then((rows) => {
+      const priceMap: Record<string, string> = {};
+      const nameMap: Record<string, string> = {};
+      const barcodeMap: Record<string, string> = {};
+      rows.forEach((r) => {
+        if (r.price != null) priceMap[r.unit_id] = r.price.toString();
+        if (r.name) nameMap[r.unit_id] = r.name;
+        if (r.barcode) barcodeMap[r.unit_id] = r.barcode;
+      });
+      setUnitPrices(priceMap);
+      setUnitVariantNames(nameMap);
+      setUnitBarcodes(barcodeMap);
+    }).catch(console.error);
   }, [product?.id]);
 
   const handleImageSelect = (file: any) => {
@@ -189,6 +192,16 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     return true;
   };
 
+  const validateUnitVariantName = (unitId: string, value: string): boolean => {
+    const cleaned = value.trim();
+    if (!cleaned) {
+      setUnitNameErrors(prev => ({ ...prev, [unitId]: 'Variant label is required' }));
+      return false;
+    }
+    setUnitNameErrors(prev => ({ ...prev, [unitId]: '' }));
+    return true;
+  };
+
   const handleBarcodeChange = (value: string) => {
     setBarcode(value);
     setBarcodeError('');
@@ -199,7 +212,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const handleBarcodeScanned = (scannedBarcode: string) => {
     if (scanningUnitId) {
-      setUnitBarcodes(prev => ({ ...prev, [scanningUnitId]: scannedBarcode }));
+      const unitId = scanningUnitId;
+      setUnitBarcodes(prev => ({ ...prev, [unitId]: scannedBarcode }));
+      validateUnitBarcode(unitId, scannedBarcode);
       setScanningUnitId(null);
     } else {
       setBarcode(scannedBarcode);
@@ -210,43 +225,55 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !price.trim()) {
-      Alert.alert('Error', 'Product name and price are required');
+    const isMultiUnit = Boolean(selectedUnitGroupId) && units.length > 0;
+
+    if (!name.trim()) {
+      Alert.alert('Error', isMultiUnit ? 'Product family name is required' : 'Product name is required');
+      return;
+    }
+    if (!isMultiUnit && !price.trim()) {
+      Alert.alert('Error', 'Product price is required');
       return;
     }
 
-    if (!validateBarcode(barcode)) {
-      Alert.alert('Error', barcodeError || 'Product barcode is required');
-      return;
-    }
-
-    // Each unit must have a barcode when a unit group is assigned
-    if (selectedUnitGroupId && units.length > 0) {
-      let unitBarcodesValid = true;
-      for (const unit of units) {
-        if (!validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) {
-          unitBarcodesValid = false;
-        }
+    // Single-unit mode: the product itself owns the barcode
+    if (!isMultiUnit) {
+      if (!validateBarcode(barcode)) {
+        Alert.alert('Error', barcodeError || 'Product barcode is required');
+        return;
       }
-      if (!unitBarcodesValid) {
-        Alert.alert('Error', 'All unit barcodes are required');
+    }
+
+    // Multi-unit mode: each unit needs its own variant label and barcode
+    if (isMultiUnit) {
+      let allValid = true;
+      for (const unit of units) {
+        if (!validateUnitVariantName(unit.id, unitVariantNames[unit.id] || '')) allValid = false;
+        if (!validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) allValid = false;
+      }
+      if (!allValid) {
+        Alert.alert('Error', 'Each unit variant needs a label and barcode');
         return;
       }
       const barcodeList = units.map(u => (unitBarcodes[u.id] || '').trim().toUpperCase());
       if (new Set(barcodeList).size !== barcodeList.length) {
-        Alert.alert('Error', 'Each unit must have a unique barcode');
-        return;
-      }
-      if (barcodeList.includes(barcode.trim().toUpperCase())) {
-        Alert.alert('Error', 'Unit barcodes must differ from the product barcode');
+        Alert.alert('Error', 'Each unit variant must have a unique barcode');
         return;
       }
     }
 
-    const priceValue = parseFloat(price);
-    if (isNaN(priceValue) || priceValue < 0) {
-      Alert.alert('Error', 'Please enter a valid price');
-      return;
+    let priceValue: number;
+    if (isMultiUnit) {
+      const baseUnit = units.find(u => u.is_base_unit) || units[units.length - 1];
+      const basePriceStr = unitPrices[baseUnit.id];
+      priceValue = parseFloat(basePriceStr || '0');
+      if (isNaN(priceValue) || priceValue < 0) priceValue = 0;
+    } else {
+      priceValue = parseFloat(price);
+      if (isNaN(priceValue) || priceValue < 0) {
+        Alert.alert('Error', 'Please enter a valid price');
+        return;
+      }
     }
 
     const stockValue = parseInt(currentStock) || 0;
@@ -280,11 +307,20 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         }
       }
 
+      // In multi-unit mode, the product-level barcode is not used for scanning
+      // (each unit variant carries its own). We still persist something to
+      // satisfy the NOT NULL column by reusing the base unit's barcode.
+      let productBarcode = barcode.trim();
+      if (isMultiUnit) {
+        const baseUnit = units.find(u => u.is_base_unit) || units[units.length - 1];
+        productBarcode = (unitBarcodes[baseUnit.id] || '').trim();
+      }
+
       const productData = {
         name: name.trim(),
         price: priceValue,
         description: description.trim() || undefined,
-        barcode: barcode.trim(),
+        barcode: productBarcode,
         current_stock: stockValue,
         min_stock_level: minStockValue,
         image_url: finalImageUrl || undefined,
@@ -300,26 +336,16 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         savedProduct = await productService.createProduct(productData);
       }
 
-      // Save unit prices if a unit group is selected
-      if (selectedUnitGroupId && savedProduct?.id) {
-        const pricesToSave = Object.entries(unitPrices)
-          .filter(([_, val]) => val && parseFloat(val) > 0)
-          .map(([unitId, val]) => ({ unit_id: unitId, price: parseFloat(val) }));
-        await unitService.setProductUnitPrices(savedProduct.id, pricesToSave);
-      }
-
-      // Save barcodes onto each unit
-      if (selectedUnitGroupId && units.length > 0) {
-        await Promise.all(
-          units.map(unit => {
-            const newBarcode = (unitBarcodes[unit.id] || '').trim() || null;
-            const oldBarcode = unit.barcode || null;
-            if (newBarcode !== oldBarcode) {
-              return unitService.updateUnit(unit.id, { barcode: newBarcode });
-            }
-            return Promise.resolve();
-          })
-        );
+      // Persist per-unit variants (name + barcode + price) when a unit group is assigned
+      if (isMultiUnit && savedProduct?.id) {
+        const rows = units.map(unit => ({
+          unit_id: unit.id,
+          name: (unitVariantNames[unit.id] || '').trim() || unit.name,
+          barcode: (unitBarcodes[unit.id] || '').trim(),
+          price: parseFloat(unitPrices[unit.id] || '') || 0,
+          currency_id: selectedCurrencyId || null,
+        }));
+        await unitService.setProductUnits(savedProduct.id, currentBusiness.id, rows);
       }
 
       Alert.alert('Success', `Product ${product ? 'updated' : 'created'} successfully`);
@@ -376,35 +402,40 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </View>
             
             <Input
-              label="Product Name"
+              label={isMultiUnit ? 'Product family name' : 'Product Name'}
               value={name}
               onChangeText={setName}
-              placeholder="Enter product name"
+              placeholder={isMultiUnit ? 'e.g. Coca-Cola 500ml' : 'Enter product name'}
               required
             />
-            
-            <View>
-              <Input
-                label="Barcode"
-                value={barcode}
-                onChangeText={handleBarcodeChange}
-                onBlur={() => validateBarcode(barcode)}
-                placeholder="Scan or enter barcode"
-                required
-              />
-              {barcodeError ? (
-                <Text style={styles.barcodeErrorText}>{barcodeError}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={() => setShowBarcodeScanner(true)}
-              >
-                <Barcode size={20} color="#2563eb" />
-                <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
-                  Scan Barcode
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {isMultiUnit ? (
+              <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                This shared name will be shown with each variant, e.g. "{(name || 'Coca-Cola 500ml')} (Box)".
+              </Text>
+            ) : (
+              <View>
+                <Input
+                  label="Barcode"
+                  value={barcode}
+                  onChangeText={handleBarcodeChange}
+                  onBlur={() => validateBarcode(barcode)}
+                  placeholder="Scan or enter barcode"
+                  required
+                />
+                {barcodeError ? (
+                  <Text style={styles.barcodeErrorText}>{barcodeError}</Text>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={() => setShowBarcodeScanner(true)}
+                >
+                  <Barcode size={20} color="#2563eb" />
+                  <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
+                    Scan Barcode
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -455,13 +486,20 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               </View>
             </View>
 
-            <Input
-              label="Price"
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0.00"
-              required
-            />
+            {!isMultiUnit && (
+              <Input
+                label="Price"
+                value={price}
+                onChangeText={setPrice}
+                placeholder="0.00"
+                required
+              />
+            )}
+            {isMultiUnit && (
+              <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Prices are set per variant below.
+              </Text>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -529,11 +567,32 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     <View style={styles.unitCardHeader}>
                       <Text style={[styles.unitPriceName, { color: isDark ? '#f9fafb' : '#111827' }]}>
                         {unit.name}
+                        {unit.is_base_unit ? '  (base)' : ''}
                       </Text>
                       <Text style={[styles.unitPriceDetail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                        {unit.is_base_unit ? 'Base unit' : `1 ${unit.name} = ${unit.conversion_factor_to_base} base`}
+                        {unit.is_base_unit ? 'Smallest sellable unit' : `1 ${unit.name} = ${unit.conversion_factor_to_base} base`}
                       </Text>
                     </View>
+
+                    <Input
+                      label={`Variant label for this unit (e.g. ${unit.name})`}
+                      value={unitVariantNames[unit.id] || ''}
+                      onChangeText={(val: string) => {
+                        setUnitVariantNames(prev => ({ ...prev, [unit.id]: val }));
+                        validateUnitVariantName(unit.id, val);
+                      }}
+                      onBlur={() => validateUnitVariantName(unit.id, unitVariantNames[unit.id] || '')}
+                      placeholder={unit.name}
+                      required
+                    />
+                    {unitNameErrors[unit.id] ? (
+                      <Text style={styles.barcodeErrorText}>{unitNameErrors[unit.id]}</Text>
+                    ) : (
+                      <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                        Shown after the family name, e.g. "{(name || 'Coca-Cola').trim()} ({(unitVariantNames[unit.id] || unit.name).trim()})".
+                      </Text>
+                    )}
+
                     <View style={styles.unitCardFields}>
                       <View style={styles.unitCardField}>
                         <Input
@@ -810,6 +869,12 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 12,
     marginTop: 4,
+  },
+  hintText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    marginBottom: 4,
   },
   pickerRow: {
     flexDirection: 'row',

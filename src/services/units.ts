@@ -12,17 +12,22 @@ export interface Unit {
   id: string;
   unit_group_id: string;
   name: string;
-  barcode: string | null;
   conversion_factor_to_base: number;
   sort_order: number;
   is_base_unit: boolean;
   created_at: string;
 }
 
-export interface ProductUnitPrice {
+// One row per (product, unit). Carries the product-specific variant label and
+// barcode for that unit (e.g. product "Coca-Cola 500ml" + unit "Box" has its
+// own barcode, distinct from any other product that uses the same unit group).
+export interface ProductUnit {
   id: string;
   product_id: string;
   unit_id: string;
+  business_id: string;
+  name: string | null;
+  barcode: string | null;
   price: number;
   cost_per_unit: number | null;
   currency_id: string | null;
@@ -80,7 +85,6 @@ export const unitService = {
     conversion_factor_to_base: number;
     sort_order: number;
     is_base_unit: boolean;
-    barcode?: string | null;
   }): Promise<Unit> {
     const { data, error } = await supabase
       .from('units')
@@ -90,22 +94,16 @@ export const unitService = {
         conversion_factor_to_base: input.conversion_factor_to_base,
         sort_order: input.sort_order,
         is_base_unit: input.is_base_unit,
-        barcode: input.barcode?.trim() || null,
       })
       .select()
       .single();
-    if (error) {
-      if ((error as any).code === '23505') {
-        throw new Error('This barcode is already used by another unit in this group');
-      }
-      throw error;
-    }
+    if (error) throw error;
     return data as Unit;
   },
 
   async updateUnit(
     id: string,
-    updates: Partial<Pick<Unit, 'name' | 'conversion_factor_to_base' | 'sort_order' | 'barcode'>>,
+    updates: Partial<Pick<Unit, 'name' | 'conversion_factor_to_base' | 'sort_order'>>,
   ): Promise<Unit> {
     const { data, error } = await supabase
       .from('units')
@@ -113,12 +111,7 @@ export const unitService = {
       .eq('id', id)
       .select()
       .single();
-    if (error) {
-      if ((error as any).code === '23505') {
-        throw new Error('This barcode is already used by another unit in this group');
-      }
-      throw error;
-    }
+    if (error) throw error;
     return data as Unit;
   },
 
@@ -143,10 +136,6 @@ export const unitService = {
     if (error) throw error;
   },
 
-  /**
-   * Check if a unit is referenced by any product prices or cart items.
-   * Returns counts so the UI can show a meaningful warning before blocking deletion.
-   */
   async getUnitUsage(unitId: string): Promise<{ productPriceCount: number; cartItemCount: number }> {
     const [priceRes, cartRes] = await Promise.all([
       supabase
@@ -164,15 +153,10 @@ export const unitService = {
     };
   },
 
-  /**
-   * Create a unit group with an ordered list of units in one call.
-   * Units must be passed from largest (top) to smallest (bottom).
-   * The last unit is automatically flagged as the base unit.
-   */
   async createUnitGroupWithUnits(input: {
     business_id: string;
     name: string;
-    units: Array<{ name: string; conversion_factor_to_base: number; barcode?: string | null }>;
+    units: Array<{ name: string; conversion_factor_to_base: number }>;
   }): Promise<{ group: UnitGroup; units: Unit[] }> {
     if (input.units.length === 0) {
       throw new Error('A unit group needs at least one unit');
@@ -192,7 +176,6 @@ export const unitService = {
           conversion_factor_to_base: i === lastIndex ? 1 : u.conversion_factor_to_base,
           sort_order: i + 1,
           is_base_unit: i === lastIndex,
-          barcode: u.barcode,
         });
         createdUnits.push(unit);
       }
@@ -203,19 +186,26 @@ export const unitService = {
     return { group, units: createdUnits };
   },
 
-  async getProductUnitPrices(productId: string): Promise<ProductUnitPrice[]> {
+  async getProductUnits(productId: string): Promise<ProductUnit[]> {
     if (!productId) return [];
     const { data, error } = await supabase
       .from('product_unit_prices')
       .select('*')
       .eq('product_id', productId);
     if (error) throw error;
-    return (data || []) as ProductUnitPrice[];
+    return (data || []) as ProductUnit[];
   },
 
-  async setProductUnitPrices(
+  async setProductUnits(
     productId: string,
-    prices: Array<{ unit_id: string; price: number; currency_id?: string | null }>,
+    businessId: string,
+    rows: Array<{
+      unit_id: string;
+      name: string;
+      barcode: string;
+      price: number;
+      currency_id?: string | null;
+    }>,
   ): Promise<void> {
     const { error: deleteError } = await supabase
       .from('product_unit_prices')
@@ -223,17 +213,26 @@ export const unitService = {
       .eq('product_id', productId);
     if (deleteError) throw deleteError;
 
-    if (prices.length > 0) {
-      const rows = prices.map(p => ({
-        product_id: productId,
-        unit_id: p.unit_id,
-        price: p.price,
-        currency_id: p.currency_id ?? null,
-      }));
-      const { error: insertError } = await supabase
-        .from('product_unit_prices')
-        .insert(rows);
-      if (insertError) throw insertError;
+    if (rows.length === 0) return;
+
+    const payload = rows.map(r => ({
+      product_id: productId,
+      unit_id: r.unit_id,
+      business_id: businessId,
+      name: r.name.trim(),
+      barcode: r.barcode.trim() || null,
+      price: r.price,
+      currency_id: r.currency_id ?? null,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('product_unit_prices')
+      .insert(payload);
+    if (insertError) {
+      if ((insertError as any).code === '23505') {
+        throw new Error('A barcode is already in use in this business');
+      }
+      throw insertError;
     }
   },
 
@@ -249,33 +248,44 @@ export const unitService = {
   },
 
   /**
-   * Look up a unit by barcode across all unit groups owned by a business.
-   * Returns the unit and the product that references the unit group.
+   * Look up a product-unit variant by its barcode, scoped to a business.
+   * Returns the product_unit row plus the unit and product rows it links to.
    */
-  async findByUnitBarcode(barcode: string, businessId: string): Promise<{
+  async findProductUnitByBarcode(barcode: string, businessId: string): Promise<{
+    productUnit: ProductUnit;
     unit: Unit;
     product: { id: string; name: string; unit_group_id: string | null; current_stock: number | null } | null;
   } | null> {
     if (!barcode || !businessId) return null;
-    const { data: units, error: unitError } = await supabase
-      .from('units')
-      .select('*, unit_groups!inner(business_id)')
-      .eq('barcode', barcode)
-      .eq('unit_groups.business_id', businessId)
-      .limit(1);
-    if (unitError) throw unitError;
-    if (!units || units.length === 0) return null;
-    const unit = units[0] as Unit & { unit_groups: unknown };
-    const { data: products } = await supabase
-      .from('products')
-      .select('id, name, unit_group_id, current_stock')
+    const { data, error } = await supabase
+      .from('product_unit_prices')
+      .select('*, units(*), products(id, name, unit_group_id, current_stock, is_archived)')
       .eq('business_id', businessId)
-      .eq('unit_group_id', unit.unit_group_id)
-      .eq('is_archived', false)
-      .limit(1);
+      .eq('barcode', barcode)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const row = data as any;
+    const product = row.products && !row.products.is_archived
+      ? { id: row.products.id, name: row.products.name, unit_group_id: row.products.unit_group_id, current_stock: row.products.current_stock }
+      : null;
     return {
-      unit,
-      product: products && products.length > 0 ? (products[0] as any) : null,
+      productUnit: {
+        id: row.id,
+        product_id: row.product_id,
+        unit_id: row.unit_id,
+        business_id: row.business_id,
+        name: row.name,
+        barcode: row.barcode,
+        price: row.price,
+        cost_per_unit: row.cost_per_unit,
+        currency_id: row.currency_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      },
+      unit: row.units as Unit,
+      product,
     };
   },
 };

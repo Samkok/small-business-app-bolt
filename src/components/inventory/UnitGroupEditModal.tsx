@@ -10,29 +10,24 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { Plus, X, Barcode, AlertTriangle } from 'lucide-react-native';
+import { Plus, X, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { unitService, UnitGroup, Unit } from '@/src/services/units';
-import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 
-// Represents an existing unit that may be edited or queued for deletion
 type ExistingUnitDraft = {
   kind: 'existing';
   unit: Unit;
   name: string;
-  conversion: string; // raw string input; ignored for base unit
-  barcode: string;
+  conversion: string;
   pendingDelete: boolean;
 };
 
-// Represents a brand-new unit not yet persisted
 type NewUnitDraft = {
   kind: 'new';
   name: string;
   conversion: string;
-  barcode: string;
 };
 
 type UnitDraft = ExistingUnitDraft | NewUnitDraft;
@@ -52,10 +47,8 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
   const [drafts, setDrafts] = useState<UnitDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [scanTarget, setScanTarget] = useState<number | null>(null);
   const [inUseWarning, setInUseWarning] = useState(false);
 
-  // Re-initialise when the modal opens
   useEffect(() => {
     if (!visible) return;
     setGroupName(group.name);
@@ -65,13 +58,11 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
         unit: u,
         name: u.name,
         conversion: u.conversion_factor_to_base.toString(),
-        barcode: u.barcode || '',
         pendingDelete: false,
       })),
     );
     setFormError('');
     setInUseWarning(false);
-    // Check if any existing unit has product prices so we can show a warning
     checkInUse(initialUnits);
   }, [visible]);
 
@@ -81,23 +72,17 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
       const anyInUse = results.some(r => r.productPriceCount > 0 || r.cartItemCount > 0);
       setInUseWarning(anyInUse);
     } catch {
-      // non-critical; just don't show the warning
+      // non-critical
     }
   };
-
-  const baseIndex = drafts.findIndex(
-    d => d.kind === 'existing' && d.unit.is_base_unit,
-  );
 
   const updateDraft = (idx: number, patch: Partial<Omit<ExistingUnitDraft, 'kind' | 'unit'>> | Partial<Omit<NewUnitDraft, 'kind'>>) => {
     setDrafts(prev => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
   };
 
   const addNewUnit = () => {
-    // New units are prepended above the base unit (they're larger)
-    const newDraft: NewUnitDraft = { kind: 'new', name: '', conversion: '', barcode: '' };
+    const newDraft: NewUnitDraft = { kind: 'new', name: '', conversion: '' };
     setDrafts(prev => {
-      // Insert new draft right before the base unit position
       const baseIdx = prev.findIndex(d => d.kind === 'existing' && d.unit.is_base_unit);
       if (baseIdx === -1) return [...prev, newDraft];
       const copy = [...prev];
@@ -109,11 +94,10 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
   const handleRequestDelete = async (idx: number) => {
     const draft = drafts[idx];
     if (draft.kind !== 'existing') {
-      // New unsaved unit — just remove from list
       setDrafts(prev => prev.filter((_, i) => i !== idx));
       return;
     }
-    if (draft.unit.is_base_unit) return; // never delete base
+    if (draft.unit.is_base_unit) return;
 
     try {
       const usage = await unitService.getUnitUsage(draft.unit.id);
@@ -129,7 +113,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
         );
         return;
       }
-      // No references — mark for deletion
       updateDraft(idx, { pendingDelete: true } as any);
     } catch {
       Alert.alert('Error', 'Could not check unit usage. Please try again.');
@@ -142,7 +125,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
       return;
     }
 
-    // Validate all non-deleted drafts
     const activeDrafts = drafts.filter(d => !(d.kind === 'existing' && d.pendingDelete));
     const baseIdx = activeDrafts.findIndex(d => d.kind === 'existing' && d.unit.is_base_unit);
 
@@ -175,7 +157,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
         (d): d is ExistingUnitDraft => d.kind === 'existing' && d.pendingDelete,
       );
 
-      // Rebuild conversion factors from the bottom up (base unit = 1, each unit above multiplies).
       let runningFactor = 1;
       const factors: number[] = new Array(active.length);
       for (let i = active.length - 1; i >= 0; i--) {
@@ -187,29 +168,23 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
         }
       }
 
-      // Build all promises and fire them in parallel.
       const ops: Promise<unknown>[] = [];
 
-      // Group rename
       if (groupName.trim() !== group.name) {
         ops.push(unitService.updateUnitGroup(group.id, { name: groupName.trim() }));
       }
 
-      // Deletions
       for (const d of toDelete) {
         ops.push(unitService.deleteUnit(d.unit.id));
       }
 
-      // Updates for changed existing units
       for (let i = 0; i < active.length; i++) {
         const d = active[i];
         if (d.kind !== 'existing') continue;
         const newFactor = factors[i];
-        const newBarcode = d.barcode.trim() || null;
         const changed =
           d.name.trim() !== d.unit.name ||
           newFactor !== d.unit.conversion_factor_to_base ||
-          newBarcode !== d.unit.barcode ||
           i + 1 !== d.unit.sort_order;
         if (changed) {
           ops.push(
@@ -217,13 +192,11 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
               name: d.name.trim(),
               conversion_factor_to_base: newFactor,
               sort_order: i + 1,
-              barcode: newBarcode,
             }),
           );
         }
       }
 
-      // New unit inserts (sort_order continues after the surviving existing units)
       const survivingExistingCount = initialUnits.filter(
         u => !toDelete.some(td => td.unit.id === u.id),
       ).length;
@@ -239,7 +212,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
             conversion_factor_to_base: factors[i],
             sort_order: sortOrder,
             is_base_unit: false,
-            barcode: d.barcode.trim() || null,
           }),
         );
       }
@@ -297,12 +269,11 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
             />
 
             <Text style={[styles.sectionLabel, { color: cardMuted }]}>
-              Units (largest to smallest). The base unit cannot be deleted or reordered.
+              Units (largest to smallest). The base unit cannot be deleted or reordered. Barcodes are set per product, not on the unit group.
             </Text>
 
             {activeDrafts.map((d, idx) => {
               const isBase = d.kind === 'existing' && d.unit.is_base_unit;
-              const isLast = idx === activeDrafts.length - 1;
               const nextName = activeDrafts[idx + 1]?.name || 'base unit';
 
               return (
@@ -361,26 +332,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
                       keyboardType="number-pad"
                     />
                   )}
-
-                  <View style={styles.barcodeRow}>
-                    <View style={{ flex: 1 }}>
-                      <Input
-                        label="Barcode (optional)"
-                        value={d.barcode}
-                        onChangeText={v => {
-                          const realIdx = drafts.indexOf(d as any);
-                          updateDraft(realIdx, { barcode: v });
-                        }}
-                        placeholder="Scan or enter"
-                      />
-                    </View>
-                    <TouchableOpacity
-                      style={styles.scanBtn}
-                      onPress={() => setScanTarget(drafts.indexOf(d as any))}
-                    >
-                      <Barcode size={20} color="#2563eb" />
-                    </TouchableOpacity>
-                  </View>
                 </View>
               );
             })}
@@ -413,20 +364,6 @@ export function UnitGroupEditModal({ visible, group, initialUnits, onClose, onSa
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      <Modal
-        visible={scanTarget !== null}
-        animationType="slide"
-        onRequestClose={() => setScanTarget(null)}
-      >
-        <BarcodeScanner
-          onBarcodeScan={code => {
-            if (scanTarget !== null) updateDraft(scanTarget, { barcode: code });
-            setScanTarget(null);
-          }}
-          onClose={() => setScanTarget(null)}
-        />
-      </Modal>
     </Modal>
   );
 }
@@ -476,8 +413,6 @@ const styles = StyleSheet.create({
   },
   newTagText: { fontSize: 10, fontWeight: '700', color: '#2563eb' },
   iconButton: { padding: 8, borderRadius: 8 },
-  barcodeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  scanBtn: { padding: 12, borderRadius: 8, backgroundColor: '#eff6ff', marginBottom: 4 },
   addUnitBtn: {
     flexDirection: 'row',
     alignItems: 'center',

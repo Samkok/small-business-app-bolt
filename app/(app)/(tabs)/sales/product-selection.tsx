@@ -22,7 +22,7 @@ import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
-import { unitService, Unit, ProductUnitPrice } from '@/src/services/units';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import { formatCurrency } from '@/src/utils/formatCurrency';
 
 export default function ProductSelectionScreen() {
@@ -35,7 +35,7 @@ export default function ProductSelectionScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [unitGroupsMap, setUnitGroupsMap] = useState<Record<string, Unit[]>>({});
-  const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnitPrice[]>>({});
+  const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnit[]>>({});
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
   const [showUnitPicker, setShowUnitPicker] = useState<string | null>(null);
 
@@ -64,13 +64,13 @@ export default function ProductSelectionScreen() {
       setFilteredProducts(productsData);
 
       const ugMap: Record<string, Unit[]> = {};
-      const upMap: Record<string, ProductUnitPrice[]> = {};
+      const upMap: Record<string, ProductUnit[]> = {};
       for (const product of productsData) {
         if (product.unit_group_id) {
           try {
             const units = await unitService.getUnits(product.unit_group_id);
             ugMap[product.id] = units;
-            const prices = await unitService.getProductUnitPrices(product.id);
+            const prices = await unitService.getProductUnits(product.id);
             upMap[product.id] = prices;
           } catch (e) {
             console.error('Error loading units for product:', product.id, e);

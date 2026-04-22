@@ -147,7 +147,7 @@ export function UnitGroupEditorModal({
             />
 
             <Text style={[styles.sectionLabel, { color: cardMuted }]}>
-              List units largest to smallest. For each unit (except the last), enter how many of the next unit down it contains. The last unit becomes the base unit stock is tracked in.
+              List units largest to smallest. For each unit (except the last), enter how many of the next unit down it contains. The last unit becomes the base unit stock is tracked in. Barcodes are set per product, not on the unit group itself.
             </Text>
 
             {draftUnits.map((u, idx) => {
