@@ -8,12 +8,13 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Trash2, Pencil } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { unitService, UnitGroup, Unit } from '@/src/services/units';
 import { UnitGroupEditorModal } from '@/src/components/inventory/UnitGroupEditorModal';
+import { UnitGroupEditModal } from '@/src/components/inventory/UnitGroupEditModal';
 
 export default function UnitGroupsScreen() {
   const { isDark } = useTheme();
@@ -23,7 +24,8 @@ export default function UnitGroupsScreen() {
   const [groups, setGroups] = useState<UnitGroup[]>([]);
   const [unitsByGroup, setUnitsByGroup] = useState<Record<string, Unit[]>>({});
   const [loading, setLoading] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showCreator, setShowCreator] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<UnitGroup | null>(null);
 
   const load = useCallback(async () => {
     if (!currentBusiness?.id) return;
@@ -51,7 +53,7 @@ export default function UnitGroupsScreen() {
   const handleDeleteGroup = (group: UnitGroup) => {
     Alert.alert(
       'Delete unit group',
-      `Delete ${group.name}? Products using this group will be unlinked. This cannot be undone.`,
+      `Delete "${group.name}"? Products using this group will be unlinked. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -73,6 +75,7 @@ export default function UnitGroupsScreen() {
   const headerBg = isDark ? '#111827' : '#f9fafb';
   const cardText = isDark ? '#f9fafb' : '#111827';
   const cardMuted = isDark ? '#9ca3af' : '#6b7280';
+  const dividerColor = isDark ? '#374151' : '#f3f4f6';
 
   return (
     <View style={[styles.container, { backgroundColor: headerBg }]}>
@@ -82,54 +85,95 @@ export default function UnitGroupsScreen() {
           <ArrowLeft size={24} color={cardText} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: cardText }]}>Unit Groups</Text>
-        <TouchableOpacity onPress={() => setShowEditor(true)} style={styles.addButton}>
+        <TouchableOpacity onPress={() => setShowCreator(true)} style={styles.addButton}>
           <Plus size={22} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={[styles.description, { color: cardMuted }]}>
-          Define packaging hierarchies for your products. List units from largest to smallest. The last unit is the
-          base unit that stock is tracked in. Each unit can have its own barcode.
+          Define packaging hierarchies for your products. List units from largest to smallest. The last unit is the base unit that stock is tracked in.
         </Text>
 
         {loading ? (
           <Text style={[styles.emptyText, { color: cardMuted }]}>Loading...</Text>
         ) : groups.length === 0 ? (
-          <Text style={[styles.emptyText, { color: cardMuted }]}>No unit groups yet.</Text>
+          <Text style={[styles.emptyText, { color: cardMuted }]}>No unit groups yet. Tap + to create one.</Text>
         ) : (
-          groups.map(g => (
-            <Card key={g.id} style={styles.itemCard}>
-              <View style={styles.groupHeader}>
-                <Text style={[styles.groupName, { color: cardText }]}>{g.name}</Text>
-                <TouchableOpacity onPress={() => handleDeleteGroup(g)} style={styles.iconButton}>
-                  <Trash2 size={18} color="#dc2626" />
-                </TouchableOpacity>
-              </View>
-              {(unitsByGroup[g.id] || []).map(u => (
-                <View key={u.id} style={styles.unitRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.unitName, { color: cardText }]}>
-                      {u.name} {u.is_base_unit ? <Text style={styles.baseBadge}>(base)</Text> : null}
-                    </Text>
-                    <Text style={[styles.unitDetail, { color: cardMuted }]}>
-                      1 {u.name} = {u.conversion_factor_to_base} base unit{u.conversion_factor_to_base === 1 ? '' : 's'}
-                      {u.barcode ? `  -  ${u.barcode}` : ''}
-                    </Text>
+          groups.map(g => {
+            const units = unitsByGroup[g.id] || [];
+            return (
+              <Card key={g.id} style={styles.itemCard}>
+                <View style={styles.groupHeader}>
+                  <Text style={[styles.groupName, { color: cardText }]}>{g.name}</Text>
+                  <View style={styles.groupActions}>
+                    <TouchableOpacity
+                      style={styles.iconButton}
+                      onPress={() => setEditingGroup(g)}
+                      accessibilityLabel={`Edit ${g.name}`}
+                    >
+                      <Pencil size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.iconButton}
+                      onPress={() => handleDeleteGroup(g)}
+                      accessibilityLabel={`Delete ${g.name}`}
+                    >
+                      <Trash2 size={16} color="#dc2626" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-              ))}
-            </Card>
-          ))
+
+                <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+
+                {units.map((u, i) => (
+                  <View
+                    key={u.id}
+                    style={[styles.unitRow, i < units.length - 1 && { borderBottomWidth: 1, borderBottomColor: dividerColor }]}
+                  >
+                    <View style={styles.unitLeft}>
+                      <View style={styles.unitNameRow}>
+                        <Text style={[styles.unitName, { color: cardText }]}>{u.name}</Text>
+                        {u.is_base_unit && (
+                          <View style={styles.baseBadge}>
+                            <Text style={styles.baseBadgeText}>base</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.unitDetail, { color: cardMuted }]}>
+                        {u.is_base_unit
+                          ? 'Stock tracked in this unit'
+                          : `1 ${u.name} = ${u.conversion_factor_to_base} base unit${u.conversion_factor_to_base === 1 ? '' : 's'}`}
+                        {u.barcode ? `  ·  ${u.barcode}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </Card>
+            );
+          })
         )}
       </ScrollView>
 
       <UnitGroupEditorModal
-        visible={showEditor}
+        visible={showCreator}
         businessId={currentBusiness?.id || ''}
-        onClose={() => setShowEditor(false)}
-        onSaved={() => load()}
+        onClose={() => setShowCreator(false)}
+        onSaved={() => { load(); }}
       />
+
+      {editingGroup && (
+        <UnitGroupEditModal
+          visible={!!editingGroup}
+          group={editingGroup}
+          initialUnits={unitsByGroup[editingGroup.id] || []}
+          onClose={() => setEditingGroup(null)}
+          onSaved={async () => {
+            setEditingGroup(null);
+            await load();
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -150,17 +194,34 @@ const styles = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 80 },
   description: { fontSize: 13, lineHeight: 18, marginBottom: 16 },
   emptyText: { textAlign: 'center', paddingVertical: 32 },
-  itemCard: { marginBottom: 12, padding: 16 },
+  itemCard: { marginBottom: 12, padding: 0, overflow: 'hidden' },
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
-  groupName: { fontSize: 16, fontWeight: '700' },
-  unitRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  unitName: { fontSize: 14, fontWeight: '600' },
-  baseBadge: { color: '#059669', fontSize: 12, fontWeight: '600' },
-  unitDetail: { fontSize: 12, marginTop: 2 },
+  groupName: { fontSize: 15, fontWeight: '700', flex: 1 },
+  groupActions: { flexDirection: 'row', gap: 4 },
   iconButton: { padding: 8, borderRadius: 8 },
+  divider: { height: 1, marginHorizontal: 0 },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  unitLeft: { flex: 1 },
+  unitNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  unitName: { fontSize: 14, fontWeight: '600' },
+  baseBadge: {
+    backgroundColor: '#d1fae5',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  baseBadgeText: { fontSize: 10, fontWeight: '700', color: '#059669' },
+  unitDetail: { fontSize: 12 },
 });

@@ -122,6 +122,17 @@ export const unitService = {
     return data as Unit;
   },
 
+  async updateUnitGroup(id: string, updates: { name: string }): Promise<UnitGroup> {
+    const { data, error } = await supabase
+      .from('unit_groups')
+      .update({ name: updates.name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as UnitGroup;
+  },
+
   async deleteUnit(id: string): Promise<void> {
     const { error } = await supabase.from('units').delete().eq('id', id);
     if (error) throw error;
@@ -130,6 +141,27 @@ export const unitService = {
   async deleteUnitGroup(id: string): Promise<void> {
     const { error } = await supabase.from('unit_groups').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  /**
+   * Check if a unit is referenced by any product prices or cart items.
+   * Returns counts so the UI can show a meaningful warning before blocking deletion.
+   */
+  async getUnitUsage(unitId: string): Promise<{ productPriceCount: number; cartItemCount: number }> {
+    const [priceRes, cartRes] = await Promise.all([
+      supabase
+        .from('product_unit_prices')
+        .select('id', { count: 'exact', head: true })
+        .eq('unit_id', unitId),
+      supabase
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('unit_id', unitId),
+    ]);
+    return {
+      productPriceCount: priceRes.count ?? 0,
+      cartItemCount: cartRes.count ?? 0,
+    };
   },
 
   /**
