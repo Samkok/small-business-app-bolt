@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert } fro
 import { useTheme } from '@/src/context/ThemeContext';
 import { Minus, Plus, Trash2, AlertCircle, Tag, X as XIcon } from 'lucide-react-native';
 import { InstantCheckoutItem } from '@/src/context/InstantCheckoutContext';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface InstantCheckoutProductListProps {
   items: InstantCheckoutItem[];
@@ -173,7 +174,7 @@ export function InstantCheckoutProductList({
             </Text>
 
             <Text style={[styles.price, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              ${item.unit_price.toFixed(2)} each
+              {formatCurrency(item.unit_price)} each
             </Text>
 
             {item.quantity > item.available_stock && (
@@ -188,7 +189,7 @@ export function InstantCheckoutProductList({
             {(item.item_discount_amount ?? 0) > 0 ? (
               <View style={styles.discountRow}>
                 <Text style={styles.discountText}>
-                  Discount: -${(item.item_discount_amount ?? 0).toFixed(2)}
+                  Discount: -{formatCurrency(item.item_discount_amount ?? 0)}
                 </Text>
                 {onRemoveDiscount ? (
                   <TouchableOpacity
@@ -217,7 +218,7 @@ export function InstantCheckoutProductList({
                   </TouchableOpacity>
                 ) : null}
                 <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  ${item.subtotal.toFixed(2)}
+                  {formatCurrency(item.subtotal)}
                 </Text>
               </View>
             </View>

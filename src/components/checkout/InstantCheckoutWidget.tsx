@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { useTheme } from '@/src/context/ThemeContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { ShoppingCart } from 'lucide-react-native';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 export function InstantCheckoutWidget() {
   const { isDark } = useTheme();
@@ -51,13 +52,13 @@ export function InstantCheckoutWidget() {
             <Text style={styles.itemsText}>
               {itemCount} {itemCount === 1 ? 'item' : 'items'}
             </Text>
-            <Text style={styles.subtotalText}>${summary.itemsSubtotalAfterDiscount.toFixed(2)}</Text>
+            <Text style={styles.subtotalText}>{formatCurrency(summary.itemsSubtotalAfterDiscount)}</Text>
           </View>
         </View>
 
         <View style={styles.rightSection}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>${summary.finalTotal.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>{formatCurrency(summary.finalTotal)}</Text>
         </View>
       </View>
     </TouchableOpacity>

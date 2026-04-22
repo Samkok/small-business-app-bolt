@@ -364,7 +364,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         quantity: quantity,
         unit_price: product.price,
         subtotal: quantity * product.price,
-        original_subtotal: quantity * product.price
+        original_subtotal: quantity * product.price,
+        unit_id: product.unit_id || undefined,
+        currency_id: product.currency_id || undefined
       });
 
       const updatedCarts = await refreshCarts(true);

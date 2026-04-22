@@ -20,6 +20,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
@@ -185,11 +186,11 @@ export default function CheckoutScreen() {
                 <View style={styles.itemPricing}>
                   {item.original_subtotal > item.subtotal && (
                     <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                      ${item.original_subtotal.toFixed(2)}
+                      {formatCurrency(item.original_subtotal)}
                     </Text>
                   )}
                   <Text style={[styles.itemSubtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    ${item.subtotal.toFixed(2)}
+                    {formatCurrency(item.subtotal)}
                   </Text>
                 </View>
               </View>
@@ -203,7 +204,7 @@ export default function CheckoutScreen() {
               Items Subtotal:
             </Text>
             <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${cartSummary?.itemsOriginalTotal.toFixed(2)}
+              {formatCurrency(cartSummary?.itemsOriginalTotal)}
             </Text>
           </View>
           
@@ -213,7 +214,7 @@ export default function CheckoutScreen() {
                 Item Discounts:
               </Text>
               <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                -${cartSummary.itemsTotalDiscount.toFixed(2)}
+                -{formatCurrency(cartSummary.itemsTotalDiscount)}
               </Text>
             </View>
           )}
@@ -224,7 +225,7 @@ export default function CheckoutScreen() {
                 Cart Discount:
               </Text>
               <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                -${cartSummary.cartDiscountAmount.toFixed(2)}
+                -{formatCurrency(cartSummary.cartDiscountAmount)}
               </Text>
             </View>
           )}
@@ -235,7 +236,7 @@ export default function CheckoutScreen() {
                 Delivery Cost:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${cartSummary.deliveryCost.toFixed(2)}
+                {formatCurrency(cartSummary.deliveryCost)}
               </Text>
             </View>
           )}
@@ -245,7 +246,7 @@ export default function CheckoutScreen() {
               Total:
             </Text>
             <Text style={[styles.totalValue, { color: '#059669' }]}>
-              ${cartSummary?.finalTotal.toFixed(2)}
+              {formatCurrency(cartSummary?.finalTotal)}
             </Text>
           </View>
         </Card>
@@ -341,7 +342,7 @@ export default function CheckoutScreen() {
       {/* Complete Sale Button */}
       <View style={styles.footer}>
         <Button
-          title={`Complete Sale - $${cartSummary?.finalTotal.toFixed(2)}`}
+          title={`Complete Sale - ${formatCurrency(cartSummary?.finalTotal)}`}
           onPress={handleCompleteSale}
           loading={processing}
           style={styles.completeButton}

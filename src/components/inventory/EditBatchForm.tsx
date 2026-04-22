@@ -23,6 +23,7 @@ import { productService } from '@/src/services/products';
 import { batchImportService, BatchImportItem, BatchImportCost } from '@/src/services/batchImport';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { v4 as uuidv4 } from 'uuid';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface EditBatchFormProps {
   batch: any; // The batch object to edit
@@ -364,7 +365,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                     {item.name}
                   </Text>
                   <Text style={[styles.productSelectorPrice, { color: '#059669' }]}>
-                    ${item.price.toFixed(2)}
+                    {formatCurrency(item.price)}
                   </Text>
                   <Text style={[styles.productSelectorStock, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                     Stock: {item.current_stock}
@@ -467,7 +468,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                         {product.name}
                       </Text>
                       <Text style={[styles.itemPrice, { color: '#059669' }]}>
-                        ${product.price.toFixed(2)}
+                        {formatCurrency(product.price)}
                       </Text>
                     </View>
                     
@@ -678,7 +679,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                     Total Base Value:
                   </Text>
                   <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                    ${totalBaseValue.toFixed(2)}
+                    {formatCurrency(totalBaseValue)}
                   </Text>
                 </View>
                 
@@ -687,7 +688,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                     Total Additional Costs:
                   </Text>
                   <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                    ${totalAdditionalCosts.toFixed(2)}
+                    {formatCurrency(totalAdditionalCosts)}
                   </Text>
                 </View>
                 
@@ -696,7 +697,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                     Total Batch Cost:
                   </Text>
                   <Text style={[styles.totalValue, { color: '#059669' }]}>
-                    ${totalBatchCost.toFixed(2)}
+                    {formatCurrency(totalBatchCost)}
                   </Text>
                 </View>
               </View>
@@ -714,7 +715,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                         {product?.name} ({item.quantity}x):
                       </Text>
                       <Text style={[styles.itemCostValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                        ${item.total_cost_for_item.toFixed(2)}
+                        {formatCurrency(item.total_cost_for_item)}
                       </Text>
                     </View>
                   );

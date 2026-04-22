@@ -29,6 +29,7 @@ import { InstantCheckoutSummary } from './InstantCheckoutSummary';
 import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -614,7 +615,7 @@ export function InstantCheckoutModal() {
                     {item.name}
                   </Text>
                   <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                    ${item.price.toFixed(2)}
+                    {formatCurrency(item.price)}
                   </Text>
                   <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                     Stock: {item.current_stock}

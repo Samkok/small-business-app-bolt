@@ -4,6 +4,7 @@ import { cartService } from './carts';
 import { productService } from './products';
 import { businessAccessGuard } from '../utils/businessAccessGuard';
 import { subscriptionService } from './subscriptionService';
+import { unitService } from './units';
 
 type Sale = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
@@ -58,7 +59,12 @@ export const salesService = {
     // Update product stock levels
     for (const item of cart.cart_items) {
       const product = await productService.getProduct(item.product_id);
-      const newStock = Math.max(0, product.current_stock - item.quantity);
+      let baseQuantity = item.quantity;
+      if (item.unit_id) {
+        const conversionFactor = await unitService.getConversionFactor(item.unit_id);
+        baseQuantity = item.quantity * conversionFactor;
+      }
+      const newStock = Math.max(0, product.current_stock - baseQuantity);
       await productService.updateStock(item.product_id, newStock);
     }
 
@@ -459,8 +465,15 @@ export const salesService = {
           // Get current product stock
           const product = await productService.getProduct(item.product_id);
 
+          // Convert quantity to base units if needed
+          let baseQuantity = item.quantity;
+          if (item.unit_id) {
+            const conversionFactor = await unitService.getConversionFactor(item.unit_id);
+            baseQuantity = item.quantity * conversionFactor;
+          }
+
           // Add the sold quantity back to stock
-          const newStock = product.current_stock + item.quantity;
+          const newStock = product.current_stock + baseQuantity;
 
           // Update the product stock
           await productService.updateStock(item.product_id, newStock);

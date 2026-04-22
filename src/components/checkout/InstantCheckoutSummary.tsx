@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { InstantCheckoutSummary as SummaryType } from '@/src/context/InstantCheckoutContext';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface InstantCheckoutSummaryProps {
   summary: SummaryType;
@@ -21,7 +22,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
           Items Total
         </Text>
         <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          ${summary.itemsOriginalTotal.toFixed(2)}
+          {formatCurrency(summary.itemsOriginalTotal)}
         </Text>
       </View>
 
@@ -29,7 +30,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
         <View style={styles.row}>
           <Text style={[styles.label, { color: '#10b981' }]}>Item Discounts</Text>
           <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.itemsTotalDiscount.toFixed(2)}
+            {formatCurrency(-summary.itemsTotalDiscount)}
           </Text>
         </View>
       )}
@@ -38,7 +39,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
         <View style={styles.row}>
           <Text style={[styles.label, { color: '#10b981' }]}>Order Discount</Text>
           <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.cartDiscountAmount.toFixed(2)}
+            {formatCurrency(-summary.cartDiscountAmount)}
           </Text>
         </View>
       )}
@@ -49,7 +50,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
             Delivery Fee Discount
           </Text>
           <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.deliveryCost.toFixed(2)}
+            {formatCurrency(-summary.deliveryCost)}
           </Text>
         </View>
       )}
@@ -61,7 +62,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
           Total
         </Text>
         <Text style={[styles.totalValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          ${summary.finalTotal.toFixed(2)}
+          {formatCurrency(summary.finalTotal)}
         </Text>
       </View>
     </View>

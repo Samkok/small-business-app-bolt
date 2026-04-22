@@ -20,6 +20,8 @@ import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truc
 import { useTranslation } from 'react-i18next';
 import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
+import { formatCurrency } from '@/src/utils/formatCurrency';
+import { useCurrency } from '@/src/hooks/useCurrency';
 
 export default function CartScreen() {
   const { t } = useTranslation();
@@ -54,6 +56,7 @@ export default function CartScreen() {
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice, getSymbol } = useCurrency(currentBusiness?.id);
   const {
     getCart,
     updateCart,
@@ -865,8 +868,8 @@ export default function CartScreen() {
                 </Text>
                 <Text style={[styles.discountValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
                   {cart.discount_type === 'percentage' 
-                    ? `${cart.discount_value}%` 
-                    : `$${cart.discount_value?.toFixed(2)}`
+                    ? `${cart.discount_value}%`
+                    : formatPrice(cart.discount_value)
                   }
                 </Text>
               </View>
@@ -876,7 +879,7 @@ export default function CartScreen() {
                     Discount Amount:
                   </Text>
                   <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                    -${cartSummary.cartDiscountAmount.toFixed(2)}
+                    -{formatPrice(cartSummary.cartDiscountAmount)}
                   </Text>
                 </View>
               )}
@@ -955,7 +958,7 @@ export default function CartScreen() {
                 Items Subtotal:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${cartSummary.itemsOriginalTotal.toFixed(2)}
+                {formatPrice(cartSummary.itemsOriginalTotal)}
               </Text>
             </View>
             
@@ -965,7 +968,7 @@ export default function CartScreen() {
                   Item Discounts:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${cartSummary.itemsTotalDiscount.toFixed(2)}
+                  -{formatPrice(cartSummary.itemsTotalDiscount)}
                 </Text>
               </View>
             )}
@@ -975,7 +978,7 @@ export default function CartScreen() {
                 Subtotal after Item Discounts:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${cartSummary.itemsSubtotalAfterDiscount.toFixed(2)}
+                {formatPrice(cartSummary.itemsSubtotalAfterDiscount)}
               </Text>
             </View>
             
@@ -985,18 +988,18 @@ export default function CartScreen() {
                   Cart Discount:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${cartSummary.cartDiscountAmount.toFixed(2)}
+                  -{formatPrice(cartSummary.cartDiscountAmount)}
                 </Text>
               </View>
             )}
-            
+
             {cartSummary.deliveryCost > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   Delivery Cost:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${cartSummary.deliveryCost.toFixed(2)}
+                  -{formatPrice(cartSummary.deliveryCost)}
                 </Text>
               </View>
             )}
@@ -1006,7 +1009,7 @@ export default function CartScreen() {
                 Total:
               </Text>
               <Text style={[styles.totalValue, { color: '#059669' }]}>
-                ${cartSummary.finalTotal.toFixed(2)}
+                {formatPrice(cartSummary.finalTotal)}
               </Text>
             </View>
           </Card>
@@ -1016,7 +1019,7 @@ export default function CartScreen() {
       {/* Checkout Button */}
       <View style={styles.footer}>
         <Button
-          title={getPendingChanges().hasChanges ? `Save & Checkout $${cartSummary?.finalTotal.toFixed(2) || '0.00'}` : `Checkout $${cartSummary?.finalTotal.toFixed(2) || '0.00'}`}
+          title={getPendingChanges().hasChanges ? `Save & Checkout ${formatPrice(cartSummary?.finalTotal ?? 0)}` : `Checkout ${formatPrice(cartSummary?.finalTotal ?? 0)}`}
           onPress={handleCheckout}
           loading={isSaving}
           disabled={!cart || cart.items.length === 0 || isSaving}
