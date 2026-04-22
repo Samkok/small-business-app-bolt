@@ -16,13 +16,15 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
-import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers } from 'lucide-react-native';
+import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers, Plus, Pencil } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { storageService } from '@/src/services/storage';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
 import { unitService, UnitGroup, Unit, ProductUnitPrice } from '@/src/services/units';
 import { Currency } from '@/src/services/currencies';
+import { CurrencyEditorModal } from '@/src/components/settings/CurrencyEditorModal';
+import { UnitGroupEditorModal } from '@/src/components/inventory/UnitGroupEditorModal';
 
 interface ProductFormProps {
   product?: any;
@@ -50,10 +52,23 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
+  const [showCurrencyEditor, setShowCurrencyEditor] = useState(false);
+  const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
+  const [showUnitGroupEditor, setShowUnitGroupEditor] = useState(false);
 
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { currencies, defaultCurrency, formatPrice } = useCurrency(currentBusiness?.id);
+  const { currencies, defaultCurrency, formatPrice, refreshCurrencies } = useCurrency(currentBusiness?.id);
+
+  const reloadUnitGroups = async () => {
+    if (!currentBusiness?.id) return;
+    try {
+      const list = await unitService.getUnitGroups(currentBusiness.id);
+      setUnitGroups(list);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     if (product) {
@@ -329,17 +344,42 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             <View style={styles.pickerRow}>
               <Text style={[styles.pickerLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>Currency</Text>
-              <TouchableOpacity
-                style={[styles.pickerButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={() => setShowCurrencyPicker(true)}
-              >
-                <Text style={[styles.pickerButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {selectedCurrencyId
-                    ? currencies.find(c => c.id === selectedCurrencyId)?.code || 'Select'
-                    : defaultCurrency?.code || 'Default'}
-                </Text>
-                <ChevronDown size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={[styles.pickerButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={() => setShowCurrencyPicker(true)}
+                >
+                  <Text style={[styles.pickerButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {selectedCurrencyId
+                      ? currencies.find(c => c.id === selectedCurrencyId)?.code || 'Select'
+                      : defaultCurrency?.code || 'Default'}
+                  </Text>
+                  <ChevronDown size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+                {selectedCurrencyId && (
+                  <TouchableOpacity
+                    style={[styles.inlineIconButton, { backgroundColor: isDark ? '#374151' : '#eff6ff' }]}
+                    onPress={() => {
+                      const cur = currencies.find(c => c.id === selectedCurrencyId) || null;
+                      setEditingCurrency(cur);
+                      setShowCurrencyEditor(true);
+                    }}
+                    accessibilityLabel="Edit currency"
+                  >
+                    <Pencil size={16} color="#2563eb" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.inlineIconButton, { backgroundColor: isDark ? '#374151' : '#eff6ff' }]}
+                  onPress={() => {
+                    setEditingCurrency(null);
+                    setShowCurrencyEditor(true);
+                  }}
+                  accessibilityLabel="Add currency"
+                >
+                  <Plus size={16} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Input
@@ -384,17 +424,26 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
             <View style={styles.pickerRow}>
               <Text style={[styles.pickerLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>Unit Group</Text>
-              <TouchableOpacity
-                style={[styles.pickerButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                onPress={() => setShowUnitGroupPicker(true)}
-              >
-                <Text style={[styles.pickerButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {selectedUnitGroupId
-                    ? unitGroups.find(g => g.id === selectedUnitGroupId)?.name || 'Select'
-                    : 'None'}
-                </Text>
-                <ChevronDown size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={[styles.pickerButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={() => setShowUnitGroupPicker(true)}
+                >
+                  <Text style={[styles.pickerButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {selectedUnitGroupId
+                      ? unitGroups.find(g => g.id === selectedUnitGroupId)?.name || 'Select'
+                      : 'None'}
+                  </Text>
+                  <ChevronDown size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.inlineIconButton, { backgroundColor: isDark ? '#374151' : '#eff6ff' }]}
+                  onPress={() => setShowUnitGroupEditor(true)}
+                  accessibilityLabel="Add unit group"
+                >
+                  <Plus size={16} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {selectedUnitGroupId && units.length > 0 && (
@@ -562,12 +611,35 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 </TouchableOpacity>
               ))}
               <Text style={[styles.pickerHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                Manage unit groups in Settings - Units
+                Manage unit groups in Inventory - Units
               </Text>
             </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <CurrencyEditorModal
+        visible={showCurrencyEditor}
+        businessId={currentBusiness?.id || ''}
+        currency={editingCurrency}
+        onClose={() => setShowCurrencyEditor(false)}
+        onSaved={(saved) => {
+          refreshCurrencies();
+          setSelectedCurrencyId(saved.id);
+          setShowCurrencyEditor(false);
+        }}
+      />
+
+      <UnitGroupEditorModal
+        visible={showUnitGroupEditor}
+        businessId={currentBusiness?.id || ''}
+        onClose={() => setShowUnitGroupEditor(false)}
+        onSaved={async (saved) => {
+          await reloadUnitGroups();
+          setSelectedUnitGroupId(saved.id);
+          setShowUnitGroupEditor(false);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -648,6 +720,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  pickerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   pickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -655,6 +732,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     gap: 6,
+  },
+  inlineIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pickerButtonText: {
     fontSize: 14,

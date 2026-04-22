@@ -31,7 +31,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
@@ -880,6 +880,22 @@ export default function InventoryScreen() {
                     <Text style={styles.alertText}>!</Text>
                   </View>
                 )}
+              </Card>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push('/inventory/unit-groups')}>
+              <Card style={styles.summaryCard}>
+                <View style={styles.summaryContent}>
+                  <Layers size={24} color="#0d9488" />
+                  <View style={styles.summaryText}>
+                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      Units
+                    </Text>
+                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Box / Pack / Bottle
+                    </Text>
+                  </View>
+                </View>
               </Card>
             </TouchableOpacity>
           </View>
