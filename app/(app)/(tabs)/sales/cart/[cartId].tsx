@@ -51,12 +51,21 @@ export default function CartScreen() {
 
   const [localItemQuantities, setLocalItemQuantities] = useState<Map<string, number>>(new Map());
   const [localItemDiscounts, setLocalItemDiscounts] = useState<Map<string, { type: 'percentage' | 'fixed'; value: number }>>(new Map());
+  const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
 
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { formatPrice, getSymbol } = useCurrency(currentBusiness?.id);
+  const { formatPrice, getSymbol, currencies, defaultCurrency, convertBetween } = useCurrency(currentBusiness?.id);
+
+  const displayAmount = (amount: number) => {
+    if (!displayCurrencyId || displayCurrencyId === defaultCurrency?.id) {
+      return formatPrice(amount);
+    }
+    const converted = convertBetween(amount, defaultCurrency?.id, displayCurrencyId);
+    return formatPrice(converted, displayCurrencyId);
+  };
   const {
     getCart,
     updateCart,
@@ -949,46 +958,71 @@ export default function CartScreen() {
         {/* Order Summary */}
         {cartSummary && (
           <Card style={styles.summaryCard}>
-            <Text style={[styles.summaryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Order Summary
-            </Text>
-            
+            <View style={styles.summaryHeader}>
+              <Text style={[styles.summaryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Order Summary
+              </Text>
+              {currencies.length > 1 && (
+                <View style={styles.currencyPills}>
+                  {currencies.map(c => {
+                    const isSelected = (displayCurrencyId ?? defaultCurrency?.id) === c.id;
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[
+                          styles.currencyPill,
+                          isSelected
+                            ? { backgroundColor: '#2563eb' }
+                            : { backgroundColor: isDark ? '#374151' : '#e5e7eb' },
+                        ]}
+                        onPress={() => setDisplayCurrencyId(c.id)}
+                      >
+                        <Text style={[styles.currencyPillText, { color: isSelected ? '#fff' : (isDark ? '#d1d5db' : '#374151') }]}>
+                          {c.code}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Items Subtotal:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {formatPrice(cartSummary.itemsOriginalTotal)}
+                {displayAmount(cartSummary.itemsOriginalTotal)}
               </Text>
             </View>
-            
+
             {cartSummary.itemsTotalDiscount > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   Item Discounts:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -{formatPrice(cartSummary.itemsTotalDiscount)}
+                  -{displayAmount(cartSummary.itemsTotalDiscount)}
                 </Text>
               </View>
             )}
-            
+
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Subtotal after Item Discounts:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {formatPrice(cartSummary.itemsSubtotalAfterDiscount)}
+                {displayAmount(cartSummary.itemsSubtotalAfterDiscount)}
               </Text>
             </View>
-            
+
             {cartSummary.cartDiscountAmount > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   Cart Discount:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -{formatPrice(cartSummary.cartDiscountAmount)}
+                  -{displayAmount(cartSummary.cartDiscountAmount)}
                 </Text>
               </View>
             )}
@@ -999,17 +1033,17 @@ export default function CartScreen() {
                   Delivery Cost:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -{formatPrice(cartSummary.deliveryCost)}
+                  -{displayAmount(cartSummary.deliveryCost)}
                 </Text>
               </View>
             )}
-            
+
             <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Total:
               </Text>
               <Text style={[styles.totalValue, { color: '#059669' }]}>
-                {formatPrice(cartSummary.finalTotal)}
+                {displayAmount(cartSummary.finalTotal)}
               </Text>
             </View>
           </Card>
@@ -1019,7 +1053,7 @@ export default function CartScreen() {
       {/* Checkout Button */}
       <View style={styles.footer}>
         <Button
-          title={getPendingChanges().hasChanges ? `Save & Checkout ${formatPrice(cartSummary?.finalTotal ?? 0)}` : `Checkout ${formatPrice(cartSummary?.finalTotal ?? 0)}`}
+          title={getPendingChanges().hasChanges ? `Save & Checkout ${displayAmount(cartSummary?.finalTotal ?? 0)}` : `Checkout ${displayAmount(cartSummary?.finalTotal ?? 0)}`}
           onPress={handleCheckout}
           loading={isSaving}
           disabled={!cart || cart.items.length === 0 || isSaving}
@@ -1264,10 +1298,31 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
   },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   summaryTitle: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 12,
+  },
+  currencyPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  currencyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   summaryRow: {
     flexDirection: 'row',

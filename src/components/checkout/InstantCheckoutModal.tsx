@@ -30,6 +30,7 @@ import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 import { formatCurrency } from '@/src/utils/formatCurrency';
+import { useCurrency } from '@/src/hooks/useCurrency';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -80,6 +81,17 @@ export function InstantCheckoutModal() {
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
+
+  const { currencies, defaultCurrency, convertBetween, formatPrice } = useCurrency(currentBusiness?.id);
+
+  const displayAmount = (amount: number) => {
+    if (!displayCurrencyId || displayCurrencyId === defaultCurrency?.id) {
+      return formatPrice(amount);
+    }
+    const converted = convertBetween(amount, defaultCurrency?.id, displayCurrencyId);
+    return formatPrice(converted, displayCurrencyId);
+  };
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -525,7 +537,30 @@ export function InstantCheckoutModal() {
           </View>
 
           <View style={styles.section}>
-            <InstantCheckoutSummary summary={summary} />
+            {currencies.length > 1 && (
+              <View style={styles.currencyRow}>
+                {currencies.map(c => {
+                  const isSelected = (displayCurrencyId ?? defaultCurrency?.id) === c.id;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.currencyPill,
+                        isSelected
+                          ? { backgroundColor: '#2563eb' }
+                          : { backgroundColor: isDark ? '#374151' : '#e5e7eb' },
+                      ]}
+                      onPress={() => setDisplayCurrencyId(c.id)}
+                    >
+                      <Text style={[styles.currencyPillText, { color: isSelected ? '#fff' : (isDark ? '#d1d5db' : '#374151') }]}>
+                        {c.code}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            <InstantCheckoutSummary summary={summary} formatAmount={displayAmount} />
           </View>
         </ScrollView>
 
@@ -953,6 +988,21 @@ const styles = StyleSheet.create({
   },
   section: {
     marginVertical: 16,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  currencyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 16,
