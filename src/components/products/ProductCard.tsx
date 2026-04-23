@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore, Zap } from 'lucide-react-native';
+import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore, Zap, ChevronDown, ChevronUp, Layers } from 'lucide-react-native';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
-import type { Unit, ProductUnit } from '@/src/services/units';
+import type { Unit } from '@/src/services/units';
 
 interface ProductCardProps {
   product: {
@@ -31,12 +31,13 @@ interface ProductCardProps {
   onUnarchive?: (product: any) => void;
   isArchived?: boolean;
   units?: Unit[];
-  unitPrices?: ProductUnit[];
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units, unitPrices }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
+  const [showUnits, setShowUnits] = useState(false);
+  const hasVariants = !!(units && units.length > 0);
   const router = useRouter();
   const { addProduct, openModal } = useInstantCheckout();
   const { formatPrice } = useCurrencyContext();
@@ -118,29 +119,47 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               {formatPrice(product.price, product.currency_id ?? undefined)}
             </Text>
 
-            <View style={styles.stockInfo}>
-              {units && units.length > 0 ? (
-                <Text style={[styles.stockTextSmall, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                  {product.current_stock} base units
-                </Text>
-              ) : (
-                <Text style={[styles.stockText, { color: stockStatus.color }]}>
-                  {product.current_stock} in stock
-                </Text>
-              )}
-            </View>
+            <Text style={[styles.stockText, { color: stockStatus.color }]}>
+              {hasVariants
+                ? `${product.current_stock} base units`
+                : `${product.current_stock} in stock`}
+            </Text>
           </View>
 
-          {units && units.length > 0 && (
-            <View style={[styles.variantsBox, { borderColor: isDark ? '#374151' : '#e5e7eb', backgroundColor: isDark ? '#1f2937' : '#f9fafb' }]}>
-              {units.map(unit => {
+          {hasVariants ? (
+            <TouchableOpacity
+              style={[styles.unitsToggle, { backgroundColor: isDark ? '#374151' : '#eff6ff', borderColor: isDark ? '#4b5563' : '#dbeafe' }]}
+              onPress={() => setShowUnits(prev => !prev)}
+              activeOpacity={0.7}
+            >
+              <Layers size={14} color="#2563eb" />
+              <Text style={[styles.unitsToggleText, { color: '#2563eb' }]}>
+                {showUnits ? 'Hide units' : `View ${units!.length} units`}
+              </Text>
+              {showUnits ? (
+                <ChevronUp size={14} color="#2563eb" />
+              ) : (
+                <ChevronDown size={14} color="#2563eb" />
+              )}
+            </TouchableOpacity>
+          ) : null}
+
+          {hasVariants && showUnits && (
+            <View style={[styles.variantsBox, { borderColor: isDark ? '#374151' : '#e5e7eb', backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+              {units!.map((unit, idx) => {
                 const pu = unitPrices?.find(p => p.unit_id === unit.id);
                 const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
                 const variantPrice = pu?.price ?? product.price;
                 const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
                 const variantName = pu?.name || unit.name;
                 return (
-                  <View key={unit.id} style={styles.variantRow}>
+                  <View
+                    key={unit.id}
+                    style={[
+                      styles.variantRow,
+                      idx < units!.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
+                    ]}
+                  >
                     <View style={styles.variantMain}>
                       <Text style={[styles.variantName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
                         {variantName}
@@ -165,7 +184,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             </View>
           )}
 
-          {product.barcode && (!units || units.length === 0) && (
+          {product.barcode && !hasVariants && (
             <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
               {product.barcode}
             </Text>
@@ -334,18 +353,32 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginBottom: 8,
   },
+  unitsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  unitsToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   variantsBox: {
     borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    borderRadius: 8,
     marginBottom: 8,
-    gap: 4,
+    overflow: 'hidden',
   },
   variantRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     gap: 8,
   },
   variantMain: {
@@ -359,7 +392,7 @@ const styles = StyleSheet.create({
   variantBarcode: {
     fontSize: 10,
     fontFamily: 'monospace',
-    marginTop: 1,
+    marginTop: 2,
   },
   variantMeta: {
     alignItems: 'flex-end',
