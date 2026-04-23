@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,7 @@ import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 import { useCurrency } from '@/src/hooks/useCurrency';
-import { unitService, ProductUnit } from '@/src/services/units';
+import { unitService, ProductUnit, Unit } from '@/src/services/units';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -69,6 +69,7 @@ export function InstantCheckoutModal() {
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnit[]>>({});
+  const [unitsMap, setUnitsMap] = useState<Record<string, Unit[]>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showItemDiscountModal, setShowItemDiscountModal] = useState(false);
@@ -127,17 +128,23 @@ export function InstantCheckoutModal() {
       setProducts(productsData);
 
       const upMap: Record<string, ProductUnit[]> = {};
+      const uMap: Record<string, Unit[]> = {};
       for (const product of productsData) {
         if (product.unit_group_id) {
           try {
-            const prices = await unitService.getProductUnits(product.id);
+            const [prices, units] = await Promise.all([
+              unitService.getProductUnits(product.id),
+              unitService.getUnits(product.unit_group_id),
+            ]);
             if (prices.length > 0) upMap[product.id] = prices;
+            if (units.length > 0) uMap[product.unit_group_id] = units;
           } catch (e) {
-            console.error('Error loading unit prices for product:', product.id, e);
+            console.error('Error loading unit data for product:', product.id, e);
           }
         }
       }
       setUnitPricesMap(upMap);
+      setUnitsMap(uMap);
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
@@ -151,7 +158,66 @@ export function InstantCheckoutModal() {
     setShowProductSelector(false);
   };
 
+  const handleAddProductVariant = (product: any, variant: ProductUnit, unit?: Unit) => {
+    addProduct(product, 1, {
+      unit_id: variant.unit_id,
+      unit_label: variant.name || unit?.name,
+      price: variant.price,
+      conversion_factor: unit?.conversion_factor_to_base ?? 1,
+    });
+    setShowProductSelector(false);
+  };
+
+  type SelectableRow =
+    | { kind: 'base'; key: string; product: any }
+    | { kind: 'variant'; key: string; product: any; variant: ProductUnit; unit?: Unit };
+
+  const selectableRows = useMemo<SelectableRow[]>(() => {
+    const rows: SelectableRow[] = [];
+    const q = searchQuery.trim().toLowerCase();
+
+    for (const product of products) {
+      const variants = unitPricesMap[product.id];
+      const units = product.unit_group_id ? unitsMap[product.unit_group_id] : undefined;
+
+      if (variants && variants.length > 0) {
+        for (const variant of variants) {
+          const unit = units?.find(u => u.id === variant.unit_id);
+          const label = variant.name || unit?.name || '';
+          const matches =
+            !q ||
+            product.name.toLowerCase().includes(q) ||
+            label.toLowerCase().includes(q) ||
+            (variant.barcode || '').toLowerCase().includes(q) ||
+            (product.barcode || '').toLowerCase().includes(q);
+          if (matches) {
+            rows.push({
+              kind: 'variant',
+              key: `${product.id}:${variant.unit_id}`,
+              product,
+              variant,
+              unit,
+            });
+          }
+        }
+      } else {
+        const matches =
+          !q ||
+          product.name.toLowerCase().includes(q) ||
+          (product.barcode || '').toLowerCase().includes(q);
+        if (matches) {
+          rows.push({ kind: 'base', key: product.id, product });
+        }
+      }
+    }
+    return rows;
+  }, [products, unitPricesMap, unitsMap, searchQuery]);
+
+  const barcodeBusyRef = useRef(false);
   const handleBarcodeScanned = async (barcode: string) => {
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+    setTimeout(() => { barcodeBusyRef.current = false; }, 1500);
     setShowBarcodeScanner(false);
     try {
       let matchedProduct: any = null;
@@ -184,10 +250,13 @@ export function InstantCheckoutModal() {
       }
 
       if (matchedUnit) {
+        const units = matchedProduct.unit_group_id ? unitsMap[matchedProduct.unit_group_id] : undefined;
+        const unit = units?.find(u => u.id === matchedUnit.unit_id);
         addProduct(matchedProduct, 1, {
           unit_id: matchedUnit.unit_id,
-          unit_label: matchedUnit.name ?? undefined,
+          unit_label: matchedUnit.name ?? unit?.name,
           price: matchedUnit.price,
+          conversion_factor: unit?.conversion_factor_to_base ?? 1,
         });
       } else {
         addProduct(matchedProduct, 1);
@@ -657,36 +726,69 @@ export function InstantCheckoutModal() {
             onChangeText={setSearchQuery}
           />
           <FlatList
-            data={products.filter(p =>
-              p.name.toLowerCase().includes(searchQuery.toLowerCase())
-            )}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-                onPress={() => handleAddProduct(item)}
-              >
-                {item.image_url ? (
-                  <Image source={{ uri: item.image_url }} style={styles.productItemImage} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                    <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+            data={selectableRows}
+            keyExtractor={(row) => row.key}
+            renderItem={({ item: row }) => {
+              const p = row.product;
+              if (row.kind === 'variant') {
+                const conversion = row.unit?.conversion_factor_to_base ?? 1;
+                const maxUnits = Math.floor((p.current_stock || 0) / conversion);
+                const label = row.variant.name || row.unit?.name || 'Unit';
+                return (
+                  <TouchableOpacity
+                    style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                    onPress={() => handleAddProductVariant(p, row.variant, row.unit)}
+                    disabled={maxUnits <= 0}
+                  >
+                    {p.image_url ? (
+                      <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                        <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                      </View>
+                    )}
+                    <View style={styles.productItemInfo}>
+                      <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                        {p.name} <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontWeight: '500' }}>· {label}</Text>
+                      </Text>
+                      <Text style={[styles.productItemPrice, { color: '#059669' }]}>
+                        {formatPrice(row.variant.price, row.variant.currency_id ?? p.currency_id ?? undefined)}
+                      </Text>
+                      <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                        Stock: {maxUnits} {label}{row.variant.barcode ? `  ·  ${row.variant.barcode}` : ''}
+                      </Text>
+                    </View>
+                    <Plus size={24} color={maxUnits > 0 ? '#2563eb' : '#9ca3af'} />
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                  onPress={() => handleAddProduct(p)}
+                >
+                  {p.image_url ? (
+                    <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                      <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                    </View>
+                  )}
+                  <View style={styles.productItemInfo}>
+                    <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {p.name}
+                    </Text>
+                    <Text style={[styles.productItemPrice, { color: '#059669' }]}>
+                      {formatPrice(p.price, p.currency_id ?? undefined)}
+                    </Text>
+                    <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      Stock: {p.current_stock}
+                    </Text>
                   </View>
-                )}
-                <View style={styles.productItemInfo}>
-                  <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                    {formatPrice(item.price, item.currency_id ?? undefined)}
-                  </Text>
-                  <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                    Stock: {item.current_stock}
-                  </Text>
-                </View>
-                <Plus size={24} color="#2563eb" />
-              </TouchableOpacity>
-            )}
+                  <Plus size={24} color="#2563eb" />
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <Text style={[styles.emptyText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                 {loadingProducts ? 'Loading products...' : 'No products available'}

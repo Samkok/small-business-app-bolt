@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { useTheme } from '@/src/context/ThemeContext';
 import { X, Barcode } from 'lucide-react-native';
@@ -12,8 +12,14 @@ interface BarcodeScannerProps {
 export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
-  const scannedRef = useRef(false);
+  const lockRef = useRef(false);
+  const lastRef = useRef<{ data: string; at: number } | null>(null);
+  const onScanRef = useRef(onBarcodeScan);
   const { isDark } = useTheme();
+
+  useEffect(() => {
+    onScanRef.current = onBarcodeScan;
+  }, [onBarcodeScan]);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -24,20 +30,27 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
     getCameraPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  // Stable callback — never re-created across renders, so CameraView never
+  // re-subscribes. Guards against: (a) native camera emitting the same barcode
+  // across multiple frames, (b) React re-renders, (c) same-code re-scans within
+  // a short window.
+  const handleBarCodeScanned = useCallback(({ data }: { type: string; data: string }) => {
     if (!data || typeof data !== 'string') return;
-    // Synchronous ref guard prevents the camera from firing this callback
-    // multiple times before React has a chance to re-render with scanned=true.
-    if (scannedRef.current) return;
-    scannedRef.current = true;
-    setScanned(true);
-    onBarcodeScan(data);
-  };
+    if (lockRef.current) return;
+    const now = Date.now();
+    if (lastRef.current && lastRef.current.data === data && now - lastRef.current.at < 2000) return;
 
-  const handleScanAgain = () => {
-    scannedRef.current = false;
+    lockRef.current = true;
+    lastRef.current = { data, at: now };
+    setScanned(true);
+    onScanRef.current(data);
+  }, []);
+
+  const handleScanAgain = useCallback(() => {
+    lockRef.current = false;
+    lastRef.current = null;
     setScanned(false);
-  };
+  }, []);
 
   if (hasPermission === null) {
     return (
@@ -89,7 +102,7 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         {/* CameraView without children */}
         <CameraView
           style={styles.camera}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          onBarcodeScanned={handleBarCodeScanned}
           barcodeScannerSettings={{
             barcodeTypes: ['qr', 'pdf417', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
           }}

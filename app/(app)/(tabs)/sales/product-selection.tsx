@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -210,7 +210,12 @@ export default function ProductSelectionScreen() {
     }));
   }, [selectedProducts, products, selectedUnits, unitGroupsMap]);
 
+  const barcodeBusyRef = useRef(false);
   const handleBarcodeScanned = async (barcode: string) => {
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+    setTimeout(() => { barcodeBusyRef.current = false; }, 1500);
+
     setShowBarcodeScanner(false);
     setSearchQuery(barcode);
 
