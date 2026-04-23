@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,9 @@ import { ArrowLeft, Package, Search, Plus, Minus, Barcode, Save } from 'lucide-r
 import { productService } from '@/src/services/products';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
+import { useCurrency } from '@/src/hooks/useCurrency';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -31,12 +34,17 @@ export default function ProductSelectionScreen() {
   const [initialProducts, setInitialProducts] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  
+  const [unitGroupsMap, setUnitGroupsMap] = useState<Record<string, Unit[]>>({});
+  const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnit[]>>({});
+  const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
+  const [showUnitPicker, setShowUnitPicker] = useState<string | null>(null);
+
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { getCart, addItemToCart, updateCartItem, refreshCarts } = useCart();
+  const { formatPrice, getSymbol } = useCurrency(currentBusiness?.id);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -51,12 +59,27 @@ export default function ProductSelectionScreen() {
     if (!currentBusiness?.id || !cartId) return;
 
     try {
-      // Load products
       const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
       setFilteredProducts(productsData);
 
-      // Get cart to initialize selected products
+      const ugMap: Record<string, Unit[]> = {};
+      const upMap: Record<string, ProductUnit[]> = {};
+      for (const product of productsData) {
+        if (product.unit_group_id) {
+          try {
+            const units = await unitService.getUnits(product.unit_group_id);
+            ugMap[product.id] = units;
+            const prices = await unitService.getProductUnits(product.id);
+            upMap[product.id] = prices;
+          } catch (e) {
+            console.error('Error loading units for product:', product.id, e);
+          }
+        }
+      }
+      setUnitGroupsMap(ugMap);
+      setUnitPricesMap(upMap);
+
       const cart = getCart(cartId as string);
       if (cart) {
         // Initialize selected products from existing cart items
@@ -79,14 +102,21 @@ export default function ProductSelectionScreen() {
     if (debouncedSearchQuery.trim() === '') {
       setFilteredProducts(products);
     } else {
-      const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-        (product.barcode && product.barcode.includes(debouncedSearchQuery)) ||
-        (product.description && product.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
-      );
+      const q = debouncedSearchQuery.toLowerCase();
+      const filtered = products.filter(product => {
+        if (product.name.toLowerCase().includes(q)) return true;
+        if (product.barcode && product.barcode.toLowerCase().includes(q)) return true;
+        if (product.description && product.description.toLowerCase().includes(q)) return true;
+        // Check unit-specific barcodes
+        const unitPrices = unitPricesMap[product.id];
+        if (unitPrices) {
+          return unitPrices.some(up => up.barcode && up.barcode.toLowerCase().includes(q));
+        }
+        return false;
+      });
       setFilteredProducts(filtered);
     }
-  }, [products, debouncedSearchQuery]);
+  }, [products, debouncedSearchQuery, unitPricesMap]);
 
   const savePendingChanges = useCallback(async () => {
     if (!cartId || isSaving) return;
@@ -133,9 +163,10 @@ export default function ProductSelectionScreen() {
         await updateCartItem(cartId as string, itemId, { quantity });
       }
 
-      // Finally, add new items sequentially to avoid race conditions
       for (const { product, quantity } of additions) {
-        await addItemToCart(cartId as string, product, quantity);
+        const unitId = selectedUnits[product.id];
+        const productWithUnit = unitId ? { ...product, unit_id: unitId } : product;
+        await addItemToCart(cartId as string, productWithUnit, quantity);
         // Refresh cart after each addition to get updated state
         await refreshCarts();
         cart = getCart(cartId as string);
@@ -162,8 +193,14 @@ export default function ProductSelectionScreen() {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
-    if (newQuantity > product.current_stock) {
-      Alert.alert('Stock Limit', `Only ${product.current_stock} items available in stock.`);
+    const unitId = selectedUnits[productId];
+    const units = unitGroupsMap[productId];
+    const selectedUnit = unitId ? units?.find(u => u.id === unitId) : null;
+    const conversionFactor = selectedUnit?.conversion_factor_to_base || 1;
+    const maxUnits = Math.floor(product.current_stock / conversionFactor);
+
+    if (newQuantity > maxUnits) {
+      Alert.alert('Stock Limit', `Only ${maxUnits} ${selectedUnit?.name || 'items'} available in stock.`);
       return;
     }
 
@@ -171,13 +208,28 @@ export default function ProductSelectionScreen() {
       ...prev,
       [productId]: newQuantity
     }));
-  }, [selectedProducts, products]);
+  }, [selectedProducts, products, selectedUnits, unitGroupsMap]);
 
+  const barcodeBusyRef = useRef(false);
   const handleBarcodeScanned = async (barcode: string) => {
-    setShowBarcodeScanner(false);
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+    setTimeout(() => { barcodeBusyRef.current = false; }, 1500);
 
-    // Simply set the search query to the scanned barcode
+    setShowBarcodeScanner(false);
     setSearchQuery(barcode);
+
+    // If the barcode exactly matches a unit-specific barcode, auto-select that unit
+    for (const product of products) {
+      const unitPrices = unitPricesMap[product.id];
+      if (unitPrices) {
+        const matchedUnit = unitPrices.find(up => up.barcode === barcode);
+        if (matchedUnit) {
+          setSelectedUnits(prev => ({ ...prev, [product.id]: matchedUnit.unit_id }));
+          break;
+        }
+      }
+    }
   };
 
   const getTotalItems = useCallback(() => {
@@ -236,12 +288,41 @@ export default function ProductSelectionScreen() {
     }
   }, [router, getPendingChangesCount, savePendingChanges]);
 
+  const getDisplayPrice = useCallback((product: any) => {
+    const unitId = selectedUnits[product.id];
+    if (unitId) {
+      const prices = unitPricesMap[product.id];
+      const unitPrice = prices?.find(p => p.unit_id === unitId);
+      if (unitPrice) return unitPrice.price;
+    }
+    return product.price;
+  }, [selectedUnits, unitPricesMap]);
+
+  const getDisplayUnitName = useCallback((productId: string) => {
+    const unitId = selectedUnits[productId];
+    if (unitId) {
+      const units = unitGroupsMap[productId];
+      const unit = units?.find(u => u.id === unitId);
+      return unit?.name || '';
+    }
+    return '';
+  }, [selectedUnits, unitGroupsMap]);
+
   const renderProductItem = useCallback(({ item }: { item: any }) => {
     const quantity = selectedProducts[item.id] || 0;
     const initialQuantity = initialProducts[item.id] || 0;
     const hasChanges = quantity !== initialQuantity;
     const isOutOfStock = item.current_stock <= 0;
-    const isMaxStock = quantity >= item.current_stock;
+
+    const units = unitGroupsMap[item.id];
+    const hasUnits = units && units.length > 0;
+    const unitId = selectedUnits[item.id];
+    const selectedUnit = unitId ? units?.find((u: Unit) => u.id === unitId) : null;
+    const conversionFactor = selectedUnit?.conversion_factor_to_base || 1;
+    const maxUnits = Math.floor(item.current_stock / conversionFactor);
+    const isMaxStock = quantity >= maxUnits;
+    const displayPrice = getDisplayPrice(item);
+    const unitName = getDisplayUnitName(item.id);
 
     return (
       <Card style={styles.productCard}>
@@ -263,12 +344,12 @@ export default function ProductSelectionScreen() {
             </Text>
             {hasChanges && (
               <View style={styles.changedBadge}>
-                <Text style={styles.changedBadgeText}>•</Text>
+                <Text style={styles.changedBadgeText}>{'\u2022'}</Text>
               </View>
             )}
           </View>
           <Text style={[styles.productPrice, { color: '#059669' }]}>
-            ${item.price.toFixed(2)}
+            {formatPrice(displayPrice, item.currency_id)}{unitName ? ` / ${unitName}` : ''}
           </Text>
           <Text style={[
             styles.productStock,
@@ -280,6 +361,16 @@ export default function ProductSelectionScreen() {
           ]}>
             Stock: {item.current_stock}
           </Text>
+          {hasUnits && (
+            <TouchableOpacity
+              style={[styles.unitPickerButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+              onPress={() => setShowUnitPicker(item.id)}
+            >
+              <Text style={[styles.unitPickerText, { color: '#2563eb' }]}>
+                {selectedUnit ? selectedUnit.name : 'Select Unit'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.productActions}>
@@ -319,7 +410,7 @@ export default function ProductSelectionScreen() {
         </View>
       </Card>
     );
-  }, [selectedProducts, initialProducts, isDark, handleQuantityChange]);
+  }, [selectedProducts, initialProducts, isDark, handleQuantityChange, unitGroupsMap, selectedUnits, getDisplayPrice, getDisplayUnitName, formatPrice]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -468,6 +559,73 @@ export default function ProductSelectionScreen() {
           onClose={() => setShowBarcodeScanner(false)}
         />
       </Modal>
+
+      {showUnitPicker && (
+        <View style={styles.modalOverlay}>
+          <Card style={styles.unitPickerModal}>
+            <Text style={[styles.unitPickerModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Select Unit
+            </Text>
+            {unitGroupsMap[showUnitPicker]?.map((unit) => {
+              const prices = unitPricesMap[showUnitPicker];
+              const unitPrice = prices?.find(p => p.unit_id === unit.id);
+              const product = products.find(p => p.id === showUnitPicker);
+              const price = unitPrice?.price || product?.price || 0;
+              const isSelected = selectedUnits[showUnitPicker] === unit.id;
+
+              return (
+                <TouchableOpacity
+                  key={unit.id}
+                  style={[
+                    styles.unitOption,
+                    {
+                      backgroundColor: isSelected ? '#2563eb20' : 'transparent',
+                      borderColor: isSelected ? '#2563eb' : (isDark ? '#4b5563' : '#e5e7eb'),
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedUnits(prev => ({ ...prev, [showUnitPicker!]: unit.id }));
+                    setShowUnitPicker(null);
+                  }}
+                >
+                  <View>
+                    <Text style={[styles.unitOptionName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {unit.name}
+                    </Text>
+                    <Text style={[styles.unitOptionDetail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      {unit.is_base_unit ? 'Base unit' : `= ${unit.conversion_factor_to_base} base units`}
+                    </Text>
+                  </View>
+                  <Text style={[styles.unitOptionPrice, { color: '#059669' }]}>
+                    {formatPrice(price, product?.currency_id)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.unitOption, { borderColor: isDark ? '#4b5563' : '#e5e7eb' }]}
+              onPress={() => {
+                setSelectedUnits(prev => {
+                  const next = { ...prev };
+                  delete next[showUnitPicker!];
+                  return next;
+                });
+                setShowUnitPicker(null);
+              }}
+            >
+              <Text style={[styles.unitOptionName, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Default (base price)
+              </Text>
+            </TouchableOpacity>
+            <Button
+              title="Cancel"
+              variant="outline"
+              onPress={() => setShowUnitPicker(null)}
+              style={{ marginTop: 12 }}
+            />
+          </Card>
+        </View>
+      )}
     </View>
   );
 }
@@ -712,5 +870,60 @@ const styles = StyleSheet.create({
   },
   errorButton: {
     minWidth: 120,
+  },
+  unitPickerButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  unitPickerText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 100,
+  },
+  unitPickerModal: {
+    width: '100%',
+    maxWidth: 360,
+    padding: 20,
+  },
+  unitPickerModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  unitOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  unitOptionName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  unitOptionDetail: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  unitOptionPrice: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

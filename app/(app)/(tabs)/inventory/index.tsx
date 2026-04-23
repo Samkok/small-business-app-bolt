@@ -31,13 +31,14 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
 import { supabase } from '@/src/config/supabase';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -70,6 +71,8 @@ export default function InventoryScreen() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
+  const [unitGroupsCache, setUnitGroupsCache] = useState<Record<string, Unit[]>>({});
+  const [unitPricesCache, setUnitPricesCache] = useState<Record<string, ProductUnit[]>>({});
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -216,6 +219,33 @@ export default function InventoryScreen() {
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
       setCurrentPage(page);
+
+      // Load units and per-product unit prices for multi-unit products
+      const multiUnitProducts = productsData.filter((p: any) => p.unit_group_id);
+      if (multiUnitProducts.length > 0) {
+        const newUnitEntries: Record<string, Unit[]> = {};
+        const newPriceEntries: Record<string, ProductUnit[]> = {};
+        await Promise.all(
+          multiUnitProducts.map(async (p: any) => {
+            try {
+              const [units, prices] = await Promise.all([
+                unitService.getUnits(p.unit_group_id),
+                unitService.getProductUnits(p.id),
+              ]);
+              newUnitEntries[p.unit_group_id] = units;
+              newPriceEntries[p.id] = prices;
+            } catch {
+              // silently ignore
+            }
+          })
+        );
+        if (Object.keys(newUnitEntries).length > 0) {
+          setUnitGroupsCache(prev => ({ ...prev, ...newUnitEntries }));
+        }
+        if (Object.keys(newPriceEntries).length > 0) {
+          setUnitPricesCache(prev => ({ ...prev, ...newPriceEntries }));
+        }
+      }
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert(t('common.error'), 'Failed to load products');
@@ -725,6 +755,8 @@ export default function InventoryScreen() {
       onDelete={handleDeleteProduct}
       onUnarchive={handleUnarchiveProduct}
       isArchived={showArchived}
+      units={item.unit_group_id ? unitGroupsCache[item.unit_group_id] : undefined}
+      unitPrices={unitPricesCache[item.id]}
     />
   );
 
@@ -734,19 +766,23 @@ export default function InventoryScreen() {
         <View style={styles.tabContent}>
           <View style={styles.summaryCards}>
             <SkeletonCard style={styles.summaryCard}>
-              <View style={styles.summaryContent}>
-                <SkeletonLoader height={24} width={24} borderRadius={12} />
-                <View style={styles.summaryText}>
-                  <SkeletonLoader height={20} width="60%" style={{ marginBottom: 4 }} />
-                  <SkeletonLoader height={12} width="80%" />
-                </View>
-              </View>
+              <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={24} width="50%" style={{ marginBottom: 6 }} />
+              <SkeletonLoader height={12} width="70%" />
             </SkeletonCard>
             <SkeletonCard style={styles.summaryCard}>
+              <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={24} width="50%" style={{ marginBottom: 6 }} />
+              <SkeletonLoader height={12} width="70%" />
+            </SkeletonCard>
+          </View>
+          <View>
+            <SkeletonCard style={{ marginBottom: 16, padding: 12 }}>
               <View style={styles.summaryContent}>
-                <SkeletonLoader height={24} width={24} borderRadius={12} />
+                <SkeletonLoader height={16} width={16} borderRadius={8} />
                 <View style={styles.summaryText}>
-                  <SkeletonLoader height={20} width="60%" style={{ marginBottom: 4 }} />
+                  <SkeletonLoader height={14} width="60%" style={{ marginBottom: 4 }} />
+                  <SkeletonLoader height={12} width="80%"  />
                   <SkeletonLoader height={12} width="80%" />
                 </View>
               </View>
@@ -828,61 +864,70 @@ export default function InventoryScreen() {
         </View>
 
         {!showArchived && (
-          <View style={styles.summaryCards}>
-            <Card style={styles.summaryCard}>
-              <View style={styles.summaryContent}>
-                <Package size={24} color="#2563eb" />
-                <View style={styles.summaryText}>
-                  <View style={styles.summaryTopRow}>
-                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {totalProducts}
-                    </Text>
-                    <Animated.View style={{
-                      opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-                      transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.05] }) }],
-                      shadowColor: '#2563eb',
-                      shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.8] }) as any,
-                      shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 8] }) as any,
-                    }}>
-                      <TouchableOpacity
-                        style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}
-                        onPress={() => router.push('/inventory/product-insight')}
-                        activeOpacity={0.75}
-                      >
-                        <Sparkles size={14} color="#2563eb" />
-                        <Text style={styles.insightButtonText}>Insight</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  </View>
-                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Total Products
+          <>
+            <View style={styles.summaryCards}>
+              <Card style={styles.summaryCard}>
+                <View style={styles.summaryIconRow}>
+                  <Package size={20} color="#2563eb" />
+                  <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {totalProducts}
                   </Text>
                 </View>
-              </View>
-            </Card>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Total Products
+                </Text>
+                <Animated.View style={{
+                  marginTop: 8,
+                  opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                  transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] }) }],
+                }}>
+                  <TouchableOpacity
+                    style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}
+                    onPress={() => router.push('/inventory/product-insight')}
+                    activeOpacity={0.75}
+                  >
+                    <Sparkles size={13} color="#2563eb" />
+                    <Text style={styles.insightButtonText}>View Insight</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              </Card>
 
-            <TouchableOpacity onPress={handleLowStockPress}>
-              <Card style={styles.summaryCard}>
-                <View style={styles.summaryContent}>
-                  <AlertTriangle size={24} color="#ea580c" />
-                  <View style={styles.summaryText}>
-                    <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              <TouchableOpacity onPress={handleLowStockPress} style={styles.summaryCard}>
+                <Card style={styles.summaryCardInner}>
+                  <View style={styles.summaryIconRow}>
+                    <AlertTriangle size={20} color={lowStockCount > 0 ? '#ea580c' : (isDark ? '#9ca3af' : '#6b7280')} />
+                    <Text style={[styles.summaryValue, { color: lowStockCount > 0 ? '#ea580c' : (isDark ? '#f9fafb' : '#111827') }]}>
                       {lowStockCount}
                     </Text>
-                    <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('inventory.lowStock')}
-                    </Text>
+                    {lowStockCount > 0 && (
+                      <View style={styles.alertDot} />
+                    )}
                   </View>
-                </View>
-                {lowStockCount > 0 && (
-                  <View style={styles.alertIndicator}>
-                    <Text style={styles.alertText}>!</Text>
-                  </View>
-                )}
-              </Card>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {t('inventory.lowStock')}
+                  </Text>
+                  <Text style={[styles.summaryAction, { color: '#ea580c' }]}>
+                    Tap to view →
+                  </Text>
+                </Card>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.unitGroupsChip, { backgroundColor: isDark ? '#134e4a' : '#f0fdfa', borderColor: isDark ? '#0d9488' : '#99f6e4' }]}
+              onPress={() => router.push('/inventory/unit-groups')}
+              activeOpacity={0.7}
+            >
+              <Layers size={16} color="#0d9488" />
+              <Text style={[styles.unitGroupsChipText, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>
+                Unit Groups
+              </Text>
+              <Text style={[styles.unitGroupsChipSub, { color: isDark ? '#5eead4' : '#14b8a6' }]}>
+                Manage Box, Pack, Bottle &amp; more
+              </Text>
+              <Text style={[styles.unitGroupsChipArrow, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>›</Text>
             </TouchableOpacity>
-          </View>
+          </>
         )}
 
         {isSearching && (
@@ -1493,13 +1538,22 @@ const styles = StyleSheet.create({
   },
   summaryCards: {
     flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 10,
+    gap: 10,
   },
   summaryCard: {
     flex: 1,
-    padding: 16,
-    position: 'relative',
+    padding: 14,
+  },
+  summaryCardInner: {
+    flex: 1,
+    padding: 14,
+  },
+  summaryIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   summaryContent: {
     flexDirection: 'row',
@@ -1509,21 +1563,49 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
   },
   summaryLabel: {
     fontSize: 12,
+    marginBottom: 6,
   },
-  summaryTopRow: {
+  summaryAction: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  alertDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ea580c',
+  },
+  unitGroupsChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
     gap: 8,
-    marginBottom: 2,
+  },
+  unitGroupsChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  unitGroupsChipSub: {
+    flex: 1,
+    fontSize: 12,
+  },
+  unitGroupsChipArrow: {
+    fontSize: 18,
+    fontWeight: '300',
   },
   insightButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,

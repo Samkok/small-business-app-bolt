@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,8 @@ import { InstantCheckoutSummary } from './InstantCheckoutSummary';
 import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
+import { useCurrency } from '@/src/hooks/useCurrency';
+import { unitService, ProductUnit, Unit } from '@/src/services/units';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -66,6 +68,8 @@ export function InstantCheckoutModal() {
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnit[]>>({});
+  const [unitsMap, setUnitsMap] = useState<Record<string, Unit[]>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showItemDiscountModal, setShowItemDiscountModal] = useState(false);
@@ -79,6 +83,17 @@ export function InstantCheckoutModal() {
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
+
+  const { currencies, defaultCurrency, convertBetween, formatPrice } = useCurrency(currentBusiness?.id);
+
+  const displayAmount = (amount: number) => {
+    if (!displayCurrencyId || displayCurrencyId === defaultCurrency?.id) {
+      return formatPrice(amount);
+    }
+    const converted = convertBetween(amount, defaultCurrency?.id, displayCurrencyId);
+    return formatPrice(converted, displayCurrencyId);
+  };
   const [completedSaleInfo, setCompletedSaleInfo] = useState<{
     saleId: string;
     amount: number;
@@ -111,6 +126,25 @@ export function InstantCheckoutModal() {
     try {
       const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
+
+      const upMap: Record<string, ProductUnit[]> = {};
+      const uMap: Record<string, Unit[]> = {};
+      for (const product of productsData) {
+        if (product.unit_group_id) {
+          try {
+            const [prices, units] = await Promise.all([
+              unitService.getProductUnits(product.id),
+              unitService.getUnits(product.unit_group_id),
+            ]);
+            if (prices.length > 0) upMap[product.id] = prices;
+            if (units.length > 0) uMap[product.unit_group_id] = units;
+          } catch (e) {
+            console.error('Error loading unit data for product:', product.id, e);
+          }
+        }
+      }
+      setUnitPricesMap(upMap);
+      setUnitsMap(uMap);
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
@@ -124,32 +158,108 @@ export function InstantCheckoutModal() {
     setShowProductSelector(false);
   };
 
-  const handleBarcodeScanned = async (barcode: string) => {
-    try {
-      console.log('Barcode scanned:', barcode);
-      console.log('Available products:', products.length);
+  const handleAddProductVariant = (product: any, variant: ProductUnit, unit?: Unit) => {
+    addProduct(product, 1, {
+      unit_id: variant.unit_id,
+      unit_label: variant.name || unit?.name,
+      price: variant.price,
+      conversion_factor: unit?.conversion_factor_to_base ?? 1,
+    });
+    setShowProductSelector(false);
+  };
 
-      const product = products.find(p => p.barcode === barcode);
+  type SelectableRow =
+    | { kind: 'base'; key: string; product: any }
+    | { kind: 'variant'; key: string; product: any; variant: ProductUnit; unit?: Unit };
 
-      if (product) {
-        console.log('Product found:', product.name);
+  const selectableRows = useMemo<SelectableRow[]>(() => {
+    const rows: SelectableRow[] = [];
+    const q = searchQuery.trim().toLowerCase();
 
-        if (product.current_stock <= 0) {
-          Alert.alert('Out of Stock', `${product.name} is currently out of stock.`);
-          return;
+    for (const product of products) {
+      const variants = unitPricesMap[product.id];
+      const units = product.unit_group_id ? unitsMap[product.unit_group_id] : undefined;
+
+      if (variants && variants.length > 0) {
+        for (const variant of variants) {
+          const unit = units?.find(u => u.id === variant.unit_id);
+          const label = variant.name || unit?.name || '';
+          const matches =
+            !q ||
+            product.name.toLowerCase().includes(q) ||
+            label.toLowerCase().includes(q) ||
+            (variant.barcode || '').toLowerCase().includes(q) ||
+            (product.barcode || '').toLowerCase().includes(q);
+          if (matches) {
+            rows.push({
+              kind: 'variant',
+              key: `${product.id}:${variant.unit_id}`,
+              product,
+              variant,
+              unit,
+            });
+          }
         }
-
-        addProduct(product, 1);
-        setShowBarcodeScanner(false);
-
-        setTimeout(() => {
-          setShowProductSelector(true);
-        }, 300);
-
-        Alert.alert('Success', `Added ${product.name} to checkout`);
       } else {
-        console.log('Product not found for barcode:', barcode);
+        const matches =
+          !q ||
+          product.name.toLowerCase().includes(q) ||
+          (product.barcode || '').toLowerCase().includes(q);
+        if (matches) {
+          rows.push({ kind: 'base', key: product.id, product });
+        }
+      }
+    }
+    return rows;
+  }, [products, unitPricesMap, unitsMap, searchQuery]);
+
+  const barcodeBusyRef = useRef(false);
+  const handleBarcodeScanned = async (barcode: string) => {
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+    setTimeout(() => { barcodeBusyRef.current = false; }, 1500);
+    setShowBarcodeScanner(false);
+    try {
+      let matchedProduct: any = null;
+      let matchedUnit: ProductUnit | null = null;
+
+      for (const product of products) {
+        const unitPrices = unitPricesMap[product.id];
+        if (unitPrices) {
+          const found = unitPrices.find(up => up.barcode === barcode);
+          if (found) {
+            matchedProduct = product;
+            matchedUnit = found;
+            break;
+          }
+        }
+      }
+
+      if (!matchedProduct) {
+        matchedProduct = products.find(p => p.barcode === barcode) ?? null;
+      }
+
+      if (!matchedProduct) {
         Alert.alert('Not Found', 'Product with this barcode was not found.');
+        return;
+      }
+
+      if (matchedProduct.current_stock <= 0) {
+        Alert.alert('Out of Stock', `${matchedProduct.name} is currently out of stock.`);
+        return;
+      }
+
+      if (matchedUnit) {
+        const units = matchedProduct.unit_group_id ? unitsMap[matchedProduct.unit_group_id] : undefined;
+        const unit = units?.find(u => u.id === matchedUnit.unit_id);
+        addProduct(matchedProduct, 1, {
+          unit_id: matchedUnit.unit_id,
+          unit_label: matchedUnit.name ?? unit?.name,
+          price: matchedUnit.price,
+          conversion_factor: unit?.conversion_factor_to_base ?? 1,
+        });
+      } else {
+        addProduct(matchedProduct, 1);
       }
     } catch (error) {
       console.error('Error processing barcode:', error);
@@ -524,7 +634,30 @@ export function InstantCheckoutModal() {
           </View>
 
           <View style={styles.section}>
-            <InstantCheckoutSummary summary={summary} />
+            {currencies.length > 1 && (
+              <View style={styles.currencyRow}>
+                {currencies.map(c => {
+                  const isSelected = (displayCurrencyId ?? defaultCurrency?.id) === c.id;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.currencyPill,
+                        isSelected
+                          ? { backgroundColor: '#2563eb' }
+                          : { backgroundColor: isDark ? '#374151' : '#e5e7eb' },
+                      ]}
+                      onPress={() => setDisplayCurrencyId(c.id)}
+                    >
+                      <Text style={[styles.currencyPillText, { color: isSelected ? '#fff' : (isDark ? '#d1d5db' : '#374151') }]}>
+                        {c.code}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            <InstantCheckoutSummary summary={summary} formatAmount={displayAmount} />
           </View>
         </ScrollView>
 
@@ -593,36 +726,69 @@ export function InstantCheckoutModal() {
             onChangeText={setSearchQuery}
           />
           <FlatList
-            data={products.filter(p =>
-              p.name.toLowerCase().includes(searchQuery.toLowerCase())
-            )}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-                onPress={() => handleAddProduct(item)}
-              >
-                {item.image_url ? (
-                  <Image source={{ uri: item.image_url }} style={styles.productItemImage} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                    <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+            data={selectableRows}
+            keyExtractor={(row) => row.key}
+            renderItem={({ item: row }) => {
+              const p = row.product;
+              if (row.kind === 'variant') {
+                const conversion = row.unit?.conversion_factor_to_base ?? 1;
+                const maxUnits = Math.floor((p.current_stock || 0) / conversion);
+                const label = row.variant.name || row.unit?.name || 'Unit';
+                return (
+                  <TouchableOpacity
+                    style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                    onPress={() => handleAddProductVariant(p, row.variant, row.unit)}
+                    disabled={maxUnits <= 0}
+                  >
+                    {p.image_url ? (
+                      <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                        <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                      </View>
+                    )}
+                    <View style={styles.productItemInfo}>
+                      <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                        {p.name} <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontWeight: '500' }}>· {label}</Text>
+                      </Text>
+                      <Text style={[styles.productItemPrice, { color: '#059669' }]}>
+                        {formatPrice(row.variant.price, row.variant.currency_id ?? p.currency_id ?? undefined)}
+                      </Text>
+                      <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                        Stock: {maxUnits} {label}{row.variant.barcode ? `  ·  ${row.variant.barcode}` : ''}
+                      </Text>
+                    </View>
+                    <Plus size={24} color={maxUnits > 0 ? '#2563eb' : '#9ca3af'} />
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                  onPress={() => handleAddProduct(p)}
+                >
+                  {p.image_url ? (
+                    <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                      <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                    </View>
+                  )}
+                  <View style={styles.productItemInfo}>
+                    <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {p.name}
+                    </Text>
+                    <Text style={[styles.productItemPrice, { color: '#059669' }]}>
+                      {formatPrice(p.price, p.currency_id ?? undefined)}
+                    </Text>
+                    <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      Stock: {p.current_stock}
+                    </Text>
                   </View>
-                )}
-                <View style={styles.productItemInfo}>
-                  <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                    ${item.price.toFixed(2)}
-                  </Text>
-                  <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                    Stock: {item.current_stock}
-                  </Text>
-                </View>
-                <Plus size={24} color="#2563eb" />
-              </TouchableOpacity>
-            )}
+                  <Plus size={24} color="#2563eb" />
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <Text style={[styles.emptyText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                 {loadingProducts ? 'Loading products...' : 'No products available'}
@@ -952,6 +1118,21 @@ const styles = StyleSheet.create({
   },
   section: {
     marginVertical: 16,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  currencyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 16,

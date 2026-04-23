@@ -215,7 +215,23 @@ export const productService = {
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    if (data) return data;
+
+    // Fall back to per-product variant barcodes (product_unit_prices.barcode).
+    // A scanned code may identify a specific unit variant (e.g. Box vs Bottle) of a product.
+    const { data: variantMatches, error: variantError } = await supabase
+      .from('product_unit_prices')
+      .select('product_id, products(*)')
+      .eq('business_id', businessId)
+      .eq('barcode', barcode)
+      .limit(1)
+      .maybeSingle();
+
+    if (variantError && variantError.code !== 'PGRST116') throw variantError;
+    if (!variantMatches) return null;
+    const matchedProduct: any = (variantMatches as any).products;
+    if (!matchedProduct || matchedProduct.is_archived) return null;
+    return matchedProduct;
   },
 
   async getLowStockProducts(businessId: string) {

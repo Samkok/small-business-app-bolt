@@ -9,6 +9,7 @@ export default function InventoryLayout() {
       <Stack.Screen name="product-details" />
       <Stack.Screen name="batch-details" />
       <Stack.Screen name="product-insight" />
+      <Stack.Screen name="unit-groups" />
     </Stack>
   );
 }

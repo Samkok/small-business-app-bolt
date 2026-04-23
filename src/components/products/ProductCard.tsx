@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore, Zap } from 'lucide-react-native';
+import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle, X, Trash2, ArchiveRestore, Zap, ChevronDown, ChevronUp, Layers } from 'lucide-react-native';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import type { Unit } from '@/src/services/units';
 
 interface ProductCardProps {
   product: {
@@ -20,19 +22,25 @@ interface ProductCardProps {
     is_archived?: boolean;
     archived_at?: string;
     archived_by?: string;
+    currency_id?: string | null;
+    unit_group_id?: string | null;
   };
   onEdit: (product: any) => void;
   onViewDetails: (product: any) => void;
   onDelete: (product: any) => void;
   onUnarchive?: (product: any) => void;
   isArchived?: boolean;
+  units?: Unit[];
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units, unitPrices }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
+  const [showUnits, setShowUnits] = useState(false);
+  const hasVariants = !!(units && units.length > 0);
   const router = useRouter();
   const { addProduct, openModal } = useInstantCheckout();
+  const { formatPrice } = useCurrencyContext();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
   const isOutOfStock = product.current_stock === 0;
@@ -108,17 +116,75 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
           
           <View style={styles.priceStockContainer}>
             <Text style={[styles.price, { color: '#059669' }]}>
-              ${product.price.toFixed(2)}
+              {formatPrice(product.price, product.currency_id ?? undefined)}
             </Text>
-            
-            <View style={styles.stockInfo}>
-              <Text style={[styles.stockText, { color: stockStatus.color }]}>
-                {product.current_stock} in stock
-              </Text>
-            </View>
+
+            <Text style={[styles.stockText, { color: stockStatus.color }]}>
+              {hasVariants
+                ? `${product.current_stock} base units`
+                : `${product.current_stock} in stock`}
+            </Text>
           </View>
-          
-          {product.barcode && (
+
+          {hasVariants ? (
+            <TouchableOpacity
+              style={[styles.unitsToggle, { backgroundColor: isDark ? '#374151' : '#eff6ff', borderColor: isDark ? '#4b5563' : '#dbeafe' }]}
+              onPress={() => setShowUnits(prev => !prev)}
+              activeOpacity={0.7}
+            >
+              <Layers size={14} color="#2563eb" />
+              <Text style={[styles.unitsToggleText, { color: '#2563eb' }]}>
+                {showUnits ? 'Hide units' : `View ${units!.length} units`}
+              </Text>
+              {showUnits ? (
+                <ChevronUp size={14} color="#2563eb" />
+              ) : (
+                <ChevronDown size={14} color="#2563eb" />
+              )}
+            </TouchableOpacity>
+          ) : null}
+
+          {hasVariants && showUnits && (
+            <View style={[styles.variantsBox, { borderColor: isDark ? '#374151' : '#e5e7eb', backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+              {units!.map((unit, idx) => {
+                const pu = unitPrices?.find(p => p.unit_id === unit.id);
+                const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
+                const variantPrice = pu?.price ?? product.price;
+                const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
+                const variantName = pu?.name || unit.name;
+                return (
+                  <View
+                    key={unit.id}
+                    style={[
+                      styles.variantRow,
+                      idx < units!.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
+                    ]}
+                  >
+                    <View style={styles.variantMain}>
+                      <Text style={[styles.variantName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+                        {variantName}
+                      </Text>
+                      {pu?.barcode ? (
+                        <Text style={[styles.variantBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]} numberOfLines={1}>
+                          {pu.barcode}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.variantMeta}>
+                      <Text style={[styles.variantPrice, { color: '#059669' }]}>
+                        {formatPrice(variantPrice, variantCurrency)}
+                      </Text>
+                      <Text style={[styles.variantStock, { color: stockStatus.color }]}>
+                        {qty} in stock
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {product.barcode && !hasVariants && (
             <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
               {product.barcode}
             </Text>
@@ -276,11 +342,68 @@ const styles = StyleSheet.create({
   stockText: {
     fontSize: 12,
     fontWeight: '500',
+    textAlign: 'right',
+  },
+  stockTextSmall: {
+    fontSize: 10,
+    textAlign: 'right',
   },
   barcode: {
     fontSize: 11,
     fontFamily: 'monospace',
     marginBottom: 8,
+  },
+  unitsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  unitsToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  variantsBox: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  variantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  variantMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  variantName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  variantBarcode: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  variantMeta: {
+    alignItems: 'flex-end',
+  },
+  variantPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  variantStock: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   archivedBadge: {
     position: 'absolute',

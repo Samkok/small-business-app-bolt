@@ -2,13 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { InstantCheckoutSummary as SummaryType } from '@/src/context/InstantCheckoutContext';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface InstantCheckoutSummaryProps {
   summary: SummaryType;
+  formatAmount?: (amount: number) => string;
 }
 
-export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps) {
+export function InstantCheckoutSummary({ summary, formatAmount }: InstantCheckoutSummaryProps) {
   const { isDark } = useTheme();
+  const fmt = formatAmount ?? formatCurrency;
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#1f2937' : '#f9fafb' }]}>
@@ -21,7 +24,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
           Items Total
         </Text>
         <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          ${summary.itemsOriginalTotal.toFixed(2)}
+          {fmt(summary.itemsOriginalTotal)}
         </Text>
       </View>
 
@@ -29,7 +32,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
         <View style={styles.row}>
           <Text style={[styles.label, { color: '#10b981' }]}>Item Discounts</Text>
           <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.itemsTotalDiscount.toFixed(2)}
+            -{fmt(summary.itemsTotalDiscount)}
           </Text>
         </View>
       )}
@@ -38,18 +41,18 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
         <View style={styles.row}>
           <Text style={[styles.label, { color: '#10b981' }]}>Order Discount</Text>
           <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.cartDiscountAmount.toFixed(2)}
+            -{fmt(summary.cartDiscountAmount)}
           </Text>
         </View>
       )}
 
       {summary.deliveryCost > 0 && (
         <View style={styles.row}>
-          <Text style={[styles.label, { color: '#10b981' }]}>
-            Delivery Fee Discount
+          <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Delivery Fee
           </Text>
-          <Text style={[styles.value, { color: '#10b981' }]}>
-            -${summary.deliveryCost.toFixed(2)}
+          <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {fmt(summary.deliveryCost)}
           </Text>
         </View>
       )}
@@ -61,7 +64,7 @@ export function InstantCheckoutSummary({ summary }: InstantCheckoutSummaryProps)
           Total
         </Text>
         <Text style={[styles.totalValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          ${summary.finalTotal.toFixed(2)}
+          {fmt(summary.finalTotal)}
         </Text>
       </View>
     </View>

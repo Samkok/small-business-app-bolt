@@ -22,6 +22,8 @@ import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
 import { productTransactionService } from '@/src/services/productTransactions';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useTranslation } from '@/src/locales';
 
 export default function ProductDetailsScreen() {
@@ -32,12 +34,15 @@ export default function ProductDetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [unarchiving, setUnarchiving] = useState(false);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [unitPrices, setUnitPrices] = useState<ProductUnit[]>([]);
   
   const router = useRouter();
   const params = useLocalSearchParams();
   const { productId } = params;
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -57,6 +62,24 @@ export default function ProductDetailsScreen() {
       // Load product details
       const productData = await productService.getProduct(productId as string);
       setProduct(productData);
+
+      // Load unit variants when applicable
+      if (productData?.unit_group_id) {
+        try {
+          const [unitsData, pricesData] = await Promise.all([
+            unitService.getUnits(productData.unit_group_id),
+            unitService.getProductUnits(productData.id),
+          ]);
+          setUnits(unitsData);
+          setUnitPrices(pricesData);
+        } catch {
+          setUnits([]);
+          setUnitPrices([]);
+        }
+      } else {
+        setUnits([]);
+        setUnitPrices([]);
+      }
       
       // Load import history for this product
       const importData = await inventoryService.getImportsByProductId(productId as string);
@@ -183,7 +206,7 @@ export default function ProductDetailsScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${(amount || 0).toFixed(2)}`;
+    return formatPrice(amount || 0, product?.currency_id ?? undefined);
   };
 
   if (loading) {
@@ -301,7 +324,7 @@ export default function ProductDetailsScreen() {
               </Text>
               
               <Text style={[styles.productPrice, { color: '#059669' }]}>
-                ${product.price.toFixed(2)}
+                {formatPrice(product.price, product.currency_id ?? undefined)}
               </Text>
               
               {product.description && (
@@ -357,10 +380,58 @@ export default function ProductDetailsScreen() {
                 {t('inventory.costPerUnit')}
               </Text>
               <Text style={[styles.stockValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${product.cost_per_unit?.toFixed(2) || '0.00'}
+                {formatPrice(product.cost_per_unit || 0, product.currency_id ?? undefined)}
               </Text>
             </View>
           </View>
+
+          {units.length > 0 && (
+            <View style={styles.unitsSection}>
+              <Text style={[styles.unitsHeading, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Units
+              </Text>
+              <View style={[styles.unitsTable, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
+                <View style={[styles.unitsHeaderRow, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
+                  <Text style={[styles.unitsHeaderCell, styles.unitCellName, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Unit</Text>
+                  <Text style={[styles.unitsHeaderCell, styles.unitCellQty, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Qty</Text>
+                  <Text style={[styles.unitsHeaderCell, styles.unitCellPrice, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Price</Text>
+                </View>
+                {units.map((unit, idx) => {
+                  const pu = unitPrices.find(p => p.unit_id === unit.id);
+                  const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
+                  const variantPrice = pu?.price ?? product.price;
+                  const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
+                  const variantName = pu?.name || unit.name;
+                  return (
+                    <View
+                      key={unit.id}
+                      style={[
+                        styles.unitRow,
+                        idx < units.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
+                      ]}
+                    >
+                      <View style={styles.unitCellName}>
+                        <Text style={[styles.unitName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                          {variantName}
+                        </Text>
+                        {pu?.barcode ? (
+                          <Text style={[styles.unitBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                            {pu.barcode}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.unitQty, styles.unitCellQty, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                        {qty}
+                      </Text>
+                      <Text style={[styles.unitPrice, styles.unitCellPrice, { color: '#059669' }]}>
+                        {formatPrice(variantPrice, variantCurrency)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {product.is_archived && (
             <Button
@@ -398,7 +469,7 @@ export default function ProductDetailsScreen() {
                 <DollarSign size={20} color="#059669" />
               </View>
               <Text style={[styles.financialValue, { color: '#059669' }]}>
-                ${financialSummary?.totalRevenue?.toFixed(2) || '0.00'}
+                {formatPrice(financialSummary?.totalRevenue || 0, product.currency_id ?? undefined)}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 {t('financials.totalRevenue')}
@@ -410,7 +481,7 @@ export default function ProductDetailsScreen() {
                 <DollarSign size={20} color="#dc2626" />
               </View>
               <Text style={[styles.financialValue, { color: '#dc2626' }]}>
-                ${financialSummary?.totalCOGS?.toFixed(2) || '0.00'}
+                {formatPrice(financialSummary?.totalCOGS || 0, product.currency_id ?? undefined)}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 {t('financials.totalCOGS')}
@@ -422,7 +493,7 @@ export default function ProductDetailsScreen() {
                 <TrendingUp size={20} color="#8b5cf6" />
               </View>
               <Text style={[styles.financialValue, { color: financialSummary?.totalProfit >= 0 ? '#059669' : '#dc2626' }]}>
-                ${financialSummary?.totalProfit?.toFixed(2) || '0.00'}
+                {formatPrice(financialSummary?.totalProfit || 0, product.currency_id ?? undefined)}
               </Text>
               <Text style={[styles.financialLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 {t('financials.totalProfit')}
@@ -874,5 +945,64 @@ const styles = StyleSheet.create({
   },
   showInSalesButton: {
     marginTop: 16,
+  },
+  unitsSection: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  unitsHeading: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  unitsTable: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  unitsHeaderRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  unitsHeaderCell: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  unitCellName: {
+    flex: 1.4,
+  },
+  unitCellQty: {
+    flex: 0.6,
+    textAlign: 'right',
+  },
+  unitCellPrice: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  unitName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  unitBarcode: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  unitQty: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  unitPrice: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

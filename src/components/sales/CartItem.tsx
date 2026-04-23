@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Plus, Minus, Percent, Trash2, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface CartItemProps {
   itemId: string;
@@ -20,6 +21,7 @@ interface CartItemProps {
   onShowDiscount: (itemId: string) => void;
   onRemoveDiscount: (itemId: string) => void;
   isUpdating: boolean;
+  currencySymbol?: string;
 }
 
 const CartItemComponent: React.FC<CartItemProps> = ({
@@ -38,7 +40,8 @@ const CartItemComponent: React.FC<CartItemProps> = ({
   onQuantityChange,
   onShowDiscount,
   onRemoveDiscount,
-  isUpdating
+  isUpdating,
+  currencySymbol = '$'
 }) => {
   const { isDark } = useTheme();
   const [inputValue, setInputValue] = useState(quantity.toString());
@@ -169,7 +172,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
           )}
         </View>
         <Text style={[styles.itemPrice, { color: '#059669' }]}>
-          ${unitPrice.toFixed(2)} each
+          {formatCurrency(unitPrice, currencySymbol)} each
         </Text>
         <View style={styles.stockRow}>
           {isLowStock && <AlertCircle size={12} color={stockWarningColor} />}
@@ -182,7 +185,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
             <Text style={[styles.itemDiscountText, { color: '#dc2626' }]}>
               {itemDiscountType === 'percentage'
                 ? `${itemDiscountValue}% off`
-                : `$${itemDiscountValue} off`
+                : `${formatCurrency(itemDiscountValue, currencySymbol)} off`
               }
               {' '}
               <Text style={[styles.itemDiscountScope, { color: '#9ca3af' }]}>
@@ -254,11 +257,11 @@ const CartItemComponent: React.FC<CartItemProps> = ({
       <View style={styles.itemTotal}>
         {originalSubtotal > subtotal && (
           <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-            ${originalSubtotal.toFixed(2)}
+            {formatCurrency(originalSubtotal, currencySymbol)}
           </Text>
         )}
         <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-          ${subtotal.toFixed(2)}
+          {formatCurrency(subtotal, currencySymbol)}
         </Text>
       </View>
     </View>
@@ -275,7 +278,8 @@ export const CartItem = memo(CartItemComponent, (prevProps, nextProps) => {
     prevProps.itemDiscountType === nextProps.itemDiscountType &&
     prevProps.itemDiscountValue === nextProps.itemDiscountValue &&
     prevProps.itemDiscountScope === nextProps.itemDiscountScope &&
-    prevProps.isUpdating === nextProps.isUpdating
+    prevProps.isUpdating === nextProps.isUpdating &&
+    prevProps.currencySymbol === nextProps.currencySymbol
   );
 });
 

@@ -19,6 +19,10 @@ export interface InstantCheckoutItem {
   item_discount_scope?: 'per_unit' | 'total';
   subtotal: number;
   available_stock: number;
+  currency_id?: string | null;
+  unit_id?: string | null;
+  unit_label?: string;
+  conversion_factor?: number;
 }
 
 export interface InstantCheckoutSession {
@@ -48,7 +52,7 @@ interface InstantCheckoutContextType {
   isModalOpen: boolean;
   guestCustomer: Customer | null;
   loading: boolean;
-  addProduct: (product: Product, quantity?: number) => void;
+  addProduct: (product: Product, quantity?: number, unitOverride?: { unit_id?: string | null; unit_label?: string; price?: number; conversion_factor?: number }) => void;
   removeProduct: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   applyItemDiscount: (productId: string, discountType: 'percentage' | 'fixed', discountValue: number) => void;
@@ -157,18 +161,20 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
     }
   }, []);
 
-  const addProduct = useCallback((product: Product, quantity: number = 1) => {
+  const addProduct = useCallback((product: Product, quantity: number = 1, unitOverride?: { unit_id?: string | null; unit_label?: string; price?: number; conversion_factor?: number }) => {
+    const unitPrice = unitOverride?.price ?? product.price;
+    const unitId = unitOverride?.unit_id ?? null;
     setSession((prev) => {
-      const existingItemIndex = prev?.items.findIndex(item => item.product_id === product.id) ?? -1;
+      const existingItemIndex = prev?.items.findIndex(item => item.product_id === product.id && (item.unit_id ?? null) === unitId) ?? -1;
 
       if (existingItemIndex !== -1 && prev) {
         const updatedItems = [...prev.items];
         const existingItem = updatedItems[existingItemIndex];
         const newQuantity = existingItem.quantity + quantity;
-        const originalSubtotal = product.price * newQuantity;
+        const originalSubtotal = existingItem.unit_price * newQuantity;
         const itemDiscountAmount = calculateItemDiscount(
           newQuantity,
-          product.price,
+          existingItem.unit_price,
           originalSubtotal,
           existingItem.item_discount_type,
           existingItem.item_discount_value,
@@ -185,16 +191,20 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
 
         return { ...prev, items: updatedItems };
       } else {
-        const originalSubtotal = product.price * quantity;
+        const originalSubtotal = unitPrice * quantity;
         const newItem: InstantCheckoutItem = {
           product_id: product.id,
           product_name: product.name,
           product_image: product.image_url || undefined,
           quantity,
-          unit_price: product.price,
+          unit_price: unitPrice,
           original_subtotal: originalSubtotal,
           subtotal: originalSubtotal,
           available_stock: product.current_stock || 0,
+          currency_id: (product as any).currency_id ?? null,
+          unit_id: unitId,
+          unit_label: unitOverride?.unit_label,
+          conversion_factor: unitOverride?.conversion_factor ?? 1,
         };
 
         return prev

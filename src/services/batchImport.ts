@@ -2,18 +2,16 @@ import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { productService } from './products';
 
-type InventoryBatch = Database['public']['Tables']['inventory_batches']['Row'];
-type InventoryBatchInsert = Database['public']['Tables']['inventory_batches']['Insert'];
 type InventoryBatchUpdate = Database['public']['Tables']['inventory_batches']['Update'];
-type InventoryImport = Database['public']['Tables']['inventory_imports']['Row'];
-type InventoryImportInsert = Database['public']['Tables']['inventory_imports']['Insert'];
-type ImportCost = Database['public']['Tables']['import_costs']['Row'];
-type ImportCostInsert = Database['public']['Tables']['import_costs']['Insert'];
 
 export interface BatchImportItem {
   product_id: string;
   quantity: number;
   base_unit_cost_per_item: number;
+  // Multi-unit fields (undefined for single-unit products)
+  unit_id?: string;
+  unit_label?: string;           // display name, e.g. "Box"
+  conversion_factor?: number;   // conversion_factor_to_base, defaults to 1
 }
 
 export interface BatchImportCost {
@@ -32,46 +30,57 @@ export interface BatchImportData {
   costs: BatchImportCost[];
 }
 
+// Returns effective base-unit quantity for cost distribution and stock maths.
+function baseQty(item: BatchImportItem): number {
+  return item.quantity * (item.conversion_factor ?? 1);
+}
+
 export const batchImportService = {
-  async createBatchImport(batchData: BatchImportData) {
-    if (!batchData.items.length) {
-      throw new Error('At least one product must be selected for import');
-    }
+  calculateItemCosts(items: BatchImportItem[], costs: BatchImportCost[]) {
+    // Distribute additional costs proportionally to base-unit quantities so that
+    // larger units (e.g. a Box of 24) absorb more overhead than a single Bottle.
+    const totalBaseQty = items.reduce((sum, item) => sum + baseQty(item), 0);
 
-    // Calculate total quantities for cost distribution
-    const totalQuantity = batchData.items.reduce((sum, item) => sum + item.quantity, 0);
-
-    // Calculate total additional costs
     let totalAdditionalCosts = 0;
-    batchData.costs.forEach(cost => {
+    costs.forEach(cost => {
       if (cost.calculation_type === 'per_unit') {
-        totalAdditionalCosts += cost.amount * totalQuantity;
+        totalAdditionalCosts += cost.amount * totalBaseQty;
       } else {
         totalAdditionalCosts += cost.amount;
       }
     });
 
-    // Calculate additional cost per unit (distributed evenly)
-    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
+    const perBaseUnitAdditionalCost = totalBaseQty > 0 ? totalAdditionalCosts / totalBaseQty : 0;
 
-    // Calculate final costs for each item
-    const itemsWithFinalCosts = batchData.items.map(item => {
-      // Distribute additional costs evenly per unit
-      const itemAdditionalCosts = perUnitAdditionalCost * item.quantity;
-      
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
+    return items.map(item => {
+      const factor = item.conversion_factor ?? 1;
+      // Additional cost per imported unit = per-base-unit overhead × factor
+      const additionalCostPerUnit = perBaseUnitAdditionalCost * factor;
+      const itemAdditionalCosts = additionalCostPerUnit * item.quantity;
+
+      const final_unit_cost_per_item = item.base_unit_cost_per_item + additionalCostPerUnit;
       const total_cost_for_item = final_unit_cost_per_item * item.quantity;
 
       return {
         ...item,
         final_unit_cost_per_item,
-        total_cost_for_item
+        total_cost_for_item,
+        allocated_additional_costs: itemAdditionalCosts,
       };
     });
+  },
 
-    const total_batch_cost = itemsWithFinalCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
+  async createBatchImport(batchData: BatchImportData) {
+    if (!batchData.items.length) {
+      throw new Error('At least one product must be selected for import');
+    }
 
-    // Start transaction by creating the batch
+    const itemsWithFinalCosts = this.calculateItemCosts(batchData.items, batchData.costs);
+    const total_batch_cost = itemsWithFinalCosts.reduce(
+      (sum, item) => sum + item.total_cost_for_item,
+      0,
+    );
+
     const { data: batch, error: batchError } = await supabase
       .from('inventory_batches')
       .insert({
@@ -80,14 +89,13 @@ export const batchImportService = {
         purchase_date: batchData.purchase_date || new Date().toISOString(),
         notes: batchData.notes,
         status: 'pending',
-        total_batch_cost
+        total_batch_cost,
       })
       .select()
       .single();
 
     if (batchError) throw batchError;
 
-    // Create import records for each item
     const importRecords = itemsWithFinalCosts.map(item => ({
       product_id: item.product_id,
       quantity: item.quantity,
@@ -96,10 +104,9 @@ export const batchImportService = {
       base_unit_cost_per_item: item.base_unit_cost_per_item,
       final_unit_cost_per_item: item.final_unit_cost_per_item,
       total_cost_for_item: item.total_cost_for_item,
-      batch_id: batch.id
+      batch_id: batch.id,
+      unit_id: item.unit_id ?? null,
     }));
-
-    console.log(importRecords);
 
     const { data: imports, error: importsError } = await supabase
       .from('inventory_imports')
@@ -108,20 +115,16 @@ export const batchImportService = {
 
     if (importsError) throw importsError;
 
-    // Create cost records
     if (batchData.costs.length > 0) {
       const costRecords = batchData.costs.map(cost => ({
         batch_id: batch.id,
         cost_type: cost.cost_type,
         amount: cost.amount,
         calculation_type: cost.calculation_type,
-        description: cost.description
+        description: cost.description,
       }));
 
-      const { error: costsError } = await supabase
-        .from('import_costs')
-        .insert(costRecords);
-
+      const { error: costsError } = await supabase.from('import_costs').insert(costRecords);
       if (costsError) throw costsError;
     }
 
@@ -165,7 +168,6 @@ export const batchImportService = {
   },
 
   async markBatchAsArrived(batchId: string, arrivalDate?: string) {
-    // Get the batch, its imports, and associated costs
     const { data: batch, error: getBatchError } = await supabase
       .from('inventory_batches')
       .select(`
@@ -173,7 +175,8 @@ export const batchImportService = {
         inventory_imports(
           product_id,
           quantity,
-          base_unit_cost_per_item
+          base_unit_cost_per_item,
+          unit_id
         ),
         import_costs(*)
       `)
@@ -181,33 +184,49 @@ export const batchImportService = {
       .single();
 
     if (getBatchError) throw getBatchError;
+    if (batch.status === 'completed') return batch;
 
-    if (batch.status === 'completed') {
-      return batch;
+    // Rebuild items list with conversion factors fetched once per unique unit
+    const uniqueUnitIds = [
+      ...new Set(
+        (batch.inventory_imports as any[])
+          .map((i: any) => i.unit_id)
+          .filter(Boolean),
+      ),
+    ];
+
+    const conversionMap = new Map<string, number>();
+    if (uniqueUnitIds.length > 0) {
+      const { data: units, error: unitsError } = await supabase
+        .from('units')
+        .select('id, conversion_factor_to_base')
+        .in('id', uniqueUnitIds as string[]);
+      if (unitsError) throw unitsError;
+      (units || []).forEach((u: any) => conversionMap.set(u.id, Number(u.conversion_factor_to_base)));
     }
 
-    // Step 1: Recalculate final costs for all items in the batch using the evenly per unit algorithm
-    const batchItems = batch.inventory_imports.map(item => ({
+    const batchItems: BatchImportItem[] = (batch.inventory_imports as any[]).map((item: any) => ({
       product_id: item.product_id,
       quantity: item.quantity,
-      base_unit_cost_per_item: item.base_unit_cost_per_item
+      base_unit_cost_per_item: item.base_unit_cost_per_item,
+      unit_id: item.unit_id ?? undefined,
+      conversion_factor: item.unit_id ? (conversionMap.get(item.unit_id) ?? 1) : 1,
     }));
-    
-    const batchCosts = batch.import_costs.map(cost => ({
+
+    const batchCosts: BatchImportCost[] = (batch.import_costs as any[]).map((cost: any) => ({
       cost_type: cost.cost_type,
       amount: cost.amount,
       calculation_type: cost.calculation_type,
-      description: cost.description
+      description: cost.description,
     }));
-    
+
     const itemsWithRecalculatedCosts = this.calculateItemCosts(batchItems, batchCosts);
 
-    // Update batch status
     const { data: updatedBatch, error: updateError } = await supabase
       .from('inventory_batches')
       .update({
         status: 'completed',
-        arrival_date: arrivalDate || new Date().toISOString()
+        arrival_date: arrivalDate || new Date().toISOString(),
       })
       .eq('id', batchId)
       .select()
@@ -215,37 +234,34 @@ export const batchImportService = {
 
     if (updateError) throw updateError;
 
-    // Step 2: Update inventory_imports records with recalculated costs and then update product stocks
-    for (const importItem of batch.inventory_imports) {
-      // Find the recalculated costs for this item
-      const recalculatedItem = itemsWithRecalculatedCosts.find(
-        item => item.product_id === importItem.product_id
+    for (const importItem of batchItems) {
+      const recalculated = itemsWithRecalculatedCosts.find(
+        i => i.product_id === importItem.product_id && i.unit_id === importItem.unit_id,
       );
-      
-      if (!recalculatedItem) {
-        console.error(`Could not find recalculated costs for product ${importItem.product_id}`);
+      if (!recalculated) {
+        console.error(
+          `Could not find recalculated costs for product ${importItem.product_id} unit ${importItem.unit_id}`,
+        );
         continue;
       }
-      
-      // Update the inventory_imports record with recalculated costs
+
       const { error: updateImportError } = await supabase
         .from('inventory_imports')
         .update({
-          final_unit_cost_per_item: recalculatedItem.final_unit_cost_per_item,
-          total_cost_for_item: recalculatedItem.total_cost_for_item,
+          final_unit_cost_per_item: recalculated.final_unit_cost_per_item,
+          total_cost_for_item: recalculated.total_cost_for_item,
           status: 'completed',
-          arrival_date: arrivalDate || new Date().toISOString()
+          arrival_date: arrivalDate || new Date().toISOString(),
         })
         .eq('product_id', importItem.product_id)
         .eq('batch_id', batchId);
-      
-      if (updateImportError) {
-        console.error(`Error updating inventory_imports for product ${importItem.product_id}:`, updateImportError);
-        throw updateImportError;
-      }
-      
+
+      if (updateImportError) throw updateImportError;
+
       try {
-        // Get current product data
+        const factor = importItem.conversion_factor ?? 1;
+        const addedBaseQty = importItem.quantity * factor;
+
         const { data: product, error: productError } = await supabase
           .from('products')
           .select('current_stock, cost_per_unit')
@@ -254,27 +270,37 @@ export const batchImportService = {
 
         if (productError) throw productError;
 
-        // Calculate new stock level
-        const newStock = (product.current_stock || 0) + importItem.quantity;
-        
-        // Calculate new weighted average cost
-        const currentTotalValue = (product.current_stock || 0) * (product.cost_per_unit || 0);
-        const importTotalValue = importItem.quantity * recalculatedItem.final_unit_cost_per_item;
-        const newTotalValue = currentTotalValue + importTotalValue;
-        const newTotalQuantity = (product.current_stock || 0) + importItem.quantity;
-        const newCostPerUnit = newTotalQuantity > 0 ? newTotalValue / newTotalQuantity : 0;
+        const newStock = (product.current_stock || 0) + addedBaseQty;
 
-        // Update the product
+        // Weighted average cost per base unit
+        const currentTotalValue = (product.current_stock || 0) * (product.cost_per_unit || 0);
+        // final_unit_cost_per_item is per imported unit; cost per base unit = per imported unit / factor
+        const costPerBaseUnit = recalculated.final_unit_cost_per_item / factor;
+        const importTotalValue = addedBaseQty * costPerBaseUnit;
+        const newTotalQuantity = newStock;
+        const newCostPerUnit = newTotalQuantity > 0
+          ? (currentTotalValue + importTotalValue) / newTotalQuantity
+          : 0;
+
         const { error: updateProductError } = await supabase
           .from('products')
           .update({
             current_stock: newStock,
             cost_per_unit: newCostPerUnit,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .eq('id', importItem.product_id);
 
         if (updateProductError) throw updateProductError;
+
+        // Also update cost_per_unit on product_unit_prices for this specific variant
+        if (importItem.unit_id) {
+          await supabase
+            .from('product_unit_prices')
+            .update({ cost_per_unit: recalculated.final_unit_cost_per_item })
+            .eq('product_id', importItem.product_id)
+            .eq('unit_id', importItem.unit_id);
+        }
       } catch (error) {
         console.error(`Error updating product ${importItem.product_id}:`, error);
         throw error;
@@ -284,57 +310,32 @@ export const batchImportService = {
     return updatedBatch;
   },
 
-  async updateBatchImport(batchId: string, updates: InventoryBatchUpdate, newItems: any[], newCosts: any[]) {
-
-    // Fetch the current batch details including its items and costs
+  async updateBatchImport(
+    batchId: string,
+    updates: InventoryBatchUpdate,
+    newItems: BatchImportItem[],
+    newCosts: BatchImportCost[],
+  ) {
     const { data: currentBatch, error: fetchError } = await supabase
       .from('inventory_batches')
-      .select(`
-        status,
-        inventory_imports(*),
-        import_costs(*)
-      `)
+      .select('status')
       .eq('id', batchId)
       .single();
 
     if (fetchError) throw fetchError;
 
     if (currentBatch.status === 'completed') {
-      throw new Error('Completed batches cannot be edited. Please delete and re-import if changes are necessary.');
+      throw new Error(
+        'Completed batches cannot be edited. Please delete and re-import if changes are necessary.',
+      );
     }
 
-    // Calculate total quantities for cost distribution
-    const totalQuantity = newItems.reduce((sum, item) => sum + item.quantity, 0);
+    const itemsWithFinalCosts = this.calculateItemCosts(newItems, newCosts);
+    const newTotalBatchCost = itemsWithFinalCosts.reduce(
+      (sum, item) => sum + item.total_cost_for_item,
+      0,
+    );
 
-    // Calculate total additional costs
-    let totalAdditionalCosts = 0;
-    newCosts.forEach(cost => {
-      const amount = parseFloat(cost.amount as any) || 0;
-      if (cost.calculation_type === 'per_unit') {
-        totalAdditionalCosts += amount * totalQuantity;
-      } else {
-        totalAdditionalCosts += amount;
-      }
-    });
-
-    // Calculate additional cost per unit (distributed evenly)
-    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
-
-    // Calculate final costs for each item
-    const itemsWithFinalCosts = newItems.map(item => {
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
-      const total_cost_for_item = final_unit_cost_per_item * item.quantity;
-
-      return {
-        ...item,
-        final_unit_cost_per_item,
-        total_cost_for_item
-      };
-    });
-
-    const newTotalBatchCost = itemsWithFinalCosts.reduce((sum, item) => sum + item.total_cost_for_item, 0);
-
-    // Update the batch record itself
     const { data, error } = await supabase
       .from('inventory_batches')
       .update({ ...updates, total_batch_cost: newTotalBatchCost, updated_at: new Date().toISOString() })
@@ -344,23 +345,18 @@ export const batchImportService = {
 
     if (error) throw error;
 
-    // Delete all existing imports and costs, then insert new ones
-    // This is simpler and avoids the ID matching issues
     const { error: deleteImportsError } = await supabase
       .from('inventory_imports')
       .delete()
       .eq('batch_id', batchId);
-
     if (deleteImportsError) throw deleteImportsError;
 
     const { error: deleteCostsError } = await supabase
       .from('import_costs')
       .delete()
       .eq('batch_id', batchId);
-
     if (deleteCostsError) throw deleteCostsError;
 
-    // Insert new imports
     const importRecords = itemsWithFinalCosts.map(item => ({
       product_id: item.product_id,
       quantity: item.quantity,
@@ -369,31 +365,29 @@ export const batchImportService = {
       base_unit_cost_per_item: item.base_unit_cost_per_item,
       final_unit_cost_per_item: item.final_unit_cost_per_item,
       total_cost_for_item: item.total_cost_for_item,
-      batch_id: batchId
+      batch_id: batchId,
+      unit_id: item.unit_id ?? null,
     }));
 
     if (importRecords.length > 0) {
       const { error: insertImportsError } = await supabase
         .from('inventory_imports')
         .insert(importRecords);
-
       if (insertImportsError) throw insertImportsError;
     }
 
-    // Insert new costs
     if (newCosts.length > 0) {
       const costRecords = newCosts.map(cost => ({
         batch_id: batchId,
         cost_type: cost.cost_type,
         amount: parseFloat(cost.amount as any) || 0,
         calculation_type: cost.calculation_type,
-        description: cost.description || null
+        description: cost.description || null,
       }));
 
       const { error: insertCostsError } = await supabase
         .from('import_costs')
         .insert(costRecords);
-
       if (insertCostsError) throw insertCostsError;
     }
 
@@ -401,14 +395,14 @@ export const batchImportService = {
   },
 
   async deleteBatchImport(batchId: string) {
-    // Get batch details first
     const { data: batch, error: getBatchError } = await supabase
       .from('inventory_batches')
       .select(`
         status,
         inventory_imports(
           product_id,
-          quantity
+          quantity,
+          unit_id
         )
       `)
       .eq('id', batchId)
@@ -416,11 +410,30 @@ export const batchImportService = {
 
     if (getBatchError) throw getBatchError;
 
-    // If the batch was completed, we need to reverse the stock changes
     if (batch.status === 'completed') {
-      for (const importItem of batch.inventory_imports) {
+      // Fetch conversion factors for any multi-unit items
+      const unitIds = [
+        ...new Set(
+          (batch.inventory_imports as any[])
+            .map((i: any) => i.unit_id)
+            .filter(Boolean),
+        ),
+      ];
+
+      const conversionMap = new Map<string, number>();
+      if (unitIds.length > 0) {
+        const { data: units } = await supabase
+          .from('units')
+          .select('id, conversion_factor_to_base')
+          .in('id', unitIds as string[]);
+        (units || []).forEach((u: any) => conversionMap.set(u.id, Number(u.conversion_factor_to_base)));
+      }
+
+      for (const importItem of batch.inventory_imports as any[]) {
         try {
-          // Get current product data
+          const factor = importItem.unit_id ? (conversionMap.get(importItem.unit_id) ?? 1) : 1;
+          const removedBaseQty = importItem.quantity * factor;
+
           const { data: product, error: productError } = await supabase
             .from('products')
             .select('current_stock')
@@ -429,87 +442,40 @@ export const batchImportService = {
 
           if (productError) throw productError;
 
-          // Calculate new stock level (subtract the imported quantity)
-          const newStock = Math.max(0, (product.current_stock || 0) - importItem.quantity);
+          const newStock = Math.max(0, (product.current_stock || 0) - removedBaseQty);
 
-          // Update the product stock
           const { error: updateError } = await supabase
             .from('products')
-            .update({
-              current_stock: newStock,
-              updated_at: new Date().toISOString()
-            })
+            .update({ current_stock: newStock, updated_at: new Date().toISOString() })
             .eq('id', importItem.product_id);
 
           if (updateError) throw updateError;
 
-          // Recalculate cost_per_unit
           await productService.recalculateProductCost(importItem.product_id);
         } catch (error) {
           console.error(`Error reversing stock for product ${importItem.product_id}:`, error);
-          // Continue with other products even if one fails
         }
       }
     }
 
-    // Delete related records first (in correct order to avoid FK constraint violations)
-    // 1. Delete import_costs first
     const { error: deleteCostsError } = await supabase
       .from('import_costs')
       .delete()
       .eq('batch_id', batchId);
-
     if (deleteCostsError) throw deleteCostsError;
 
-    // 2. Delete inventory_imports
     const { error: deleteImportsError } = await supabase
       .from('inventory_imports')
       .delete()
       .eq('batch_id', batchId);
-
     if (deleteImportsError) throw deleteImportsError;
 
-    // 3. Finally delete the batch
     const { error: deleteError } = await supabase
       .from('inventory_batches')
       .delete()
       .eq('id', batchId);
-
     if (deleteError) throw deleteError;
 
     return true;
   },
-
-  calculateItemCosts(items: BatchImportItem[], costs: BatchImportCost[]) {
-    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-
-    // Calculate total additional costs
-    let totalAdditionalCosts = 0;
-    costs.forEach(cost => {
-      if (cost.calculation_type === 'per_unit') {
-        totalAdditionalCosts += cost.amount * totalQuantity;
-      } else {
-        totalAdditionalCosts += cost.amount;
-      }
-    });
-
-    // Calculate additional cost per unit (distributed evenly)
-    const perUnitAdditionalCost = totalQuantity > 0 ? totalAdditionalCosts / totalQuantity : 0;
-
-    // Calculate final costs for each item
-    return items.map(item => {
-      // Distribute additional costs evenly per unit
-      const itemAdditionalCosts = perUnitAdditionalCost * item.quantity;
-      
-      const final_unit_cost_per_item = item.base_unit_cost_per_item + perUnitAdditionalCost;
-      const total_cost_for_item = final_unit_cost_per_item * item.quantity;
-
-      return {
-        ...item,
-        final_unit_cost_per_item,
-        total_cost_for_item,
-        allocated_additional_costs: itemAdditionalCosts
-      };
-    });
-  }
 };

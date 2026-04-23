@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { X, Package, DollarSign, Plus, Trash2, Calendar, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
 import { inventoryService } from '@/src/services/inventory';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface EditImportFormProps {
   importRecord: any;

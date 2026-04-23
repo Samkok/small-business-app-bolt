@@ -20,6 +20,8 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
+import { formatCurrency } from '@/src/utils/formatCurrency';
+import { useCurrency } from '@/src/hooks/useCurrency';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
@@ -28,6 +30,7 @@ export default function CheckoutScreen() {
   const [saleDate, setSaleDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
 
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
@@ -35,6 +38,15 @@ export default function CheckoutScreen() {
   const { currentBusiness } = useAuth();
   const { getCart, getCartSummary, completeSale } = useCart();
   const { salesCountData, showPaywall } = useSubscription();
+  const { currencies, defaultCurrency, convertBetween, formatPrice } = useCurrency(currentBusiness?.id);
+
+  const displayAmount = (amount: number) => {
+    if (!displayCurrencyId || displayCurrencyId === defaultCurrency?.id) {
+      return formatPrice(amount);
+    }
+    const converted = convertBetween(amount, defaultCurrency?.id, displayCurrencyId);
+    return formatPrice(converted, displayCurrencyId);
+  };
 
   // Get cart and summary
   const cart = getCart(cartId as string);
@@ -158,10 +170,35 @@ export default function CheckoutScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Order Summary */}
         <Card style={styles.summaryCard}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Order Summary
-          </Text>
-          
+          <View style={styles.summaryHeader}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827', marginBottom: 0 }]}>
+              Order Summary
+            </Text>
+            {currencies.length > 1 && (
+              <View style={styles.currencyPills}>
+                {currencies.map(c => {
+                  const isSelected = (displayCurrencyId ?? defaultCurrency?.id) === c.id;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.currencyPill,
+                        isSelected
+                          ? { backgroundColor: '#2563eb' }
+                          : { backgroundColor: isDark ? '#374151' : '#e5e7eb' },
+                      ]}
+                      onPress={() => setDisplayCurrencyId(c.id)}
+                    >
+                      <Text style={[styles.currencyPillText, { color: isSelected ? '#fff' : (isDark ? '#d1d5db' : '#374151') }]}>
+                        {c.code}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
           <View style={styles.customerRow}>
             <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               Customer:
@@ -170,7 +207,7 @@ export default function CheckoutScreen() {
               {cart.customer_name}
             </Text>
           </View>
-          
+
           <View style={styles.itemsContainer}>
             {cart.items?.map((item) => (
               <View key={item.id} style={styles.summaryItem}>
@@ -185,67 +222,67 @@ export default function CheckoutScreen() {
                 <View style={styles.itemPricing}>
                   {item.original_subtotal > item.subtotal && (
                     <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                      ${item.original_subtotal.toFixed(2)}
+                      {displayAmount(item.original_subtotal)}
                     </Text>
                   )}
                   <Text style={[styles.itemSubtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    ${item.subtotal.toFixed(2)}
+                    {displayAmount(item.subtotal)}
                   </Text>
                 </View>
               </View>
             ))}
           </View>
-          
+
           <View style={styles.divider} />
-          
+
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               Items Subtotal:
             </Text>
             <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${cartSummary?.itemsOriginalTotal.toFixed(2)}
+              {displayAmount(cartSummary?.itemsOriginalTotal)}
             </Text>
           </View>
-          
+
           {cartSummary?.itemsTotalDiscount > 0 && (
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Item Discounts:
               </Text>
               <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                -${cartSummary.itemsTotalDiscount.toFixed(2)}
+                -{displayAmount(cartSummary.itemsTotalDiscount)}
               </Text>
             </View>
           )}
-          
+
           {cartSummary?.cartDiscountAmount > 0 && (
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Cart Discount:
               </Text>
               <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                -${cartSummary.cartDiscountAmount.toFixed(2)}
+                -{displayAmount(cartSummary.cartDiscountAmount)}
               </Text>
             </View>
           )}
-          
+
           {cartSummary?.deliveryCost > 0 && (
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Delivery Cost:
               </Text>
               <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${cartSummary.deliveryCost.toFixed(2)}
+                {displayAmount(cartSummary.deliveryCost)}
               </Text>
             </View>
           )}
-          
+
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Total:
             </Text>
             <Text style={[styles.totalValue, { color: '#059669' }]}>
-              ${cartSummary?.finalTotal.toFixed(2)}
+              {displayAmount(cartSummary?.finalTotal)}
             </Text>
           </View>
         </Card>
@@ -341,7 +378,7 @@ export default function CheckoutScreen() {
       {/* Complete Sale Button */}
       <View style={styles.footer}>
         <Button
-          title={`Complete Sale - $${cartSummary?.finalTotal.toFixed(2)}`}
+          title={`Complete Sale - ${displayAmount(cartSummary?.finalTotal ?? 0)}`}
           onPress={handleCompleteSale}
           loading={processing}
           style={styles.completeButton}
@@ -418,6 +455,28 @@ const styles = StyleSheet.create({
   summaryCard: {
     padding: 16,
     marginBottom: 16,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  currencyPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  currencyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 18,
