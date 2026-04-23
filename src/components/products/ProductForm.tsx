@@ -56,6 +56,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [unitBarcodes, setUnitBarcodes] = useState<Record<string, string>>({});
   const [unitBarcodeErrors, setUnitBarcodeErrors] = useState<Record<string, string>>({});
   const [unitNameErrors, setUnitNameErrors] = useState<Record<string, string>>({});
+  // Per-unit stock inputs (in that unit's own quantity)
+  const [unitStock, setUnitStock] = useState<Record<string, string>>({});
+  const [unitMinStock, setUnitMinStock] = useState<Record<string, string>>({});
   const [scanningUnitId, setScanningUnitId] = useState<string | null>(null);
   const [showCurrencyEditor, setShowCurrencyEditor] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
@@ -108,6 +111,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       setUnitBarcodes({});
       setUnitBarcodeErrors({});
       setUnitNameErrors({});
+      setUnitStock({});
+      setUnitMinStock({});
     }
   }, [selectedUnitGroupId]);
 
@@ -128,6 +133,27 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       setUnitBarcodes(barcodeMap);
     }).catch(console.error);
   }, [product?.id]);
+
+  // When editing a multi-unit product, initialise per-unit stock from the product's
+  // base-unit current_stock / min_stock_level, converted to each unit's own quantity.
+  useEffect(() => {
+    if (!product?.id || units.length === 0) return;
+    const baseStock = product.current_stock ?? 0;
+    const baseMin = product.min_stock_level ?? 0;
+    const stockMap: Record<string, string> = {};
+    const minMap: Record<string, string> = {};
+    units.forEach((unit) => {
+      const factor = unit.conversion_factor_to_base || 1;
+      stockMap[unit.id] = factor > 1
+        ? Math.floor(baseStock / factor).toString()
+        : baseStock.toString();
+      minMap[unit.id] = factor > 1
+        ? Math.floor(baseMin / factor).toString()
+        : baseMin.toString();
+    });
+    setUnitStock(stockMap);
+    setUnitMinStock(minMap);
+  }, [product?.id, units]);
 
   const handleImageSelect = (file: any) => {
     // Handle file object properly for both web and mobile
@@ -276,8 +302,24 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       }
     }
 
-    const stockValue = parseInt(currentStock) || 0;
-    const minStockValue = parseInt(minStockLevel) || 0;
+    // Compute stock in base units
+    let stockValue: number;
+    let minStockValue: number;
+
+    if (isMultiUnit) {
+      // Sum each unit's entered quantity × its conversion factor to arrive at base-unit totals.
+      // Only the base unit contributes directly; larger units multiply up.
+      stockValue = units.reduce((sum, unit) => {
+        const qty = parseInt(unitStock[unit.id] || '0') || 0;
+        return sum + qty * (unit.conversion_factor_to_base || 1);
+      }, 0);
+      // Min stock: use the base unit's threshold expressed in base units
+      const baseUnit = units.find(u => u.is_base_unit) || units[units.length - 1];
+      minStockValue = parseInt(unitMinStock[baseUnit.id] || '0') || 0;
+    } else {
+      stockValue = parseInt(currentStock) || 0;
+      minStockValue = parseInt(minStockLevel) || 0;
+    }
 
     if (stockValue < 0 || minStockValue < 0) {
       Alert.alert('Error', 'Stock values cannot be negative');
@@ -509,20 +551,71 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 Stock Management
               </Text>
             </View>
-            
-            <Input
-              label="Current Stock"
-              value={currentStock}
-              onChangeText={setCurrentStock}
-              placeholder="0"
-            />
 
-            <Input
-              label="Minimum Stock Level"
-              value={minStockLevel}
-              onChangeText={setMinStockLevel}
-              placeholder="0"
-            />
+            {isMultiUnit ? (
+              <>
+                <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280', marginBottom: 12 }]}>
+                  Enter stock in each unit's own quantity. All quantities are converted to base units internally.
+                </Text>
+                {units.map((unit) => {
+                  const isBase = unit.is_base_unit;
+                  const label = (unitVariantNames[unit.id] || unit.name).trim();
+                  return (
+                    <View key={unit.id} style={[styles.unitStockCard, { backgroundColor: isDark ? '#1f2937' : '#f8fafc', borderColor: isDark ? '#374151' : '#e2e8f0' }]}>
+                      <Text style={[styles.unitStockLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                        {label}{isBase ? '  (base unit)' : ''}
+                      </Text>
+                      {!isBase && (
+                        <Text style={[styles.unitStockHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                          1 {label} = {unit.conversion_factor_to_base} base units
+                        </Text>
+                      )}
+                      <View style={styles.unitStockRow}>
+                        <View style={styles.unitStockField}>
+                          <Input
+                            label={`Current stock (${label})`}
+                            value={unitStock[unit.id] || ''}
+                            onChangeText={(val: string) =>
+                              setUnitStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
+                            }
+                            placeholder="0"
+                            keyboardType="number-pad"
+                          />
+                        </View>
+                        {isBase && (
+                          <View style={styles.unitStockField}>
+                            <Input
+                              label="Min stock (base)"
+                              value={unitMinStock[unit.id] || ''}
+                              onChangeText={(val: string) =>
+                                setUnitMinStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
+                              }
+                              placeholder="0"
+                              keyboardType="number-pad"
+                            />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <Input
+                  label="Current Stock"
+                  value={currentStock}
+                  onChangeText={setCurrentStock}
+                  placeholder="0"
+                />
+                <Input
+                  label="Minimum Stock Level"
+                  value={minStockLevel}
+                  onChangeText={setMinStockLevel}
+                  placeholder="0"
+                />
+              </>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -948,6 +1041,28 @@ const styles = StyleSheet.create({
   unitPricesSection: {
     marginTop: 12,
     gap: 12,
+  },
+  unitStockCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  unitStockLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  unitStockHint: {
+    fontSize: 11,
+    marginBottom: 8,
+  },
+  unitStockRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  unitStockField: {
+    flex: 1,
   },
   unitCard: {
     borderRadius: 12,
