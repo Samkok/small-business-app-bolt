@@ -33,7 +33,7 @@ interface ProductCardProps {
   units?: Unit[];
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units, unitPrices }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const [showUnits, setShowUnits] = useState(false);
