@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -12,6 +12,7 @@ interface BarcodeScannerProps {
 export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const scannedRef = useRef(false);
   const { isDark } = useTheme();
 
   useEffect(() => {
@@ -25,10 +26,17 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
 
   const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (!data || typeof data !== 'string') return;
-    if (scanned) return;
-    
+    // Synchronous ref guard prevents the camera from firing this callback
+    // multiple times before React has a chance to re-render with scanned=true.
+    if (scannedRef.current) return;
+    scannedRef.current = true;
     setScanned(true);
     onBarcodeScan(data);
+  };
+
+  const handleScanAgain = () => {
+    scannedRef.current = false;
+    setScanned(false);
   };
 
   if (hasPermission === null) {
@@ -103,7 +111,7 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
           {scanned && (
             <TouchableOpacity
               style={styles.scanAgainButton}
-              onPress={() => setScanned(false)}
+              onPress={handleScanAgain}
             >
               <Text style={styles.scanAgainText}>Tap to scan again</Text>
             </TouchableOpacity>

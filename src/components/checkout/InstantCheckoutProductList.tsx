@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert } fro
 import { useTheme } from '@/src/context/ThemeContext';
 import { Minus, Plus, Trash2, AlertCircle, Tag, X as XIcon } from 'lucide-react-native';
 import { InstantCheckoutItem } from '@/src/context/InstantCheckoutContext';
-import { formatCurrency } from '@/src/utils/formatCurrency';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface InstantCheckoutProductListProps {
   items: InstantCheckoutItem[];
@@ -139,6 +139,7 @@ export function InstantCheckoutProductList({
   onRemoveDiscount,
 }: InstantCheckoutProductListProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
 
   if (items.length === 0) {
     return (
@@ -174,7 +175,7 @@ export function InstantCheckoutProductList({
             </Text>
 
             <Text style={[styles.price, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {formatCurrency(item.unit_price)} each
+              {formatPrice(item.unit_price, item.currency_id ?? undefined)}{item.unit_label ? ` / ${item.unit_label}` : ' each'}
             </Text>
 
             {item.quantity > item.available_stock && (
@@ -189,7 +190,7 @@ export function InstantCheckoutProductList({
             {(item.item_discount_amount ?? 0) > 0 ? (
               <View style={styles.discountRow}>
                 <Text style={styles.discountText}>
-                  Discount: -{formatCurrency(item.item_discount_amount ?? 0)}
+                  Discount: -{formatPrice(item.item_discount_amount ?? 0, item.currency_id ?? undefined)}
                 </Text>
                 {onRemoveDiscount ? (
                   <TouchableOpacity
@@ -218,7 +219,7 @@ export function InstantCheckoutProductList({
                   </TouchableOpacity>
                 ) : null}
                 <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {formatCurrency(item.subtotal)}
+                  {formatPrice(item.subtotal, item.currency_id ?? undefined)}
                 </Text>
               </View>
             </View>

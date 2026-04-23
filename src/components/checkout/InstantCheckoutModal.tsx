@@ -29,8 +29,8 @@ import { InstantCheckoutSummary } from './InstantCheckoutSummary';
 import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
-import { formatCurrency } from '@/src/utils/formatCurrency';
 import { useCurrency } from '@/src/hooks/useCurrency';
+import { unitService, ProductUnit } from '@/src/services/units';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -68,6 +68,7 @@ export function InstantCheckoutModal() {
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [unitPricesMap, setUnitPricesMap] = useState<Record<string, ProductUnit[]>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showItemDiscountModal, setShowItemDiscountModal] = useState(false);
@@ -124,6 +125,19 @@ export function InstantCheckoutModal() {
     try {
       const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
+
+      const upMap: Record<string, ProductUnit[]> = {};
+      for (const product of productsData) {
+        if (product.unit_group_id) {
+          try {
+            const prices = await unitService.getProductUnits(product.id);
+            if (prices.length > 0) upMap[product.id] = prices;
+          } catch (e) {
+            console.error('Error loading unit prices for product:', product.id, e);
+          }
+        }
+      }
+      setUnitPricesMap(upMap);
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
@@ -138,31 +152,45 @@ export function InstantCheckoutModal() {
   };
 
   const handleBarcodeScanned = async (barcode: string) => {
+    setShowBarcodeScanner(false);
     try {
-      console.log('Barcode scanned:', barcode);
-      console.log('Available products:', products.length);
+      let matchedProduct: any = null;
+      let matchedUnit: ProductUnit | null = null;
 
-      const product = products.find(p => p.barcode === barcode);
-
-      if (product) {
-        console.log('Product found:', product.name);
-
-        if (product.current_stock <= 0) {
-          Alert.alert('Out of Stock', `${product.name} is currently out of stock.`);
-          return;
+      for (const product of products) {
+        const unitPrices = unitPricesMap[product.id];
+        if (unitPrices) {
+          const found = unitPrices.find(up => up.barcode === barcode);
+          if (found) {
+            matchedProduct = product;
+            matchedUnit = found;
+            break;
+          }
         }
+      }
 
-        addProduct(product, 1);
-        setShowBarcodeScanner(false);
+      if (!matchedProduct) {
+        matchedProduct = products.find(p => p.barcode === barcode) ?? null;
+      }
 
-        setTimeout(() => {
-          setShowProductSelector(true);
-        }, 300);
-
-        Alert.alert('Success', `Added ${product.name} to checkout`);
-      } else {
-        console.log('Product not found for barcode:', barcode);
+      if (!matchedProduct) {
         Alert.alert('Not Found', 'Product with this barcode was not found.');
+        return;
+      }
+
+      if (matchedProduct.current_stock <= 0) {
+        Alert.alert('Out of Stock', `${matchedProduct.name} is currently out of stock.`);
+        return;
+      }
+
+      if (matchedUnit) {
+        addProduct(matchedProduct, 1, {
+          unit_id: matchedUnit.unit_id,
+          unit_label: matchedUnit.name ?? undefined,
+          price: matchedUnit.price,
+        });
+      } else {
+        addProduct(matchedProduct, 1);
       }
     } catch (error) {
       console.error('Error processing barcode:', error);
@@ -650,7 +678,7 @@ export function InstantCheckoutModal() {
                     {item.name}
                   </Text>
                   <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                    {formatCurrency(item.price)}
+                    {formatPrice(item.price, item.currency_id ?? undefined)}
                   </Text>
                   <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                     Stock: {item.current_stock}

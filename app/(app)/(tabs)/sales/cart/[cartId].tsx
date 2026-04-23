@@ -32,6 +32,7 @@ export default function CartScreen() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [productStockMap, setProductStockMap] = useState<Map<string, number>>(new Map());
+  const [productCurrencyMap, setProductCurrencyMap] = useState<Map<string, string | null>>(new Map());
   const [loadingStock, setLoadingStock] = useState(false);
 
   // Track initial state and local changes
@@ -101,13 +102,16 @@ export default function CartScreen() {
         const products = await productService.getProducts(currentBusiness.id);
 
         const stockMap = new Map<string, number>();
+        const currencyMap = new Map<string, string | null>();
         products.forEach(product => {
           if (productIds.includes(product.id)) {
             stockMap.set(product.id, product.current_stock || 0);
+            currencyMap.set(product.id, (product as any).currency_id ?? null);
           }
         });
 
         setProductStockMap(stockMap);
+        setProductCurrencyMap(currencyMap);
       } catch (error) {
         console.error('Error loading stock data:', error);
       } finally {
@@ -847,6 +851,7 @@ export default function CartScreen() {
                 onShowDiscount={setShowDiscountModal}
                 onRemoveDiscount={handleRemoveItemDiscount}
                 isUpdating={updating === item.id}
+                currencySymbol={getSymbol(productCurrencyMap.get(item.product_id) ?? undefined)}
               />
             );
           })}
