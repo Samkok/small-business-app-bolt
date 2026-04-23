@@ -7,6 +7,7 @@ import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import type { Unit } from '@/src/services/units';
 
 interface ProductCardProps {
   product: {
@@ -21,16 +22,18 @@ interface ProductCardProps {
     is_archived?: boolean;
     archived_at?: string;
     archived_by?: string;
-    currency_id?: string;
+    currency_id?: string | null;
+    unit_group_id?: string | null;
   };
   onEdit: (product: any) => void;
   onViewDetails: (product: any) => void;
   onDelete: (product: any) => void;
   onUnarchive?: (product: any) => void;
   isArchived?: boolean;
+  units?: Unit[];
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
@@ -111,13 +114,29 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
           
           <View style={styles.priceStockContainer}>
             <Text style={[styles.price, { color: '#059669' }]}>
-              {formatPrice(product.price, product.currency_id)}
+              {formatPrice(product.price, product.currency_id ?? undefined)}
             </Text>
-            
+
             <View style={styles.stockInfo}>
-              <Text style={[styles.stockText, { color: stockStatus.color }]}>
-                {product.current_stock} in stock
-              </Text>
+              {units && units.length > 0 ? (
+                <>
+                  {units.map(unit => {
+                    const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
+                    return (
+                      <Text key={unit.id} style={[styles.stockText, { color: stockStatus.color }]}>
+                        {qty} {unit.name}
+                      </Text>
+                    );
+                  })}
+                  <Text style={[styles.stockTextSmall, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    ({product.current_stock} base units)
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.stockText, { color: stockStatus.color }]}>
+                  {product.current_stock} in stock
+                </Text>
+              )}
             </View>
           </View>
           
@@ -279,6 +298,11 @@ const styles = StyleSheet.create({
   stockText: {
     fontSize: 12,
     fontWeight: '500',
+    textAlign: 'right',
+  },
+  stockTextSmall: {
+    fontSize: 10,
+    textAlign: 'right',
   },
   barcode: {
     fontSize: 11,

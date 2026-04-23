@@ -18,7 +18,6 @@ import Input from '@/src/components/ui/Input';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface ReturnItem {
   productId: string;
@@ -46,7 +45,6 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const [includeDeliveryCost, setIncludeDeliveryCost] = useState(false);
 
   const { isDark } = useTheme();
-  const { formatPrice } = useCurrencyContext();
   const { currentBusiness, userProfile } = useAuth();
 
   useEffect(() => {
@@ -186,7 +184,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
 
       Alert.alert(
         'Return Processed',
-        `Successfully processed return for ${getTotalReturnItems()} items. Refund amount: ${formatPrice(calculateRefundAmount())}`,
+        `Successfully processed return for ${getTotalReturnItems()} items. Refund amount: $${calculateRefundAmount().toFixed(2)}`,
         [{ text: 'OK', onPress: onComplete }]
       );
     } catch (error) {
@@ -285,7 +283,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                 Total Amount:
               </Text>
               <Text style={[styles.saleInfoValue, { color: '#059669' }]}>
-                {formatPrice(sale.total_amount)}
+                ${sale.total_amount.toFixed(2)}
               </Text>
             </View>
           </View>
@@ -312,10 +310,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                     {item.productName}
                   </Text>
                   <Text style={[styles.itemDetails, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Original: {item.originalQuantity} × {formatPrice(item.unitPrice)}
+                    Original: {item.originalQuantity} × ${item.unitPrice.toFixed(2)}
                   </Text>
                   <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-                    Subtotal: {formatPrice(item.originalQuantity * item.unitPrice)}
+                    Subtotal: ${(item.originalQuantity * item.unitPrice).toFixed(2)}
                   </Text>
                 </View>
 
@@ -370,7 +368,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                 
                 {item.returnQuantity > 0 && (
                   <Text style={[styles.returnAmount, { color: '#dc2626' }]}>
-                    Refund: {formatPrice(item.returnQuantity * item.unitPrice)}
+                    Refund: ${(item.returnQuantity * item.unitPrice).toFixed(2)}
                   </Text>
                 )}
                 </View>
@@ -475,20 +473,20 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                   {item.lossType !== 'none' && (
                     <View style={styles.lossCalculation}>
                       <Text style={[styles.lossCalculationText, { color: isDark ? '#f87171' : '#dc2626' }]}>
-                        Loss: -{formatPrice(
+                        Loss: -${(
                           item.lossType === 'fixed'
                             ? item.lossAmount
                             : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
-                        )}
+                        ).toFixed(2)}
                       </Text>
                       <Text style={[styles.lossCalculationText, { color: '#059669' }]}>
-                        Final refund: {formatPrice(Math.max(0,
+                        Final refund: ${Math.max(0, (
                           item.returnQuantity * item.unitPrice - (
                             item.lossType === 'fixed'
                               ? item.lossAmount
                               : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
                           )
-                        ))}
+                        )).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -513,7 +511,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                   Total Refund Amount:
                 </Text>
                 <Text style={[styles.totalRefundValue, { color: '#dc2626' }]}>
-                  {formatPrice(calculateRefundAmount())}
+                  ${calculateRefundAmount().toFixed(2)}
                 </Text>
               </View>
             </View>
@@ -582,7 +580,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
           style={styles.footerButton}
         />
         <Button
-          title={`Process Return - ${formatPrice(calculateRefundAmount())}`}
+          title={`Process Return - $${calculateRefundAmount().toFixed(2)}`}
           onPress={handleSubmitReturn}
           loading={loading}
           style={styles.footerButton}

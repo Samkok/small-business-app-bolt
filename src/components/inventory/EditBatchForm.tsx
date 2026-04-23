@@ -24,7 +24,7 @@ import { batchImportService, BatchImportItem, BatchImportCost } from '@/src/serv
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { supabase } from '@/src/config/supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface EditBatchFormProps {
   batch: any;
@@ -66,8 +66,6 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
 
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
-  const { formatPrice } = useCurrencyContext();
-  const formatCurrency = (amount: number) => formatPrice(amount);
 
   const isEditable = batch.status === 'pending';
 

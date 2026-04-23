@@ -4,7 +4,6 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Pencil, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck } from 'lucide-react-native';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
-import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface BatchHistoryCardProps {
   batch: {
@@ -47,13 +46,14 @@ interface BatchHistoryCardProps {
 
 export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onViewDetails }: BatchHistoryCardProps) {
   const { isDark } = useTheme();
-  const { formatPrice } = useCurrencyContext();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatCurrency = (amount: number) => formatPrice(amount);
+  const formatCurrency = (amount: number) => {
+    return `$${amount.toFixed(2)}`;
+  };
 
   const getStatusColor = (status: 'pending' | 'completed') => {
     return status === 'completed' ? '#059669' : '#f59e0b';

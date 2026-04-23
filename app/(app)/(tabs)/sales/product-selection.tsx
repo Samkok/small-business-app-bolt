@@ -102,14 +102,21 @@ export default function ProductSelectionScreen() {
     if (debouncedSearchQuery.trim() === '') {
       setFilteredProducts(products);
     } else {
-      const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-        (product.barcode && product.barcode.includes(debouncedSearchQuery)) ||
-        (product.description && product.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
-      );
+      const q = debouncedSearchQuery.toLowerCase();
+      const filtered = products.filter(product => {
+        if (product.name.toLowerCase().includes(q)) return true;
+        if (product.barcode && product.barcode.toLowerCase().includes(q)) return true;
+        if (product.description && product.description.toLowerCase().includes(q)) return true;
+        // Check unit-specific barcodes
+        const unitPrices = unitPricesMap[product.id];
+        if (unitPrices) {
+          return unitPrices.some(up => up.barcode && up.barcode.toLowerCase().includes(q));
+        }
+        return false;
+      });
       setFilteredProducts(filtered);
     }
-  }, [products, debouncedSearchQuery]);
+  }, [products, debouncedSearchQuery, unitPricesMap]);
 
   const savePendingChanges = useCallback(async () => {
     if (!cartId || isSaving) return;
@@ -205,9 +212,19 @@ export default function ProductSelectionScreen() {
 
   const handleBarcodeScanned = async (barcode: string) => {
     setShowBarcodeScanner(false);
-
-    // Simply set the search query to the scanned barcode
     setSearchQuery(barcode);
+
+    // If the barcode exactly matches a unit-specific barcode, auto-select that unit
+    for (const product of products) {
+      const unitPrices = unitPricesMap[product.id];
+      if (unitPrices) {
+        const matchedUnit = unitPrices.find(up => up.barcode === barcode);
+        if (matchedUnit) {
+          setSelectedUnits(prev => ({ ...prev, [product.id]: matchedUnit.unit_id }));
+          break;
+        }
+      }
+    }
   };
 
   const getTotalItems = useCallback(() => {

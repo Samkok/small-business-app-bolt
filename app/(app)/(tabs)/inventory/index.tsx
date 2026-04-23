@@ -38,6 +38,7 @@ import { productTransactionService } from '@/src/services/productTransactions';
 import { supabase } from '@/src/config/supabase';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
+import { unitService, Unit } from '@/src/services/units';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -70,6 +71,7 @@ export default function InventoryScreen() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
+  const [unitGroupsCache, setUnitGroupsCache] = useState<Record<string, Unit[]>>({});
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -216,6 +218,25 @@ export default function InventoryScreen() {
       
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
       setCurrentPage(page);
+
+      // Load units for multi-unit products not yet cached
+      const multiUnitProducts = productsData.filter((p: any) => p.unit_group_id);
+      if (multiUnitProducts.length > 0) {
+        const newEntries: Record<string, Unit[]> = {};
+        await Promise.all(
+          multiUnitProducts.map(async (p: any) => {
+            try {
+              const units = await unitService.getUnits(p.unit_group_id);
+              newEntries[p.unit_group_id] = units;
+            } catch {
+              // silently ignore
+            }
+          })
+        );
+        if (Object.keys(newEntries).length > 0) {
+          setUnitGroupsCache(prev => ({ ...prev, ...newEntries }));
+        }
+      }
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert(t('common.error'), 'Failed to load products');
@@ -725,6 +746,7 @@ export default function InventoryScreen() {
       onDelete={handleDeleteProduct}
       onUnarchive={handleUnarchiveProduct}
       isArchived={showArchived}
+      units={item.unit_group_id ? unitGroupsCache[item.unit_group_id] : undefined}
     />
   );
 
