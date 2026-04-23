@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { X, DollarSign, TrendingDown, Truck, AlertTriangle } from 'lucide-react-native';
@@ -39,6 +40,7 @@ export default function VoidSaleModal({
   loading = false,
 }: VoidSaleModalProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const [reason, setReason] = useState('');
   const [includeDeliveryCost, setIncludeDeliveryCost] = useState(true);
   const [lossType, setLossType] = useState<'none' | 'fixed' | 'percentage'>('none');
@@ -166,7 +168,7 @@ export default function VoidSaleModal({
             {/* Sale Info */}
             <View style={[styles.saleInfo, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
               <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Sale #{sale?.id?.slice(-8)} - ${originalAmount.toFixed(2)}
+                Sale #{sale?.id?.slice(-8)} - {formatPrice(originalAmount)}
               </Text>
               {sale?.customers && (
                 <Text style={[styles.saleInfoSubtext, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
@@ -186,7 +188,7 @@ export default function VoidSaleModal({
                 </View>
                 <View style={styles.switchRow}>
                   <Text style={[styles.switchLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                    Include delivery cost (${deliveryCost.toFixed(2)})
+                    Include delivery cost ({formatPrice(deliveryCost)})
                   </Text>
                   <Switch
                     value={includeDeliveryCost}
@@ -300,7 +302,7 @@ export default function VoidSaleModal({
                   Original Amount:
                 </Text>
                 <Text style={[styles.breakdownValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  ${originalAmount.toFixed(2)}
+                  {formatPrice(originalAmount)}
                 </Text>
               </View>
 
@@ -310,7 +312,7 @@ export default function VoidSaleModal({
                     Delivery excluded:
                   </Text>
                   <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>
-                    -${calculatedAmounts.deliveryAdjustment.toFixed(2)}
+                    -{formatPrice(calculatedAmounts.deliveryAdjustment)}
                   </Text>
                 </View>
               )}
@@ -321,7 +323,7 @@ export default function VoidSaleModal({
                     Loss adjustment:
                   </Text>
                   <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>
-                    -${calculatedAmounts.lossAdjustment.toFixed(2)}
+                    -{formatPrice(calculatedAmounts.lossAdjustment)}
                   </Text>
                 </View>
               )}
@@ -333,7 +335,7 @@ export default function VoidSaleModal({
                   Final void amount:
                 </Text>
                 <Text style={[styles.breakdownTotalValue, { color: '#2563eb' }]}>
-                  ${calculatedAmounts.adjusted.toFixed(2)}
+                  {formatPrice(calculatedAmounts.adjusted)}
                 </Text>
               </View>
             </View>

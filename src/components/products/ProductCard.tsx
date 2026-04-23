@@ -6,6 +6,7 @@ import { CreditCard as Edit, TrendingUp, Package, TriangleAlert as AlertTriangle
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface ProductCardProps {
   product: {
@@ -20,6 +21,7 @@ interface ProductCardProps {
     is_archived?: boolean;
     archived_at?: string;
     archived_by?: string;
+    currency_id?: string;
   };
   onEdit: (product: any) => void;
   onViewDetails: (product: any) => void;
@@ -33,6 +35,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
   const { addProduct, openModal } = useInstantCheckout();
+  const { formatPrice } = useCurrencyContext();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
   const isOutOfStock = product.current_stock === 0;
@@ -108,7 +111,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
           
           <View style={styles.priceStockContainer}>
             <Text style={[styles.price, { color: '#059669' }]}>
-              ${product.price.toFixed(2)}
+              {formatPrice(product.price, product.currency_id)}
             </Text>
             
             <View style={styles.stockInfo}>

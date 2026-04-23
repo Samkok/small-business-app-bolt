@@ -15,6 +15,7 @@ import { BusinessSwitchProvider } from '@/src/context/BusinessSwitchContext';
 import { SaleDetailsModalProvider } from '@/src/context/SaleDetailsModalContext';
 import { SubscriptionProvider } from '@/src/context/SubscriptionContext';
 import { NetworkProvider } from '@/src/context/NetworkContext';
+import { CurrencyProvider } from '@/src/context/CurrencyContext';
 import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
 import '@/src/locales';
 
@@ -27,6 +28,7 @@ export default function RootLayout() {
         <LanguageProvider>
           <NetworkProvider>
             <AuthProvider>
+              <CurrencyProvider>
               <SubscriptionProvider>
                 <BusinessSwitchProvider>
                   <SaleDetailsModalProvider>
@@ -46,6 +48,7 @@ export default function RootLayout() {
                   </SaleDetailsModalProvider>
                 </BusinessSwitchProvider>
               </SubscriptionProvider>
+              </CurrencyProvider>
             </AuthProvider>
           </NetworkProvider>
         </LanguageProvider>

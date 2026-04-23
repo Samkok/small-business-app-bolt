@@ -4,6 +4,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { ShoppingCart, User, Clock, DollarSign, Trash2, UserCheck } from 'lucide-react-native';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface ActiveCartCardProps {
   cart: {
@@ -26,6 +27,7 @@ interface ActiveCartCardProps {
 
 export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress, onDelete }: ActiveCartCardProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
 
   const getTotalItems = () => {
     return cart.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
@@ -125,7 +127,7 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
           <View style={styles.totalAmount}>
             <DollarSign size={16} color="#059669" />
             <Text style={[styles.totalAmountText, { color: '#059669' }]}>
-              ${cart.total_amount.toFixed(2)}
+              {formatPrice(cart.total_amount)}
             </Text>
           </View>
         </View>

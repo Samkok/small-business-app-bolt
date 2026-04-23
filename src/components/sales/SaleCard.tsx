@@ -5,6 +5,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface SaleCardProps {
   sale: {
@@ -37,14 +38,13 @@ interface SaleCardProps {
 export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator = false }: SaleCardProps) {
   const { isDark } = useTheme();
   const router = useRouter();
+  const { formatPrice } = useCurrencyContext();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number) => formatPrice(amount);
 
   const getStatusColor = (status: string) => {
     switch (status) {
