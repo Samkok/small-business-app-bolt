@@ -7,7 +7,7 @@ import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
-import type { Unit } from '@/src/services/units';
+import type { Unit, ProductUnit } from '@/src/services/units';
 
 interface ProductCardProps {
   product: {
@@ -31,9 +31,10 @@ interface ProductCardProps {
   onUnarchive?: (product: any) => void;
   isArchived?: boolean;
   units?: Unit[];
+  unitPrices?: ProductUnit[];
 }
 
-export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onEdit, onViewDetails, onDelete, onUnarchive, isArchived, units, unitPrices }: ProductCardProps) {
   const { isDark } = useTheme();
   const [showImageModal, setShowImageModal] = useState(false);
   const router = useRouter();
@@ -119,19 +120,9 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
 
             <View style={styles.stockInfo}>
               {units && units.length > 0 ? (
-                <>
-                  {units.map(unit => {
-                    const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
-                    return (
-                      <Text key={unit.id} style={[styles.stockText, { color: stockStatus.color }]}>
-                        {qty} {unit.name}
-                      </Text>
-                    );
-                  })}
-                  <Text style={[styles.stockTextSmall, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                    ({product.current_stock} base units)
-                  </Text>
-                </>
+                <Text style={[styles.stockTextSmall, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  {product.current_stock} base units
+                </Text>
               ) : (
                 <Text style={[styles.stockText, { color: stockStatus.color }]}>
                   {product.current_stock} in stock
@@ -139,8 +130,42 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
               )}
             </View>
           </View>
-          
-          {product.barcode && (
+
+          {units && units.length > 0 && (
+            <View style={[styles.variantsBox, { borderColor: isDark ? '#374151' : '#e5e7eb', backgroundColor: isDark ? '#1f2937' : '#f9fafb' }]}>
+              {units.map(unit => {
+                const pu = unitPrices?.find(p => p.unit_id === unit.id);
+                const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
+                const variantPrice = pu?.price ?? product.price;
+                const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
+                const variantName = pu?.name || unit.name;
+                return (
+                  <View key={unit.id} style={styles.variantRow}>
+                    <View style={styles.variantMain}>
+                      <Text style={[styles.variantName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+                        {variantName}
+                      </Text>
+                      {pu?.barcode ? (
+                        <Text style={[styles.variantBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]} numberOfLines={1}>
+                          {pu.barcode}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.variantMeta}>
+                      <Text style={[styles.variantPrice, { color: '#059669' }]}>
+                        {formatPrice(variantPrice, variantCurrency)}
+                      </Text>
+                      <Text style={[styles.variantStock, { color: stockStatus.color }]}>
+                        {qty} in stock
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {product.barcode && (!units || units.length === 0) && (
             <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
               {product.barcode}
             </Text>
@@ -308,6 +333,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     marginBottom: 8,
+  },
+  variantsBox: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    gap: 4,
+  },
+  variantRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  variantMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  variantName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  variantBarcode: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 1,
+  },
+  variantMeta: {
+    alignItems: 'flex-end',
+  },
+  variantPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  variantStock: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   archivedBadge: {
     position: 'absolute',

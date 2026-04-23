@@ -38,7 +38,7 @@ import { productTransactionService } from '@/src/services/productTransactions';
 import { supabase } from '@/src/config/supabase';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
-import { unitService, Unit } from '@/src/services/units';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -72,6 +72,7 @@ export default function InventoryScreen() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [markingAsArrived, setMarkingAsArrived] = useState<string | null>(null);
   const [unitGroupsCache, setUnitGroupsCache] = useState<Record<string, Unit[]>>({});
+  const [unitPricesCache, setUnitPricesCache] = useState<Record<string, ProductUnit[]>>({});
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -219,22 +220,30 @@ export default function InventoryScreen() {
       setHasMoreProducts(productsData.length === PRODUCTS_PER_PAGE);
       setCurrentPage(page);
 
-      // Load units for multi-unit products not yet cached
+      // Load units and per-product unit prices for multi-unit products
       const multiUnitProducts = productsData.filter((p: any) => p.unit_group_id);
       if (multiUnitProducts.length > 0) {
-        const newEntries: Record<string, Unit[]> = {};
+        const newUnitEntries: Record<string, Unit[]> = {};
+        const newPriceEntries: Record<string, ProductUnit[]> = {};
         await Promise.all(
           multiUnitProducts.map(async (p: any) => {
             try {
-              const units = await unitService.getUnits(p.unit_group_id);
-              newEntries[p.unit_group_id] = units;
+              const [units, prices] = await Promise.all([
+                unitService.getUnits(p.unit_group_id),
+                unitService.getProductUnits(p.id),
+              ]);
+              newUnitEntries[p.unit_group_id] = units;
+              newPriceEntries[p.id] = prices;
             } catch {
               // silently ignore
             }
           })
         );
-        if (Object.keys(newEntries).length > 0) {
-          setUnitGroupsCache(prev => ({ ...prev, ...newEntries }));
+        if (Object.keys(newUnitEntries).length > 0) {
+          setUnitGroupsCache(prev => ({ ...prev, ...newUnitEntries }));
+        }
+        if (Object.keys(newPriceEntries).length > 0) {
+          setUnitPricesCache(prev => ({ ...prev, ...newPriceEntries }));
         }
       }
     } catch (error) {
@@ -747,6 +756,7 @@ export default function InventoryScreen() {
       onUnarchive={handleUnarchiveProduct}
       isArchived={showArchived}
       units={item.unit_group_id ? unitGroupsCache[item.unit_group_id] : undefined}
+      unitPrices={unitPricesCache[item.id]}
     />
   );
 
