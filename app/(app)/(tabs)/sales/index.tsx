@@ -813,16 +813,16 @@ export default function SalesScreen() {
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
   type SaleFlatItem =
-    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number }
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }
     | { type: 'sale'; item: any };
 
   const buildGroupedSalesList = useCallback((salesData: any[]): SaleFlatItem[] => {
-    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number }> = {};
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }> = {};
 
     salesData.forEach((sale) => {
       const dateKey = format(new Date(sale.sale_date), 'yyyy-MM-dd');
       if (!groups[dateKey]) {
-        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0 };
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
       }
 
       const displayAmount = sale.status === 'voided'
@@ -832,29 +832,37 @@ export default function SalesScreen() {
             a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
         : sale.total_amount;
 
+      const cartItems: any[] = sale.carts?.cart_items || [];
       const productCount =
         sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
-        sale.carts?.cart_items?.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0) ||
-        0;
+        cartItems.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0);
+
+      const saleProfit = sale.status === 'voided'
+        ? 0
+        : cartItems.reduce((sum: number, ci: any) => {
+            const cost = ci.products?.cost_per_unit ?? 0;
+            return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
+          }, 0);
 
       groups[dateKey].sales.push(sale);
       groups[dateKey].totalOrders += 1;
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
+      groups[dateKey].totalProfit += saleProfit;
     });
 
     const result: SaleFlatItem[] = [];
     Object.entries(groups)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([date, data]) => {
-        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue });
+        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit });
         data.sales.forEach(sale => result.push({ type: 'sale', item: sale }));
       });
 
     return result;
   }, []);
 
-  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, totalRevenue: number) => (
+  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, totalRevenue: number, totalProfit: number) => (
     <View style={[styles.saleDateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.saleDatePillRow}>
         <View style={[styles.saleDatePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
@@ -866,18 +874,23 @@ export default function SalesScreen() {
       </View>
       <View style={[styles.saleDateSummary, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
         <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalOrders}</Text>
+          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalOrders}</Text>
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Orders</Text>
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalProducts}</Text>
+          <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalProducts}</Text>
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+        </View>
+        <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.saleDateSummaryItem}>
+          <Text style={[styles.saleDateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
+          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
         </View>
       </View>
     </View>
@@ -885,7 +898,7 @@ export default function SalesScreen() {
 
   const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
     if (item.type === 'header') {
-      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue);
+      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue, item.totalProfit);
     }
     return (
       <SaleCard
