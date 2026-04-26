@@ -1,41 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   RefreshControl,
   FlatList,
-  Modal,
-  Dimensions
+  SectionList,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
-import { Button } from '@/src/components/ui/Button';
-import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { ArrowLeft, User, Phone, ShoppingCart, DollarSign, Calendar, Receipt, Package, TrendingUp, ChevronDown } from 'lucide-react-native';
+import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
+import { ArrowLeft, User, Phone, ShoppingBag, DollarSign, Package, Calendar, ChevronRight, Receipt } from 'lucide-react-native';
 import { supabase } from '@/src/config/supabase';
-import { reportsService } from '@/src/services/reports';
-import { LineChart } from 'react-native-chart-kit';
-import { format, subMonths, eachMonthOfInterval, startOfMonth, endOfMonth } from 'date-fns';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
-const screenWidth = Dimensions.get('window').width;
-
-interface CustomerOrder {
+interface RawOrder {
   id: string;
   total_amount: number;
-  current_total_amount: number;
+  current_total_amount: number | null;
+  returned_amount: number | null;
+  payment_method: string;
+  sale_date: string;
+  status: string;
+  carts: {
+    cart_items: Array<{
+      quantity: number;
+      products: { name: string } | null;
+    }>;
+  } | null;
+}
+
+interface ProcessedOrder {
+  id: string;
+  displayAmount: number;
   returned_amount: number;
   payment_method: string;
   sale_date: string;
   status: string;
-  items_count: number;
-  products: string[];
+  itemsCount: number;
+  productNames: string[];
+}
+
+interface DateGroup {
+  date: string;          // yyyy-MM-dd
+  displayDate: string;   // human-readable
+  orders: ProcessedOrder[];
+  totalOrders: number;
+  totalProducts: number;
+  totalRevenue: number;
 }
 
 interface CustomerInfo {
@@ -46,322 +61,245 @@ interface CustomerInfo {
   platform?: string;
 }
 
+function formatDateKey(dateString: string): string {
+  return dateString.slice(0, 10); // yyyy-MM-dd
+}
+
+function formatDisplayDate(dateKey: string): string {
+  const date = new Date(dateKey + 'T00:00:00');
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (dateKey === formatDateKey(today.toISOString())) return 'Today';
+  if (dateKey === formatDateKey(yesterday.toISOString())) return 'Yesterday';
+
+  return date.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'completed': return '#059669';
+    case 'voided': return '#dc2626';
+    case 'refunded': return '#ea580c';
+    case 'partially_returned': return '#f59e0b';
+    default: return '#6b7280';
+  }
+}
+
+function formatStatus(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+}
+
 export default function CustomerOrdersScreen() {
   const router = useRouter();
-  const { customerId } = useLocalSearchParams();
+  const { customerId } = useLocalSearchParams<{ customerId: string }>();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  
+  const { formatPrice } = useCurrencyContext();
+
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
-  const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [orders, setOrders] = useState<ProcessedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [totalOrders, setTotalOrders] = useState(0);
 
-  useEffect(() => {
-    if (customerId && currentBusiness?.id) {
-      loadCustomerOrders();
-    }
-  }, [customerId, currentBusiness?.id]);
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!customerId || !currentBusiness?.id) return;
+    if (!isRefresh) setLoading(true);
 
-  const loadCustomerOrders = async (isRefresh = false) => {
-    if (!customerId || typeof customerId !== 'string' || !currentBusiness?.id) {
-      console.log('Missing required parameters:', { customerId, currentBusinessId: currentBusiness?.id });
-      return;
-    }
-    
-    if (!isRefresh) {
-      setLoading(true);
-    }
-    
-    console.log("Customer: ", customerId);
-    
     try {
-      // Get customer information
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', customerId as string)
-        .eq('business_id', currentBusiness.id)
-        .single();
+      const [{ data: customerData, error: customerError }, { data: salesData, error: salesError }] = await Promise.all([
+        supabase
+          .from('customers')
+          .select('id, name, phone, address, platform')
+          .eq('id', customerId)
+          .eq('business_id', currentBusiness.id)
+          .maybeSingle(),
+        supabase
+          .from('sales')
+          .select(`
+            id,
+            total_amount,
+            current_total_amount,
+            returned_amount,
+            payment_method,
+            sale_date,
+            status,
+            carts(
+              cart_items(
+                quantity,
+                products(name)
+              )
+            )
+          `)
+          .eq('customer_id', customerId)
+          .eq('business_id', currentBusiness.id)
+          .not('status', 'eq', 'voided')
+          .order('sale_date', { ascending: false }),
+      ]);
 
       if (customerError) throw customerError;
-      setCustomer(customerData);
-
-
-      // Get customer's orders with cart items
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          total_amount,
-          current_total_amount,
-          returned_amount,
-          payment_method,
-          sale_date,
-          status,
-          carts(
-            cart_items(
-              quantity,
-              products(name)
-            )
-          )
-        `)
-        .eq('customer_id', customerId as string)
-        .eq('business_id', currentBusiness.id)
-        .in('status', ['completed', 'partially_returned'])
-        .order('sale_date', { ascending: false });
-
       if (salesError) throw salesError;
 
-      // Process orders data
-      const processedOrders: CustomerOrder[] = salesData.map(sale => {
-        const items = sale.carts?.cart_items || [];
-        const itemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
-        const products = items.map(item => item.products?.name || 'Unknown Product');
+      setCustomer(customerData);
+
+      const processed: ProcessedOrder[] = (salesData as RawOrder[] ?? []).map(sale => {
+        const items = sale.carts?.cart_items ?? [];
+        const itemsCount = items.reduce((s, i) => s + (i.quantity || 0), 0);
+        const productNames = items.map(i => i.products?.name ?? 'Unknown');
+        const returned = sale.returned_amount ?? 0;
+        const displayAmount = sale.current_total_amount ?? sale.total_amount ?? 0;
 
         return {
           id: sale.id,
-          total_amount: sale.current_total_amount || sale.total_amount || 0,
-          current_total_amount: sale.current_total_amount || sale.total_amount || 0,
-          returned_amount: sale.returned_amount || 0,
+          displayAmount,
+          returned_amount: returned,
           payment_method: sale.payment_method,
           sale_date: sale.sale_date,
           status: sale.status,
-          items_count: itemsCount,
-          products: products
+          itemsCount,
+          productNames,
         };
       });
 
-      setOrders(processedOrders);
-
-      // Calculate totals
-      const completedOrders = processedOrders.filter(order => 
-        order.status === 'completed' || order.status === 'partially_returned'
-      );
-      const totalSpentAmount = completedOrders.reduce((sum, order) => sum + order.current_total_amount, 0);
-      
-      setTotalSpent(totalSpentAmount);
-      setTotalOrders(completedOrders.length);
-
+      setOrders(processed);
     } catch (error) {
       console.error('Error loading customer orders:', error);
     } finally {
-      if (isRefresh) {
-        setRefreshing(false);
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
-  };
+  }, [customerId, currentBusiness?.id]);
 
-  const handleRefresh = async () => {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    await loadCustomerOrders(true);
-  };
+    loadData(true);
+  }, [loadData]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `$${(amount || 0).toFixed(2)}`;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return '#059669';
-      case 'voided':
-        return '#dc2626';
-      case 'refunded':
-        return '#ea580c';
-      case 'partially_returned':
-        return '#f59e0b';
-      default:
-        return '#6b7280';
+  // Group orders by date, newest first
+  const sections: DateGroup[] = useMemo(() => {
+    const map: Record<string, ProcessedOrder[]> = {};
+    for (const order of orders) {
+      const key = formatDateKey(order.sale_date);
+      if (!map[key]) map[key] = [];
+      map[key].push(order);
     }
-  };
 
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method) {
-      case 'cash':
-        return '💵';
-      case 'card':
-        return '💳';
-      case 'transfer':
-        return '🏦';
-      default:
-        return '💰';
-    }
-  };
+    return Object.keys(map)
+      .sort((a, b) => b.localeCompare(a))
+      .map(dateKey => {
+        const groupOrders = map[dateKey];
+        const totalProducts = groupOrders.reduce((s, o) => s + o.itemsCount, 0);
+        const totalRevenue = groupOrders.reduce((s, o) => s + o.displayAmount, 0);
+        return {
+          date: dateKey,
+          displayDate: formatDisplayDate(dateKey),
+          orders: groupOrders,
+          totalOrders: groupOrders.length,
+          totalProducts,
+          totalRevenue,
+        };
+      });
+  }, [orders]);
 
-  const OrderCard = ({ order }: { order: CustomerOrder }) => (
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((s, o) => s + o.displayAmount, 0);
+
+  // --- Sub-components ---
+
+  const OrderRow = ({ order }: { order: ProcessedOrder }) => (
     <TouchableOpacity
+      style={[styles.orderRow, { borderBottomColor: isDark ? '#374151' : '#f3f4f6' }]}
       onPress={() => router.push(`/sales/details/${order.id}`)}
       activeOpacity={0.7}
     >
-      <Card style={styles.orderCard}>
-        <View style={styles.orderHeader}>
-          <View style={styles.orderInfo}>
-            <Text style={[styles.orderId, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Order #{order.id.slice(-8)}
-            </Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
-                {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.amountContainer}>
-            {order.returned_amount > 0 ? (
-              <View style={styles.amountWithReturns}>
-                <Text style={[styles.originalOrderAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                  {formatCurrency(order.total_amount + order.returned_amount)}
-                </Text>
-                <Text style={[styles.currentOrderAmount, { color: '#059669' }]}>
-                  {formatCurrency(order.current_total_amount)}
-                </Text>
-                <Text style={[styles.returnedOrderAmount, { color: '#dc2626' }]}>
-                  (-{formatCurrency(order.returned_amount)} returned)
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.orderAmount, { color: '#059669' }]}>
-                {formatCurrency(order.current_total_amount)}
-              </Text>
-            )}
-          </View>
-        </View>
-        
-        <View style={styles.orderDetails}>
-          <View style={styles.orderDetailRow}>
-            <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-            <Text style={[styles.orderDetailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {formatDate(order.sale_date)}
-            </Text>
-          </View>
-          
-          <View style={styles.orderDetailRow}>
-            <Receipt size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-            <Text style={[styles.orderDetailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {getPaymentMethodIcon(order.payment_method)} {order.payment_method.charAt(0).toUpperCase() + order.payment_method.slice(1)}
-            </Text>
-          </View>
-          
-          <View style={styles.orderDetailRow}>
-            <Package size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-            <Text style={[styles.orderDetailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {order.items_count} items
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.productsSection}>
-          <Text style={[styles.productsLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-            Products:
+      <View style={styles.orderRowLeft}>
+        <View style={[styles.statusDot, { backgroundColor: getStatusColor(order.status) }]} />
+        <View style={styles.orderRowInfo}>
+          <Text style={[styles.orderId, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            #{order.id.slice(-8).toUpperCase()}
           </Text>
-          <Text style={[styles.productsText, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={2}>
-            {order.products.slice(0, 3).join(', ')}
-            {order.products.length > 3 && ` +${order.products.length - 3} more`}
+          <Text style={[styles.orderMeta, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            {order.itemsCount} {order.itemsCount === 1 ? 'item' : 'items'}
+            {' · '}
+            <Text style={[styles.statusLabel, { color: getStatusColor(order.status) }]}>
+              {formatStatus(order.status)}
+            </Text>
           </Text>
+          {order.productNames.length > 0 && (
+            <Text style={[styles.productNames, { color: isDark ? '#d1d5db' : '#6b7280' }]} numberOfLines={1}>
+              {order.productNames.slice(0, 3).join(', ')}
+              {order.productNames.length > 3 ? ` +${order.productNames.length - 3}` : ''}
+            </Text>
+          )}
         </View>
-      </Card>
+      </View>
+      <View style={styles.orderRowRight}>
+        <Text style={[styles.orderAmount, { color: '#059669' }]}>
+          {formatPrice(order.displayAmount)}
+        </Text>
+        {order.returned_amount > 0 && (
+          <Text style={styles.returnedNote}>
+            -{formatPrice(order.returned_amount)} returned
+          </Text>
+        )}
+        <ChevronRight size={16} color={isDark ? '#6b7280' : '#9ca3af'} />
+      </View>
     </TouchableOpacity>
   );
 
-  const SkeletonOrderCard = () => (
-    <SkeletonCard style={styles.orderCard}>
-      <View style={styles.orderHeader}>
-        <View style={styles.orderInfo}>
-          <SkeletonLoader height={16} width="40%" style={{ marginBottom: 4 }} />
-          <SkeletonLoader height={20} width={80} borderRadius={12} />
-        </View>
-        <SkeletonLoader height={20} width="25%" />
+  const GroupHeader = ({ group }: { group: DateGroup }) => (
+    <View style={[styles.groupHeader, { backgroundColor: isDark ? '#1f2937' : '#f9fafb' }]}>
+      <View style={styles.groupHeaderLeft}>
+        <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+        <Text style={[styles.groupDate, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          {group.displayDate}
+        </Text>
       </View>
-      
-      <View style={styles.orderDetails}>
-        <View style={styles.orderDetailRow}>
-          <SkeletonLoader height={14} width={14} borderRadius={7} style={{ marginRight: 6 }} />
-          <SkeletonLoader height={14} width="30%" />
+      <View style={styles.groupSummary}>
+        <View style={styles.groupStat}>
+          <Receipt size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <Text style={[styles.groupStatText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            {group.totalOrders} {group.totalOrders === 1 ? 'order' : 'orders'}
+          </Text>
         </View>
-        <View style={styles.orderDetailRow}>
-          <SkeletonLoader height={14} width={14} borderRadius={7} style={{ marginRight: 6 }} />
-          <SkeletonLoader height={14} width="25%" />
+        <View style={styles.groupStat}>
+          <Package size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <Text style={[styles.groupStatText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            {group.totalProducts} {group.totalProducts === 1 ? 'item' : 'items'}
+          </Text>
         </View>
-        <View style={styles.orderDetailRow}>
-          <SkeletonLoader height={14} width={14} borderRadius={7} style={{ marginRight: 6 }} />
-          <SkeletonLoader height={14} width="20%" />
-        </View>
+        <Text style={[styles.groupRevenue, { color: '#059669' }]}>
+          {formatPrice(group.totalRevenue)}
+        </Text>
       </View>
-      
-      <View style={styles.productsSection}>
-        <SkeletonLoader height={12} width="20%" style={{ marginBottom: 4 }} />
-        <SkeletonLoader height={14} width="80%" />
-      </View>
-    </SkeletonCard>
+    </View>
   );
 
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Customer Orders
-          </Text>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>Orders</Text>
           <View style={styles.headerRight} />
         </View>
-
-        <View style={styles.content}>
-          {/* Customer Info Skeleton */}
-          <SkeletonCard style={styles.customerInfoCard}>
-            <View style={styles.customerInfoHeader}>
-              <SkeletonLoader height={48} width={48} borderRadius={24} style={{ marginRight: 12 }} />
-              <View style={styles.customerInfoDetails}>
-                <SkeletonLoader height={18} width="60%" style={{ marginBottom: 4 }} />
-                <SkeletonLoader height={14} width="40%" style={{ marginBottom: 4 }} />
-                <SkeletonLoader height={14} width="50%" />
-              </View>
-            </View>
+        <View style={{ padding: 16, gap: 12 }}>
+          <SkeletonCard style={{ padding: 16 }}>
+            <SkeletonLoader height={48} width={48} borderRadius={24} />
           </SkeletonCard>
-
-          {/* Stats Skeleton */}
-          <View style={styles.statsContainer}>
-            <SkeletonCard style={styles.statCard}>
-              <View style={styles.statContent}>
-                <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
-                <View style={styles.statText}>
-                  <SkeletonLoader height={18} width="40%" style={{ marginBottom: 4 }} />
-                  <SkeletonLoader height={12} width="60%" />
-                </View>
-              </View>
+          {[1, 2, 3].map(i => (
+            <SkeletonCard key={i} style={{ padding: 16 }}>
+              <SkeletonLoader height={16} width="60%" style={{ marginBottom: 8 }} />
+              <SkeletonLoader height={12} width="40%" />
             </SkeletonCard>
-            
-            <SkeletonCard style={styles.statCard}>
-              <View style={styles.statContent}>
-                <SkeletonLoader height={20} width={20} borderRadius={10} style={{ marginRight: 8 }} />
-                <View style={styles.statText}>
-                  <SkeletonLoader height={18} width="40%" style={{ marginBottom: 4 }} />
-                  <SkeletonLoader height={12} width="60%" />
-                </View>
-              </View>
-            </SkeletonCard>
-          </View>
-
-          {/* Orders List Skeleton */}
-          <View style={styles.ordersList}>
-            {[1, 2, 3, 4, 5].map((index) => (
-              <SkeletonOrderCard key={index} />
-            ))}
-          </View>
+          ))}
         </View>
       </View>
     );
@@ -371,26 +309,15 @@ export default function CustomerOrdersScreen() {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Customer Orders
-          </Text>
+          <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>Orders</Text>
           <View style={styles.headerRight} />
         </View>
-        
-        <View style={styles.errorContainer}>
+        <View style={styles.centered}>
           <User size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-          <Text style={[styles.errorTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Customer Not Found
-          </Text>
-          <Text style={[styles.errorText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            The customer you're looking for doesn't exist or you don't have access to view their orders.
-          </Text>
+          <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>Customer not found</Text>
         </View>
       </View>
     );
@@ -399,446 +326,199 @@ export default function CustomerOrdersScreen() {
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Customer Orders
+        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+          {customer.name}
         </Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <SectionList
+        sections={sections.map(g => ({ ...g, data: g.orders }))}
+        keyExtractor={item => item.id}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={['#2563eb']}
             tintColor="#2563eb"
-            title="Pull to refresh"
-            titleColor={isDark ? '#f9fafb' : '#111827'}
           />
         }
-      >
-        {/* Customer Information */}
-        <Card style={styles.customerInfoCard}>
-          <View style={styles.customerInfoHeader}>
-            <View style={[styles.customerAvatar, { backgroundColor: '#2563eb' }]}>
-              <Text style={styles.customerAvatarText}>
-                {customer.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.customerInfoDetails}>
-              <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {customer.name}
-              </Text>
-              {customer.phone && (
-                <View style={styles.customerDetailRow}>
-                  <Phone size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                  <Text style={[styles.customerDetailText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    {customer.phone}
+        ListHeaderComponent={() => (
+          <View style={styles.listHeader}>
+            {/* Customer Info */}
+            <Card style={styles.customerCard}>
+              <View style={styles.customerRow}>
+                <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
+                  <Text style={styles.avatarText}>{customer.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={styles.customerInfo}>
+                  <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {customer.name}
+                  </Text>
+                  {customer.phone && (
+                    <View style={styles.infoRow}>
+                      <Phone size={13} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <Text style={[styles.infoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                        {customer.phone}
+                      </Text>
+                    </View>
+                  )}
+                  {customer.platform && (
+                    <Text style={[styles.platform, { color: '#2563eb' }]}>
+                      {customer.platform.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </Card>
+
+            {/* Stats */}
+            <View style={styles.statsRow}>
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
+                    <ShoppingBag size={18} color="#2563eb" />
+                  </View>
+                  <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {totalOrders}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    Orders
                   </Text>
                 </View>
-              )}
-              {customer.platform && (
-                <Text style={[styles.customerPlatform, { color: '#2563eb' }]}>
-                  {customer.platform.charAt(0).toUpperCase() + customer.platform.slice(1).replace('_', ' ')}
-                </Text>
-              )}
+              </Card>
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                    <DollarSign size={18} color="#059669" />
+                  </View>
+                  <Text style={[styles.statValue, { color: '#059669' }]}>
+                    {formatPrice(totalSpent)}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    Total Spent
+                  </Text>
+                </View>
+              </Card>
             </View>
+
+            {orders.length > 0 && (
+              <Text style={[styles.sectionHeading, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Order History
+              </Text>
+            )}
           </View>
-        </Card>
-
-        {/* Customer Stats */}
-        <View style={styles.statsContainer}>
-          <Card style={styles.statCard}>
-            <View style={styles.statContent}>
-              <ShoppingCart size={20} color="#2563eb" />
-              <View style={styles.statText}>
-                <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {totalOrders}
-                </Text>
-                <Text style={[styles.statLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Total Orders
-                </Text>
-              </View>
-            </View>
+        )}
+        renderSectionHeader={({ section }) => <GroupHeader group={section as unknown as DateGroup} />}
+        renderItem={({ item }) => (
+          <Card style={[styles.groupCard, { marginHorizontal: 16 }]}>
+            <OrderRow order={item} />
           </Card>
-          
-          <Card style={styles.statCard}>
-            <View style={styles.statContent}>
-              <DollarSign size={20} color="#059669" />
-              <View style={styles.statText}>
-                <Text style={[styles.statValue, { color: '#059669' }]}>
-                  {formatCurrency(totalSpent)}
-                </Text>
-                <Text style={[styles.statLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Total Spent
-                </Text>
-              </View>
-            </View>
+        )}
+        SectionSeparatorComponent={() => <View style={{ height: 12 }} />}
+        stickySectionHeadersEnabled={false}
+        ListEmptyComponent={() => (
+          <Card style={styles.emptyCard}>
+            <Receipt size={40} color={isDark ? '#6b7280' : '#9ca3af'} />
+            <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>No orders yet</Text>
+            <Text style={[styles.emptySubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              This customer hasn't made any orders
+            </Text>
           </Card>
-        </View>
-
-        {/* Orders List */}
-        <View style={styles.ordersList}>
-          <Text style={[styles.ordersTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Order History ({orders.length})
-          </Text>
-          
-          {orders.length > 0 ? (
-            orders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))
-          ) : (
-            <Card style={styles.emptyState}>
-              <Receipt size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
-              <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                No Orders Found
-              </Text>
-              <Text style={[styles.emptyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                This customer hasn't made any orders yet
-              </Text>
-            </Card>
-          )}
-        </View>
-      </ScrollView>
+        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 16,
   },
-  backButton: {
-    padding: 8,
-  },
+  backButton: { padding: 8 },
   title: {
+    flex: 1,
     fontSize: 20,
     fontWeight: 'bold',
-    flex: 1,
     textAlign: 'center',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
   },
-  headerRight: {
-    width: 40,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  customerInfoCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  customerInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  customerAvatar: {
+  headerRight: { width: 40 },
+  listContent: { paddingBottom: 32 },
+  listHeader: { padding: 16, gap: 12 },
+  customerCard: { padding: 16 },
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  customerAvatarText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  avatarText: { color: '#ffffff', fontSize: 20, fontWeight: 'bold' },
+  customerInfo: { flex: 1 },
+  customerName: { fontSize: 17, fontWeight: 'bold', marginBottom: 4 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  infoText: { fontSize: 13 },
+  platform: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  statsRow: { flexDirection: 'row', gap: 12 },
+  statCard: { flex: 1, padding: 16 },
+  statContent: { alignItems: 'center', gap: 6 },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  customerInfoDetails: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  customerDetailRow: {
+  statValue: { fontSize: 20, fontWeight: 'bold' },
+  statLabel: { fontSize: 12 },
+  sectionHeading: { fontSize: 16, fontWeight: '700', marginTop: 4 },
+  groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
-  },
-  customerDetailText: {
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  customerPlatform: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-  },
-  statContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statText: {
-    marginLeft: 8,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chartCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  chartHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  chartTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  dateRangeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  dateRangeText: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  chartLoadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 220,
-  },
-  chartContainer: {
-    alignItems: 'center',
-  },
-  noDataContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 220,
-  },
-  noDataText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  enhancedStatsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-    gap: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  dateRangeModal: {
-    width: '90%',
-    maxWidth: 400,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  dateRangeModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  dateRangeOptions: {
-    gap: 8,
-  },
-  dateRangeOption: {
-    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
   },
-  ordersList: {
-    flex: 1,
-  },
-  ordersTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  orderCard: {
-    padding: 16,
-    marginBottom: 12,
-  },
-  orderHeader: {
+  groupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  groupDate: { fontSize: 14, fontWeight: '700' },
+  groupSummary: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  groupStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  groupStatText: { fontSize: 12 },
+  groupRevenue: { fontSize: 14, fontWeight: '700' },
+  groupCard: { marginBottom: 0, padding: 0, overflow: 'hidden' },
+  orderRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
   },
-  orderInfo: {
-    flex: 1,
-  },
-  orderId: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  orderAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  amountContainer: {
-    alignItems: 'flex-end',
-  },
-  amountWithReturns: {
-    alignItems: 'flex-end',
-  },
-  originalOrderAmount: {
-    fontSize: 14,
-    textDecorationLine: 'line-through',
-    marginBottom: 2,
-  },
-  currentOrderAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  returnedOrderAmount: {
-    fontSize: 11,
-    fontStyle: 'italic',
-  },
-  amountContainer: {
-    alignItems: 'flex-end',
-  },
-  amountWithReturns: {
-    alignItems: 'flex-end',
-  },
-  originalOrderAmount: {
-    fontSize: 14,
-    textDecorationLine: 'line-through',
-    marginBottom: 2,
-  },
-  currentOrderAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  returnedOrderAmount: {
-    fontSize: 11,
-    fontStyle: 'italic',
-  },
-  orderDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 12,
-  },
-  orderDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  orderDetailText: {
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  productsSection: {
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  productsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  productsText: {
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-    marginTop: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  orderRowLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  orderRowInfo: { flex: 1 },
+  orderId: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  orderMeta: { fontSize: 12, marginBottom: 2 },
+  statusLabel: { fontSize: 12, fontWeight: '600' },
+  productNames: { fontSize: 12, marginTop: 1 },
+  orderRowRight: { alignItems: 'flex-end', gap: 2, flexShrink: 0 },
+  orderAmount: { fontSize: 15, fontWeight: '700' },
+  returnedNote: { fontSize: 10, color: '#dc2626', fontStyle: 'italic' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyCard: { margin: 16, padding: 40, alignItems: 'center', gap: 8 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', marginTop: 8 },
+  emptySubtitle: { fontSize: 14, textAlign: 'center' },
 });

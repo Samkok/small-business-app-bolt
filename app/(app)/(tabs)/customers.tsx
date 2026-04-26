@@ -23,6 +23,7 @@ import CustomerForm from '@/src/components/customers/CustomerForm';
 import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { useRouter } from 'expo-router';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -45,6 +46,7 @@ export default function CustomersScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const router = useRouter();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -150,6 +152,10 @@ export default function CustomersScreen() {
     setShowCustomerForm(true);
   }, []);
 
+  const handleViewOrders = useCallback((customer: any) => {
+    router.push(`/customer-orders/${customer.id}`);
+  }, [router]);
+
   const handleDeleteCustomer = useCallback((customer: any) => {
     Alert.alert(
       'Delete Customer',
@@ -193,8 +199,9 @@ export default function CustomersScreen() {
       customer={item}
       onEdit={handleEditCustomer}
       onDelete={handleDeleteCustomer}
+      onViewOrders={handleViewOrders}
     />
-  ), [handleEditCustomer, handleDeleteCustomer]);
+  ), [handleEditCustomer, handleDeleteCustomer, handleViewOrders]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
