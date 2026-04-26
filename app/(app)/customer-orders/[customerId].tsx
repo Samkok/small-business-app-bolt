@@ -28,7 +28,8 @@ interface RawOrder {
   carts: {
     cart_items: Array<{
       quantity: number;
-      products: { name: string } | null;
+      unit_price: number;
+      products: { name: string; cost_per_unit: number | null } | null;
     }>;
   } | null;
 }
@@ -42,6 +43,7 @@ interface ProcessedOrder {
   status: string;
   itemsCount: number;
   productNames: string[];
+  profit: number;
 }
 
 interface DateGroup {
@@ -51,6 +53,7 @@ interface DateGroup {
   totalOrders: number;
   totalProducts: number;
   totalRevenue: number;
+  totalProfit: number;
 }
 
 interface CustomerInfo {
@@ -128,7 +131,8 @@ export default function CustomerOrdersScreen() {
             carts(
               cart_items(
                 quantity,
-                products(name)
+                unit_price,
+                products(name, cost_per_unit)
               )
             )
           `)
@@ -149,6 +153,10 @@ export default function CustomerOrdersScreen() {
         const productNames = items.map(i => i.products?.name ?? 'Unknown');
         const returned = sale.returned_amount ?? 0;
         const displayAmount = sale.current_total_amount ?? sale.total_amount ?? 0;
+        const profit = items.reduce((s, i) => {
+          const cost = i.products?.cost_per_unit ?? 0;
+          return s + (i.unit_price - cost) * i.quantity;
+        }, 0);
 
         return {
           id: sale.id,
@@ -159,6 +167,7 @@ export default function CustomerOrdersScreen() {
           status: sale.status,
           itemsCount,
           productNames,
+          profit,
         };
       });
 
@@ -195,6 +204,7 @@ export default function CustomerOrdersScreen() {
         const groupOrders = map[dateKey];
         const totalProducts = groupOrders.reduce((s, o) => s + o.itemsCount, 0);
         const totalRevenue = groupOrders.reduce((s, o) => s + o.displayAmount, 0);
+        const totalProfit = groupOrders.reduce((s, o) => s + o.profit, 0);
         return {
           date: dateKey,
           displayDate: formatDisplayDate(dateKey),
@@ -202,6 +212,7 @@ export default function CustomerOrdersScreen() {
           totalOrders: groupOrders.length,
           totalProducts,
           totalRevenue,
+          totalProfit,
         };
       });
   }, [orders]);
@@ -254,28 +265,40 @@ export default function CustomerOrdersScreen() {
 
   const GroupHeader = ({ group }: { group: DateGroup }) => (
     <View style={[styles.groupHeader, { backgroundColor: isDark ? '#1f2937' : '#f9fafb' }]}>
-      <View style={styles.groupHeaderLeft}>
-        <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+      <View style={styles.groupHeaderTop}>
+        <Calendar size={13} color={isDark ? '#9ca3af' : '#6b7280'} />
         <Text style={[styles.groupDate, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {group.displayDate}
         </Text>
       </View>
-      <View style={styles.groupSummary}>
-        <View style={styles.groupStat}>
-          <Receipt size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <Text style={[styles.groupStatText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-            {group.totalOrders} {group.totalOrders === 1 ? 'order' : 'orders'}
+      <View style={[styles.groupPills, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
+        <View style={styles.groupPill}>
+          <Text style={[styles.groupPillValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {group.totalOrders}
           </Text>
+          <Text style={[styles.groupPillLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Orders</Text>
         </View>
-        <View style={styles.groupStat}>
-          <Package size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
-          <Text style={[styles.groupStatText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-            {group.totalProducts} {group.totalProducts === 1 ? 'item' : 'items'}
+        <View style={[styles.groupPillDivider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.groupPill}>
+          <Text style={[styles.groupPillValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {group.totalProducts}
           </Text>
+          <Text style={[styles.groupPillLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
         </View>
-        <Text style={[styles.groupRevenue, { color: '#059669' }]}>
-          {formatPrice(group.totalRevenue)}
-        </Text>
+        <View style={[styles.groupPillDivider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.groupPill}>
+          <Text style={[styles.groupPillValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {formatPrice(group.totalRevenue)}
+          </Text>
+          <Text style={[styles.groupPillLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+        </View>
+        <View style={[styles.groupPillDivider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.groupPill}>
+          <Text style={[styles.groupPillValue, { color: group.totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {formatPrice(group.totalProfit)}
+          </Text>
+          <Text style={[styles.groupPillLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
+        </View>
       </View>
     </View>
   );
@@ -485,19 +508,30 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12 },
   sectionHeading: { fontSize: 16, fontWeight: '700', marginTop: 4 },
   groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 12,
+    paddingBottom: 6,
     marginTop: 4,
+    gap: 8,
   },
-  groupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  groupDate: { fontSize: 14, fontWeight: '700' },
-  groupSummary: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  groupStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  groupStatText: { fontSize: 12 },
-  groupRevenue: { fontSize: 14, fontWeight: '700' },
+  groupHeaderTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  groupDate: { fontSize: 13, fontWeight: '700' },
+  groupPills: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  groupPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    minWidth: 0,
+  },
+  groupPillDivider: { width: 1 },
+  groupPillValue: { fontSize: 13, fontWeight: '700' },
+  groupPillLabel: { fontSize: 10, marginTop: 1 },
   groupCard: { marginBottom: 0, padding: 0, overflow: 'hidden' },
   orderRow: {
     flexDirection: 'row',
