@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Phone, MapPin, MessageCircle } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Phone, MapPin, MessageCircle, ShoppingBag } from 'lucide-react-native';
 
 interface CustomerCardProps {
   customer: {
@@ -16,9 +16,10 @@ interface CustomerCardProps {
   };
   onEdit: (customer: any) => void;
   onDelete: (customer: any) => void;
+  onViewOrders: (customer: any) => void;
 }
 
-export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) {
+export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit, onDelete, onViewOrders }: CustomerCardProps) {
   const { isDark } = useTheme();
 
   const getPlatformIcon = (platform?: string) => {
@@ -131,6 +132,13 @@ export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit,
         <Text style={[styles.dateText, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
           Added {formatDate(customer.created_at)}
         </Text>
+        <TouchableOpacity
+          style={[styles.ordersButton, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff', borderColor: isDark ? '#2563eb' : '#bfdbfe' }]}
+          onPress={() => onViewOrders(customer)}
+        >
+          <ShoppingBag size={14} color="#2563eb" />
+          <Text style={[styles.ordersButtonText, { color: '#2563eb' }]}>View Orders</Text>
+        </TouchableOpacity>
       </View>
     </Card>
   );
@@ -208,5 +216,18 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
+  },
+  ordersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  ordersButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -184,7 +184,7 @@ export const salesService = {
             item_discount_type,
             item_discount_value,
             item_discount_amount,
-            products(name)
+            products(name, cost_per_unit)
           )
         )
       `)

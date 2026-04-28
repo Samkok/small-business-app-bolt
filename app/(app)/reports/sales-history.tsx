@@ -180,12 +180,12 @@ export default function SalesHistoryScreen() {
   };
 
   const groupedSales = useCallback(() => {
-    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number }> = {};
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }> = {};
 
     sales.forEach((item) => {
       const dateKey = format(new Date(item.sale_date), 'yyyy-MM-dd');
       if (!groups[dateKey]) {
-        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0 };
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
       }
 
       const displayAmount = item.status === 'voided'
@@ -195,12 +195,20 @@ export default function SalesHistoryScreen() {
             a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
         : item.total_amount;
 
-      const productCount = item.carts?.cart_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) || 0;
+      const cartItems: any[] = item.carts?.cart_items || [];
+      const productCount = cartItems.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0);
+      const saleProfit = item.status === 'voided'
+        ? 0
+        : cartItems.reduce((sum: number, si: any) => {
+            const cost = si.products?.cost_per_unit ?? 0;
+            return sum + ((si.unit_price ?? 0) - cost) * (si.quantity || 0);
+          }, 0);
 
       groups[dateKey].sales.push(item);
       groups[dateKey].totalOrders += 1;
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
+      groups[dateKey].totalProfit += saleProfit;
     });
 
     return Object.entries(groups)
@@ -209,13 +217,13 @@ export default function SalesHistoryScreen() {
   }, [sales]);
 
   type FlatItem =
-    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number }
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }
     | { type: 'sale'; item: any };
 
   const flatListData = useCallback((): FlatItem[] => {
     const result: FlatItem[] = [];
     for (const group of groupedSales()) {
-      result.push({ type: 'header', date: group.date, totalOrders: group.totalOrders, totalProducts: group.totalProducts, totalRevenue: group.totalRevenue });
+      result.push({ type: 'header', date: group.date, totalOrders: group.totalOrders, totalProducts: group.totalProducts, totalRevenue: group.totalRevenue, totalProfit: group.totalProfit });
       for (const sale of group.sales) {
         result.push({ type: 'sale', item: sale });
       }
@@ -286,7 +294,7 @@ export default function SalesHistoryScreen() {
     );
   };
 
-  const renderDateHeader = (date: string, totalOrders: number, totalProducts: number, totalRevenue: number) => (
+  const renderDateHeader = (date: string, totalOrders: number, totalProducts: number, totalRevenue: number, totalProfit: number) => (
     <View style={[styles.dateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.dateHeaderTop}>
         <View style={[styles.datePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
@@ -298,18 +306,23 @@ export default function SalesHistoryScreen() {
       </View>
       <View style={[styles.dateSummaryRow, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalOrders}</Text>
+          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalOrders}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Orders</Text>
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{totalProducts}</Text>
+          <Text style={[styles.dateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalProducts}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: '#059669' }]}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+        </View>
+        <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+        <View style={styles.dateSummaryItem}>
+          <Text style={[styles.dateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
         </View>
       </View>
     </View>
@@ -317,7 +330,7 @@ export default function SalesHistoryScreen() {
 
   const renderFlatItem = ({ item }: { item: FlatItem }) => {
     if (item.type === 'header') {
-      return renderDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue);
+      return renderDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue, item.totalProfit);
     }
     return renderSaleItem(item.item);
   };
