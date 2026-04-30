@@ -58,6 +58,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
   const [voidingInProgress, setVoidingInProgress] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const isMountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -95,6 +96,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
           setLoading(true);
           setShowReturnForm(false);
           setShowVoidModal(false);
+          setShowEditModal(false);
         }
       }, 300);
     }
@@ -247,6 +249,32 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
     setShowVoidModal(false);
   };
 
+  const handleEditSale = () => {
+    setShowEditModal(true);
+  };
+
+  const handleEditSaleConfirm = async (updates: {
+    customerId?: string | null;
+    discountType?: 'percentage' | 'fixed' | null;
+    discountValue?: number | null;
+    deliveryCost?: number | null;
+  }) => {
+    if (!sale) return;
+    try {
+      await salesService.updateSaleRecord(sale.id, updates);
+      setShowEditModal(false);
+      Alert.alert('Success', 'Sale updated successfully');
+      await loadSaleDetails();
+    } catch (error) {
+      console.error('Error updating sale:', error);
+      Alert.alert('Error', 'Failed to update sale');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditModal(false);
+  };
+
   if (!visible) return null;
 
   return (
@@ -312,12 +340,16 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
               voidingInProgress={voidingInProgress}
               showReturnForm={showReturnForm}
               showVoidModal={showVoidModal}
+              showEditModal={showEditModal}
               onVoidSale={handleVoidSale}
               onVoidSaleConfirm={handleVoidSaleConfirm}
               onReturnItems={handleReturnItems}
               onReturnComplete={handleReturnComplete}
               onCancelReturn={handleCancelReturn}
               onCancelVoid={handleCancelVoid}
+              onEditSale={handleEditSale}
+              onEditSaleConfirm={handleEditSaleConfirm}
+              onCancelEdit={handleCancelEdit}
               userProfile={userProfile}
               currentBusiness={currentBusiness}
             />

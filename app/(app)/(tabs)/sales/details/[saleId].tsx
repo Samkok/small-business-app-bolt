@@ -21,6 +21,7 @@ export default function SaleDetailsScreen() {
   const [voidingInProgress, setVoidingInProgress] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const router = useRouter();
   const { saleId } = useLocalSearchParams();
@@ -116,6 +117,32 @@ export default function SaleDetailsScreen() {
     setShowVoidModal(false);
   };
 
+  const handleEditSale = () => {
+    setShowEditModal(true);
+  };
+
+  const handleEditSaleConfirm = async (updates: {
+    customerId?: string | null;
+    discountType?: 'percentage' | 'fixed' | null;
+    discountValue?: number | null;
+    deliveryCost?: number | null;
+  }) => {
+    if (!sale) return;
+    try {
+      await salesService.updateSaleRecord(sale.id, updates);
+      setShowEditModal(false);
+      Alert.alert(t('common.success'), 'Sale updated successfully');
+      await loadSaleDetails();
+    } catch (error) {
+      console.error('Error updating sale:', error);
+      Alert.alert(t('common.error'), 'Failed to update sale');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditModal(false);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
@@ -138,12 +165,16 @@ export default function SaleDetailsScreen() {
         voidingInProgress={voidingInProgress}
         showReturnForm={showReturnForm}
         showVoidModal={showVoidModal}
+        showEditModal={showEditModal}
         onVoidSale={handleVoidSale}
         onVoidSaleConfirm={handleVoidSaleConfirm}
         onReturnItems={handleReturnItems}
         onReturnComplete={handleReturnComplete}
         onCancelReturn={handleCancelReturn}
         onCancelVoid={handleCancelVoid}
+        onEditSale={handleEditSale}
+        onEditSaleConfirm={handleEditSaleConfirm}
+        onCancelEdit={handleCancelEdit}
         userProfile={userProfile}
         currentBusiness={currentBusiness}
       />

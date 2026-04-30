@@ -5,15 +5,17 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
+  TouchableOpacity,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck } from 'lucide-react-native';
+import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck, Pencil } from 'lucide-react-native';
 import ReturnSaleForm from './ReturnSaleForm';
 import VoidSaleModal from './VoidSaleModal';
+import SaleEditModal from './SaleEditModal';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface SaleDetailsContentProps {
@@ -23,6 +25,7 @@ interface SaleDetailsContentProps {
   voidingInProgress: boolean;
   showReturnForm: boolean;
   showVoidModal: boolean;
+  showEditModal: boolean;
   onVoidSale: () => void;
   onVoidSaleConfirm: (options: {
     reason: string;
@@ -35,6 +38,14 @@ interface SaleDetailsContentProps {
   onReturnComplete: () => void;
   onCancelReturn: () => void;
   onCancelVoid: () => void;
+  onEditSale: () => void;
+  onEditSaleConfirm: (updates: {
+    customerId?: string | null;
+    discountType?: 'percentage' | 'fixed' | null;
+    discountValue?: number | null;
+    deliveryCost?: number | null;
+  }) => Promise<void>;
+  onCancelEdit: () => void;
   userProfile?: any;
   currentBusiness?: any;
 }
@@ -46,12 +57,17 @@ export default function SaleDetailsContent({
   voidingInProgress,
   showReturnForm,
   showVoidModal,
+  showEditModal,
   onVoidSale,
   onVoidSaleConfirm,
   onReturnItems,
   onReturnComplete,
   onCancelReturn,
   onCancelVoid,
+  onEditSale,
+  onEditSaleConfirm,
+  onCancelEdit,
+  currentBusiness,
 }: SaleDetailsContentProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -218,10 +234,21 @@ export default function SaleDetailsContent({
             <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
               {t('sales.saleNumber', { number: sale.id.slice(-8) })}
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
-                {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
-              </Text>
+            <View style={styles.saleIdRight}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
+                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
+                </Text>
+              </View>
+              {(sale.status === 'completed' || sale.status === 'partially_returned') && (
+                <TouchableOpacity
+                  style={[styles.editBtn, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={onEditSale}
+                >
+                  <Pencil size={14} color="#2563eb" />
+                  <Text style={styles.editBtnText}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -640,6 +667,18 @@ export default function SaleDetailsContent({
           loading={voidingInProgress}
         />
       )}
+
+      {/* Edit Sale Modal */}
+      {sale && (
+        <SaleEditModal
+          visible={showEditModal}
+          sale={sale}
+          saleDetails={saleDetails}
+          businessId={currentBusiness?.id || sale?.business_id || ''}
+          onConfirm={onEditSaleConfirm}
+          onCancel={onCancelEdit}
+        />
+      )}
     </>
   );
 }
@@ -662,6 +701,13 @@ const styles = StyleSheet.create({
   saleId: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  saleIdRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -672,6 +718,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  editBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563eb',
   },
   saleInfoRow: {
     flexDirection: 'row',
