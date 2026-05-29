@@ -226,10 +226,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data: authUser, error: authError } = await supabase.auth.getUser();
             if (authError || !authUser.user) throw authError ?? new Error('No auth user');
 
-            await supabase.from('user_profiles').insert({
-              user_id: userId,
-              full_name: authUser.user.email?.split('@')[0] || 'User',
-            });
+            await supabase.from('user_profiles').upsert(
+              {
+                user_id: userId,
+                email: authUser.user.email || '',
+                full_name: authUser.user.user_metadata?.full_name || authUser.user.email?.split('@')[0] || 'User',
+              },
+              { onConflict: 'user_id' }
+            );
 
             isLoadingAuthDataRef.current = false;
             return await loadAuthData(userId);
@@ -441,9 +445,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
       if (data.user) {
+        // Upsert profile: the DB trigger already creates a row on auth.users INSERT,
+        // but we update full_name here since the trigger only has access to metadata.
         const { error: profileError } = await supabase
           .from('user_profiles')
-          .insert({ user_id: data.user.id, full_name: fullName });
+          .upsert(
+            { user_id: data.user.id, email, full_name: fullName },
+            { onConflict: 'user_id' }
+          );
         if (profileError) return { error: profileError };
       }
       return { error: null };
