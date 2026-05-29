@@ -309,7 +309,7 @@ export const inventoryService = {
     // Get the import record
     const { data: importRecord, error: getError } = await supabase
       .from('inventory_imports')
-      .select('product_id, quantity, final_unit_cost, status')
+      .select('product_id, quantity, final_unit_cost_per_item, status')
       .eq('id', importId)
       .single();
 
@@ -352,7 +352,7 @@ export const inventoryService = {
       
       // Calculate new weighted average cost
       const currentTotalValue = (product.current_stock || 0) * (product.cost_per_unit || 0);
-      const importTotalValue = importRecord.quantity * importRecord.final_unit_cost;
+      const importTotalValue = importRecord.quantity * importRecord.final_unit_cost_per_item;
       const newTotalValue = currentTotalValue + importTotalValue;
       const newTotalQuantity = (product.current_stock || 0) + importRecord.quantity;
       const newCostPerUnit = newTotalQuantity > 0 ? newTotalValue / newTotalQuantity : 0;
