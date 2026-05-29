@@ -825,19 +825,36 @@ export default function SalesScreen() {
         groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
       }
 
-      const displayAmount = sale.status === 'voided'
+      const isVoided = sale.status === 'voided';
+      const isPartialReturn = sale.status === 'partially_returned';
+
+      const displayAmount = isVoided
         ? 0
-        : sale.status === 'partially_returned'
+        : isPartialReturn
         ? sale.total_amount - (sale.sale_actions?.reduce((sum: number, a: any) =>
             a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
         : sale.total_amount;
 
       const cartItems: any[] = sale.carts?.cart_items || [];
-      const productCount =
-        sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
-        cartItems.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0);
 
-      const saleProfit = sale.status === 'voided'
+      // For voided sales: 0 products. For partial returns: subtract returned quantities.
+      let productCount = 0;
+      if (!isVoided) {
+        const grossQty =
+          sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
+          cartItems.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0);
+        if (isPartialReturn) {
+          const returnedQty = (sale.sale_actions || []).reduce((sum: number, a: any) => {
+            if (a.action_type !== 'return') return sum;
+            return sum + (a.items_metadata || []).reduce((s: number, m: any) => s + (m.quantity || 0), 0);
+          }, 0);
+          productCount = Math.max(0, grossQty - returnedQty);
+        } else {
+          productCount = grossQty;
+        }
+      }
+
+      const saleProfit = isVoided
         ? 0
         : cartItems.reduce((sum: number, ci: any) => {
             const cost = ci.products?.cost_per_unit ?? 0;
@@ -845,7 +862,7 @@ export default function SalesScreen() {
           }, 0);
 
       groups[dateKey].sales.push(sale);
-      groups[dateKey].totalOrders += 1;
+      if (!isVoided) groups[dateKey].totalOrders += 1;
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
       groups[dateKey].totalProfit += saleProfit;

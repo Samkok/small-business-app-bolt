@@ -188,16 +188,34 @@ export default function SalesHistoryScreen() {
         groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
       }
 
-      const displayAmount = item.status === 'voided'
+      const isVoided = item.status === 'voided';
+      const isPartialReturn = item.status === 'partially_returned';
+
+      const displayAmount = isVoided
         ? 0
-        : item.status === 'partially_returned'
+        : isPartialReturn
         ? item.total_amount - (item.sale_actions?.reduce((sum: number, a: any) =>
             a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
         : item.total_amount;
 
       const cartItems: any[] = item.carts?.cart_items || [];
-      const productCount = cartItems.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0);
-      const saleProfit = item.status === 'voided'
+
+      // For voided sales: 0 products. For partial returns: subtract returned quantities.
+      let productCount = 0;
+      if (!isVoided) {
+        const grossQty = cartItems.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0);
+        if (isPartialReturn) {
+          const returnedQty = (item.sale_actions || []).reduce((sum: number, a: any) => {
+            if (a.action_type !== 'return') return sum;
+            return sum + (a.items_metadata || []).reduce((s: number, m: any) => s + (m.quantity || 0), 0);
+          }, 0);
+          productCount = Math.max(0, grossQty - returnedQty);
+        } else {
+          productCount = grossQty;
+        }
+      }
+
+      const saleProfit = isVoided
         ? 0
         : cartItems.reduce((sum: number, si: any) => {
             const cost = si.products?.cost_per_unit ?? 0;
@@ -205,7 +223,7 @@ export default function SalesHistoryScreen() {
           }, 0);
 
       groups[dateKey].sales.push(item);
-      groups[dateKey].totalOrders += 1;
+      if (!isVoided) groups[dateKey].totalOrders += 1;
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
       groups[dateKey].totalProfit += saleProfit;
