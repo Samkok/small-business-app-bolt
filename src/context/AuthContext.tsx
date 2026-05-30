@@ -389,6 +389,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleDeepLink = async (url: string) => {
       if (!url) return;
+
+      // Handle PKCE flow: ?code=AUTH_CODE
+      try {
+        const urlObj = new URL(url);
+        const code = urlObj.searchParams.get('code');
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data.session) {
+            if (mounted.current) {
+              setIsPasswordRecovery(true);
+              setSession(data.session);
+              setUser(data.session.user);
+            }
+          }
+          return;
+        }
+      } catch (_) {
+        // URL parsing failed, try hash approach
+      }
+
+      // Handle implicit flow: #access_token=...&refresh_token=...&type=recovery
       const hashIndex = url.indexOf('#');
       if (hashIndex === -1) return;
 
