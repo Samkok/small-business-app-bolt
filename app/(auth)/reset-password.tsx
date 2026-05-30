@@ -19,6 +19,7 @@ import { Card } from '@/src/components/ui/Card';
 import { supabase } from '@/src/config/supabase';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { Lock, CheckCircle } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -31,6 +32,7 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const { isPasswordRecovery, clearPasswordRecovery, session } = useAuth();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptedTokenExtraction = useRef(false);
 
   useEffect(() => {
     if (isPasswordRecovery || session) {
@@ -38,6 +40,46 @@ export default function ResetPasswordScreen() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     }
   }, [isPasswordRecovery, session]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' && !attemptedTokenExtraction.current) {
+      attemptedTokenExtraction.current = true;
+      Linking.getInitialURL().then(async (url) => {
+        if (!url) return;
+        const hashIndex = url.indexOf('#');
+        if (hashIndex === -1) return;
+
+        const hash = url.substring(hashIndex + 1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
+
+        if (accessToken && refreshToken && type === 'recovery') {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+      });
+    } else if (Platform.OS === 'web' && !attemptedTokenExtraction.current) {
+      attemptedTokenExtraction.current = true;
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
+
+        if (accessToken && refreshToken && type === 'recovery') {
+          supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     timeoutRef.current = setTimeout(() => {

@@ -12,6 +12,7 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
 
 import { supabase } from '../config/supabase';
 import { clearAuthStorage, verifySessionCleared, updateLastActivityTimestamp } from '../lib/authStorage';
@@ -380,6 +381,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // ── Deep link handling for mobile password recovery ─────────────────────────
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const handleDeepLink = async (url: string) => {
+      if (!url) return;
+      const hashIndex = url.indexOf('#');
+      if (hashIndex === -1) return;
+
+      const hash = url.substring(hashIndex + 1);
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const type = params.get('type');
+
+      if (accessToken && refreshToken && type === 'recovery') {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!error && data.session) {
+          if (mounted.current) {
+            setIsPasswordRecovery(true);
+            setSession(data.session);
+            setUser(data.session.user);
+          }
+        }
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink(url);
+    });
+
+    const sub = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => sub.remove();
   }, []);
 
   // ── Safety timeout ─────────────────────────────────────────────────────────
