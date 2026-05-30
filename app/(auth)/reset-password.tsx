@@ -19,6 +19,50 @@ import { Card } from '@/src/components/ui/Card';
 import { supabase } from '@/src/config/supabase';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { Lock, CheckCircle } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
+
+const createSessionFromUrl = async (url: string): Promise<boolean> => {
+  if (!url) return false;
+
+  // Parse both query params and hash fragment
+  // Some redirects put tokens in ?params, others in #fragment
+  let params: Record<string, string> = {};
+
+  // Try hash fragment first (implicit flow)
+  const hashIndex = url.indexOf('#');
+  if (hashIndex !== -1) {
+    const hash = url.substring(hashIndex + 1);
+    const hashParams = new URLSearchParams(hash);
+    hashParams.forEach((value, key) => { params[key] = value; });
+  }
+
+  // Also try query parameters (PKCE flow or some redirect configs)
+  try {
+    const questionIndex = url.indexOf('?');
+    if (questionIndex !== -1) {
+      const queryString = url.substring(questionIndex + 1, hashIndex !== -1 ? hashIndex : undefined);
+      const queryParams = new URLSearchParams(queryString);
+      queryParams.forEach((value, key) => { params[key] = value; });
+    }
+  } catch (_) {}
+
+  // PKCE: exchange code for session
+  if (params.code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+    return !error;
+  }
+
+  // Implicit: set session directly from tokens
+  if (params.access_token && params.refresh_token) {
+    const { error } = await supabase.auth.setSession({
+      access_token: params.access_token,
+      refresh_token: params.refresh_token,
+    });
+    return !error;
+  }
+
+  return false;
+};
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -31,6 +75,10 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const { isPasswordRecovery, clearPasswordRecovery, session } = useAuth();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionCreated = useRef(false);
+
+  // Use Linking.useURL() to reactively capture deep link URL (official Supabase pattern)
+  const deepLinkUrl = Linking.useURL();
 
   useEffect(() => {
     if (isPasswordRecovery || session) {
@@ -38,6 +86,26 @@ export default function ResetPasswordScreen() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     }
   }, [isPasswordRecovery, session]);
+
+  // Handle deep link URL when it arrives
+  useEffect(() => {
+    if (sessionCreated.current || !deepLinkUrl) return;
+
+    const handle = async () => {
+      sessionCreated.current = true;
+      await createSessionFromUrl(deepLinkUrl);
+    };
+    handle();
+  }, [deepLinkUrl]);
+
+  // Also handle web hash fragment
+  useEffect(() => {
+    if (Platform.OS !== 'web' || sessionCreated.current) return;
+    if (typeof window !== 'undefined' && (window.location.hash || window.location.search)) {
+      sessionCreated.current = true;
+      createSessionFromUrl(window.location.href);
+    }
+  }, []);
 
   useEffect(() => {
     timeoutRef.current = setTimeout(() => {
@@ -49,7 +117,7 @@ export default function ResetPasswordScreen() {
           [{ text: 'OK', onPress: () => router.replace('/(auth)/forgot-password') }]
         );
       }
-    }, 5000);
+    }, 8000);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
