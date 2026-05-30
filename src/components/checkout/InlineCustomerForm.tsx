@@ -1,12 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import Input from '../ui/Input';
 import { Button } from '../ui/Button';
 import { UserPlus } from 'lucide-react-native';
 
+const PLATFORMS = [
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'wechat', label: 'WeChat' },
+  { value: 'line', label: 'Line' },
+  { value: 'walk_in', label: 'Walk-in' },
+  { value: 'other', label: 'Other' },
+];
+
 interface InlineCustomerFormProps {
-  onCustomerCreate: (name: string, phone?: string) => Promise<void>;
+  onCustomerCreate: (name: string, phone?: string, platform?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -14,6 +25,7 @@ export function InlineCustomerForm({ onCustomerCreate, onCancel }: InlineCustome
   const { isDark } = useTheme();
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
@@ -24,9 +36,14 @@ export function InlineCustomerForm({ onCustomerCreate, onCancel }: InlineCustome
 
     setLoading(true);
     try {
-      await onCustomerCreate(customerName.trim(), customerPhone.trim() || undefined);
+      await onCustomerCreate(
+        customerName.trim(),
+        customerPhone.trim() || undefined,
+        selectedPlatform || undefined
+      );
       setCustomerName('');
       setCustomerPhone('');
+      setSelectedPlatform('');
     } catch (error) {
       Alert.alert('Error', 'Failed to create customer');
     } finally {
@@ -57,6 +74,43 @@ export function InlineCustomerForm({ onCustomerCreate, onCancel }: InlineCustome
         keyboardType="phone-pad"
       />
 
+      <View style={styles.platformSection}>
+        <Text style={[styles.platformLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
+          Channel (Optional)
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.platformScroll}>
+          <View style={styles.platformRow}>
+            {PLATFORMS.map((p) => (
+              <TouchableOpacity
+                key={p.value}
+                style={[
+                  styles.platformChip,
+                  {
+                    backgroundColor: selectedPlatform === p.value
+                      ? '#2563eb'
+                      : (isDark ? '#374151' : '#e5e7eb'),
+                  },
+                ]}
+                onPress={() => setSelectedPlatform(selectedPlatform === p.value ? '' : p.value)}
+              >
+                <Text
+                  style={[
+                    styles.platformChipText,
+                    {
+                      color: selectedPlatform === p.value
+                        ? '#ffffff'
+                        : (isDark ? '#d1d5db' : '#374151'),
+                    },
+                  ]}
+                >
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
       <View style={styles.buttonRow}>
         <Button
           title="Cancel"
@@ -86,6 +140,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 16,
+  },
+  platformSection: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  platformLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  platformScroll: {
+    marginBottom: 4,
+  },
+  platformRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+  },
+  platformChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  platformChipText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   buttonRow: {
     flexDirection: 'row',

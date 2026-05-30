@@ -63,7 +63,8 @@ export const exportService = {
       }
 
       if (endDate) {
-        salesQuery = salesQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
+        const endDateValue = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
+        salesQuery = salesQuery.lte('sale_date', endDateValue);
       }
 
       const { data: salesData, error: salesError } = await salesQuery.order('sale_date', { ascending: false });
@@ -89,7 +90,8 @@ export const exportService = {
       }
 
       if (endDate) {
-        discountQuery = discountQuery.lte('sale_date', `${endDate}T23:59:59.999Z`);
+        const endDateValue = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
+        discountQuery = discountQuery.lte('sale_date', endDateValue);
       }
       
       const { data: discountData, error: discountError } = await discountQuery;
@@ -148,9 +150,11 @@ export const exportService = {
         const escapedCreatedBy = createdBy.includes(',') ? `"${createdBy}"` : createdBy;
         const escapedProducts = productsString.includes(',') ? `"${productsString}"` : productsString;
         const escapedNotes = notes.includes(',') ? `"${notes}"` : notes;
+        // Always quote phone to preserve leading zeros in spreadsheet apps
+        const escapedPhone = customerPhone ? `"${customerPhone}"` : '';
 
         // Add single row for this sale
-        csv += `${saleId},${date},${escapedCustomer},${customerPhone},${paymentMethod},${escapedCreatedBy},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
+        csv += `${saleId},${date},${escapedCustomer},${escapedPhone},${paymentMethod},${escapedCreatedBy},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
       });
       
       return csv;

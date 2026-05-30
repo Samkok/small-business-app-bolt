@@ -31,7 +31,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers, Download } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
@@ -39,6 +39,8 @@ import { supabase } from '@/src/config/supabase';
 import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -87,6 +89,11 @@ export default function InventoryScreen() {
   const [filteredArchivedProducts, setFilteredArchivedProducts] = useState<any[]>([]);
   const [totalArchivedProducts, setTotalArchivedProducts] = useState(0);
   const [unarchivingProduct, setUnarchivingProduct] = useState<string | null>(null);
+
+  // Export states
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFields, setExportFields] = useState({ name: true, price: true, cost: false, qty: false });
+  const [exporting, setExporting] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -747,6 +754,75 @@ export default function InventoryScreen() {
   );
 
 
+  const handleExportProducts = async () => {
+    if (!currentBusiness?.id) return;
+
+    setExporting(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('name, price, cost_per_unit, current_stock')
+        .eq('business_id', currentBusiness.id)
+        .is('archived_at', null)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        Alert.alert(t('common.error'), 'No products to export');
+        return;
+      }
+
+      const headers: string[] = [];
+      if (exportFields.name) headers.push('Name');
+      if (exportFields.price) headers.push('Price');
+      if (exportFields.cost) headers.push('Cost');
+      if (exportFields.qty) headers.push('Quantity');
+
+      let csv = headers.join(',') + '\n';
+
+      data.forEach(product => {
+        const row: string[] = [];
+        if (exportFields.name) {
+          const name = (product.name || '').replace(/"/g, '""');
+          row.push(`"${name}"`);
+        }
+        if (exportFields.price) row.push(String(product.price ?? 0));
+        if (exportFields.cost) row.push(String(product.cost_per_unit ?? 0));
+        if (exportFields.qty) row.push(String(product.current_stock ?? 0));
+        csv += row.join(',') + '\n';
+      });
+
+      const fileName = `products_${currentBusiness.name?.replace(/\s+/g, '_') || 'export'}.csv`;
+      const fileUri = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          UTI: 'public.comma-separated-values-text',
+        });
+      }
+
+      setShowExportModal(false);
+    } catch (error) {
+      console.error('Error exporting products:', error);
+      Alert.alert(t('common.error'), 'Failed to export products');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const renderProductItem = ({ item }: { item: any }) => (
     <ProductCard
       product={item}
@@ -1310,6 +1386,12 @@ export default function InventoryScreen() {
       {activeTab === 'products' && (
         <View style={styles.fab}>
           <TouchableOpacity
+            style={styles.fabButtonSecondary}
+            onPress={() => setShowExportModal(true)}
+          >
+            <Download size={22} color="#ffffff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.fabButton}
             onPress={() => setShowProductForm(true)}
           >
@@ -1380,6 +1462,112 @@ export default function InventoryScreen() {
           onComplete={handleRefresh}
           onCancel={() => setShowEditBatchForm(false)}
         />
+      </Modal>
+
+      {/* Export Products Modal */}
+      <Modal
+        visible={showExportModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <View style={styles.exportModalOverlay}>
+          <View style={[styles.exportModalContent, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <Text style={[styles.exportModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Export Products
+            </Text>
+            <Text style={[styles.exportModalSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Select fields to include in the export
+            </Text>
+
+            <View style={styles.exportFieldsList}>
+              <TouchableOpacity
+                style={[styles.exportFieldRow, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setExportFields(prev => ({ ...prev, name: !prev.name }))}
+              >
+                {exportFields.name ? (
+                  <CheckSquare size={22} color="#2563eb" />
+                ) : (
+                  <Square size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                )}
+                <Text style={[styles.exportFieldLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Name
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exportFieldRow, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setExportFields(prev => ({ ...prev, price: !prev.price }))}
+              >
+                {exportFields.price ? (
+                  <CheckSquare size={22} color="#2563eb" />
+                ) : (
+                  <Square size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                )}
+                <Text style={[styles.exportFieldLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Price
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exportFieldRow, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setExportFields(prev => ({ ...prev, cost: !prev.cost }))}
+              >
+                {exportFields.cost ? (
+                  <CheckSquare size={22} color="#2563eb" />
+                ) : (
+                  <Square size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                )}
+                <Text style={[styles.exportFieldLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Cost
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exportFieldRow, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setExportFields(prev => ({ ...prev, qty: !prev.qty }))}
+              >
+                {exportFields.qty ? (
+                  <CheckSquare size={22} color="#2563eb" />
+                ) : (
+                  <Square size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                )}
+                <Text style={[styles.exportFieldLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Quantity
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.exportModalActions}>
+              <TouchableOpacity
+                style={[styles.exportModalCancelButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setShowExportModal(false)}
+              >
+                <Text style={[styles.exportModalCancelText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('actions.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.exportModalExportButton,
+                  (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty) && { opacity: 0.5 }
+                ]}
+                onPress={handleExportProducts}
+                disabled={exporting || (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty)}
+              >
+                {exporting ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Download size={18} color="#ffffff" />
+                    <Text style={styles.exportModalExportText}>Export</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Loading overlay for deleting import */}
@@ -1752,6 +1940,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
   },
   fabButton: {
     backgroundColor: '#2563eb',
@@ -1768,6 +1959,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fabButtonSecondary: {
+    backgroundColor: '#059669',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   backToTopButton: {
     position: 'absolute',
@@ -1797,5 +2004,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  exportModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  exportModalContent: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  exportModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  exportModalSubtitle: {
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  exportFieldsList: {
+    gap: 4,
+    marginBottom: 24,
+  },
+  exportFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 12,
+  },
+  exportFieldLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  exportModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  exportModalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  exportModalExportButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  exportModalExportText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

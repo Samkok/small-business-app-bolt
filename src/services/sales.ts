@@ -178,6 +178,7 @@ export const salesService = {
           created_by_name,
           cart_items(
             quantity,
+            product_id,
             unit_price,
             subtotal,
             original_subtotal,
@@ -186,6 +187,15 @@ export const salesService = {
             item_discount_amount,
             products(name, cost_per_unit)
           )
+        ),
+        sale_actions(
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          items_metadata,
+          reason,
+          created_at
         )
       `)
       .eq('business_id', businessId)
@@ -448,7 +458,7 @@ export const salesService = {
 
   async getSaleWithDiscountBreakdown(saleId: string) {
     if (!saleId) return null;
-    
+
     const { data, error } = await supabase
       .from('sales_with_discount_details')
       .select('*')
@@ -457,6 +467,63 @@ export const salesService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async updateSaleRecord(
+    saleId: string,
+    updates: {
+      customerId?: string | null;
+      discountType?: 'percentage' | 'fixed' | null;
+      discountValue?: number | null;
+      deliveryCost?: number | null;
+    }
+  ) {
+    if (!saleId) throw new Error('saleId is required');
+
+    // Fetch the sale to get cart_id
+    const { data: sale, error: saleErr } = await supabase
+      .from('sales')
+      .select('cart_id')
+      .eq('id', saleId)
+      .single();
+    if (saleErr) throw saleErr;
+
+    const cartId = sale.cart_id;
+
+    // Build cart updates
+    const cartUpdates: Record<string, any> = {};
+    if (updates.customerId !== undefined) cartUpdates.customer_id = updates.customerId;
+    if (updates.discountType !== undefined) cartUpdates.discount_type = updates.discountType;
+    if (updates.discountValue !== undefined) cartUpdates.discount_value = updates.discountValue;
+    if (updates.deliveryCost !== undefined) cartUpdates.delivery_cost = updates.deliveryCost ?? 0;
+
+    if (Object.keys(cartUpdates).length > 0) {
+      const { error: cartErr } = await supabase
+        .from('carts')
+        .update({ ...cartUpdates, updated_at: new Date().toISOString() })
+        .eq('id', cartId);
+      if (cartErr) throw cartErr;
+    }
+
+    // Recalculate totals from cart summary
+    const summary = await cartService.getCartSummary(cartId);
+
+    // Build sales updates
+    const salesUpdates: Record<string, any> = {
+      total_amount: summary.finalTotal,
+      delivery_cost: summary.deliveryCost,
+      sale_discount_amount: summary.cartDiscountAmount,
+      subtotal_before_discount: summary.itemsOriginalTotal,
+    };
+    if (updates.customerId !== undefined) salesUpdates.customer_id = updates.customerId;
+    if (updates.discountType !== undefined) salesUpdates.sale_discount_type = updates.discountType;
+    if (updates.discountValue !== undefined) salesUpdates.sale_discount_value = updates.discountValue;
+
+    const { error: updateErr } = await supabase
+      .from('sales')
+      .update(salesUpdates)
+      .eq('id', saleId);
+    if (updateErr) throw updateErr;
   },
 
   async voidSale(

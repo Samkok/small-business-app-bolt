@@ -359,9 +359,9 @@ export const productService = {
       .select(`
         id,
         quantity,
-        base_unit_cost,
-        final_unit_cost,
-        total_cost,
+        base_unit_cost_per_item,
+        final_unit_cost_per_item,
+        total_cost_for_item,
         created_at
       `)
       .eq('product_id', productId)
@@ -372,36 +372,24 @@ export const productService = {
   },
 
   async recalculateProductCost(productId: string) {
-    // Get all imports for this product
     const { data: imports, error: importsError } = await supabase
       .from('inventory_imports')
-      .select('quantity, final_unit_cost')
+      .select('quantity, final_unit_cost_per_item')
       .eq('product_id', productId)
       .order('created_at');
 
     if (importsError) throw importsError;
 
-    // Get current stock
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('current_stock')
-      .eq('id', productId)
-      .single();
-
-    if (productError) throw productError;
-
-    // Calculate weighted average cost
     let totalQuantity = 0;
     let totalCost = 0;
 
     imports.forEach(imp => {
       totalQuantity += imp.quantity;
-      totalCost += imp.quantity * imp.final_unit_cost;
+      totalCost += imp.quantity * imp.final_unit_cost_per_item;
     });
 
     const costPerUnit = totalQuantity > 0 ? totalCost / totalQuantity : 0;
 
-    // Update the product's cost_per_unit
     await this.updateCostPerUnit(productId, costPerUnit);
 
     return costPerUnit;

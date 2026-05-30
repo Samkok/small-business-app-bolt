@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { supabase } from '@/src/config/supabase';
+import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { Lock, CheckCircle } from 'lucide-react-native';
 
 export default function ResetPasswordScreen() {
@@ -24,20 +25,36 @@ export default function ResetPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetComplete, setResetComplete] = useState(false);
+  const [waitingForSession, setWaitingForSession] = useState(true);
   const { isDark } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const { isPasswordRecovery, clearPasswordRecovery, session } = useAuth();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!isPasswordRecovery && !session) {
-      Alert.alert(
-        'Invalid Reset Link',
-        'This password reset link is invalid or has expired. Please request a new one.',
-        [{ text: 'OK', onPress: () => router.replace('/(auth)/forgot-password') }]
-      );
+    if (isPasswordRecovery || session) {
+      setWaitingForSession(false);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     }
   }, [isPasswordRecovery, session]);
+
+  useEffect(() => {
+    timeoutRef.current = setTimeout(() => {
+      if (!isPasswordRecovery && !session) {
+        setWaitingForSession(false);
+        Alert.alert(
+          'Invalid Reset Link',
+          'This password reset link is invalid or has expired. Please request a new one.',
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/forgot-password') }]
+        );
+      }
+    }, 5000);
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const handleResetPassword = async () => {
     if (!password || !confirmPassword) {
@@ -71,6 +88,14 @@ export default function ResetPasswordScreen() {
       setLoading(false);
     }
   };
+
+  if (waitingForSession) {
+    return (
+      <View style={[styles.container, styles.inner, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
+        <LoadingSpinner text="Verifying reset link..." />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
