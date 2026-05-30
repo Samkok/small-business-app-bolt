@@ -178,6 +178,7 @@ export const salesService = {
           created_by_name,
           cart_items(
             quantity,
+            product_id,
             unit_price,
             subtotal,
             original_subtotal,
@@ -186,6 +187,15 @@ export const salesService = {
             item_discount_amount,
             products(name, cost_per_unit)
           )
+        ),
+        sale_actions(
+          id,
+          action_type,
+          amount,
+          adjusted_amount,
+          items_metadata,
+          reason,
+          created_at
         )
       `)
       .eq('business_id', businessId)

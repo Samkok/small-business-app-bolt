@@ -217,10 +217,35 @@ export default function SalesHistoryScreen() {
 
       const saleProfit = isVoided
         ? 0
-        : cartItems.reduce((sum: number, si: any) => {
-            const cost = si.products?.cost_per_unit ?? 0;
-            return sum + ((si.unit_price ?? 0) - cost) * (si.quantity || 0);
-          }, 0);
+        : (() => {
+            // Build cost map: product_id -> cost_per_unit (from cart items)
+            const costMap = new Map<string, number>();
+            cartItems.forEach((ci: any) => {
+              if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
+            });
+
+            // Gross profit across all cart items
+            const grossProfit = cartItems.reduce((sum: number, ci: any) => {
+              const cost = ci.products?.cost_per_unit ?? 0;
+              return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
+            }, 0);
+
+            if (!isPartialReturn) return grossProfit;
+
+            // Subtract profit that belonged to returned items, then also subtract loss absorbed
+            const returnDeduction = (item.sale_actions || []).reduce((sum: number, a: any) => {
+              if (a.action_type !== 'return') return sum;
+              return sum + (a.items_metadata || []).reduce((s: number, m: any) => {
+                const cost = costMap.get(m.productId) ?? 0;
+                // originalAmount = unit_price * returnedQty; profit on those units + loss cost
+                const returnedProfit = (m.originalAmount || 0) - cost * (m.quantity || 0);
+                const loss = m.lossAmount || 0;
+                return s + returnedProfit - loss;
+              }, 0);
+            }, 0);
+
+            return grossProfit - returnDeduction;
+          })();
 
       groups[dateKey].sales.push(item);
       if (!isVoided) groups[dateKey].totalOrders += 1;
