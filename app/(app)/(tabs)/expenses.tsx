@@ -25,7 +25,7 @@ import { SkeletonExpenseCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ExpenseCard } from '@/src/components/expenses/ExpenseCard';
 import ExpenseForm from '@/src/components/expenses/ExpenseForm';
 import CategoryForm from '@/src/components/expenses/CategoryForm';
-import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp, X } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
 import { useDebounce } from '@/src/hooks/useDebounce';
 
@@ -409,6 +409,11 @@ export default function ExpensesScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

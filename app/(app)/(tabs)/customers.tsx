@@ -20,7 +20,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCustomerCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { CustomerCard } from '@/src/components/customers/CustomerCard';
 import CustomerForm from '@/src/components/customers/CustomerForm';
-import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag } from 'lucide-react-native';
+import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag, X } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { useRouter } from 'expo-router';
@@ -325,6 +325,11 @@ export default function CustomersScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>

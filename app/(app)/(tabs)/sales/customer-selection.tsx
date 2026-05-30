@@ -20,7 +20,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
-import { ArrowLeft, Users, Plus, Search, User } from 'lucide-react-native';
+import { ArrowLeft, Users, Plus, Search, User, X } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
 
@@ -209,6 +209,11 @@ export default function CustomerSelectionScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
