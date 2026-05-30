@@ -79,13 +79,14 @@ export function InstantCheckoutCustomerSelector({
     onSelectCustomer(customer.id, customer.name, customer.phone || undefined);
   };
 
-  const handleCreateCustomer = async (name: string, phone?: string) => {
+  const handleCreateCustomer = async (name: string, phone?: string, platform?: string) => {
     if (!currentBusiness?.id || !user?.id) return;
 
     try {
       const newCustomer = await customerService.createCustomer({
         name,
         phone: phone || null,
+        platform: platform || null,
         business_id: currentBusiness.id,
         is_system_customer: false,
       });

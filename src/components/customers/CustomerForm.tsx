@@ -21,7 +21,7 @@ import { customerService } from '@/src/services/customers';
 
 interface CustomerFormProps {
   customer?: any;
-  onSave: () => void;
+  onSave: (savedCustomer?: any) => void;
   onCancel: () => void;
 }
 
@@ -105,14 +105,15 @@ export default function CustomerForm({ customer, onSave, onCancel }: CustomerFor
         business_id: currentBusiness.id,
       };
 
+      let savedCustomer;
       if (customer) {
-        await customerService.updateCustomer(customer.id, customerData);
+        savedCustomer = await customerService.updateCustomer(customer.id, customerData);
       } else {
-        await customerService.createCustomer(customerData);
+        savedCustomer = await customerService.createCustomer(customerData);
       }
 
       Alert.alert('Success', `Customer ${customer ? 'updated' : 'created'} successfully`);
-      onSave();
+      onSave(savedCustomer);
     } catch (error) {
       console.error('Error saving customer:', error);
       Alert.alert('Error', `Failed to ${customer ? 'update' : 'create'} customer. ${error}`);

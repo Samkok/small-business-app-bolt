@@ -102,10 +102,14 @@ export default function CustomerSelectionScreen() {
     }
   }, [currentBusiness?.id, createCart, router, salesCountData.isAtLimit, canAccessFeature]);
 
-  const handleCustomerSave = useCallback(async () => {
+  const handleCustomerSave = useCallback(async (savedCustomer?: any) => {
     setShowCustomerForm(false);
-    await loadCustomers();
-  }, [loadCustomers]);
+    if (savedCustomer && savedCustomer.id) {
+      handleCustomerSelect(savedCustomer);
+    } else {
+      await loadCustomers();
+    }
+  }, [loadCustomers, handleCustomerSelect]);
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
