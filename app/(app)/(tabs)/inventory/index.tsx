@@ -747,28 +747,56 @@ export default function InventoryScreen() {
     try {
       const allProducts = await productService.getProducts(currentBusiness.id);
 
-      const headers: string[] = [];
-      if (exportColumns.image) headers.push('Image URL');
-      if (exportColumns.name) headers.push('Name');
-      if (exportColumns.price) headers.push('Price');
-      if (exportColumns.cost) headers.push('Cost');
-      if (exportColumns.qty) headers.push('Qty');
+      const columns: { key: string; label: string }[] = [];
+      if (exportColumns.image) columns.push({ key: 'image', label: 'Image' });
+      if (exportColumns.name) columns.push({ key: 'name', label: 'Name' });
+      if (exportColumns.price) columns.push({ key: 'price', label: 'Price' });
+      if (exportColumns.cost) columns.push({ key: 'cost', label: 'Cost' });
+      if (exportColumns.qty) columns.push({ key: 'qty', label: 'Qty' });
 
-      const rows = allProducts.map((p: any) => {
-        const row: string[] = [];
-        if (exportColumns.image) row.push(p.image_url || '');
-        if (exportColumns.name) row.push(`"${(p.name || '').replace(/"/g, '""')}"`);
-        if (exportColumns.price) row.push(p.price != null ? String(p.price) : '0');
-        if (exportColumns.cost) row.push(p.cost_per_unit != null ? String(p.cost_per_unit) : '0');
-        if (exportColumns.qty) row.push(p.current_stock != null ? String(p.current_stock) : '0');
-        return row.join(',');
-      });
+      const headerRow = columns.map(c => `<th>${c.label}</th>`).join('');
+      const bodyRows = allProducts.map((p: any) => {
+        const cells = columns.map(c => {
+          switch (c.key) {
+            case 'image':
+              return p.image_url
+                ? `<td><img src="${p.image_url}" width="60" height="60" style="object-fit:cover;border-radius:6px;" /></td>`
+                : `<td></td>`;
+            case 'name':
+              return `<td>${p.name || ''}</td>`;
+            case 'price':
+              return `<td>${p.price != null ? Number(p.price).toFixed(2) : '0.00'}</td>`;
+            case 'cost':
+              return `<td>${p.cost_per_unit != null ? Number(p.cost_per_unit).toFixed(2) : '0.00'}</td>`;
+            case 'qty':
+              return `<td>${p.current_stock != null ? p.current_stock : '0'}</td>`;
+            default:
+              return '<td></td>';
+          }
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
 
-      const csv = [headers.join(','), ...rows].join('\n');
-      const fileName = `products_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Product List</title>
+<style>
+body{font-family:system-ui,sans-serif;padding:24px;color:#111827;}
+h1{font-size:22px;margin-bottom:16px;}
+table{border-collapse:collapse;width:100%;}
+th,td{border:1px solid #e5e7eb;padding:10px 12px;text-align:left;vertical-align:middle;}
+th{background:#f9fafb;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;}
+tr:nth-child(even){background:#f9fafb;}
+img{display:block;}
+</style></head><body>
+<h1>Product List</h1>
+<p>${allProducts.length} products</p>
+<table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
+</body></html>`;
+
+      const fileName = `products_export_${new Date().toISOString().slice(0, 10)}.html`;
 
       if (Platform.OS === 'web') {
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -779,10 +807,10 @@ export default function InventoryScreen() {
         URL.revokeObjectURL(url);
       } else {
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, html, { encoding: FileSystem.EncodingType.UTF8 });
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/csv',
+            mimeType: 'text/html',
             dialogTitle: 'Export Products',
           });
         }
@@ -1522,7 +1550,7 @@ export default function InventoryScreen() {
 
             <View style={styles.exportColumnList}>
               {([
-                { key: 'image' as const, label: 'Image URL' },
+                { key: 'image' as const, label: 'Image' },
                 { key: 'name' as const, label: 'Product Name' },
                 { key: 'price' as const, label: 'Selling Price' },
                 { key: 'cost' as const, label: 'Cost per Unit' },
@@ -1565,7 +1593,7 @@ export default function InventoryScreen() {
                 ) : (
                   <>
                     <Download size={18} color="#ffffff" />
-                    <Text style={styles.exportConfirmText}>Export CSV</Text>
+                    <Text style={styles.exportConfirmText}>Export</Text>
                   </>
                 )}
               </TouchableOpacity>
