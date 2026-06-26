@@ -23,6 +23,7 @@ import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ArrowLeft, Download, User, DollarSign, Calendar, Filter, ChevronDown, X } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
+import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCount } from '@/src/utils/profitCalculation';
 import { format } from 'date-fns';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -189,63 +190,9 @@ export default function SalesHistoryScreen() {
       }
 
       const isVoided = item.status === 'voided';
-      const isPartialReturn = item.status === 'partially_returned';
-
-      const displayAmount = isVoided
-        ? 0
-        : isPartialReturn
-        ? item.total_amount - (item.sale_actions?.reduce((sum: number, a: any) =>
-            a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
-        : item.total_amount;
-
-      const cartItems: any[] = item.carts?.cart_items || [];
-
-      // For voided sales: 0 products. For partial returns: subtract returned quantities.
-      let productCount = 0;
-      if (!isVoided) {
-        const grossQty = cartItems.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0);
-        if (isPartialReturn) {
-          const returnedQty = (item.sale_actions || []).reduce((sum: number, a: any) => {
-            if (a.action_type !== 'return') return sum;
-            return sum + (a.items_metadata || []).reduce((s: number, m: any) => s + (m.quantity || 0), 0);
-          }, 0);
-          productCount = Math.max(0, grossQty - returnedQty);
-        } else {
-          productCount = grossQty;
-        }
-      }
-
-      const saleProfit = isVoided
-        ? 0
-        : (() => {
-            // Build cost map: product_id -> cost_per_unit (from cart items)
-            const costMap = new Map<string, number>();
-            cartItems.forEach((ci: any) => {
-              if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
-            });
-
-            // Gross profit across all cart items
-            const grossProfit = cartItems.reduce((sum: number, ci: any) => {
-              const cost = ci.products?.cost_per_unit ?? 0;
-              return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
-            }, 0);
-
-            if (!isPartialReturn) return grossProfit;
-
-            // Subtract profit that belonged to returned items, then also subtract loss absorbed
-            const returnDeduction = (item.sale_actions || []).reduce((sum: number, a: any) => {
-              if (a.action_type !== 'return') return sum;
-              return sum + (a.items_metadata || []).reduce((s: number, m: any) => {
-                const cost = costMap.get(m.productId) ?? 0;
-                // originalAmount = unit_price * returnedQty; profit on those units + loss cost
-                const returnedProfit = (m.originalAmount || 0) - cost * (m.quantity || 0);
-                const loss = m.lossAmount || 0;
-                return s + returnedProfit - loss;
-              }, 0);
-            }, 0);
-
-            return grossProfit - returnDeduction;
-          })();
+      const displayAmount = calculateSaleDisplayAmount(item);
+      const productCount = calculateSaleProductCount(item);
+      const saleProfit = calculateSaleProfit(item);
 
       groups[dateKey].sales.push(item);
       if (!isVoided) groups[dateKey].totalOrders += 1;
@@ -275,12 +222,7 @@ export default function SalesHistoryScreen() {
   }, [groupedSales]);
 
   const renderSaleItem = (item: any) => {
-    const displayAmount = item.status === 'voided'
-      ? 0
-      : item.status === 'partially_returned'
-      ? item.total_amount - (item.sale_actions?.reduce((sum: number, a: any) =>
-          a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
-      : item.total_amount;
+    const displayAmount = calculateSaleDisplayAmount(item);
 
     const creatorName = getUserDisplayName(item.created_by_name || item.carts?.created_by_name);
     const isDeleted = creatorName.includes('deleted');

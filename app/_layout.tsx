@@ -17,6 +17,7 @@ import { SubscriptionProvider } from '@/src/context/SubscriptionContext';
 import { NetworkProvider } from '@/src/context/NetworkContext';
 import { CurrencyProvider } from '@/src/context/CurrencyContext';
 import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
+import { PendingSalesSyncModal } from '@/src/components/sales/PendingSalesSyncModal';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -41,6 +42,7 @@ export default function RootLayout() {
                             <Stack.Screen name="+not-found" />
                           </Stack>
                           <NetworkBanner />
+                          <PendingSalesSyncModal />
                           <StatusBar style="auto" />
                         </InstantCheckoutProvider>
                       </CartProvider>

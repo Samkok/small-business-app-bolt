@@ -34,6 +34,7 @@ import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, 
 import { format } from 'date-fns';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
+import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCount } from '@/src/utils/profitCalculation';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -79,7 +80,7 @@ export default function SalesScreen() {
     totalRevenue: 0,
     averageSale: 0,
     todayRevenue: 0,
-    todaySalesCount: 0
+    totalProfit: 0
   });
 
   // Animation for collapsible section
@@ -92,7 +93,7 @@ export default function SalesScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   
   // Date filter states
-  const [dateFilter, setDateFilter] = useState<'this_month' | 'three_months' | 'six_months' | 'custom' | 'all'>('this_month');
+  const [dateFilter, setDateFilter] = useState<'this_month' | 'three_months' | 'six_months' | 'this_year' | 'custom' | 'all'>('this_month');
   const [startDate, setStartDate] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [dateRangeText, setDateRangeText] = useState('This Month');
@@ -129,65 +130,75 @@ export default function SalesScreen() {
     { value: 'this_month', label: t('dateRanges.thisMonth') },
     { value: 'three_months', label: t('dateRanges.last3Months') },
     { value: 'six_months', label: t('dateRanges.last6Months') },
+    { value: 'this_year', label: t('dateRanges.thisYear') },
     { value: 'custom', label: t('dateRanges.customRange') },
     { value: 'all', label: t('dateRanges.allTime') },
   ];
 
   // Helper function to calculate dates without state updates
-  const calculateDatesForFilter = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all', customStart?: Date, customEnd?: Date) => {
+  const calculateDatesForFilter = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'this_year' | 'custom' | 'all', customStart?: Date, customEnd?: Date) => {
     const now = new Date();
     let start = new Date();
     let end = new Date();
     let text = '';
-    
+
     switch (filter) {
       case 'this_month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
-        start.setHours(0, 0, 0, 0); // Set to beginning of day
-        
+        start.setHours(0, 0, 0, 0);
+
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        end.setHours(23, 59, 59, 999); // Set to end of day
-        
+        end.setHours(23, 59, 59, 999);
+
         text = t('dateRanges.thisMonth');
         break;
       case 'three_months':
         start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        start.setHours(0, 0, 0, 0); // Set to beginning of day
-        
+        start.setHours(0, 0, 0, 0);
+
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        end.setHours(23, 59, 59, 999); // Set to end of day
-        
+        end.setHours(23, 59, 59, 999);
+
         text = t('dateRanges.last3Months');
         break;
       case 'six_months':
         start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-        start.setHours(0, 0, 0, 0); // Set to beginning of day
-        
+        start.setHours(0, 0, 0, 0);
+
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        end.setHours(23, 59, 59, 999); // Set to end of day
-        
+        end.setHours(23, 59, 59, 999);
+
         text = t('dateRanges.last6Months');
+        break;
+      case 'this_year':
+        start = new Date(now.getFullYear(), 0, 1);
+        start.setHours(0, 0, 0, 0);
+
+        end = now;
+        end.setHours(23, 59, 59, 999);
+
+        text = t('dateRanges.thisYear');
         break;
       case 'custom':
         start = customStart || new Date();
-        start.setHours(0, 0, 0, 0); // Set to beginning of day
-        
+        start.setHours(0, 0, 0, 0);
+
         end = customEnd || new Date();
-        end.setHours(23, 59, 59, 999); // Set to end of day
-        
+        end.setHours(23, 59, 59, 999);
+
         text = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
         break;
       case 'all':
         start = new Date(2000, 0, 1);
-        start.setHours(0, 0, 0, 0); // Set to beginning of day
-        
+        start.setHours(0, 0, 0, 0);
+
         end = now;
-        end.setHours(23, 59, 59, 999); // Set to end of day
-        
+        end.setHours(23, 59, 59, 999);
+
         text = t('dateRanges.allTime');
         break;
     }
-    
+
     return { start, end, text };
   }, []);
 
@@ -601,7 +612,7 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, startDate, endDate]);
 
-  const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'custom' | 'all') => {
+  const handleDateFilterChange = useCallback((filter: 'this_month' | 'three_months' | 'six_months' | 'this_year' | 'custom' | 'all') => {
     setDateFilter(filter);
     setCurrentPage(0);
     setShowDateFilterTypeModal(false);
@@ -703,7 +714,7 @@ export default function SalesScreen() {
   const totalRevenue = analytics.totalRevenue;
   const averageSale = analytics.averageSale;
   const todayRevenue = analytics.todayRevenue;
-  const todaySales = analytics.todaySalesCount;
+  const totalProfit = analytics.totalProfit;
 
 
   const renderDateFilter = useCallback(() => (
@@ -826,65 +837,9 @@ export default function SalesScreen() {
       }
 
       const isVoided = sale.status === 'voided';
-      const isPartialReturn = sale.status === 'partially_returned';
-
-      const displayAmount = isVoided
-        ? 0
-        : isPartialReturn
-        ? sale.total_amount - (sale.sale_actions?.reduce((sum: number, a: any) =>
-            a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
-        : sale.total_amount;
-
-      const cartItems: any[] = sale.carts?.cart_items || [];
-
-      // For voided sales: 0 products. For partial returns: subtract returned quantities.
-      let productCount = 0;
-      if (!isVoided) {
-        const grossQty =
-          sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
-          cartItems.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0);
-        if (isPartialReturn) {
-          const returnedQty = (sale.sale_actions || []).reduce((sum: number, a: any) => {
-            if (a.action_type !== 'return') return sum;
-            return sum + (a.items_metadata || []).reduce((s: number, m: any) => s + (m.quantity || 0), 0);
-          }, 0);
-          productCount = Math.max(0, grossQty - returnedQty);
-        } else {
-          productCount = grossQty;
-        }
-      }
-
-      const saleProfit = isVoided
-        ? 0
-        : (() => {
-            // Build cost map: product_id -> cost_per_unit (from cart items)
-            const costMap = new Map<string, number>();
-            cartItems.forEach((ci: any) => {
-              if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
-            });
-
-            // Gross profit across all cart items
-            const grossProfit = cartItems.reduce((sum: number, ci: any) => {
-              const cost = ci.products?.cost_per_unit ?? 0;
-              return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
-            }, 0);
-
-            if (!isPartialReturn) return grossProfit;
-
-            // Subtract profit that belonged to returned items, then also subtract loss absorbed
-            const returnDeduction = (sale.sale_actions || []).reduce((sum: number, a: any) => {
-              if (a.action_type !== 'return') return sum;
-              return sum + (a.items_metadata || []).reduce((s: number, m: any) => {
-                const cost = costMap.get(m.productId) ?? 0;
-                // originalAmount = unit_price * returnedQty; profit on those units + loss cost
-                const returnedProfit = (m.originalAmount || 0) - cost * (m.quantity || 0);
-                const loss = m.lossAmount || 0;
-                return s + returnedProfit - loss;
-              }, 0);
-            }, 0);
-
-            return grossProfit - returnDeduction;
-          })();
+      const displayAmount = calculateSaleDisplayAmount(sale);
+      const productCount = calculateSaleProductCount(sale);
+      const saleProfit = calculateSaleProfit(sale);
 
       groups[dateKey].sales.push(sale);
       if (!isVoided) groups[dateKey].totalOrders += 1;
@@ -1254,11 +1209,11 @@ export default function SalesScreen() {
                 <View style={styles.statsContent}>
                   <Receipt size={20} color="#8b5cf6" />
                   <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {todaySales}
+                    <Text style={[styles.statsValue, { color: totalProfit >= 0 ? (isDark ? '#f9fafb' : '#111827') : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
+                      ${totalProfit.toFixed(2)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('financials.todaySales')}
+                      {t('financials.totalProfit')}
                     </Text>
                   </View>
                 </View>

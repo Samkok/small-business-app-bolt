@@ -23,6 +23,7 @@ import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, Users, Plus, Search, User, X } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { dataCache } from '@/src/lib/dataCache';
 
 export default function CustomerSelectionScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -50,14 +51,26 @@ export default function CustomerSelectionScreen() {
 
   const loadCustomers = useCallback(async () => {
     if (!currentBusiness?.id) return;
-    
+
     try {
+      const cached = await dataCache.get<any[]>('customers', currentBusiness.id);
+      if (cached) {
+        setCustomers(cached.data);
+        setFilteredCustomers(cached.data);
+        if (!cached.isStale) {
+          setLoading(false);
+        }
+      }
+
       const data = await customerService.getCustomers(currentBusiness.id);
       setCustomers(data);
       setFilteredCustomers(data);
+      await dataCache.set('customers', currentBusiness.id, data);
     } catch (error) {
       console.error('Error loading customers:', error);
-      Alert.alert('Error', 'Failed to load customers');
+      if (customers.length === 0) {
+        Alert.alert('Error', 'Failed to load customers');
+      }
     } finally {
       setLoading(false);
     }

@@ -296,6 +296,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (error) {
+        // Don't sign out on network errors -- trust any locally cached session
+        if (isNetworkError(error)) {
+          console.log('[Auth] Network error on getSession, keeping local state');
+          if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
+          return;
+        }
         if (isInvalidTokenError(error)) {
           await handleInvalidToken();
           if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
@@ -312,7 +318,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
       }
     }).catch(async error => {
-      if (isInvalidTokenError(error)) await handleInvalidToken();
+      if (isNetworkError(error)) {
+        console.log('[Auth] Network error on getSession catch, keeping local state');
+      } else if (isInvalidTokenError(error)) {
+        await handleInvalidToken();
+      }
       if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
     });
 

@@ -7,6 +7,7 @@ import { Database } from '@/src/types/database';
 import { UserCheck, UserPlus, Users, Check } from 'lucide-react-native';
 import { InlineCustomerForm } from './InlineCustomerForm';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { dataCache } from '@/src/lib/dataCache';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 
@@ -55,7 +56,19 @@ export function InstantCheckoutCustomerSelector({
 
     setLoading(true);
     try {
+      const cached = await dataCache.get<Customer[]>('customers', currentBusiness.id);
+      if (cached) {
+        const regularCustomers = cached.data.filter((c) => !c.is_system_customer);
+        setCustomers(regularCustomers);
+        setFilteredCustomers(regularCustomers);
+        if (!cached.isStale) {
+          setLoading(false);
+          return;
+        }
+      }
+
       const allCustomers = await customerService.getCustomers(currentBusiness.id);
+      await dataCache.set('customers', currentBusiness.id, allCustomers);
       const regularCustomers = allCustomers.filter((c) => !c.is_system_customer);
       setCustomers(regularCustomers);
       setFilteredCustomers(regularCustomers);

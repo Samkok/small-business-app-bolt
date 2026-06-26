@@ -80,6 +80,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
         product_name: product.name,
         quantity: 1,
         unit_price: product.price,
+        cost_per_unit: product.cost_per_unit || 0,
         subtotal: product.price
       }]);
     }
@@ -134,6 +135,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
           product_id: item.product_id,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          cost_per_unit: item.cost_per_unit || 0,
           subtotal: item.subtotal
         });
       }

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import { customerService } from '@/src/services/customers';
 import { Database } from '../types/database';
@@ -12,6 +13,7 @@ export interface InstantCheckoutItem {
   product_image?: string;
   quantity: number;
   unit_price: number;
+  cost_per_unit: number;
   original_subtotal: number;
   item_discount_type?: 'percentage' | 'fixed';
   item_discount_value?: number;
@@ -82,12 +84,58 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(false);
   const { currentBusiness } = useAuth();
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const persistTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getStorageKey = (businessId: string) => `instant_checkout_session_${businessId}`;
+
+  const persistSession = useCallback((sessionData: InstantCheckoutSession | null, businessId?: string) => {
+    const bid = businessId || currentBusiness?.id;
+    if (!bid) return;
+
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(async () => {
+      try {
+        if (sessionData && sessionData.items.length > 0) {
+          const toStore = {
+            ...sessionData,
+            sale_date: sessionData.sale_date.toISOString(),
+          };
+          await AsyncStorage.setItem(getStorageKey(bid), JSON.stringify(toStore));
+        } else {
+          await AsyncStorage.removeItem(getStorageKey(bid));
+        }
+      } catch {}
+    }, 500);
+  }, [currentBusiness?.id]);
+
+  const restoreSession = async (businessId: string) => {
+    try {
+      const raw = await AsyncStorage.getItem(getStorageKey(businessId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        parsed.sale_date = new Date(parsed.sale_date);
+        setSession(parsed);
+      }
+    } catch {}
+  };
+
+  const clearPersistedSession = async () => {
+    if (currentBusiness?.id) {
+      await AsyncStorage.removeItem(getStorageKey(currentBusiness.id));
+    }
+  };
 
   useEffect(() => {
     if (currentBusiness?.id) {
       loadGuestCustomer();
+      restoreSession(currentBusiness.id);
     }
   }, [currentBusiness?.id]);
+
+  // Persist session to AsyncStorage on every change
+  useEffect(() => {
+    persistSession(session);
+  }, [session, persistSession]);
 
   const loadGuestCustomer = async () => {
     if (!currentBusiness?.id) return;
@@ -198,6 +246,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
           product_image: product.image_url || undefined,
           quantity,
           unit_price: unitPrice,
+          cost_per_unit: (product as any).cost_per_unit || 0,
           original_subtotal: originalSubtotal,
           subtotal: originalSubtotal,
           available_stock: product.current_stock || 0,
@@ -440,6 +489,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
 
   const clearSession = useCallback(() => {
     setSession(null);
+    clearPersistedSession();
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
