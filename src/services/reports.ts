@@ -1313,7 +1313,7 @@ export const reportsService = {
             discount_type,
             discount_value,
             delivery_cost,
-            cart_items(quantity, product_id, unit_price, products(cost_per_unit))
+            cart_items(quantity, product_id, unit_price, item_discount_amount, products(cost_per_unit))
           ),
           sale_actions(
             id,

@@ -218,33 +218,55 @@ export default function SalesHistoryScreen() {
       const saleProfit = isVoided
         ? 0
         : (() => {
-            // Build cost map: product_id -> cost_per_unit (from cart items)
+            const cart = item.carts;
+            const deliveryCost = cart?.delivery_cost ?? 0;
+
+            // Calculate cart-level discount amount
+            let cartDiscountAmount = 0;
+            if (cart?.discount_type && cart?.discount_value) {
+              const itemsSubtotal = cartItems.reduce((sum: number, ci: any) => {
+                const itemTotal = (ci.unit_price ?? 0) * (ci.quantity || 0);
+                const itemDiscount = ci.item_discount_amount ?? 0;
+                return sum + (itemTotal - itemDiscount);
+              }, 0);
+              if (cart.discount_type === 'percentage') {
+                cartDiscountAmount = itemsSubtotal * (cart.discount_value / 100);
+              } else {
+                cartDiscountAmount = Math.min(cart.discount_value, itemsSubtotal);
+              }
+            }
+
+            // Build cost map for partial returns
             const costMap = new Map<string, number>();
             cartItems.forEach((ci: any) => {
               if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
             });
 
-            // Gross profit across all cart items
+            // Gross profit: (revenue per item after item discount) - cost
             const grossProfit = cartItems.reduce((sum: number, ci: any) => {
               const cost = ci.products?.cost_per_unit ?? 0;
-              return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
+              const itemRevenue = (ci.unit_price ?? 0) * (ci.quantity || 0);
+              const itemDiscount = ci.item_discount_amount ?? 0;
+              return sum + (itemRevenue - itemDiscount) - cost * (ci.quantity || 0);
             }, 0);
 
-            if (!isPartialReturn) return grossProfit;
+            // Net profit: subtract cart-level discount and delivery cost
+            const netProfit = grossProfit - cartDiscountAmount - deliveryCost;
 
-            // Subtract profit that belonged to returned items, then also subtract loss absorbed
+            if (!isPartialReturn) return netProfit;
+
+            // Subtract profit that belonged to returned items
             const returnDeduction = (item.sale_actions || []).reduce((sum: number, a: any) => {
               if (a.action_type !== 'return') return sum;
               return sum + (a.items_metadata || []).reduce((s: number, m: any) => {
                 const cost = costMap.get(m.productId) ?? 0;
-                // originalAmount = unit_price * returnedQty; profit on those units + loss cost
                 const returnedProfit = (m.originalAmount || 0) - cost * (m.quantity || 0);
                 const loss = m.lossAmount || 0;
                 return s + returnedProfit - loss;
               }, 0);
             }, 0);
 
-            return grossProfit - returnDeduction;
+            return netProfit - returnDeduction;
           })();
 
       groups[dateKey].sales.push(item);
