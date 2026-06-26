@@ -363,6 +363,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         product_id: product.id,
         quantity: quantity,
         unit_price: product.price,
+        cost_per_unit: product.cost_per_unit || 0,
         subtotal: quantity * product.price,
         original_subtotal: quantity * product.price,
         unit_id: product.unit_id || undefined,

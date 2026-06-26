@@ -3,6 +3,7 @@ interface CartItem {
   unit_price?: number;
   product_id?: string;
   item_discount_amount?: number;
+  cost_per_unit?: number;
   products?: { cost_per_unit?: number };
 }
 
@@ -57,11 +58,14 @@ export function calculateSaleProfit(sale: SaleData): number {
 
   const costMap = new Map<string, number>();
   cartItems.forEach((ci) => {
-    if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
+    if (ci.product_id) {
+      const cost = (ci.cost_per_unit && ci.cost_per_unit > 0) ? ci.cost_per_unit : (ci.products?.cost_per_unit ?? 0);
+      costMap.set(ci.product_id, cost);
+    }
   });
 
   const grossProfit = cartItems.reduce((sum, ci) => {
-    const cost = ci.products?.cost_per_unit ?? 0;
+    const cost = (ci.cost_per_unit && ci.cost_per_unit > 0) ? ci.cost_per_unit : (ci.products?.cost_per_unit ?? 0);
     const itemRevenue = (ci.unit_price ?? 0) * (ci.quantity || 0);
     const itemDiscount = ci.item_discount_amount ?? 0;
     return sum + (itemRevenue - itemDiscount) - cost * (ci.quantity || 0);

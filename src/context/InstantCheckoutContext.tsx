@@ -12,6 +12,7 @@ export interface InstantCheckoutItem {
   product_image?: string;
   quantity: number;
   unit_price: number;
+  cost_per_unit: number;
   original_subtotal: number;
   item_discount_type?: 'percentage' | 'fixed';
   item_discount_value?: number;
@@ -198,6 +199,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
           product_image: product.image_url || undefined,
           quantity,
           unit_price: unitPrice,
+          cost_per_unit: (product as any).cost_per_unit || 0,
           original_subtotal: originalSubtotal,
           subtotal: originalSubtotal,
           available_stock: product.current_stock || 0,

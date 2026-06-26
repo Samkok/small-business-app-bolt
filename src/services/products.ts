@@ -372,10 +372,20 @@ export const productService = {
   },
 
   async recalculateProductCost(productId: string) {
+    // Get current cost before recalculation
+    const { data: currentProduct } = await supabase
+      .from('products')
+      .select('cost_per_unit, business_id')
+      .eq('id', productId)
+      .single();
+
+    const oldCost = currentProduct?.cost_per_unit || 0;
+
     const { data: imports, error: importsError } = await supabase
       .from('inventory_imports')
-      .select('quantity, final_unit_cost_per_item')
+      .select('quantity, final_unit_cost_per_item, imported_by')
       .eq('product_id', productId)
+      .eq('status', 'completed')
       .order('created_at');
 
     if (importsError) throw importsError;
@@ -389,10 +399,24 @@ export const productService = {
     });
 
     const costPerUnit = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+    const roundedCost = Math.round(costPerUnit * 100) / 100;
 
-    await this.updateCostPerUnit(productId, costPerUnit);
+    await this.updateCostPerUnit(productId, roundedCost);
 
-    return costPerUnit;
+    // Log to product_history if cost changed
+    if (roundedCost !== oldCost && currentProduct) {
+      const lastImport = imports[imports.length - 1];
+      await supabase.from('product_history').insert({
+        product_id: productId,
+        changed_by_user_id: lastImport?.imported_by || null,
+        business_id: currentProduct.business_id,
+        field_name: 'cost_per_unit',
+        old_value: oldCost.toString(),
+        new_value: roundedCost.toString(),
+      });
+    }
+
+    return roundedCost;
   },
 
   async getArchivedProducts(businessId: string, limit?: number, offset?: number) {

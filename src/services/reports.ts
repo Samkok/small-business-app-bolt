@@ -232,6 +232,7 @@ export const reportsService = {
             quantity,
             product_id,
             unit_price,
+            cost_per_unit,
             subtotal,
             products(id, name, price, cost_per_unit, description, image_url, barcode, current_stock, min_stock_level)
           )
@@ -274,7 +275,7 @@ export const reportsService = {
         const productId = item.product_id || item.products?.id || 'unknown';
         const productName = item.products?.name || 'Unknown';
         const productPrice = item.products?.price || 0;
-        const productCost = item.products?.cost_per_unit || 0;
+        const productCost = (item.cost_per_unit && item.cost_per_unit > 0) ? item.cost_per_unit : (item.products?.cost_per_unit || 0);
 
         // Initialize product entry if not exists
         if (!productSales[productId]) {
@@ -857,6 +858,7 @@ export const reportsService = {
           cart_items(
             quantity,
             product_id,
+            cost_per_unit,
             products(
               name,
               cost_per_unit
@@ -880,7 +882,7 @@ export const reportsService = {
       // Calculate COGS for each item in the sale
       if (sale.carts?.cart_items) {
         sale.carts.cart_items.forEach(item => {
-          const costPerUnit = item.products?.cost_per_unit || 0;
+          const costPerUnit = (item.cost_per_unit && item.cost_per_unit > 0) ? item.cost_per_unit : (item.products?.cost_per_unit || 0);
           const itemCOGS = item.quantity * costPerUnit;
           totalCOGS += itemCOGS;
 
@@ -914,6 +916,7 @@ export const reportsService = {
           quantity,
           unit_price,
           subtotal,
+          cost_per_unit,
           carts!inner(
             sales!inner(
               id,
@@ -931,7 +934,7 @@ export const reportsService = {
 
       if (cartItemsError) throw cartItemsError;
 
-      // Get product cost per unit
+      // Get product cost per unit (fallback for items without snapshot)
       const { data: product, error: productError } = await supabase
         .from('products')
         .select('cost_per_unit')
@@ -940,11 +943,14 @@ export const reportsService = {
 
       if (productError) throw productError;
 
-      // Calculate totals
+      // Calculate totals using snapshot cost where available
       const quantitySold = cartItems.reduce((sum, item) => sum + item.quantity, 0);
       const totalRevenue = cartItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
-      const costPerUnit = product?.cost_per_unit || 0;
-      const totalCOGS = quantitySold * costPerUnit;
+      const fallbackCost = product?.cost_per_unit || 0;
+      const totalCOGS = cartItems.reduce((sum, item) => {
+        const itemCost = (item.cost_per_unit && item.cost_per_unit > 0) ? item.cost_per_unit : fallbackCost;
+        return sum + item.quantity * itemCost;
+      }, 0);
       const totalProfit = totalRevenue - totalCOGS;
       const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
@@ -1313,7 +1319,7 @@ export const reportsService = {
             discount_type,
             discount_value,
             delivery_cost,
-            cart_items(quantity, product_id, unit_price, item_discount_amount, products(cost_per_unit))
+            cart_items(quantity, product_id, unit_price, cost_per_unit, item_discount_amount, products(cost_per_unit))
           ),
           sale_actions(
             id,

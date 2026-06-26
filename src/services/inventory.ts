@@ -309,7 +309,7 @@ export const inventoryService = {
     // Get the import record
     const { data: importRecord, error: getError } = await supabase
       .from('inventory_imports')
-      .select('product_id, quantity, final_unit_cost_per_item, status')
+      .select('product_id, quantity, final_unit_cost_per_item, status, imported_by, business_id')
       .eq('id', importId)
       .single();
 
@@ -360,7 +360,7 @@ export const inventoryService = {
       // Update the product
       const { error: updateProductError } = await supabase
         .from('products')
-        .update({ 
+        .update({
           current_stock: newStock,
           cost_per_unit: newCostPerUnit,
           updated_at: new Date().toISOString()
@@ -368,6 +368,20 @@ export const inventoryService = {
         .eq('id', importRecord.product_id);
 
       if (updateProductError) throw updateProductError;
+
+      // Log cost_per_unit change to product_history if it actually changed
+      const oldCost = product.cost_per_unit || 0;
+      const roundedNewCost = Math.round(newCostPerUnit * 100) / 100;
+      if (roundedNewCost !== oldCost) {
+        await supabase.from('product_history').insert({
+          product_id: importRecord.product_id,
+          changed_by_user_id: importRecord.imported_by,
+          business_id: importRecord.business_id,
+          field_name: 'cost_per_unit',
+          old_value: oldCost.toString(),
+          new_value: roundedNewCost.toString(),
+        });
+      }
     } catch (error) {
       console.error('Error updating product after import arrival:', error);
       // Consider rolling back the import status update if product update fails

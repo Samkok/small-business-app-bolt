@@ -180,6 +180,7 @@ export const salesService = {
             quantity,
             product_id,
             unit_price,
+            cost_per_unit,
             subtotal,
             original_subtotal,
             item_discount_type,
