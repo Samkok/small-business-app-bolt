@@ -14,18 +14,30 @@ export const customerService = {
       throw new ValidationError('Business ID is required');
     }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('business_id', businessId)
-      .order('name');
+    const PAGE_SIZE = 1000;
+    let allData: Customer[] = [];
+    let from = 0;
 
-    if (error) {
-      logger.error('Failed to fetch customers', error, { businessId });
-      throw new DatabaseError('Failed to fetch customers');
+    while (true) {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('name')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        logger.error('Failed to fetch customers', error, { businessId });
+        throw new DatabaseError('Failed to fetch customers');
+      }
+
+      allData = allData.concat(data);
+
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    return data;
+    return allData;
   },
 
   async getCustomer(id: string): Promise<Customer> {
@@ -111,19 +123,30 @@ export const customerService = {
 
     const sanitizedQuery = sanitizeSearchQuery(query);
 
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('business_id', businessId)
-      .or(`name.ilike.%${sanitizedQuery}%,phone.ilike.%${sanitizedQuery}%`)
-      .order('name');
+    const PAGE_SIZE = 1000;
+    let allData: Customer[] = [];
+    let from = 0;
 
-    if (error) {
-      logger.error('Failed to search customers', error, { businessId, query });
-      throw new DatabaseError('Failed to search customers');
+    while (true) {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('business_id', businessId)
+        .or(`name.ilike.%${sanitizedQuery}%,phone.ilike.%${sanitizedQuery}%`)
+        .order('name')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        logger.error('Failed to search customers', error, { businessId, query });
+        throw new DatabaseError('Failed to search customers');
+      }
+
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    return data;
+    return allData;
   },
 
   async enrichCustomerProfile(

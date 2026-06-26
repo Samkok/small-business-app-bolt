@@ -15,24 +15,47 @@ export const productService = {
       return [];
     }
 
-    let query = supabase
-      .from('products')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('is_archived', false)
-      .order('name');
+    if (limit || offset) {
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_archived', false)
+        .order('name');
 
-    if (limit) {
-      query = query.limit(limit);
+      if (limit) {
+        query = query.limit(limit);
+      }
+
+      if (offset) {
+        query = query.range(offset, offset + (limit || 10) - 1);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
     }
 
-    if (offset) {
-      query = query.range(offset, offset + (limit || 10) - 1);
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let from = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_archived', false)
+        .order('name')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) throw error;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data;
+    return allData;
   },
 
   async getInStockProducts(businessId: string, limit?: number, offset?: number) {
