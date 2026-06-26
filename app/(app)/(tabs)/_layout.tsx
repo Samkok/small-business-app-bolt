@@ -2,18 +2,20 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
-import { 
-  LayoutDashboard, 
-  Package, 
-  Users, 
-  ShoppingCart, 
-  Receipt, 
-  Settings 
+import { useNetwork } from '@/src/context/NetworkContext';
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  ShoppingCart,
+  Receipt,
+  Settings
 } from 'lucide-react-native';
 
 export default function TabLayout() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { pendingSalesCount } = useNetwork();
 
   const tabBarStyle = {
     backgroundColor: isDark ? '#374151' : '#ffffff',
@@ -69,6 +71,8 @@ export default function TabLayout() {
           tabBarIcon: ({ size, color }) => (
             <ShoppingCart size={size} color={color} />
           ),
+          tabBarBadge: pendingSalesCount > 0 ? pendingSalesCount : undefined,
+          tabBarBadgeStyle: pendingSalesCount > 0 ? { backgroundColor: '#F59E0B', fontSize: 10 } : undefined,
         }}
       />
       <Tabs.Screen

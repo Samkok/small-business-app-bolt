@@ -17,7 +17,10 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
+import { useNetwork } from '@/src/context/NetworkContext';
 import { instantCheckoutService } from '@/src/services/instantCheckout';
+import { offlineSaleQueue } from '@/src/lib/offlineSaleQueue';
+import { isNetworkError } from '@/src/lib/network';
 import { useRouter } from 'expo-router';
 import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode, Package } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
@@ -407,6 +410,49 @@ export function InstantCheckoutModal() {
     } catch (error) {
       console.error('Failed to complete sale:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+
+      // If network error, queue the sale offline
+      if (isNetworkError(error)) {
+        try {
+          await offlineSaleQueue.add({
+            cartItems: session.items.map(item => ({
+              product_id: item.product_id,
+              product_name: item.product_name,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              cost_per_unit: item.cost_per_unit || 0,
+              subtotal: item.subtotal,
+              original_subtotal: item.original_subtotal,
+              item_discount_type: item.item_discount_type,
+              item_discount_value: item.item_discount_value,
+              item_discount_amount: item.item_discount_amount,
+              item_discount_scope: item.item_discount_scope,
+              unit_id: item.unit_id,
+              currency_id: item.currency_id,
+            })),
+            customerId: session.customer_id || guestCustomer.id,
+            customerName: session.customer_name || 'Guest Customer',
+            paymentMethod: session.payment_method || 'cash',
+            saleDate: session.sale_date.toISOString(),
+            totalAmount: summary.finalTotal,
+            businessId: currentBusiness.id,
+            createdBy: user.id,
+            deliveryCost: session.delivery_cost,
+            notes: session.notes,
+            discountType: session.cart_discount_type,
+            discountValue: session.cart_discount_value,
+          });
+          Alert.alert(
+            'Sale Saved Offline',
+            'No internet connection. Your sale has been saved and will sync when you are back online.'
+          );
+          clearSession();
+          onClose();
+        } catch (queueError) {
+          Alert.alert('Error', 'Failed to save sale offline. Please try again.');
+        }
+        return;
+      }
 
       if (errorMessage === 'SUBSCRIPTION_LIMIT_REACHED') {
         await refreshSalesCount();

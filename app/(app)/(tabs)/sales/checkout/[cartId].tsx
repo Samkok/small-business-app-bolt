@@ -13,13 +13,14 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
 import { useSubscription } from '@/src/context/SubscriptionContext';
+import { useNetwork } from '@/src/context/NetworkContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
 import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
-import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar, WifiOff } from 'lucide-react-native';
 import { formatCurrency } from '@/src/utils/formatCurrency';
 import { useCurrency } from '@/src/hooks/useCurrency';
 
@@ -39,6 +40,7 @@ export default function CheckoutScreen() {
   const { getCart, getCartSummary, completeSale } = useCart();
   const { salesCountData, showPaywall } = useSubscription();
   const { currencies, defaultCurrency, convertBetween, formatPrice } = useCurrency(currentBusiness?.id);
+  const { isConnected } = useNetwork();
 
   const displayAmount = (amount: number) => {
     if (!displayCurrencyId || displayCurrencyId === defaultCurrency?.id) {
@@ -92,9 +94,12 @@ export default function CheckoutScreen() {
       const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes);
 
       if (result.success) {
+        const isOfflineSale = (result as any).offline;
         Alert.alert(
-          'Sale Completed',
-          'The sale has been successfully completed!',
+          isOfflineSale ? 'Sale Saved Offline' : 'Sale Completed',
+          isOfflineSale
+            ? 'You are offline. The sale has been saved and will sync when you reconnect.'
+            : 'The sale has been successfully completed!',
           [
             {
               text: 'OK',
@@ -168,6 +173,14 @@ export default function CheckoutScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {!isConnected && (
+          <View style={styles.offlineNotice}>
+            <WifiOff size={16} color="#92400E" />
+            <Text style={styles.offlineNoticeText}>
+              You are offline. Sale will be saved locally and synced when you reconnect.
+            </Text>
+          </View>
+        )}
         {/* Order Summary */}
         <Card style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
@@ -426,6 +439,21 @@ export default function CheckoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  offlineNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
   },
   header: {
     flexDirection: 'row',

@@ -24,6 +24,7 @@ import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import { formatCurrency } from '@/src/utils/formatCurrency';
+import { dataCache } from '@/src/lib/dataCache';
 
 export default function ProductSelectionScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -59,9 +60,21 @@ export default function ProductSelectionScreen() {
     if (!currentBusiness?.id || !cartId) return;
 
     try {
+      // Try to show cached products immediately
+      const cached = await dataCache.get<any[]>('products_in_stock', currentBusiness.id);
+      if (cached) {
+        setProducts(cached.data);
+        setFilteredProducts(cached.data);
+        setLoading(false);
+      }
+
+      // Fetch fresh data from network
       const productsData = await productService.getInStockProducts(currentBusiness.id);
       setProducts(productsData);
       setFilteredProducts(productsData);
+
+      // Cache the fresh data
+      await dataCache.set('products_in_stock', currentBusiness.id, productsData);
 
       const ugMap: Record<string, Unit[]> = {};
       const upMap: Record<string, ProductUnit[]> = {};
@@ -92,7 +105,10 @@ export default function ProductSelectionScreen() {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load products');
+      // Only show error if we have no cached data to fall back on
+      if (products.length === 0) {
+        Alert.alert('Error', 'Failed to load products. Please check your connection.');
+      }
     } finally {
       setLoading(false);
     }

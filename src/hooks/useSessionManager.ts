@@ -6,6 +6,7 @@ import {
   updateLastActivityTimestamp,
   getLastActivityTimestamp,
 } from '../lib/authStorage';
+import { isNetworkError } from '../lib/network';
 
 // One week in milliseconds
 const INACTIVITY_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
@@ -62,6 +63,12 @@ export function useSessionManager({
 
       if (error) {
         console.error('Session refresh failed:', error.message);
+        // Never sign out due to a network error -- trust the local session
+        if (isNetworkError(error)) {
+          console.log('[Auth] Network error during refresh, keeping local session');
+          isRefreshingRef.current = false;
+          return false;
+        }
         if (isInvalidTokenError(error)) {
           isRefreshingRef.current = false;
           await onInvalidToken();
@@ -82,6 +89,12 @@ export function useSessionManager({
       isRefreshingRef.current = false;
       return false;
     } catch (error) {
+      // Never sign out due to a network error
+      if (isNetworkError(error)) {
+        console.log('[Auth] Network error during refresh (caught), keeping local session');
+        isRefreshingRef.current = false;
+        return false;
+      }
       if (isInvalidTokenError(error)) {
         isRefreshingRef.current = false;
         await onInvalidToken();

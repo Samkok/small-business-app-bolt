@@ -1,11 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
+import { useNetwork } from './NetworkContext';
 import { cartService } from '@/src/services/carts';
 import { productService } from '@/src/services/products';
 import { salesService } from '@/src/services/sales';
 import { subscriptionService } from '@/src/services/subscriptionService';
 import { dataCleanupRegistry } from '@/src/utils/dataCleanupRegistry';
+import { offlineSaleQueue } from '@/src/lib/offlineSaleQueue';
+import { isNetworkError } from '@/src/lib/network';
+import { retryWithBackoff } from '@/src/lib/network';
 
 // Types
 export interface CartItem {
@@ -62,7 +66,7 @@ interface CartContextType {
   applyItemDiscount: (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope?: 'per_unit' | 'total') => Promise<CartItem>;
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
-  completeSale: (cartId: string, paymentMethod: string) => Promise<{ success: boolean; saleId?: string; error?: string }>;
+  completeSale: (cartId: string, paymentMethod: string, saleDate?: string, customNotes?: string) => Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }>;
   refreshCarts: () => Promise<Cart[]>;
 }
 
@@ -72,6 +76,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentBusiness, user } = useAuth();
+  const { isConnected, setPendingSalesCount } = useNetwork();
   const cartsCache = useRef<Map<string, { cart: Cart; timestamp: number }>>(new Map());
   const CACHE_TTL = 5000;
 
@@ -511,13 +516,56 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     paymentMethod: string,
     saleDate?: string,
     customNotes?: string
-  ): Promise<{ success: boolean; saleId?: string; error?: string }> => {
+  ): Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }> => {
     if (!currentBusiness?.id) {
       return { success: false, error: 'No business currentBusiness found' };
     }
 
     if (!user?.id) {
       return { success: false, error: 'User not authenticated' };
+    }
+
+    const cart = carts.find(c => c.id === cartId);
+    if (!cart) {
+      return { success: false, error: 'Cart not found' };
+    }
+
+    // If offline, queue the sale immediately
+    if (!isConnected) {
+      console.log('[CartContext] Offline - queuing sale for later sync');
+      await offlineSaleQueue.add({
+        cartItems: cart.items.map(item => ({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          cost_per_unit: (item as any).cost_per_unit || 0,
+          subtotal: item.subtotal,
+          original_subtotal: item.original_subtotal,
+          item_discount_type: item.item_discount_type,
+          item_discount_value: item.item_discount_value,
+          item_discount_amount: item.item_discount_amount,
+          item_discount_scope: item.item_discount_scope,
+        })),
+        customerId: cart.customer_id,
+        customerName: cart.customer_name,
+        paymentMethod: paymentMethod as any,
+        saleDate: saleDate || new Date().toISOString(),
+        totalAmount: cart.total_amount,
+        businessId: currentBusiness.id,
+        createdBy: user.id,
+        deliveryCost: cart.delivery_cost,
+        notes: customNotes || cart.notes,
+        discountType: cart.discount_type,
+        discountValue: cart.discount_value,
+        cartId,
+      });
+
+      setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
+      const count = await offlineSaleQueue.getCount();
+      setPendingSalesCount(count);
+
+      return { success: true, offline: true };
     }
 
     try {
@@ -533,25 +581,66 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log('[CartContext] Access validated, completing sale');
-      const cart = carts.find(c => c.id === cartId);
-      const sale = await salesService.completeSale({
-        cart_id: cartId,
-        customer_id: cart?.customer_id || '',
-        payment_method: paymentMethod as any,
-        notes: customNotes || cart?.notes,
-        sale_date: saleDate,
-        business_id: currentBusiness.id,
-        created_by: user.id
-      });
+      const sale = await retryWithBackoff(
+        () => salesService.completeSale({
+          cart_id: cartId,
+          customer_id: cart.customer_id || '',
+          payment_method: paymentMethod as any,
+          notes: customNotes || cart.notes,
+          sale_date: saleDate,
+          business_id: currentBusiness.id,
+          created_by: user.id
+        }),
+        'completeSale'
+      );
 
       setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
 
       return { success: true, saleId: sale.id };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing sale:', error);
-      return { success: false, error: 'Failed to complete sale' };
+
+      // If it failed due to network, queue it
+      if (isNetworkError(error)) {
+        console.log('[CartContext] Network error during sale - queuing for later sync');
+        await offlineSaleQueue.add({
+          cartItems: cart.items.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            cost_per_unit: (item as any).cost_per_unit || 0,
+            subtotal: item.subtotal,
+            original_subtotal: item.original_subtotal,
+            item_discount_type: item.item_discount_type,
+            item_discount_value: item.item_discount_value,
+            item_discount_amount: item.item_discount_amount,
+            item_discount_scope: item.item_discount_scope,
+          })),
+          customerId: cart.customer_id,
+          customerName: cart.customer_name,
+          paymentMethod: paymentMethod as any,
+          saleDate: saleDate || new Date().toISOString(),
+          totalAmount: cart.total_amount,
+          businessId: currentBusiness.id,
+          createdBy: user.id,
+          deliveryCost: cart.delivery_cost,
+          notes: customNotes || cart.notes,
+          discountType: cart.discount_type,
+          discountValue: cart.discount_value,
+          cartId,
+        });
+
+        setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
+        const count = await offlineSaleQueue.getCount();
+        setPendingSalesCount(count);
+
+        return { success: true, offline: true };
+      }
+
+      return { success: false, error: error?.message || 'Failed to complete sale' };
     }
-  }, [currentBusiness, carts, user]);
+  }, [currentBusiness, carts, user, isConnected, setPendingSalesCount]);
 
   const value = {
     carts,
