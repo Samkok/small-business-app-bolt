@@ -34,6 +34,7 @@ import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, 
 import { format } from 'date-fns';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
+import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCount } from '@/src/utils/profitCalculation';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -826,65 +827,9 @@ export default function SalesScreen() {
       }
 
       const isVoided = sale.status === 'voided';
-      const isPartialReturn = sale.status === 'partially_returned';
-
-      const displayAmount = isVoided
-        ? 0
-        : isPartialReturn
-        ? sale.total_amount - (sale.sale_actions?.reduce((sum: number, a: any) =>
-            a.action_type === 'return' ? sum + (a.adjusted_amount || a.amount || 0) : sum, 0) || 0)
-        : sale.total_amount;
-
-      const cartItems: any[] = sale.carts?.cart_items || [];
-
-      // For voided sales: 0 products. For partial returns: subtract returned quantities.
-      let productCount = 0;
-      if (!isVoided) {
-        const grossQty =
-          sale.sale_items?.reduce((sum: number, si: any) => sum + (si.quantity || 0), 0) ||
-          cartItems.reduce((sum: number, ci: any) => sum + (ci.quantity || 0), 0);
-        if (isPartialReturn) {
-          const returnedQty = (sale.sale_actions || []).reduce((sum: number, a: any) => {
-            if (a.action_type !== 'return') return sum;
-            return sum + (a.items_metadata || []).reduce((s: number, m: any) => s + (m.quantity || 0), 0);
-          }, 0);
-          productCount = Math.max(0, grossQty - returnedQty);
-        } else {
-          productCount = grossQty;
-        }
-      }
-
-      const saleProfit = isVoided
-        ? 0
-        : (() => {
-            // Build cost map: product_id -> cost_per_unit (from cart items)
-            const costMap = new Map<string, number>();
-            cartItems.forEach((ci: any) => {
-              if (ci.product_id) costMap.set(ci.product_id, ci.products?.cost_per_unit ?? 0);
-            });
-
-            // Gross profit across all cart items
-            const grossProfit = cartItems.reduce((sum: number, ci: any) => {
-              const cost = ci.products?.cost_per_unit ?? 0;
-              return sum + ((ci.unit_price ?? 0) - cost) * (ci.quantity || 0);
-            }, 0);
-
-            if (!isPartialReturn) return grossProfit;
-
-            // Subtract profit that belonged to returned items, then also subtract loss absorbed
-            const returnDeduction = (sale.sale_actions || []).reduce((sum: number, a: any) => {
-              if (a.action_type !== 'return') return sum;
-              return sum + (a.items_metadata || []).reduce((s: number, m: any) => {
-                const cost = costMap.get(m.productId) ?? 0;
-                // originalAmount = unit_price * returnedQty; profit on those units + loss cost
-                const returnedProfit = (m.originalAmount || 0) - cost * (m.quantity || 0);
-                const loss = m.lossAmount || 0;
-                return s + returnedProfit - loss;
-              }, 0);
-            }, 0);
-
-            return grossProfit - returnDeduction;
-          })();
+      const displayAmount = calculateSaleDisplayAmount(sale);
+      const productCount = calculateSaleProductCount(sale);
+      const saleProfit = calculateSaleProfit(sale);
 
       groups[dateKey].sales.push(sale);
       if (!isVoided) groups[dateKey].totalOrders += 1;
