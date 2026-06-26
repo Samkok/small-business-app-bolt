@@ -974,46 +974,74 @@ export const salesService = {
         totalRevenue: 0,
         averageSale: 0,
         todayRevenue: 0,
-        todaySalesCount: 0
+        totalProfit: 0
       };
     }
 
-    let query = supabase
-      .from('sales')
-      .select('total_amount, sale_date, status')
-      .eq('business_id', businessId)
-      .gte('sale_date', startDate)
-      .lte('sale_date', endDate);
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let from = 0;
 
-    if (status) {
-      query = query.eq('status', status);
+    while (true) {
+      let query = supabase
+        .from('sales')
+        .select(`
+          total_amount, sale_date, status,
+          carts(
+            delivery_cost,
+            discount_type,
+            discount_value,
+            cart_items(
+              quantity,
+              product_id,
+              unit_price,
+              cost_per_unit,
+              item_discount_amount,
+              products(cost_per_unit)
+            )
+          ),
+          sale_actions(action_type, amount, adjusted_amount, items_metadata)
+        `)
+        .eq('business_id', businessId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      if (paymentMethod) {
+        query = query.eq('payment_method', paymentMethod);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      allData = allData.concat(data || []);
+      if (!data || data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    if (paymentMethod) {
-      query = query.eq('payment_method', paymentMethod);
-    }
+    const { calculateSaleProfit } = require('../utils/profitCalculation');
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    // Filter completed sales for revenue calculations
-    const completedSales = (data || []).filter(s => s.status === 'completed');
+    const completedSales = allData.filter(s => s.status === 'completed');
     const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
     const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
 
-    // Calculate today's sales
     const today = new Date().toISOString().split('T')[0];
     const todaySales = completedSales.filter(sale =>
       sale.sale_date.split('T')[0] === today
     );
     const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
 
+    const totalProfit = allData.reduce((sum, sale) => sum + calculateSaleProfit(sale), 0);
+
     return {
       totalRevenue,
       averageSale,
       todayRevenue,
-      todaySalesCount: todaySales.length
+      totalProfit
     };
   }
 };
