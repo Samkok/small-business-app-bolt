@@ -28,6 +28,7 @@ import CategoryForm from '@/src/components/expenses/CategoryForm';
 import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp, X } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import DateRangePicker from '@/src/components/sales/DateRangePicker';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -45,8 +46,12 @@ export default function ExpensesScreen() {
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('month');
   const [statsCollapsed, setStatsCollapsed] = useState(true);
+  const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [dateRangeText, setDateRangeText] = useState('');
 
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -57,11 +62,12 @@ export default function ExpensesScreen() {
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
-    { value: 'all', label: t('dateRanges.allTime') },
-    { value: 'today', label: t('dateRanges.today') },
-    { value: 'week', label: t('dateRanges.thisWeek') },
     { value: 'month', label: t('dateRanges.thisMonth') },
+    { value: 'three_months', label: t('dateRanges.last3Months') },
+    { value: 'six_months', label: t('dateRanges.last6Months') },
     { value: 'year', label: t('dateRanges.thisYear') },
+    { value: 'custom', label: dateRangeText || t('dateRanges.customRange') },
+    { value: 'all', label: t('dateRanges.allTime') },
   ];
 
   useEffect(() => {
@@ -70,7 +76,7 @@ export default function ExpensesScreen() {
 
   useEffect(() => {
     filterExpenses();
-  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod]);
+  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod, customStartDate, customEndDate]);
 
   // Animate the collapsible section
   useEffect(() => {
@@ -129,10 +135,10 @@ export default function ExpensesScreen() {
     if (selectedPeriod !== 'all') {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       filtered = filtered.filter(expense => {
         const expenseDate = new Date(expense.expense_date);
-        
+
         switch (selectedPeriod) {
           case 'today':
             return expenseDate >= today;
@@ -143,9 +149,21 @@ export default function ExpensesScreen() {
           case 'month':
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
             return expenseDate >= monthStart;
+          case 'three_months':
+            const threeMonthsStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+            return expenseDate >= threeMonthsStart;
+          case 'six_months':
+            const sixMonthsStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+            return expenseDate >= sixMonthsStart;
           case 'year':
             const yearStart = new Date(now.getFullYear(), 0, 1);
             return expenseDate >= yearStart;
+          case 'custom':
+            const start = new Date(customStartDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(customEndDate);
+            end.setHours(23, 59, 59, 999);
+            return expenseDate >= start && expenseDate <= end;
           default:
             return true;
         }
@@ -153,7 +171,7 @@ export default function ExpensesScreen() {
     }
 
     setFilteredExpenses(filtered);
-  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod]);
+  }, [expenses, debouncedSearchQuery, selectedCategory, selectedPeriod, customStartDate, customEndDate]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -204,6 +222,36 @@ export default function ExpensesScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setStatsCollapsed(!statsCollapsed);
   }, [statsCollapsed]);
+
+  const handlePeriodChange = useCallback((value: string) => {
+    if (value === 'custom') {
+      setSelectedPeriod('custom');
+      setShowCustomDateRangePicker(true);
+    } else {
+      setSelectedPeriod(value);
+      setDateRangeText('');
+    }
+  }, []);
+
+  const handleDateRangeConfirm = useCallback((start: Date, end: Date) => {
+    const adjustedStart = new Date(start);
+    adjustedStart.setHours(0, 0, 0, 0);
+    const adjustedEnd = new Date(end);
+    adjustedEnd.setHours(23, 59, 59, 999);
+
+    setCustomStartDate(adjustedStart);
+    setCustomEndDate(adjustedEnd);
+    setDateRangeText(`${start.toLocaleDateString()} - ${end.toLocaleDateString()}`);
+    setSelectedPeriod('custom');
+    setShowCustomDateRangePicker(false);
+  }, []);
+
+  const handleDateRangeCancel = useCallback(() => {
+    setShowCustomDateRangePicker(false);
+    if (!dateRangeText) {
+      setSelectedPeriod('month');
+    }
+  }, [dateRangeText]);
 
   const getExpenseStats = useCallback(() => {
     const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -511,22 +559,22 @@ export default function ExpensesScreen() {
               style={[
                 styles.filterButton,
                 {
-                  backgroundColor: selectedPeriod === filter.value 
-                    ? '#059669' 
+                  backgroundColor: selectedPeriod === filter.value
+                    ? '#059669'
                     : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: selectedPeriod === filter.value 
-                    ? '#059669' 
+                  borderColor: selectedPeriod === filter.value
+                    ? '#059669'
                     : (isDark ? '#4b5563' : '#d1d5db'),
                 }
               ]}
-              onPress={() => setSelectedPeriod(filter.value)}
+              onPress={() => handlePeriodChange(filter.value)}
             >
               <Text style={[
                 styles.filterButtonText,
-                { 
-                  color: selectedPeriod === filter.value 
-                    ? '#ffffff' 
-                    : (isDark ? '#f9fafb' : '#374151') 
+                {
+                  color: selectedPeriod === filter.value
+                    ? '#ffffff'
+                    : (isDark ? '#f9fafb' : '#374151')
                 }
               ]}>
                 {filter.label}
@@ -662,6 +710,26 @@ export default function ExpensesScreen() {
           onSave={handleCategorySave}
           onCancel={() => setShowCategoryForm(false)}
         />
+      </Modal>
+
+      <Modal
+        visible={showCustomDateRangePicker}
+        animationType="fade"
+        transparent
+      >
+        <View style={styles.datePickerOverlay}>
+          <View style={[styles.datePickerContainer, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <Text style={[styles.datePickerTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {t('dateRanges.customRange')}
+            </Text>
+            <DateRangePicker
+              startDate={customStartDate}
+              endDate={customEndDate}
+              onConfirm={handleDateRangeConfirm}
+              onCancel={handleDateRangeCancel}
+            />
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -837,5 +905,29 @@ const styles = StyleSheet.create({
   emptyButton: {
     marginTop: 16,
     minWidth: 120,
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerContainer: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });
