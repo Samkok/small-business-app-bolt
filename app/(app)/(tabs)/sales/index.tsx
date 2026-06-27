@@ -38,6 +38,7 @@ import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCo
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { dataCache } from '@/src/lib/dataCache';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
@@ -107,7 +108,7 @@ export default function SalesScreen() {
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
-  const { isConnected } = useNetwork();
+  const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -242,6 +243,13 @@ export default function SalesScreen() {
       setLoading(false);
     }
   }, [currentBusiness?.id, clearSalesData]);
+
+  // Auto-refetch when coming back online
+  useEffect(() => {
+    if (wasOffline && isConnected && currentBusiness?.id) {
+      loadData(true);
+    }
+  }, [wasOffline, isConnected]);
 
   // Load sales data when tab changes to sales or filter parameters change
   useEffect(() => {
@@ -384,7 +392,32 @@ export default function SalesScreen() {
       setCurrentPage(0);
       setHasMoreSales(true);
     } else if (page > 0) {
+      if (!isConnected) return;
       setLoadingMore(true);
+    }
+
+    // Cache-first: on initial load (page 0, not refresh), try cache
+    if (page === 0 && !refresh) {
+      try {
+        const cachedSales = await dataCache.get<any[]>('recent_sales', currentBusiness!.id);
+        const cachedAnalytics = await dataCache.get<any>('sales_analytics', currentBusiness!.id);
+        if (cachedSales) {
+          setSales(cachedSales.data);
+          setFilteredSales(cachedSales.data);
+          setTotalSales(cachedSales.data.length);
+          setLoading(false);
+        }
+        if (cachedAnalytics) {
+          setAnalytics(cachedAnalytics.data);
+        }
+      } catch {}
+    }
+
+    // If offline, stop after cache restore
+    if (!isConnected) {
+      setLoading(false);
+      setLoadingMore(false);
+      return;
     }
 
     try {
@@ -431,6 +464,12 @@ export default function SalesScreen() {
         setSales(salesData);
         setFilteredSales(salesData);
         setCurrentPage(0);
+
+        // Cache first page (up to 50 sales) and analytics
+        if (currentBusiness?.id) {
+          dataCache.set('recent_sales', currentBusiness.id, salesData.slice(0, 50)).catch(() => {});
+          dataCache.set('sales_analytics', currentBusiness.id, analyticsData).catch(() => {});
+        }
       } else {
         // Pagination: only fetch sales data, not analytics
         const salesData = await salesService.getSalesPaginated(

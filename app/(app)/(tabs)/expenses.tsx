@@ -31,6 +31,7 @@ import { useDebounce } from '@/src/hooks/useDebounce';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { dataCache } from '@/src/lib/dataCache';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -61,7 +62,7 @@ export default function ExpensesScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { isConnected } = useNetwork();
+  const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
@@ -76,6 +77,13 @@ export default function ExpensesScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-refetch when coming back online
+  useEffect(() => {
+    if (wasOffline && isConnected) {
+      loadData(true);
+    }
+  }, [wasOffline, isConnected]);
 
   useEffect(() => {
     filterExpenses();
@@ -92,19 +100,41 @@ export default function ExpensesScreen() {
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
-    
+
     if (!isRefresh) {
       setLoading(true);
     }
-    
+
+    // Cache-first: restore from cache
+    if (!isRefresh) {
+      try {
+        const cached = await dataCache.get<{ expenses: any[]; categories: any[] }>('expenses_data', currentBusiness.id);
+        if (cached) {
+          setExpenses(cached.data.expenses);
+          setCategories(cached.data.categories);
+          setLoading(false);
+        }
+      } catch {}
+    }
+
+    // If offline, stop here
+    if (!isConnected) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       const [expensesData, categoriesData] = await Promise.all([
         expenseService.getExpenses(currentBusiness.id),
         expenseService.getCategories(currentBusiness.id)
       ]);
-      
+
       setExpenses(expensesData);
       setCategories(categoriesData);
+
+      // Cache the data
+      dataCache.set('expenses_data', currentBusiness.id, { expenses: expensesData, categories: categoriesData }).catch(() => {});
     } catch (error) {
       console.error('Error loading data:', error);
       showNetworkAwareError(error, t('common.error'), t('expenses.loadFailed'), isConnected);
@@ -115,7 +145,7 @@ export default function ExpensesScreen() {
         setLoading(false);
       }
     }
-  }, [currentBusiness?.id, t]);
+  }, [currentBusiness?.id, t, isConnected]);
 
   const filterExpenses = useCallback(() => {
     let filtered = expenses;

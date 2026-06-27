@@ -26,6 +26,7 @@ import { useDebounce } from '@/src/hooks/useDebounce';
 import { useRouter } from 'expo-router';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { dataCache } from '@/src/lib/dataCache';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -49,12 +50,19 @@ export default function CustomersScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const router = useRouter();
-  const { isConnected } = useNetwork();
+  const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     loadCustomers();
   }, []);
+
+  // Auto-refetch when coming back online
+  useEffect(() => {
+    if (wasOffline && isConnected) {
+      loadCustomers(true);
+    }
+  }, [wasOffline, isConnected]);
 
   useEffect(() => {
     filterCustomers();
@@ -66,10 +74,31 @@ export default function CustomersScreen() {
     if (!isRefresh) {
       setLoading(true);
     }
-    
+
+    // Cache-first: restore from cache immediately
+    if (!isRefresh) {
+      try {
+        const cached = await dataCache.get<any[]>('customers', currentBusiness.id);
+        if (cached) {
+          setCustomers(cached.data);
+          setLoading(false);
+        }
+      } catch {}
+    }
+
+    // If offline, stop here
+    if (!isConnected) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       const data = await customerService.getCustomers(currentBusiness.id);
       setCustomers(data);
+
+      // Cache customers
+      dataCache.set('customers', currentBusiness.id, data).catch(() => {});
       
       // Count platforms manually
       const platformCounts: Record<string, number> = { all: data.length };

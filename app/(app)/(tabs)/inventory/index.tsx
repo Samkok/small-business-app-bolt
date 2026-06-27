@@ -43,6 +43,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { dataCache } from '@/src/lib/dataCache';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -101,7 +102,7 @@ export default function InventoryScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { isConnected } = useNetwork();
+  const { isConnected, wasOffline } = useNetwork();
   const flatListRef = useRef<FlatList>(null);
   const historyFlatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -111,7 +112,18 @@ export default function InventoryScreen() {
     loadData();
   }, []);
 
+  // Auto-refetch when coming back online
   useEffect(() => {
+    if (wasOffline && isConnected) {
+      loadData(true);
+    }
+  }, [wasOffline, isConnected]);
+
+  useEffect(() => {
+    if (!isConnected) {
+      glowAnim.setValue(1);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -120,7 +132,7 @@ export default function InventoryScreen() {
     );
     loop.start();
     return () => loop.stop();
-  }, [glowAnim]);
+  }, [glowAnim, isConnected]);
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -147,6 +159,35 @@ export default function InventoryScreen() {
       setLoading(true);
     }
 
+    // Cache-first: restore from cache immediately
+    if (!isRefresh) {
+      try {
+        const cachedProducts = await dataCache.get<any[]>('products', currentBusiness.id);
+        const cachedMeta = await dataCache.get<{ batchHistory: any[]; totalProducts: number; lowStockCount: number; totalArchivedProducts: number }>('inventory_meta', currentBusiness.id);
+        if (cachedProducts) {
+          setProducts(cachedProducts.data);
+          setFilteredProducts(cachedProducts.data);
+        }
+        if (cachedMeta) {
+          setBatchHistory(cachedMeta.data.batchHistory);
+          setFilteredBatchHistory(cachedMeta.data.batchHistory);
+          setTotalProducts(cachedMeta.data.totalProducts);
+          setLowStockCount(cachedMeta.data.lowStockCount);
+          setTotalArchivedProducts(cachedMeta.data.totalArchivedProducts);
+        }
+        if (cachedProducts || cachedMeta) {
+          setLoading(false);
+        }
+      } catch {}
+    }
+
+    // If offline, stop here - display cached data only
+    if (!isConnected) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       const [batchData, totalCount, lowStockProducts, archivedCount] = await Promise.all([
         batchImportService.getBatchImports(currentBusiness.id),
@@ -160,6 +201,14 @@ export default function InventoryScreen() {
       setTotalProducts(totalCount);
       setLowStockCount(lowStockProducts.length);
       setTotalArchivedProducts(archivedCount);
+
+      // Cache metadata
+      dataCache.set('inventory_meta', currentBusiness.id, {
+        batchHistory: batchData,
+        totalProducts: totalCount,
+        lowStockCount: lowStockProducts.length,
+        totalArchivedProducts: archivedCount,
+      }).catch(() => {});
 
       // Reset pagination and load first page of products
       if (isRefresh) {
@@ -191,7 +240,8 @@ export default function InventoryScreen() {
 
   const loadProducts = async (page: number, reset: boolean = false) => {
     if (!currentBusiness?.id) return;
-    
+    if (!isConnected) return;
+
     try {
       const offset = page * PRODUCTS_PER_PAGE;
       const productsData = await productService.getProducts(currentBusiness.id, PRODUCTS_PER_PAGE, offset);
@@ -256,6 +306,11 @@ export default function InventoryScreen() {
           setUnitPricesCache(prev => ({ ...prev, ...newPriceEntries }));
         }
       }
+
+      // Cache first page products (up to 50)
+      if (reset && currentBusiness?.id) {
+        dataCache.set('products', currentBusiness.id, productsData.slice(0, 50)).catch(() => {});
+      }
     } catch (error) {
       console.error('Error loading products:', error);
       showNetworkAwareError(error, t('common.error'), 'Failed to load products', isConnected);
@@ -264,6 +319,7 @@ export default function InventoryScreen() {
 
   const loadArchivedProducts = async (page: number, reset: boolean = false) => {
     if (!currentBusiness?.id) return;
+    if (!isConnected) return;
 
     try {
       const offset = page * PRODUCTS_PER_PAGE;
@@ -301,7 +357,7 @@ export default function InventoryScreen() {
   };
 
   const loadMoreProducts = useCallback(async () => {
-    if (loadingMore || !hasMoreProducts || isSearching) return;
+    if (loadingMore || !hasMoreProducts || isSearching || !isConnected) return;
 
     setLoadingMore(true);
     try {
@@ -568,6 +624,18 @@ export default function InventoryScreen() {
     if (!currentBusiness?.id || searchQuery.trim() === '') return;
 
     setIsSearching(true);
+
+    // If offline, filter locally
+    if (!isConnected) {
+      const query = searchQuery.toLowerCase();
+      const localResults = products.filter((p: any) =>
+        p.name?.toLowerCase().includes(query) || p.barcode?.toLowerCase().includes(query)
+      );
+      setSearchResults(localResults);
+      setFilteredProducts(localResults);
+      return;
+    }
+
     try {
       const results = showArchived
         ? await productService.searchArchivedProducts(currentBusiness.id, searchQuery)
@@ -582,7 +650,13 @@ export default function InventoryScreen() {
       }
     } catch (error) {
       console.error('Error searching products:', error);
-      Alert.alert('Error', 'Failed to search products');
+      // Fallback to local filter on error
+      const query = searchQuery.toLowerCase();
+      const localResults = products.filter((p: any) =>
+        p.name?.toLowerCase().includes(query) || p.barcode?.toLowerCase().includes(query)
+      );
+      setSearchResults(localResults);
+      setFilteredProducts(localResults);
     }
   };
 
@@ -958,7 +1032,6 @@ export default function InventoryScreen() {
                 <Animated.View style={{
                   marginTop: 8,
                   opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-                  transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] }) }],
                 }}>
                   <TouchableOpacity
                     style={[styles.insightButton, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe', borderColor: isDark ? '#2563eb' : '#93c5fd', borderWidth: 1 }]}

@@ -27,6 +27,7 @@ import NotificationModal from '@/src/components/notifications/NotificationModal'
 import { useNotifications } from '@/src/context/NotificationContext';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { dataCache } from '@/src/lib/dataCache';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -73,13 +74,18 @@ export default function DashboardScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
-  const { isConnected } = useNetwork();
-  console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
+  const { isConnected, wasOffline } = useNetwork();
   const router = useRouter();
 
   useEffect(() => {
     loadDashboardData();
   }, [currentBusiness, selectedMonth]);
+
+  useEffect(() => {
+    if (wasOffline && isConnected && currentBusiness?.id) {
+      loadDashboardData(true);
+    }
+  }, [wasOffline, isConnected]);
 
   const handleNewSale = useCallback(() => {
     // Use router.navigate instead of router.push to properly handle tab navigation
@@ -92,19 +98,40 @@ export default function DashboardScreen() {
       setLoading(false);
       return;
     }
-    
-    console.log('DashboardScreen: Loading data for profile ID:', currentBusiness.id);
+
+    const monthKey = `${selectedMonth.getFullYear()}_${selectedMonth.getMonth() + 1}`;
+    const businessId = currentBusiness.id;
+
     if (!isRefresh) {
       setLoading(true);
     }
-    
+
     setError(null);
-    
+
+    // Step 1: Try loading from cache first
+    const cachedStats = await dataCache.get<DashboardStats>(`dashboard_stats_${monthKey}`, businessId);
+    const cachedProducts = await dataCache.get<TopProduct[]>(`dashboard_top_products_${monthKey}`, businessId);
+    const cachedCustomers = await dataCache.get<TopCustomer[]>(`dashboard_top_customers_${monthKey}`, businessId);
+
+    if (cachedStats) {
+      setStats(cachedStats.data);
+      setTopProducts(cachedProducts?.data || []);
+      setTopCustomers(cachedCustomers?.data || []);
+      setLoading(false);
+    }
+
+    // Step 2: If offline, stop here
+    if (!isConnected) {
+      if (!cachedStats) {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
-      // Check if environment variables are properly set
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-      
+
       if (!supabaseUrl || !supabaseKey) {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
@@ -113,22 +140,29 @@ export default function DashboardScreen() {
       const month = selectedMonth.getMonth() + 1;
 
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(currentBusiness.id, year, month),
-        reportsService.getTopProducts(currentBusiness.id, 3, year, month),
-        reportsService.getTopCustomers(currentBusiness.id, 3, year, month)
+        reportsService.getDashboardStats(businessId, year, month),
+        reportsService.getTopProducts(businessId, 3, year, month),
+        reportsService.getTopCustomers(businessId, 3, year, month)
       ]);
-      
+
       setStats(dashboardStats);
       setTopProducts(products);
       setTopCustomers(customers);
       setError(null);
+
+      // Cache the fresh data
+      await dataCache.set(`dashboard_stats_${monthKey}`, businessId, dashboardStats);
+      await dataCache.set(`dashboard_top_products_${monthKey}`, businessId, products);
+      await dataCache.set(`dashboard_top_customers_${monthKey}`, businessId, customers);
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
-      setError(errorMessage);
+      if (!cachedStats) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
+        setError(errorMessage);
 
-      if (Platform.OS !== 'web') {
-        showNetworkAwareError(err, t('common.error'), errorMessage, isConnected);
+        if (Platform.OS !== 'web') {
+          showNetworkAwareError(err, t('common.error'), errorMessage, isConnected);
+        }
       }
     } finally {
       if (isRefresh) {
