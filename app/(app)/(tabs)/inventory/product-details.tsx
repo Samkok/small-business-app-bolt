@@ -25,6 +25,8 @@ import { productTransactionService } from '@/src/services/productTransactions';
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useTranslation } from '@/src/locales';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 
 export default function ProductDetailsScreen() {
   const [product, setProduct] = useState<any>(null);
@@ -44,6 +46,7 @@ export default function ProductDetailsScreen() {
   const { currentBusiness } = useAuth();
   const { formatPrice } = useCurrencyContext();
   const { t } = useTranslation();
+  const { isConnected } = useNetwork();
 
   useEffect(() => {
     if (productId) {
@@ -100,7 +103,7 @@ export default function ProductDetailsScreen() {
       setFinancialSummary(summaryData);
     } catch (error) {
       console.error('Error loading product details:', error);
-      Alert.alert(t('common.error'), t('errors.loadFailed'));
+      showNetworkAwareError(error, t('common.error'), t('errors.loadFailed'), isConnected);
     } finally {
       setLoading(false);
       if (isRefresh) {

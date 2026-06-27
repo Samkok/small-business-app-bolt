@@ -29,6 +29,8 @@ import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag,
 import { expenseService } from '@/src/services/expenses';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -59,6 +61,7 @@ export default function ExpensesScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { isConnected } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const periodFilters = [
@@ -104,7 +107,7 @@ export default function ExpensesScreen() {
       setCategories(categoriesData);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), t('expenses.loadFailed'));
+      showNetworkAwareError(error, t('common.error'), t('expenses.loadFailed'), isConnected);
     } finally {
       if (isRefresh) {
         setRefreshing(false);

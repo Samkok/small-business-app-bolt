@@ -41,6 +41,8 @@ import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckout
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -99,6 +101,7 @@ export default function InventoryScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { isConnected } = useNetwork();
   const flatListRef = useRef<FlatList>(null);
   const historyFlatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -176,7 +179,7 @@ export default function InventoryScreen() {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), 'Failed to load inventory data');
+      showNetworkAwareError(error, t('common.error'), 'Failed to load inventory data', isConnected);
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -255,7 +258,7 @@ export default function InventoryScreen() {
       }
     } catch (error) {
       console.error('Error loading products:', error);
-      Alert.alert(t('common.error'), 'Failed to load products');
+      showNetworkAwareError(error, t('common.error'), 'Failed to load products', isConnected);
     }
   };
 
@@ -293,7 +296,7 @@ export default function InventoryScreen() {
       setCurrentPage(page);
     } catch (error) {
       console.error('Error loading archived products:', error);
-      Alert.alert(t('common.error'), 'Failed to load archived products');
+      showNetworkAwareError(error, t('common.error'), 'Failed to load archived products', isConnected);
     }
   };
 

@@ -21,6 +21,7 @@ import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/bu
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { dataCleanupRegistry } from '../utils/dataCleanupRegistry';
 import { isNetworkError } from '../lib/network';
+import { dataCache } from '../lib/dataCache';
 
 import { AuthContextType, Business, UserProfile } from './authTypes';
 import {
@@ -158,6 +159,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshSessionIfNeeded,
   });
 
+  // ── Auth data caching helpers ────────────────────────────────────────────────
+  const cacheAuthData = useCallback(async (userId: string, profile: UserProfile, businesses: Business[], business: Business | null) => {
+    try {
+      await AsyncStorage.setItem(`cached_profile_${userId}`, JSON.stringify(profile));
+      await AsyncStorage.setItem(`cached_businesses_${userId}`, JSON.stringify(businesses));
+      if (business) {
+        await AsyncStorage.setItem(`cached_current_business_${userId}`, JSON.stringify(business));
+      }
+    } catch (e) {
+      console.log('[Auth] Failed to cache auth data:', e);
+    }
+  }, []);
+
+  const restoreCachedAuthData = useCallback(async (userId: string): Promise<boolean> => {
+    try {
+      const [profileStr, businessesStr, currentStr] = await Promise.all([
+        AsyncStorage.getItem(`cached_profile_${userId}`),
+        AsyncStorage.getItem(`cached_businesses_${userId}`),
+        AsyncStorage.getItem(`cached_current_business_${userId}`),
+      ]);
+      if (profileStr && businessesStr) {
+        const profile = JSON.parse(profileStr) as UserProfile;
+        const businesses = JSON.parse(businessesStr) as Business[];
+        const business = currentStr ? JSON.parse(currentStr) as Business : null;
+        if (mounted.current) {
+          setUserProfile(profile);
+          setUserBusinesses(businesses);
+          setCurrentBusiness(business);
+          setLoading(false);
+          setDataLoadingState('loaded');
+        }
+        console.log('[Auth] Restored auth data from cache');
+        return true;
+      }
+    } catch (e) {
+      console.log('[Auth] Failed to restore cached auth data:', e);
+    }
+    return false;
+  }, []);
+
   // ── Load auth data ───────────────────────────────────────────────────────────
   const loadAuthData = async (userId: string) => {
     if (isLoadingAuthDataRef.current) return;
@@ -219,6 +260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
             setDataLoadingState('loaded');
           }
+          // Cache successful auth data for offline access
+          cacheAuthData(userId, data, businesses, determinedBusiness ?? null).catch(() => {});
           isLoadingAuthDataRef.current = false;
           return;
         } else {
@@ -265,7 +308,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (lastError) {
       console.error('All auth data loading attempts failed:', lastError);
-      if (mounted.current) {
+      // Try to restore cached data so the app remains functional offline
+      const restored = await restoreCachedAuthData(userId);
+      if (!restored && mounted.current) {
         setUserProfile(null);
         setUserBusinesses([]);
         setCurrentBusiness(null);
@@ -298,8 +343,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         // Don't sign out on network errors -- trust any locally cached session
         if (isNetworkError(error)) {
-          console.log('[Auth] Network error on getSession, keeping local state');
-          if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
+          console.log('[Auth] Network error on getSession, restoring from cache');
+          // Try to get userId from any previously stored session
+          const keys = await AsyncStorage.getAllKeys();
+          const profileKey = keys.find(k => k.startsWith('cached_profile_'));
+          if (profileKey) {
+            const userId = profileKey.replace('cached_profile_', '');
+            await restoreCachedAuthData(userId);
+          } else if (mounted.current) {
+            setLoading(false);
+            setDataLoadingState('loaded');
+          }
           return;
         }
         if (isInvalidTokenError(error)) {
@@ -319,11 +373,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }).catch(async error => {
       if (isNetworkError(error)) {
-        console.log('[Auth] Network error on getSession catch, keeping local state');
+        console.log('[Auth] Network error on getSession catch, restoring from cache');
+        const keys = await AsyncStorage.getAllKeys();
+        const profileKey = keys.find(k => k.startsWith('cached_profile_'));
+        if (profileKey) {
+          const userId = profileKey.replace('cached_profile_', '');
+          await restoreCachedAuthData(userId);
+        } else if (mounted.current) {
+          setLoading(false);
+          setDataLoadingState('loaded');
+        }
       } else if (isInvalidTokenError(error)) {
         await handleInvalidToken();
+        if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
+      } else {
+        if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
       }
-      if (mounted.current) { setLoading(false); setDataLoadingState('loaded'); }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

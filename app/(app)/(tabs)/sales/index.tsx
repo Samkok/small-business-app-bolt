@@ -36,6 +36,8 @@ import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCount } from '@/src/utils/profitCalculation';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
@@ -105,6 +107,7 @@ export default function SalesScreen() {
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
+  const { isConnected } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Detect business mismatch in sales data
@@ -368,7 +371,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert(t('common.error'), t('errors.loadFailed'));
+      showNetworkAwareError(error, t('common.error'), t('errors.loadFailed'), isConnected);
       setLoading(false);
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
@@ -467,7 +470,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error loading sales data:', error);
-      Alert.alert(t('common.error'), t('sales.loadFailed'));
+      showNetworkAwareError(error, t('common.error'), t('sales.loadFailed'), isConnected);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -506,7 +509,7 @@ export default function SalesScreen() {
       }
     } catch (error) {
       console.error('Error refreshing data:', error);
-      Alert.alert(t('common.error'), t('sales.refreshFailed'));
+      showNetworkAwareError(error, t('common.error'), t('sales.refreshFailed'), isConnected);
     } finally {
       setRefreshing(false);
     }

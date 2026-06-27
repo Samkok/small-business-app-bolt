@@ -25,6 +25,8 @@ import { reportsService } from '@/src/services/reports';
 import MonthPicker from '@/src/components/ui/MonthPicker';
 import NotificationModal from '@/src/components/notifications/NotificationModal';
 import { useNotifications } from '@/src/context/NotificationContext';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -71,6 +73,7 @@ export default function DashboardScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
+  const { isConnected } = useNetwork();
   console.log('DashboardScreen: Profile on render:', currentBusiness ? `ID: ${currentBusiness.id}` : 'null'); 
   const router = useRouter();
 
@@ -119,14 +122,13 @@ export default function DashboardScreen() {
       setTopProducts(products);
       setTopCustomers(customers);
       setError(null);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
       setError(errorMessage);
-      
-      // Only show alert on mobile platforms, show inline error on web
+
       if (Platform.OS !== 'web') {
-        Alert.alert(t('common.error'), errorMessage);
+        showNetworkAwareError(err, t('common.error'), errorMessage, isConnected);
       }
     } finally {
       if (isRefresh) {

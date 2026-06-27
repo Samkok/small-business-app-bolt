@@ -24,6 +24,8 @@ import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Ta
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { useRouter } from 'expo-router';
+import { showNetworkAwareError } from '@/src/utils/offlineAlert';
+import { useNetwork } from '@/src/context/NetworkContext';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -47,6 +49,7 @@ export default function CustomersScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const router = useRouter();
+  const { isConnected } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -106,7 +109,7 @@ export default function CustomersScreen() {
       setAvailablePlatforms(platforms);
     } catch (error) {
       console.error('Error loading customers:', error);
-      Alert.alert(t('common.error'), 'Failed to load customers');
+      showNetworkAwareError(error, t('common.error'), 'Failed to load customers', isConnected);
     } finally {
       if (isRefresh) {
         setRefreshing(false);
