@@ -20,7 +20,7 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCustomerCard, SkeletonCard, SkeletonLoader, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { CustomerCard } from '@/src/components/customers/CustomerCard';
 import CustomerForm from '@/src/components/customers/CustomerForm';
-import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag, X } from 'lucide-react-native';
+import { Users, Plus, Search, Filter, UserPlus, Phone, MapPin, MessageCircle, Tag, X, ArrowUpDown } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { useRouter } from 'expo-router';
@@ -37,6 +37,8 @@ export default function CustomersScreen() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc' | 'purchase_asc' | 'purchase_desc'>('name_asc');
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [availablePlatforms, setAvailablePlatforms] = useState<Array<{value: string, label: string, count: number}>>([
     { value: 'all', label: 'All Platforms', count: 0 },
     { value: 'facebook', label: 'Facebook', count: 0 },
@@ -66,7 +68,7 @@ export default function CustomersScreen() {
 
   useEffect(() => {
     filterCustomers();
-  }, [customers, debouncedSearchQuery, selectedPlatform]);
+  }, [customers, debouncedSearchQuery, selectedPlatform, sortBy]);
 
   const loadCustomers = useCallback(async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -165,8 +167,28 @@ export default function CustomersScreen() {
       filtered = filtered.filter(customer => customer.platform === selectedPlatform);
     }
 
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name_asc':
+          return (a.name || '').localeCompare(b.name || '');
+        case 'name_desc':
+          return (b.name || '').localeCompare(a.name || '');
+        case 'date_asc':
+          return (a.created_at || '').localeCompare(b.created_at || '');
+        case 'date_desc':
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        case 'purchase_asc':
+          return (a.updated_at || '').localeCompare(b.updated_at || '');
+        case 'purchase_desc':
+          return (b.updated_at || '').localeCompare(a.updated_at || '');
+        default:
+          return 0;
+      }
+    });
+
     setFilteredCustomers(filtered);
-  }, [customers, debouncedSearchQuery, selectedPlatform]);
+  }, [customers, debouncedSearchQuery, selectedPlatform, sortBy]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -364,36 +386,67 @@ export default function CustomersScreen() {
           )}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {availablePlatforms.map((platform) => (
-            <TouchableOpacity
-              key={platform.value}
-              style={[
-                styles.filterButton,
-                {
-                  backgroundColor: selectedPlatform === platform.value 
-                    ? '#2563eb' 
-                    : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: selectedPlatform === platform.value 
-                    ? '#2563eb' 
-                    : (isDark ? '#4b5563' : '#d1d5db'),
-                }
-              ]}
-              onPress={() => setSelectedPlatform(platform.value)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                { 
-                  color: selectedPlatform === platform.value 
-                    ? '#ffffff' 
-                    : (isDark ? '#f9fafb' : '#374151') 
-                }
-              ]}>
-                {platform.label} ({platform.count})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer} contentContainerStyle={{ flexGrow: 1 }}>
+            {availablePlatforms.map((platform) => (
+              <TouchableOpacity
+                key={platform.value}
+                style={[
+                  styles.filterButton,
+                  {
+                    backgroundColor: selectedPlatform === platform.value
+                      ? '#2563eb'
+                      : (isDark ? '#374151' : '#f3f4f6'),
+                    borderColor: selectedPlatform === platform.value
+                      ? '#2563eb'
+                      : (isDark ? '#4b5563' : '#d1d5db'),
+                  }
+                ]}
+                onPress={() => setSelectedPlatform(platform.value)}
+              >
+                <Text style={[
+                  styles.filterButtonText,
+                  {
+                    color: selectedPlatform === platform.value
+                      ? '#ffffff'
+                      : (isDark ? '#f9fafb' : '#374151')
+                  }
+                ]}>
+                  {platform.label} ({platform.count})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity
+            style={[styles.sortButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6', borderColor: isDark ? '#4b5563' : '#d1d5db' }]}
+            onPress={() => setShowSortMenu(!showSortMenu)}
+          >
+            <ArrowUpDown size={16} color={isDark ? '#f9fafb' : '#374151'} />
+          </TouchableOpacity>
+        </View>
+
+        {showSortMenu && (
+          <View style={[styles.sortMenu, { backgroundColor: isDark ? '#374151' : '#ffffff', borderColor: isDark ? '#4b5563' : '#e5e7eb' }]}>
+            {([
+              { key: 'name_asc', label: 'Name A-Z' },
+              { key: 'name_desc', label: 'Name Z-A' },
+              { key: 'date_desc', label: 'Newest First' },
+              { key: 'date_asc', label: 'Oldest First' },
+              { key: 'purchase_desc', label: 'Recent Purchase' },
+              { key: 'purchase_asc', label: 'Oldest Purchase' },
+            ] as const).map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.sortOption, sortBy === option.key && { backgroundColor: isDark ? '#1f2937' : '#eff6ff' }]}
+                onPress={() => { setSortBy(option.key); setShowSortMenu(false); }}
+              >
+                <Text style={[styles.sortOptionText, { color: sortBy === option.key ? '#2563eb' : (isDark ? '#f9fafb' : '#374151') }]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Stats Cards */}
@@ -536,7 +589,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filterContainer: {
+    flex: 1,
     marginBottom: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sortButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortMenu: {
+    borderWidth: 1,
+    borderRadius: 10,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  sortOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  sortOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   filterButton: {
     paddingVertical: 8,
