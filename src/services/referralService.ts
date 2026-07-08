@@ -157,7 +157,7 @@ export const referralService = {
 
   async shareReferralLink(code: string): Promise<boolean> {
     try {
-      const link = `https://bizmanage.app/refer/${code}`;
+      const link = `https://bizmanage.xtremon.com/refer/${code}`;
       const message = `Join me on BizManage - the best app for managing your business! Use my referral code ${code} and get bonus credits when you subscribe. ${link}`;
 
       const result = await Share.share({

@@ -476,7 +476,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleDeepLink = async (url: string) => {
       if (!url) return;
 
-      // Handle referral deep links: businessmanager://refer/{code} or https://bizmanage.app/refer/{code}
+      // Handle referral deep links: businessmanager://refer/{code} or https://bizmanage.xtremon.com/refer/{code}
       const referralMatch = url.match(/\/refer\/([A-Za-z0-9]+)/);
       if (referralMatch) {
         const code = referralMatch[1].toUpperCase();

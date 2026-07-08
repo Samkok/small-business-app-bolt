@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
 
     // Build referral link
     const referralLink = referralCode
-      ? `https://bizmanage.app/refer/${referralCode.code}`
+      ? `https://bizmanage.xtremon.com/refer/${referralCode.code}`
       : null;
 
     // Enrich history with names
