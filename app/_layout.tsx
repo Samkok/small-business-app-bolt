@@ -16,6 +16,7 @@ import { SaleDetailsModalProvider } from '@/src/context/SaleDetailsModalContext'
 import { SubscriptionProvider } from '@/src/context/SubscriptionContext';
 import { NetworkProvider } from '@/src/context/NetworkContext';
 import { CurrencyProvider } from '@/src/context/CurrencyContext';
+import { ReferralProvider } from '@/src/context/ReferralContext';
 import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
 import { PendingSalesSyncModal } from '@/src/components/sales/PendingSalesSyncModal';
 import '@/src/locales';
@@ -30,6 +31,7 @@ export default function RootLayout() {
           <NetworkProvider>
             <AuthProvider>
               <CurrencyProvider>
+              <ReferralProvider>
               <SubscriptionProvider>
                 <BusinessSwitchProvider>
                   <SaleDetailsModalProvider>
@@ -50,6 +52,7 @@ export default function RootLayout() {
                   </SaleDetailsModalProvider>
                 </BusinessSwitchProvider>
               </SubscriptionProvider>
+              </ReferralProvider>
               </CurrencyProvider>
             </AuthProvider>
           </NetworkProvider>

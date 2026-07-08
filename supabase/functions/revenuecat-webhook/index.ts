@@ -146,6 +146,133 @@ function getCancelReasonMessage(reason: string): string {
   }
 }
 
+// Process referral reward when a referred user subscribes
+async function processReferralReward(
+  supabase: any,
+  event: RevenueCatEvent['event'],
+  eventId: string,
+  tier: string,
+  productId: string | null
+) {
+  const userId = event.app_user_id;
+  log(eventId, 'INFO', 'Checking for pending referral reward...');
+
+  try {
+    // Find referral event for this user that is in 'signed_up' status
+    const { data: referralEvent } = await supabase
+      .from('referral_events')
+      .select('id, referrer_user_id, referral_code_id')
+      .eq('referee_user_id', userId)
+      .eq('status', 'signed_up')
+      .order('signed_up_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!referralEvent) {
+      log(eventId, 'INFO', 'No pending referral found for this user');
+      return;
+    }
+
+    log(eventId, 'INFO', `Found referral event ${referralEvent.id}, referrer: ${referralEvent.referrer_user_id}`);
+
+    // Get active reward rules matching this tier
+    const { data: rules } = await supabase
+      .from('referral_reward_rules')
+      .select('*')
+      .eq('is_active', true)
+      .contains('applies_to_tiers', [tier])
+      .limit(1)
+      .maybeSingle();
+
+    if (!rules) {
+      log(eventId, 'INFO', `No active reward rules for tier: ${tier}`);
+      // Still mark the event as subscribed even without rewards
+      await supabase
+        .from('referral_events')
+        .update({
+          status: 'subscribed',
+          subscribed_at: new Date().toISOString(),
+          subscription_product_id: productId,
+          subscription_tier: tier,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', referralEvent.id);
+      return;
+    }
+
+    log(eventId, 'INFO', `Applying rule: ${rules.rule_name} (referrer=${rules.referrer_credits}, referee=${rules.referee_credits})`);
+
+    // Award referrer credits
+    if (rules.referrer_credits > 0) {
+      const { data: referrerLedgerId } = await supabase.rpc('award_credits', {
+        p_user_id: referralEvent.referrer_user_id,
+        p_amount: rules.referrer_credits,
+        p_transaction_type: 'referral_reward_referrer',
+        p_reference_id: referralEvent.id,
+        p_description: `Referral reward: friend subscribed to ${tier}`,
+        p_expiry_days: rules.credit_expiry_days
+      });
+      log(eventId, 'SUCCESS', `Awarded ${rules.referrer_credits} credits to referrer, ledger: ${referrerLedgerId}`);
+    }
+
+    // Award referee credits
+    if (rules.referee_credits > 0) {
+      const { data: refereeLedgerId } = await supabase.rpc('award_credits', {
+        p_user_id: userId,
+        p_amount: rules.referee_credits,
+        p_transaction_type: 'referral_reward_referee',
+        p_reference_id: referralEvent.id,
+        p_description: `Welcome reward for joining via referral`,
+        p_expiry_days: rules.credit_expiry_days
+      });
+      log(eventId, 'SUCCESS', `Awarded ${rules.referee_credits} credits to referee, ledger: ${refereeLedgerId}`);
+    }
+
+    // Update referral event status to rewarded
+    await supabase
+      .from('referral_events')
+      .update({
+        status: 'rewarded',
+        subscribed_at: new Date().toISOString(),
+        rewarded_at: new Date().toISOString(),
+        subscription_product_id: productId,
+        subscription_tier: tier,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', referralEvent.id);
+
+    // Update referral code conversion count
+    await supabase.rpc('increment_referral_conversions', {
+      p_code_id: referralEvent.referral_code_id
+    }).catch(() => {
+      // Non-critical, increment manually as fallback
+      supabase
+        .from('referral_codes')
+        .update({ total_conversions: supabase.sql`total_conversions + 1`, updated_at: new Date().toISOString() })
+        .eq('id', referralEvent.referral_code_id);
+    });
+
+    // Send notification to referrer
+    await supabase.from('notifications').insert({
+      user_id: referralEvent.referrer_user_id,
+      business_id: null,
+      type: 'referral_reward',
+      title: 'Referral Reward Earned!',
+      message: `Your friend subscribed to ${tier}! You earned ${rules.referrer_credits} credits.`,
+      data: { referral_event_id: referralEvent.id, credits: rules.referrer_credits },
+      is_read: false,
+      created_at: new Date().toISOString()
+    }).catch((err: any) => {
+      log(eventId, 'WARN', 'Failed to send referrer notification: ' + err.message);
+    });
+
+    log(eventId, 'SUCCESS', `Referral rewards distributed successfully`);
+  } catch (error: any) {
+    log(eventId, 'ERROR', `Referral reward processing failed: ${error.message}`);
+    // Non-fatal - don't throw, the subscription activation should still succeed
+  }
+}
+
 // Shared handler for subscription activation (INITIAL_PURCHASE, RENEWAL, UNCANCELLATION)
 async function handleSubscriptionActivation(
   supabase: any,
@@ -394,7 +521,13 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      case 'INITIAL_PURCHASE':
+      case 'INITIAL_PURCHASE': {
+        await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
+        // Process referral reward only on initial purchase (not renewals)
+        await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        break;
+      }
+
       case 'RENEWAL':
       case 'UNCANCELLATION': {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);

@@ -22,6 +22,7 @@ import { notificationCleanupService } from '../utils/notificationCleanup';
 import { dataCleanupRegistry } from '../utils/dataCleanupRegistry';
 import { isNetworkError } from '../lib/network';
 import { dataCache } from '../lib/dataCache';
+import { referralService } from '../services/referralService';
 
 import { AuthContextType, Business, UserProfile } from './authTypes';
 import {
@@ -432,6 +433,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await AsyncStorage.removeItem('lastActivityTimestamp');
             await AsyncStorage.setItem('lastActivityTimestamp', Date.now().toString());
           } catch {}
+
+          // Auto-claim pending referral code on sign-in
+          (async () => {
+            try {
+              const pendingCode = await referralService.getPendingReferralCode();
+              if (pendingCode) {
+                await referralService.claimReferral(pendingCode);
+              }
+            } catch {}
+          })();
         }
 
         if (isExplicitSignOutRef.current) {
@@ -464,6 +475,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleDeepLink = async (url: string) => {
       if (!url) return;
+
+      // Handle referral deep links: businessmanager://refer/{code} or https://bizmanage.app/refer/{code}
+      const referralMatch = url.match(/\/refer\/([A-Za-z0-9]+)/);
+      if (referralMatch) {
+        const code = referralMatch[1].toUpperCase();
+        await referralService.storePendingReferralCode(code);
+        await referralService.recordClick(code);
+        return;
+      }
 
       // Handle PKCE flow: ?code=AUTH_CODE
       try {
