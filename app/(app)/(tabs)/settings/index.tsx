@@ -31,7 +31,8 @@ import {
   TriangleAlert as AlertTriangle,
   Crown,
   KeyRound,
-  Coins
+  Coins,
+  Gift
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
@@ -246,6 +247,13 @@ export default function SettingsScreen() {
           title={t('subscription.title')}
           subtitle={isSubscribed ? `${t('subscription.proPlan')} - ${t('subscription.active')}` : `${salesCountData.salesCount}/50 ${t('sales.salesUsed')}`}
           onPress={() => router.push('/settings/subscription')}
+        />
+
+        <SettingItem
+          icon={<Gift size={20} color="#10b981" />}
+          title="Refer & Earn"
+          subtitle="Invite friends, earn extra sales"
+          onPress={() => router.push('/settings/referrals')}
         />
 
         <SettingItem

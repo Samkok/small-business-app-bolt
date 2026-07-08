@@ -535,7 +535,7 @@ export default function DashboardScreen() {
 
           {/* Top Customers Section */}
           {topCustomers.length > 0 && (
-            <TouchableOpacity onPress={() => router.push('/top-customers')}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/top-customers', params: { year: String(selectedMonth.getFullYear()), month: String(selectedMonth.getMonth() + 1) } })}>
               <Card style={styles.topSection}>
                 <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                   {t('dashboard.topCustomersMonth')}

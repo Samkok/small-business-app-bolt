@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { X, User, Percent, Truck, Search, Check } from 'lucide-react-native';
+import { X, User, Percent, Truck, Search, Check, UserPlus } from 'lucide-react-native';
 import { Button } from '@/src/components/ui/Button';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -48,6 +48,13 @@ export default function SaleEditModal({
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+
+  // Inline create customer
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerPlatform, setNewCustomerPlatform] = useState<'facebook' | 'instagram' | 'telegram' | 'walk_in' | 'other'>('walk_in');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   // Discount
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed' | null>(null);
@@ -109,6 +116,30 @@ export default function SaleEditModal({
     setCustomerSearch('');
     setShowCustomerList(false);
   }, []);
+
+  const handleCreateCustomer = useCallback(async () => {
+    if (!newCustomerName.trim() || !businessId) return;
+    setCreatingCustomer(true);
+    try {
+      const created = await customerService.createCustomer({
+        name: newCustomerName.trim(),
+        phone: newCustomerPhone.trim() || undefined,
+        platform: newCustomerPlatform,
+        business_id: businessId,
+      });
+      setSelectedCustomer(created);
+      setCustomerSearch(created.name);
+      setShowCreateForm(false);
+      setShowCustomerList(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerPlatform('walk_in');
+    } catch {
+      // silently fail
+    } finally {
+      setCreatingCustomer(false);
+    }
+  }, [newCustomerName, newCustomerPhone, newCustomerPlatform, businessId]);
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -210,10 +241,78 @@ export default function SaleEditModal({
                   ))}
                 </View>
               )}
+              {showCustomerList && customers.length === 0 && !loadingCustomers && debouncedSearch.trim().length > 0 && (
+                <View style={[styles.noResultsRow, { borderColor }]}>
+                  <Text style={[styles.noResultsText, { color: labelColor }]}>No customers found</Text>
+                </View>
+              )}
               {selectedCustomer && (
                 <View style={[styles.selectedBadge, { backgroundColor: '#2563eb15' }]}>
                   <Check size={13} color="#2563eb" />
                   <Text style={[styles.selectedBadgeText, { color: '#2563eb' }]}>{selectedCustomer.name}</Text>
+                </View>
+              )}
+
+              {!selectedCustomer && !showCreateForm && (
+                <TouchableOpacity
+                  style={[styles.createCustomerBtn, { borderColor }]}
+                  onPress={() => { setShowCreateForm(true); setShowCustomerList(false); }}
+                >
+                  <UserPlus size={15} color="#2563eb" />
+                  <Text style={styles.createCustomerBtnText}>Create New Customer</Text>
+                </TouchableOpacity>
+              )}
+
+              {showCreateForm && !selectedCustomer && (
+                <View style={[styles.createForm, { backgroundColor: inputBg, borderColor }]}>
+                  <View style={styles.createFormHeader}>
+                    <Text style={[styles.createFormTitle, { color: textColor }]}>New Customer</Text>
+                    <TouchableOpacity onPress={() => setShowCreateForm(false)}>
+                      <X size={16} color={labelColor} />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={[styles.createFormInput, { color: textColor, borderColor, backgroundColor: bg }]}
+                    placeholder="Name *"
+                    placeholderTextColor={labelColor}
+                    value={newCustomerName}
+                    onChangeText={setNewCustomerName}
+                  />
+                  <TextInput
+                    style={[styles.createFormInput, { color: textColor, borderColor, backgroundColor: bg }]}
+                    placeholder="Phone (optional)"
+                    placeholderTextColor={labelColor}
+                    value={newCustomerPhone}
+                    onChangeText={setNewCustomerPhone}
+                    keyboardType="phone-pad"
+                  />
+                  <View style={styles.platformRow}>
+                    {(['walk_in', 'facebook', 'instagram', 'telegram', 'other'] as const).map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.platformChip,
+                          { backgroundColor: newCustomerPlatform === p ? '#2563eb' : bg, borderColor },
+                        ]}
+                        onPress={() => setNewCustomerPlatform(p)}
+                      >
+                        <Text style={[styles.platformChipText, { color: newCustomerPlatform === p ? '#fff' : labelColor }]}>
+                          {p === 'walk_in' ? 'Walk-in' : p.charAt(0).toUpperCase() + p.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.createConfirmBtn, !newCustomerName.trim() && { opacity: 0.5 }]}
+                    onPress={handleCreateCustomer}
+                    disabled={!newCustomerName.trim() || creatingCustomer}
+                  >
+                    {creatingCustomer ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.createConfirmBtnText}>Create & Select</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -454,6 +553,85 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontSize: 12,
     marginTop: 4,
+  },
+  noResultsRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+    marginTop: 4,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 13,
+  },
+  createCustomerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+    borderStyle: 'dashed',
+    alignSelf: 'flex-start',
+  },
+  createCustomerBtnText: {
+    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  createForm: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  createFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  createFormTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  createFormInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    fontSize: 14,
+  },
+  platformRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  platformChip: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  platformChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  createConfirmBtn: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  createConfirmBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',

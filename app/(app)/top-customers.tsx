@@ -8,7 +8,7 @@ import {
   RefreshControl,
   TextInput
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
@@ -28,6 +28,7 @@ interface TopCustomer {
 
 export default function TopCustomersScreen() {
   const router = useRouter();
+  const { year: yearParam, month: monthParam } = useLocalSearchParams<{ year?: string; month?: string }>();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const [customers, setCustomers] = useState<TopCustomer[]>([]);
@@ -36,6 +37,9 @@ export default function TopCustomersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const targetYear = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+  const targetMonth = monthParam ? parseInt(monthParam, 10) : new Date().getMonth() + 1;
 
   useEffect(() => {
     loadTopCustomers();
@@ -47,14 +51,13 @@ export default function TopCustomersScreen() {
 
   const loadTopCustomers = async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
-    
+
     if (!isRefresh) {
       setLoading(true);
     }
-    
+
     try {
-      // Get all customers who made purchases this month (no limit)
-      const data = await reportsService.getTopCustomers(currentBusiness.id, 100);
+      const data = await reportsService.getTopCustomers(currentBusiness.id, 100, targetYear, targetMonth);
       setCustomers(data);
       setFilteredCustomers(data);
     } catch (error) {
@@ -253,11 +256,11 @@ export default function TopCustomersScreen() {
           <View style={styles.summaryHeader}>
             <Calendar size={20} color="#2563eb" />
             <Text style={[styles.summaryTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              This Month's Performance
+              {new Date(targetYear, targetMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })} Performance
             </Text>
           </View>
           <Text style={[styles.summaryText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            {searchQuery ? `${filteredCustomers.length} of ${customers.length} customers` : `${customers.length} customers made purchases this month`}
+            {searchQuery ? `${filteredCustomers.length} of ${customers.length} customers` : `${customers.length} customers made purchases`}
           </Text>
         </Card>
 
