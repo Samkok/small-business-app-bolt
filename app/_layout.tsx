@@ -1,6 +1,5 @@
-import { useFrameworkReady } from '@/hooks/useFrameworkReady'import 'react-native-get-random-values';
+import 'react-native-get-random-values';
 import React from 'react';
-import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
