@@ -1,6 +1,5 @@
 import 'react-native-get-random-values';
 import React from 'react';
-import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -41,6 +40,7 @@ export default function RootLayout() {
                           <Stack screenOptions={{ headerShown: false }}>
                             <Stack.Screen name="(auth)" />
                             <Stack.Screen name="(app)" />
+                            <Stack.Screen name="refer/[code]" />
                             <Stack.Screen name="+not-found" />
                           </Stack>
                           <NetworkBanner />
