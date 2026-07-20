@@ -76,6 +76,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Clean up profile images from storage
+    const { data: profileImages } = await supabaseAdmin.storage
+      .from("profile-images")
+      .list(userId);
+
+    if (profileImages && profileImages.length > 0) {
+      const paths = profileImages.map((f) => `${userId}/${f.name}`);
+      await supabaseAdmin.storage.from("profile-images").remove(paths).catch((err: any) => {
+        console.error("Non-critical: failed to clean profile images:", err);
+      });
+    }
+
+    // Clean up orphaned subscription/sales-count rows
+    await supabaseAdmin.from("user_subscriptions").delete().eq("user_id", userId).catch(() => {});
+    await supabaseAdmin.from("user_sales_counts").delete().eq("user_id", userId).catch(() => {});
+    await supabaseAdmin.from("user_credit_balances").delete().eq("user_id", userId).catch(() => {});
+    await supabaseAdmin.from("credit_ledger").delete().eq("user_id", userId).catch(() => {});
+    await supabaseAdmin.from("referral_codes").delete().eq("user_id", userId).catch(() => {});
+
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
