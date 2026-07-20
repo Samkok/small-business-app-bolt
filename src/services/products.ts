@@ -395,7 +395,6 @@ export const productService = {
   },
 
   async recalculateProductCost(productId: string) {
-    // Get current cost before recalculation
     const { data: currentProduct } = await supabase
       .from('products')
       .select('cost_per_unit, business_id')
@@ -406,27 +405,28 @@ export const productService = {
 
     const { data: imports, error: importsError } = await supabase
       .from('inventory_imports')
-      .select('quantity, final_unit_cost_per_item, imported_by')
+      .select('quantity, final_unit_cost_per_item, imported_by, unit_id, units(conversion_factor_to_base)')
       .eq('product_id', productId)
       .eq('status', 'completed')
       .order('created_at');
 
     if (importsError) throw importsError;
 
-    let totalQuantity = 0;
+    let totalBaseQuantity = 0;
     let totalCost = 0;
 
     imports.forEach(imp => {
-      totalQuantity += imp.quantity;
+      const conversionFactor = (imp as any).units?.conversion_factor_to_base || 1;
+      const baseQty = imp.quantity * conversionFactor;
+      totalBaseQuantity += baseQty;
       totalCost += imp.quantity * imp.final_unit_cost_per_item;
     });
 
-    const costPerUnit = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+    const costPerUnit = totalBaseQuantity > 0 ? totalCost / totalBaseQuantity : 0;
     const roundedCost = Math.round(costPerUnit * 100) / 100;
 
     await this.updateCostPerUnit(productId, roundedCost);
 
-    // Log to product_history if cost changed
     if (roundedCost !== oldCost && currentProduct) {
       const lastImport = imports[imports.length - 1];
       await supabase.from('product_history').insert({

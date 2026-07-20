@@ -790,5 +790,14 @@
     "retrying": "Retrying...",
     "backOnline": "Back online",
     "offlineBanner": "No internet connection"
+  },
+  "onboarding": {
+    "welcome": "Welcome to BizManage",
+    "greeting": "Hello {{name}}! Let's set up your first business",
+    "pullToRefresh": "Pull down to check if you've been added to a business",
+    "requestJoin": "Request to Join a Business",
+    "joinBusinessTitle": "Waiting for an Invite?",
+    "joinBusinessMessage": "Ask your business admin to add you as a team member using your email address. Once added, pull down to refresh and the business will appear automatically.",
+    "signOutConfirm": "Are you sure you want to sign out and return to login?"
   }
 }

@@ -853,7 +853,9 @@ export const reportsService = {
         id,
         total_amount,
         sale_date,
+        status,
         cart_id,
+        sale_actions(action_type, adjusted_amount, amount, items_metadata),
         carts(
           cart_items(
             quantity,
@@ -867,24 +869,25 @@ export const reportsService = {
         )
       `)
       .eq('business_id', businessId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned'])
       .gte('sale_date', startDate)
       .lte('sale_date', endDate)
       .order('sale_date');
 
     if (!salesData) return [];
 
-    // Process sales data to calculate COGS and profit
     return salesData.map(sale => {
       let totalCOGS = 0;
-      let itemDetails = [];
+      let revenue = parseFloat(sale.total_amount);
+      const itemDetails: any[] = [];
+      const costMap = new Map<string, number>();
 
-      // Calculate COGS for each item in the sale
       if (sale.carts?.cart_items) {
         sale.carts.cart_items.forEach(item => {
           const costPerUnit = (item.cost_per_unit && item.cost_per_unit > 0) ? item.cost_per_unit : (item.products?.cost_per_unit || 0);
           const itemCOGS = item.quantity * costPerUnit;
           totalCOGS += itemCOGS;
+          if (item.product_id) costMap.set(item.product_id, costPerUnit);
 
           itemDetails.push({
             product: item.products?.name || 'Unknown Product',
@@ -895,13 +898,25 @@ export const reportsService = {
         });
       }
 
+      if (sale.status === 'partially_returned' && (sale as any).sale_actions) {
+        for (const action of (sale as any).sale_actions) {
+          if (action.action_type !== 'return') continue;
+          revenue -= (action.adjusted_amount || action.amount || 0);
+          const items = action.items_metadata as any[] || [];
+          for (const m of items) {
+            const cost = costMap.get(m.productId) || 0;
+            totalCOGS -= cost * (m.quantity || 0);
+          }
+        }
+      }
+
       return {
         id: sale.id,
         date: sale.sale_date,
-        revenue: sale.total_amount,
+        revenue,
         cogs: totalCOGS,
-        profit: sale.total_amount - totalCOGS,
-        profitMargin: sale.total_amount > 0 ? ((sale.total_amount - totalCOGS) / sale.total_amount) * 100 : 0,
+        profit: revenue - totalCOGS,
+        profitMargin: revenue > 0 ? ((revenue - totalCOGS) / revenue) * 100 : 0,
         items: itemDetails
       };
     });
@@ -928,7 +943,7 @@ export const reportsService = {
         `)
         .eq('product_id', productId)
         .eq('carts.sales.business_id', businessId)
-        .eq('carts.sales.status', 'completed')
+        .in('carts.sales.status', ['completed', 'partially_returned'])
         .gte('carts.sales.sale_date', startDate.toISOString())
         .lte('carts.sales.sale_date', endDate.toISOString());
 

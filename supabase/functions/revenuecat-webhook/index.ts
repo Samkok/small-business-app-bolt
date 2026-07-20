@@ -202,8 +202,18 @@ async function processReferralReward(
 
     log(eventId, 'INFO', `Applying rule: ${rules.rule_name} (referrer=${rules.referrer_credits}, referee=${rules.referee_credits})`);
 
-    // Award referrer credits
-    if (rules.referrer_credits > 0) {
+    // Enforce max_rewards_per_referrer (A4.4)
+    const maxRewards = rules.max_rewards_per_referrer || 999999;
+    const { count: priorRewards } = await supabase
+      .from('credit_ledger')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', referralEvent.referrer_user_id)
+      .eq('transaction_type', 'referral_reward_referrer');
+
+    const referrerLimitReached = (priorRewards || 0) >= maxRewards;
+
+    // Award referrer credits (if under limit)
+    if (rules.referrer_credits > 0 && !referrerLimitReached) {
       const { data: referrerLedgerId } = await supabase.rpc('award_credits', {
         p_user_id: referralEvent.referrer_user_id,
         p_amount: rules.referrer_credits,
@@ -558,14 +568,23 @@ Deno.serve(async (req: Request) => {
 
       case 'INITIAL_PURCHASE': {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
-        // Process referral reward only on initial purchase (not renewals)
-        await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        // Only award referral reward on paid purchases, not free trial starts
+        const periodType = event.period_type || '';
+        if (periodType !== 'TRIAL') {
+          await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        } else {
+          log(eventId, 'INFO', 'Skipping referral reward for TRIAL period - will reward on conversion');
+        }
         break;
       }
 
       case 'RENEWAL':
       case 'UNCANCELLATION': {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
+        // Award referral reward on trial-to-paid conversion (first RENEWAL after trial)
+        if (event.period_type === 'NORMAL') {
+          await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        }
         break;
       }
 

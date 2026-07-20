@@ -839,7 +839,6 @@ export const salesService = {
   async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
     if (!businessId || !startDate || !endDate) return [];
     
-    // Get sales with cart items and product costs
     const { data, error } = await supabase
       .from('sales')
       .select(`
@@ -847,6 +846,7 @@ export const salesService = {
         total_amount,
         sale_date,
         status,
+        sale_actions(action_type, adjusted_amount, amount, items_metadata),
         carts(
           cart_items(
             quantity,
@@ -871,14 +871,28 @@ export const salesService = {
 
     return data.map(sale => {
       let totalCOGS = 0;
-      const totalRevenue = parseFloat(sale.total_amount);
+      let totalRevenue = parseFloat(sale.total_amount);
+
+      const costMap = new Map<string, number>();
 
       if (sale.carts?.cart_items) {
         sale.carts.cart_items.forEach(item => {
-          // Prefer snapshot cost_per_unit, fall back to current product cost (I6 fix)
           const costPerUnit = parseFloat(item.cost_per_unit) || parseFloat(item.products?.cost_per_unit) || 0;
           totalCOGS += item.quantity * costPerUnit;
+          if (item.product_id) costMap.set(item.product_id, costPerUnit);
         });
+      }
+
+      if (sale.status === 'partially_returned' && sale.sale_actions) {
+        for (const action of sale.sale_actions) {
+          if (action.action_type !== 'return') continue;
+          totalRevenue -= (action.adjusted_amount || action.amount || 0);
+          const items = action.items_metadata as any[] || [];
+          for (const m of items) {
+            const cost = costMap.get(m.productId) || 0;
+            totalCOGS -= cost * (m.quantity || 0);
+          }
+        }
       }
 
       return {

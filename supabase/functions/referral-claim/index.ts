@@ -114,21 +114,10 @@ Deno.serve(async (req: Request) => {
 
         eventId = newEvent.id;
 
-        // Update referral code stats
-        await supabase
-          .from("referral_codes")
-          .update({
-            total_signups: referralCodeData.user_id ? 1 : 0, // Will be incremented
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", referralCodeData.id);
-
-        // Increment signups properly
+        // Increment signups via RPC (atomic increment)
         await supabase.rpc("increment_referral_code_signups", {
           p_code_id: referralCodeData.id,
-        }).catch(() => {
-          // Non-critical - stats update
-        });
+        }).catch(() => {});
       }
     }
 

@@ -200,15 +200,15 @@ export default function BusinessOnboardingScreen() {
 
   const handleBackToLogin = async () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out and return to login?',
+      t('common.signOut', 'Sign Out'),
+      t('onboarding.signOutConfirm', 'Are you sure you want to sign out and return to login?'),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel', 'Cancel'),
           style: 'cancel'
         },
         {
-          text: 'Sign Out',
+          text: t('common.signOut', 'Sign Out'),
           style: 'destructive',
           onPress: async () => {
             await signOut();
@@ -221,9 +221,9 @@ export default function BusinessOnboardingScreen() {
 
   const handleJoinBusiness = () => {
     Alert.alert(
-      'Coming Soon',
-      'The ability to join an existing business will be available soon. For now, please create a new business or contact your business administrator.',
-      [{ text: 'OK' }]
+      t('onboarding.joinBusinessTitle', 'Waiting for an Invite?'),
+      t('onboarding.joinBusinessMessage', 'Ask your business admin to add you as a team member using your email address. Once added, pull down to refresh and the business will appear automatically.'),
+      [{ text: t('common.ok', 'OK') }]
     );
   };
 
@@ -249,16 +249,16 @@ export default function BusinessOnboardingScreen() {
             <Building2 size={48} color="#2563eb" />
           </View>
           <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Welcome to BizManage
+            {t('onboarding.welcome', 'Welcome to BizManage')}
           </Text>
           <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Hello {userProfile?.full_name}! Let's set up your first business
+            {t('onboarding.greeting', { name: userProfile?.full_name || '' })}
           </Text>
 
           <View style={[styles.refreshHint, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }]}>
             <RefreshCw size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={[styles.refreshHintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              Pull down to check if you've been added to a business
+            {t('onboarding.pullToRefresh', 'Pull down to check if you\'ve been added to a business')}
             </Text>
           </View>
         </View>
@@ -315,7 +315,7 @@ export default function BusinessOnboardingScreen() {
             >
               <UserPlus size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
               <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Request to Join a Business
+                {t('onboarding.requestJoin', 'Request to Join a Business')}
               </Text>
             </TouchableOpacity>
 
