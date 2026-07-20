@@ -44,36 +44,11 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify webhook shared secret (D5 fix)
-    const webhookSecret = Deno.env.get('APPLE_WEBHOOK_SECRET');
-    if (webhookSecret) {
-      const authHeader = req.headers.get('Authorization') || '';
-      const providedSecret = authHeader.startsWith('Bearer ')
-        ? authHeader.slice(7)
-        : authHeader;
-
-      if (!providedSecret || providedSecret !== webhookSecret) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
     const expectedBundleId = Deno.env.get('APPLE_BUNDLE_ID');
 
     const payload: AppleNotificationPayload = await req.json();
 
     const decodedPayload = decodeJWT(payload.signedPayload);
-
-    // Validate environment — reject sandbox in production
-    const environment = decodedPayload.data?.environment;
-    if (environment === 'Sandbox' && Deno.env.get('ENVIRONMENT') === 'production') {
-      return new Response(JSON.stringify({ error: 'Sandbox events rejected in production' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const transactionInfo = decodedPayload.data.signedTransactionInfo
       ? decodeJWT(decodedPayload.data.signedTransactionInfo)
