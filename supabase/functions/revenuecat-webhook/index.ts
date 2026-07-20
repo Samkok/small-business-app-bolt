@@ -202,8 +202,18 @@ async function processReferralReward(
 
     log(eventId, 'INFO', `Applying rule: ${rules.rule_name} (referrer=${rules.referrer_credits}, referee=${rules.referee_credits})`);
 
-    // Award referrer credits
-    if (rules.referrer_credits > 0) {
+    // Enforce max_rewards_per_referrer (A4.4)
+    const maxRewards = rules.max_rewards_per_referrer || 999999;
+    const { count: priorRewards } = await supabase
+      .from('credit_ledger')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', referralEvent.referrer_user_id)
+      .eq('transaction_type', 'referral_reward_referrer');
+
+    const referrerLimitReached = (priorRewards || 0) >= maxRewards;
+
+    // Award referrer credits (if under limit)
+    if (rules.referrer_credits > 0 && !referrerLimitReached) {
       const { data: referrerLedgerId } = await supabase.rpc('award_credits', {
         p_user_id: referralEvent.referrer_user_id,
         p_amount: rules.referrer_credits,
@@ -462,6 +472,18 @@ async function handleTierChange(
   }
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const encoder = new TextEncoder();
+  const aBuf = encoder.encode(a);
+  const bBuf = encoder.encode(b);
+  let result = 0;
+  for (let i = 0; i < aBuf.length; i++) {
+    result |= aBuf[i] ^ bBuf[i];
+  }
+  return result === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -471,6 +493,29 @@ Deno.serve(async (req: Request) => {
   let eventId = 'unknown';
 
   try {
+    // Verify webhook authorization secret (E5 fix)
+    const webhookSecret = Deno.env.get("REVENUECAT_WEBHOOK_SECRET");
+    if (!webhookSecret) {
+      console.error("[revenuecat-webhook] REVENUECAT_WEBHOOK_SECRET not configured");
+      return new Response(
+        JSON.stringify({ error: "Webhook secret not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const authHeader = req.headers.get("Authorization") || "";
+    const providedSecret = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : authHeader;
+
+    if (!providedSecret || !timingSafeEqual(providedSecret, webhookSecret)) {
+      console.error("[revenuecat-webhook] Invalid or missing webhook secret");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -523,14 +568,23 @@ Deno.serve(async (req: Request) => {
 
       case 'INITIAL_PURCHASE': {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
-        // Process referral reward only on initial purchase (not renewals)
-        await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        // Only award referral reward on paid purchases, not free trial starts
+        const periodType = event.period_type || '';
+        if (periodType !== 'TRIAL') {
+          await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        } else {
+          log(eventId, 'INFO', 'Skipping referral reward for TRIAL period - will reward on conversion');
+        }
         break;
       }
 
       case 'RENEWAL':
       case 'UNCANCELLATION': {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
+        // Award referral reward on trial-to-paid conversion (first RENEWAL after trial)
+        if (event.period_type === 'NORMAL') {
+          await processReferralReward(supabase, event, eventId, tier, validatedProductId);
+        }
         break;
       }
 

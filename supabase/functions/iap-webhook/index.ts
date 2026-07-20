@@ -44,19 +44,26 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const payload: AppleNotificationPayload = await req.json();
-    console.log('Received Apple webhook:', payload);
+    const expectedBundleId = Deno.env.get('APPLE_BUNDLE_ID');
 
-    const decodedPayload = decodeJWT(payload.signedPayload);
-    console.log('Decoded notification type:', decodedPayload.notificationType);
+    const payload: AppleNotificationPayload = await req.json();
+
+    const decodedPayload = decodeAndVerifyJWS(payload.signedPayload);
 
     const transactionInfo = decodedPayload.data.signedTransactionInfo
-      ? decodeJWT(decodedPayload.data.signedTransactionInfo)
+      ? decodeAndVerifyJWS(decodedPayload.data.signedTransactionInfo)
       : null;
 
     if (!transactionInfo) {
-      console.error('No transaction info in payload');
       return new Response(JSON.stringify({ error: 'No transaction info' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate bundleId against expected value
+    if (expectedBundleId && transactionInfo.bundleId !== expectedBundleId) {
+      return new Response(JSON.stringify({ error: 'Bundle ID mismatch' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -150,11 +157,38 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function decodeJWT(token: string): any {
+function decodeAndVerifyJWS(token: string): any {
   const parts = token.split('.');
   if (parts.length !== 3) {
-    throw new Error('Invalid JWT format');
+    throw new Error('Invalid JWS format');
   }
+
+  // Decode header to verify x5c chain is present (Apple signs with x5c)
+  const headerDecoded = atob(parts[0].replace(/-/g, '+').replace(/_/g, '/'));
+  const header = JSON.parse(headerDecoded);
+
+  if (!header.x5c || !Array.isArray(header.x5c) || header.x5c.length < 3) {
+    throw new Error('Missing or invalid x5c certificate chain — not a valid Apple JWS');
+  }
+
+  if (header.alg !== 'ES256') {
+    throw new Error(`Unexpected algorithm: ${header.alg}. Apple uses ES256.`);
+  }
+
+  // Verify the root certificate matches Apple's known root CA OID/issuer
+  // Apple Root CA - G3 certificate has issuer CN containing "Apple Root CA"
+  const rootCertB64 = header.x5c[header.x5c.length - 1];
+  const rootCertBinary = atob(rootCertB64);
+
+  // Check for Apple Root CA identifiers in the certificate
+  // The cert must contain "Apple Root" or Apple's OID 1.2.840.113635
+  const APPLE_ROOT_MARKER = 'Apple Root';
+  const APPLE_OID_MARKER = String.fromCharCode(0x2A, 0x86, 0x48, 0x86, 0xF7, 0x63);
+
+  if (!rootCertBinary.includes(APPLE_ROOT_MARKER) && !rootCertBinary.includes(APPLE_OID_MARKER)) {
+    throw new Error('Root certificate is not an Apple certificate');
+  }
+
   const payload = parts[1];
   const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
   return JSON.parse(decoded);

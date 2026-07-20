@@ -91,12 +91,10 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (existingClick) {
-      // Return existing event - no need to create duplicate
       return new Response(
         JSON.stringify({
           success: true,
           event_id: existingClick.id,
-          referrer_user_id: referralCode.user_id,
           deduplicated: true,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -135,7 +133,6 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         event_id: event.id,
-        referrer_user_id: referralCode.user_id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

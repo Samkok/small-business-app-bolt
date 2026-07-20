@@ -62,7 +62,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web',
-    flowType: 'implicit',
+    flowType: 'pkce',
     storage: new CustomStorageAdapter(),
   },
 });

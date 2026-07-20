@@ -16,21 +16,42 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { userId, selectedBusinessIds, selectOldest, tierLimit } = await req.json();
-
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required field: userId' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify JWT authentication (D3 fix)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Force userId to the authenticated user — ignore body-supplied userId
+    const userId = user.id;
+
+    const { selectedBusinessIds, selectOldest } = await req.json();
+
+    // Compute tierLimit server-side from the user's actual subscription
+    const { data: subscription } = await supabase
+      .from('user_subscriptions')
+      .select('max_owned_businesses, tier')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const tierLimit = subscription?.max_owned_businesses || 1;
 
     let businessIdsToActivate: string[] = [];
 

@@ -323,43 +323,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const maxBusinesses = isRevenueCatAvailable ? await revenueCatService.getMaxBusinesses() : null;
       const revenueCatAppUserId = info?.originalAppUserId || user.id;
 
-      const dataChanged = !existingSubscription ||
-                         existingSubscription.tier !== tier ||
-                         existingSubscription.subscription_product_id !== newProductId ||
-                         existingSubscription.max_owned_businesses !== maxBusinesses;
-
-      if (!dataChanged) {
-        console.log('[RevenueCatSubscriptionContext] No changes detected - skipping sync');
-        lastSyncTimeRef.current = now;
-        return;
-      }
-
-      console.log('[RevenueCatSubscriptionContext] Syncing to Supabase - changes detected');
-      console.log('[RevenueCatSubscriptionContext] Client state: tier=' + tier + ', productId=' + newProductId + ', hasActiveEntitlements=' + hasActiveEntitlements);
-      console.log('[RevenueCatSubscriptionContext] DB state: tier=' + existingSubscription?.tier + ', productId=' + existingSubscription?.subscription_product_id + ', updated_by=' + existingSubscription?.updated_by);
-
-      const currentSyncVersion = existingSubscription?.sync_version || 0;
-
-      await supabase
-        .from('user_subscriptions')
-        .upsert({
-          user_id: user.id,
-          subscription_status: tier !== 'free' ? 'active' : 'trial',
-          subscription_product_id: newProductId,
-          subscription_expiration_date: expirationDate || null,
-          platform: Platform.OS === 'ios' ? 'ios' : 'android',
-          tier: tier,
-          max_owned_businesses: maxBusinesses,
-          revenuecat_app_user_id: revenueCatAppUserId,
-          updated_by: 'client',
-          updated_at: new Date().toISOString(),
-          sync_version: currentSyncVersion + 1,
-        }, {
-          onConflict: 'user_id',
-        });
-
+      // Subscription state is now managed exclusively by the server-side webhook.
+      // The client only reads the subscription status from the DB; it does not write it.
+      // This prevents self-grant exploits (E1). The revenuecat-webhook edge function
+      // is the sole writer of user_subscriptions.
       lastSyncTimeRef.current = now;
-      console.log('[RevenueCatSubscriptionContext] Synced with Supabase successfully');
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error syncing with Supabase:', error);
     } finally {

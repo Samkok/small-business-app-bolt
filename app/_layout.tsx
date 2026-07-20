@@ -1,5 +1,6 @@
 import 'react-native-get-random-values';
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,46 +19,60 @@ import { CurrencyProvider } from '@/src/context/CurrencyContext';
 import { ReferralProvider } from '@/src/context/ReferralContext';
 import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
 import { PendingSalesSyncModal } from '@/src/components/sales/PendingSalesSyncModal';
+import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import '@/src/locales';
 
 export default function RootLayout() {
   useFrameworkReady();
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      const defaultHandler = (ErrorUtils as any).getGlobalHandler();
+      (ErrorUtils as any).setGlobalHandler((error: Error, isFatal?: boolean) => {
+        console.error(`[GlobalError] ${isFatal ? 'FATAL' : 'non-fatal'}:`, error?.message);
+        if (defaultHandler) defaultHandler(error, isFatal);
+      });
+    }
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <LanguageProvider>
-          <NetworkProvider>
-            <AuthProvider>
-              <CurrencyProvider>
-              <ReferralProvider>
-              <SubscriptionProvider>
-                <BusinessSwitchProvider>
-                  <SaleDetailsModalProvider>
-                    <NotificationProvider>
-                      <CartProvider>
-                        <InstantCheckoutProvider>
-                          <Stack screenOptions={{ headerShown: false }}>
-                            <Stack.Screen name="(auth)" />
-                            <Stack.Screen name="(app)" />
-                            <Stack.Screen name="refer/[code]" />
-                            <Stack.Screen name="+not-found" />
-                          </Stack>
-                          <NetworkBanner />
-                          <PendingSalesSyncModal />
-                          <StatusBar style="auto" />
-                        </InstantCheckoutProvider>
-                      </CartProvider>
-                    </NotificationProvider>
-                  </SaleDetailsModalProvider>
-                </BusinessSwitchProvider>
-              </SubscriptionProvider>
-              </ReferralProvider>
-              </CurrencyProvider>
-            </AuthProvider>
-          </NetworkProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <LanguageProvider>
+            <NetworkProvider>
+              <AuthProvider>
+                <CurrencyProvider>
+                <ReferralProvider>
+                <SubscriptionProvider>
+                  <BusinessSwitchProvider>
+                    <SaleDetailsModalProvider>
+                      <NotificationProvider>
+                        <CartProvider>
+                          <InstantCheckoutProvider>
+                            <Stack screenOptions={{ headerShown: false }}>
+                              <Stack.Screen name="index" />
+                              <Stack.Screen name="(auth)" />
+                              <Stack.Screen name="(app)" />
+                              <Stack.Screen name="refer/[code]" />
+                              <Stack.Screen name="+not-found" />
+                            </Stack>
+                            <NetworkBanner />
+                            <PendingSalesSyncModal />
+                            <StatusBar style="auto" />
+                          </InstantCheckoutProvider>
+                        </CartProvider>
+                      </NotificationProvider>
+                    </SaleDetailsModalProvider>
+                  </BusinessSwitchProvider>
+                </SubscriptionProvider>
+                </ReferralProvider>
+                </CurrencyProvider>
+              </AuthProvider>
+            </NetworkProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }
