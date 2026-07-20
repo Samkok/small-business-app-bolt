@@ -16,25 +16,33 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const userId = url.searchParams.get('userId');
-    const checkBusinessSelection = url.searchParams.get('checkBusinessSelection') === 'true';
-
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required parameter: userId' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    console.log('[SubscriptionStatus] Fetching status for user:', userId);
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify JWT authentication (D2 fix)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Derive userId from verified token — ignore query string
+    const userId = user.id;
+    const url = new URL(req.url);
+    const checkBusinessSelection = url.searchParams.get('checkBusinessSelection') === 'true';
 
     // Optionally check business selection requirement
     if (checkBusinessSelection) {

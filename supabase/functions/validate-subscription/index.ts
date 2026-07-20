@@ -42,26 +42,44 @@ function isDowngrade(prevTier: string | null, newTier: string): boolean {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const { receipt, platform, userId } = await req.json();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (!receipt || !platform || !userId) {
+    // Verify JWT authentication (E4 fix)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: receipt, platform, or userId' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[ValidateReceipt] Validating receipt:', { platform, userId, receiptLength: receipt.length });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Force userId to the authenticated user — ignore any body-supplied userId
+    const userId = user.id;
+
+    const { receipt, platform } = await req.json();
+
+    if (!receipt || !platform) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: receipt or platform' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let isValid = false;
     let expiresDate: string | null = null;
@@ -71,12 +89,25 @@ Deno.serve(async (req: Request) => {
       const appleSharedSecret = Deno.env.get('APPLE_SHARED_SECRET');
 
       if (!appleSharedSecret) {
-        console.warn('[ValidateReceipt] APPLE_SHARED_SECRET not configured, using test mode');
-        isValid = true;
-        productId = 'bizmanage.pro.month';
-        expiresDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      } else {
-        const appleResponse = await fetch(APPLE_VERIFY_RECEIPT_URL, {
+        return new Response(
+          JSON.stringify({ error: 'Server configuration error: Apple shared secret not configured' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const appleResponse = await fetch(APPLE_VERIFY_RECEIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          'receipt-data': receipt,
+          'password': appleSharedSecret,
+        }),
+      });
+
+      const appleData = await appleResponse.json();
+
+      if (appleData.status === 21007) {
+        const sandboxResponse = await fetch(APPLE_SANDBOX_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -84,57 +115,47 @@ Deno.serve(async (req: Request) => {
             'password': appleSharedSecret,
           }),
         });
+        const sandboxData = await sandboxResponse.json();
 
-        const appleData = await appleResponse.json();
-        console.log('[ValidateReceipt] Apple verification response status:', appleData.status);
-
-        if (appleData.status === 21007) {
-          console.log('[ValidateReceipt] Sandbox receipt detected, verifying with sandbox');
-          const sandboxResponse = await fetch(APPLE_SANDBOX_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              'receipt-data': receipt,
-              'password': appleSharedSecret,
-            }),
-          });
-          const sandboxData = await sandboxResponse.json();
-
-          if (sandboxData.status === 0 && sandboxData.latest_receipt_info) {
-            const latestReceipt = sandboxData.latest_receipt_info[sandboxData.latest_receipt_info.length - 1];
-            isValid = true;
-            expiresDate = new Date(parseInt(latestReceipt.expires_date_ms)).toISOString();
-            productId = latestReceipt.product_id;
-            console.log('[ValidateReceipt] Sandbox receipt validated successfully');
-          } else {
-            console.error('[ValidateReceipt] Sandbox receipt validation failed:', sandboxData);
-          }
-        } else if (appleData.status === 0 && appleData.latest_receipt_info) {
-          const latestReceipt = appleData.latest_receipt_info[appleData.latest_receipt_info.length - 1];
+        if (sandboxData.status === 0 && sandboxData.latest_receipt_info) {
+          const latestReceipt = sandboxData.latest_receipt_info[sandboxData.latest_receipt_info.length - 1];
           isValid = true;
           expiresDate = new Date(parseInt(latestReceipt.expires_date_ms)).toISOString();
           productId = latestReceipt.product_id;
-          console.log('[ValidateReceipt] Production receipt validated successfully');
-        } else {
-          console.error('[ValidateReceipt] Apple receipt validation failed:', appleData);
         }
+      } else if (appleData.status === 0 && appleData.latest_receipt_info) {
+        const latestReceipt = appleData.latest_receipt_info[appleData.latest_receipt_info.length - 1];
+        isValid = true;
+        expiresDate = new Date(parseInt(latestReceipt.expires_date_ms)).toISOString();
+        productId = latestReceipt.product_id;
       }
     } else if (platform === 'android') {
-      console.log('[ValidateReceipt] Android receipt validation - using test mode');
-      isValid = true;
-      productId = 'bizmanage.pro.month';
-      expiresDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      // Android receipt validation requires Google Play Developer API
+      const googleServiceAccountKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY');
+      if (!googleServiceAccountKey) {
+        return new Response(
+          JSON.stringify({ error: 'Server configuration error: Google service account not configured' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // For now, reject Android validation until Google Play API integration is complete.
+      // The revenuecat-webhook handles Android subscription state via server notifications.
+      return new Response(
+        JSON.stringify({ error: 'Android validation is handled via RevenueCat webhooks' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({ error: 'Invalid platform. Must be ios or android.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     if (isValid) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
       const newTier = getTierFromProductId(productId);
       const maxOwnedBusinesses = getMaxBusinessesFromTier(newTier);
 
-      // Get previous subscription to detect downgrade
       const { data: prevSubscription } = await supabase
         .from('user_subscriptions')
         .select('tier, max_owned_businesses')
@@ -144,24 +165,6 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       const previousTier = prevSubscription?.tier || 'free';
-      const isDowngradeDetected = isDowngrade(previousTier, newTier);
-
-      console.log('[ValidateReceipt] Tier change detected:', {
-        previousTier,
-        newTier,
-        isDowngrade: isDowngradeDetected
-      });
-
-      // Update subscription in database
-      console.log('[ValidateReceipt] Updating subscription in database:', {
-        userId,
-        status: 'active',
-        productId,
-        tier: newTier,
-        maxOwnedBusinesses,
-        expiresDate,
-        previousTier
-      });
 
       const { error } = await supabase
         .from('user_subscriptions')
@@ -172,32 +175,25 @@ Deno.serve(async (req: Request) => {
           tier: newTier,
           max_owned_businesses: maxOwnedBusinesses,
           subscription_expiration_date: expiresDate,
-          receipt_data: receipt,
           last_validated_at: new Date().toISOString(),
           platform: platform,
           previous_tier: previousTier,
           updated_at: new Date().toISOString(),
+          updated_by: 'validate-subscription',
         }, {
           onConflict: 'user_id'
         });
 
       if (error) {
-        console.error('[ValidateReceipt] Database update error:', error);
         throw error;
       }
 
-      // Use centralized business selection logic
-      console.log('[ValidateReceipt] Checking business selection requirement');
-      const { data: selectionResult, error: selectionError } = await supabase
+      const { error: selectionError } = await supabase
         .rpc('check_business_selection_requirement', { p_user_id: userId });
 
       if (selectionError) {
         console.error('[ValidateReceipt] Error checking business selection:', selectionError);
-      } else {
-        console.log('[ValidateReceipt] Business selection check result:', selectionResult);
       }
-
-      console.log('[ValidateReceipt] Subscription updated successfully');
     }
 
     return new Response(
@@ -208,22 +204,13 @@ Deno.serve(async (req: Request) => {
         tier: getTierFromProductId(productId),
         maxOwnedBusinesses: getMaxBusinessesFromTier(getTierFromProductId(productId))
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[ValidateReceipt] Error validating subscription:', error);
+    console.error('[ValidateReceipt] Error:', error);
     return new Response(
-      JSON.stringify({
-        error: error.message || 'Internal server error',
-        details: error.toString()
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

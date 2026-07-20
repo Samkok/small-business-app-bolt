@@ -957,7 +957,7 @@ export const reportsService = {
       return {
         quantitySold,
         totalRevenue,
-        costPerUnit,
+        costPerUnit: quantitySold > 0 ? totalCOGS / quantitySold : (product?.cost_per_unit || 0),
         totalCOGS,
         totalProfit,
         profitMargin

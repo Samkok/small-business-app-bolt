@@ -37,30 +37,7 @@ export const salesService = {
     const cartSummary = await cartService.getCartSummary(saleData.cart_id);
     const cart = await cartService.getCart(saleData.cart_id);
 
-    // Pre-validate stock for every cart item in base units before creating the sale
-    const deductions: Array<{ productId: string; baseQuantity: number; newStock: number }> = [];
-    for (const item of cart.cart_items) {
-      const product = await productService.getProduct(item.product_id);
-      let baseQuantity = item.quantity;
-      if (item.unit_id) {
-        const conversionFactor = await unitService.getConversionFactor(item.unit_id);
-        baseQuantity = item.quantity * conversionFactor;
-      }
-      const currentStock = product.current_stock ?? 0;
-      if (baseQuantity > currentStock) {
-        throw new Error(
-          `INSUFFICIENT_STOCK:${product.name}:requested ${baseQuantity} base units, available ${currentStock}`,
-        );
-      }
-      deductions.push({
-        productId: item.product_id,
-        baseQuantity,
-        newStock: currentStock - baseQuantity,
-      });
-    }
-
-    // Snapshot currency and exchange rate at the moment of sale so reports stay accurate
-    // even if the business later edits exchange rates.
+    // Snapshot currency and exchange rate
     let currencyIdForSale: string | null = (saleData as any).currency_id ?? null;
     let exchangeRateAtSale: number = 1;
     if (!currencyIdForSale) {
@@ -83,32 +60,45 @@ export const salesService = {
       exchangeRateAtSale = Number(cur?.exchange_rate_to_usd ?? 1);
     }
 
-    // Create sale record with discount information and currency snapshot
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        ...saleData,
-        total_amount: cartSummary.finalTotal,
-        subtotal_before_discount: cartSummary.itemsOriginalTotal,
-        sale_discount_type: cart.discount_type,
-        sale_discount_value: cart.discount_value,
-        sale_discount_amount: cartSummary.cartDiscountAmount,
-        currency_id: currencyIdForSale,
-        exchange_rate_at_sale: exchangeRateAtSale,
-      })
-      .select()
-      .single();
+    // Use atomic DB function for idempotent, transaction-safe completion (I1, I2 fix)
+    const { data: saleId, error: rpcError } = await supabase.rpc('complete_sale_atomic', {
+      p_cart_id: saleData.cart_id,
+      p_customer_id: saleData.customer_id,
+      p_business_id: saleData.business_id,
+      p_total_amount: cartSummary.finalTotal,
+      p_payment_method: saleData.payment_method,
+      p_sale_date: saleData.sale_date || new Date().toISOString(),
+      p_notes: saleData.notes || null,
+      p_created_by: saleData.created_by,
+      p_sale_discount_type: cart.discount_type || null,
+      p_sale_discount_value: cart.discount_value || null,
+      p_sale_discount_amount: cartSummary.cartDiscountAmount || null,
+      p_subtotal_before_discount: cartSummary.itemsOriginalTotal || null,
+      p_delivery_cost: saleData.delivery_cost || null,
+      p_currency_id: currencyIdForSale,
+      p_exchange_rate_at_sale: exchangeRateAtSale,
+    });
 
-    if (saleError) throw saleError;
-
-    // Update cart status to completed
-    await cartService.updateCart(saleData.cart_id, { status: 'completed' });
-
-    // Apply pre-validated stock deductions
-    for (const d of deductions) {
-      await productService.updateStock(d.productId, d.newStock);
+    if (rpcError) {
+      if (rpcError.message?.includes('Insufficient stock')) {
+        const productId = rpcError.message.split('product ')[1];
+        throw new Error(`INSUFFICIENT_STOCK:${productId}`);
+      }
+      throw rpcError;
     }
 
+    if (!saleId) {
+      throw new Error('Sale creation failed');
+    }
+
+    // Fetch and return the created sale
+    const { data: sale, error: fetchError } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('id', saleId)
+      .single();
+
+    if (fetchError) throw fetchError;
     return sale;
   },
 
@@ -548,6 +538,11 @@ export const salesService = {
       throw new Error('Sale not found');
     }
 
+    // Status guard: prevent voiding an already-voided or fully-returned sale
+    if (sale.status === 'voided' || sale.status === 'fully_returned') {
+      throw new Error(`Cannot void a sale with status: ${sale.status}`);
+    }
+
     // Validate business access if provided
     if (currentBusiness && userBusinesses) {
       const validation = businessAccessGuard.validateActionOnBusinessData(
@@ -676,6 +671,12 @@ export const salesService = {
     if (!saleId || !returnedItems.length || !reason || !performedBy) return null;
 
     const sale = await this.getSale(saleId);
+
+    // Status guard: prevent returning items from a voided or already fully-returned sale
+    if (sale.status === 'voided' || sale.status === 'fully_returned') {
+      throw new Error(`Cannot return items from a sale with status: ${sale.status}`);
+    }
+
     let returnAmount = 0;
     let totalLossAmount = 0;
     const itemsMetadata: any[] = [];
@@ -712,9 +713,14 @@ export const salesService = {
           adjustedAmount: itemAdjustedAmount,
         });
 
-        // Restore inventory
+        // Restore inventory with proper unit conversion (I4 fix)
         const product = await productService.getProduct(returnItem.productId);
-        await productService.updateStock(returnItem.productId, product.current_stock + returnItem.quantity);
+        let baseQuantityToRestore = returnItem.quantity;
+        if (cartItem.unit_id) {
+          const conversionFactor = await unitService.getConversionFactor(cartItem.unit_id);
+          baseQuantityToRestore = returnItem.quantity * conversionFactor;
+        }
+        await productService.updateStock(returnItem.productId, product.current_stock + baseQuantityToRestore);
       }
     }
 
@@ -846,6 +852,7 @@ export const salesService = {
             quantity,
             unit_price,
             subtotal,
+            cost_per_unit,
             product_id,
             products(
               name,
@@ -855,22 +862,21 @@ export const salesService = {
         )
       `)
       .eq('business_id', businessId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned'])
       .gte('sale_date', startDate)
       .lte('sale_date', endDate)
       .order('sale_date');
 
     if (error) throw error;
 
-    // Calculate COGS and profit for each sale
     return data.map(sale => {
       let totalCOGS = 0;
-      let totalRevenue = parseFloat(sale.total_amount);
+      const totalRevenue = parseFloat(sale.total_amount);
 
-      // Calculate COGS from cart items
       if (sale.carts?.cart_items) {
         sale.carts.cart_items.forEach(item => {
-          const costPerUnit = parseFloat(item.products?.cost_per_unit) || 0;
+          // Prefer snapshot cost_per_unit, fall back to current product cost (I6 fix)
+          const costPerUnit = parseFloat(item.cost_per_unit) || parseFloat(item.products?.cost_per_unit) || 0;
           totalCOGS += item.quantity * costPerUnit;
         });
       }

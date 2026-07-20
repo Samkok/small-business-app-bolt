@@ -18,6 +18,7 @@ import { CurrencyProvider } from '@/src/context/CurrencyContext';
 import { ReferralProvider } from '@/src/context/ReferralContext';
 import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
 import { PendingSalesSyncModal } from '@/src/components/sales/PendingSalesSyncModal';
+import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import '@/src/locales';
 
 export default function RootLayout() {
@@ -25,39 +26,41 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <LanguageProvider>
-          <NetworkProvider>
-            <AuthProvider>
-              <CurrencyProvider>
-              <ReferralProvider>
-              <SubscriptionProvider>
-                <BusinessSwitchProvider>
-                  <SaleDetailsModalProvider>
-                    <NotificationProvider>
-                      <CartProvider>
-                        <InstantCheckoutProvider>
-                          <Stack screenOptions={{ headerShown: false }}>
-                            <Stack.Screen name="(auth)" />
-                            <Stack.Screen name="(app)" />
-                            <Stack.Screen name="refer/[code]" />
-                            <Stack.Screen name="+not-found" />
-                          </Stack>
-                          <NetworkBanner />
-                          <PendingSalesSyncModal />
-                          <StatusBar style="auto" />
-                        </InstantCheckoutProvider>
-                      </CartProvider>
-                    </NotificationProvider>
-                  </SaleDetailsModalProvider>
-                </BusinessSwitchProvider>
-              </SubscriptionProvider>
-              </ReferralProvider>
-              </CurrencyProvider>
-            </AuthProvider>
-          </NetworkProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <LanguageProvider>
+            <NetworkProvider>
+              <AuthProvider>
+                <CurrencyProvider>
+                <ReferralProvider>
+                <SubscriptionProvider>
+                  <BusinessSwitchProvider>
+                    <SaleDetailsModalProvider>
+                      <NotificationProvider>
+                        <CartProvider>
+                          <InstantCheckoutProvider>
+                            <Stack screenOptions={{ headerShown: false }}>
+                              <Stack.Screen name="(auth)" />
+                              <Stack.Screen name="(app)" />
+                              <Stack.Screen name="refer/[code]" />
+                              <Stack.Screen name="+not-found" />
+                            </Stack>
+                            <NetworkBanner />
+                            <PendingSalesSyncModal />
+                            <StatusBar style="auto" />
+                          </InstantCheckoutProvider>
+                        </CartProvider>
+                      </NotificationProvider>
+                    </SaleDetailsModalProvider>
+                  </BusinessSwitchProvider>
+                </SubscriptionProvider>
+                </ReferralProvider>
+                </CurrencyProvider>
+              </AuthProvider>
+            </NetworkProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

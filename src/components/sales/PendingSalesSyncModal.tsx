@@ -86,6 +86,8 @@ export function PendingSalesSyncModal() {
               item_discount_value: item.item_discount_value,
               item_discount_amount: item.item_discount_amount,
               item_discount_scope: item.item_discount_scope,
+              unit_id: item.unit_id || null,
+              currency_id: item.currency_id || null,
             });
 
           if (itemError) throw itemError;
