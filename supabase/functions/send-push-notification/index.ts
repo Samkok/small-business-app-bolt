@@ -40,18 +40,36 @@ Deno.serve(async (req) => {
 
     const { targetUserId, title, body, data, sound = "default", badge, priority = "default" } = await req.json();
 
-    // Resolve push token server-side from target user profile (don't accept raw tokens from body)
+    if (!targetUserId) {
+      return new Response(
+        JSON.stringify({ error: "targetUserId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Authorization: caller must share at least one business with the target user
+    const { data: hasShared, error: sharedError } = await supabase.rpc(
+      "check_shared_business_membership",
+      { p_caller_id: user.id, p_target_id: targetUserId }
+    );
+
+    if (sharedError || !hasShared) {
+      return new Response(
+        JSON.stringify({ error: "Not authorized to notify this user" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Resolve push token server-side from target user profile
     let expoPushToken: string | null = null;
 
-    if (targetUserId) {
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("expo_push_token")
-        .eq("user_id", targetUserId)
-        .maybeSingle();
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("expo_push_token")
+      .eq("user_id", targetUserId)
+      .maybeSingle();
 
-      expoPushToken = profile?.expo_push_token || null;
-    }
+    expoPushToken = profile?.expo_push_token || null;
 
     if (!expoPushToken) {
       return new Response(
