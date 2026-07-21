@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -65,8 +65,12 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [variantPickerUnits, setVariantPickerUnits] = useState<Array<ProductUnit & { unit: Unit }>>([]);
   const [showVariantPicker, setShowVariantPicker] = useState(false);
 
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const costTypeRefs = useRef<Map<number, TextInput>>(new Map());
 
   const validateDecimalInput = (text: string): string => {
     if (text === '') return '';
@@ -217,10 +221,17 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   };
 
   const addCost = () => {
+    const newIndex = additionalCosts.length;
     setAdditionalCosts(prev => [
       ...prev,
       { cost_type: '', amount: 0, calculation_type: 'per_total', description: '' },
     ]);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+      setTimeout(() => {
+        costTypeRefs.current.get(newIndex)?.focus();
+      }, 300);
+    }, 100);
   };
 
   const updateCost = (index: number, field: keyof BatchImportCost, value: any) => {
@@ -610,12 +621,12 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Import Stock
         </Text>
-        <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => setShowDiscardModal(true)}>
           <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Purchase Date */}
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -690,6 +701,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               </View>
 
               <Input
+                ref={(ref: TextInput | null) => {
+                  if (ref) costTypeRefs.current.set(index, ref);
+                  else costTypeRefs.current.delete(index);
+                }}
                 label="Cost Type"
                 value={cost.cost_type}
                 onChangeText={v => updateCost(index, 'cost_type', v)}
@@ -824,7 +839,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button title="Cancel" variant="outline" onPress={onCancel} style={styles.footerButton} />
+        <Button title="Cancel" variant="outline" onPress={() => setShowDiscardModal(true)} style={styles.footerButton} />
         <Button
           title="Create Import"
           onPress={handleImport}
@@ -855,6 +870,38 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               onConfirm={(start: Date) => { setPurchaseDate(start.toISOString()); setShowDatePicker(false); }}
               onCancel={() => setShowDatePicker(false)}
             />
+          </Card>
+        </View>
+      </Modal>
+
+      {/* Discard Confirmation Modal */}
+      <Modal
+        visible={showDiscardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDiscardModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={{ ...styles.discardModalContainer, backgroundColor: isDark ? '#1f2937' : '#ffffff' }}>
+            <Text style={[styles.discardTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Discard Import?
+            </Text>
+            <Text style={[styles.discardMessage, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              You have unsaved changes. Are you sure you want to discard this import?
+            </Text>
+            <View style={styles.discardButtons}>
+              <Button
+                title="Keep Editing"
+                variant="outline"
+                onPress={() => setShowDiscardModal(false)}
+                style={styles.discardButton}
+              />
+              <Button
+                title="Discard"
+                onPress={() => { setShowDiscardModal(false); onCancel(); }}
+                style={{ ...styles.discardButton, backgroundColor: '#dc2626' }}
+              />
+            </View>
           </Card>
         </View>
       </Modal>
@@ -1022,4 +1069,9 @@ const styles = StyleSheet.create({
   },
   datePickerContainer: { width: '100%', maxWidth: 400, padding: 20 },
   datePickerTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+  discardModalContainer: { width: '100%', maxWidth: 340, padding: 24, borderRadius: 16 },
+  discardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  discardMessage: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+  discardButtons: { flexDirection: 'row', gap: 12 },
+  discardButton: { flex: 1 },
 });

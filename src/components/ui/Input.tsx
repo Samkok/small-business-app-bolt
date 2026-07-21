@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef } from 'react';
 import {
   TextInput,
   Text,
@@ -17,7 +17,7 @@ interface InputProps extends TextInputProps {
   showPasswordToggle?: boolean;
 }
 
-export default function Input({
+const Input = forwardRef<TextInput, InputProps>(({
   label,
   error,
   required = false,
@@ -25,7 +25,7 @@ export default function Input({
   style,
   secureTextEntry,
   ...props
-}: InputProps) {
+}, ref) => {
   const { isDark } = useTheme();
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
@@ -51,6 +51,7 @@ export default function Input({
       )}
       <View style={styles.inputWrapper}>
         <TextInput
+          ref={ref}
           style={[
             styles.input,
             containerStyle,
@@ -78,7 +79,9 @@ export default function Input({
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
-}
+});
+
+export default Input;
 
 const styles = StyleSheet.create({
   container: {

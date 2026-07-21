@@ -8,11 +8,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck, Pencil } from 'lucide-react-native';
+import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck, Pencil, ChevronRight } from 'lucide-react-native';
 import ReturnSaleForm from './ReturnSaleForm';
 import VoidSaleModal from './VoidSaleModal';
 import SaleEditModal from './SaleEditModal';
@@ -71,6 +72,7 @@ export default function SaleDetailsContent({
 }: SaleDetailsContentProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const router = useRouter();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -273,7 +275,7 @@ export default function SaleDetailsContent({
               <View style={styles.saleInfoItem}>
                 <UserCheck size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
                 <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  {t('reports.createdBy')}: {getUserDisplayName(sale.created_by_name || sale.carts?.created_by_name)}
+                  {t('reports.createdBy')}: {getUserDisplayName(sale.created_by_name || sale.carts?.created_by_name, null)}
                 </Text>
               </View>
             </View>
@@ -324,38 +326,51 @@ export default function SaleDetailsContent({
         </Card>
 
         {/* Customer Info */}
-        <Card style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <User size={20} color="#2563eb" />
-            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {t('sales.customerInformation')}
-            </Text>
-          </View>
-
-          <View style={styles.customerInfo}>
-            <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {sale.customers?.name || t('customers.unknown')}
-            </Text>
-
-            {sale.customers?.phone && (
-              <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {t('customers.phone')}: {sale.customers.phone}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            if (sale.customer_id) {
+              router.push(`/(app)/customer-orders/${sale.customer_id}`);
+            }
+          }}
+          disabled={!sale.customer_id}
+        >
+          <Card style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <User size={20} color="#2563eb" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {t('sales.customerInformation')}
               </Text>
-            )}
+              {sale.customer_id && (
+                <ChevronRight size={18} color={isDark ? '#9ca3af' : '#6b7280'} style={{ marginLeft: 'auto' }} />
+              )}
+            </View>
 
-            {sale.customers?.address && (
-              <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {t('customers.address')}: {sale.customers.address}
+            <View style={styles.customerInfo}>
+              <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {sale.customers?.name || t('customers.unknown')}
               </Text>
-            )}
 
-            {sale.customers?.platform && (
-              <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {t('customers.platform')}: {sale.customers.platform.charAt(0).toUpperCase() + sale.customers.platform.slice(1).replace('_', ' ')}
-              </Text>
-            )}
-          </View>
-        </Card>
+              {sale.customers?.phone && (
+                <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('customers.phone')}: {sale.customers.phone}
+                </Text>
+              )}
+
+              {sale.customers?.address && (
+                <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('customers.address')}: {sale.customers.address}
+                </Text>
+              )}
+
+              {sale.customers?.platform && (
+                <Text style={[styles.customerDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('customers.platform')}: {sale.customers.platform.charAt(0).toUpperCase() + sale.customers.platform.slice(1).replace('_', ' ')}
+                </Text>
+              )}
+            </View>
+          </Card>
+        </TouchableOpacity>
 
         {/* Items */}
         <Card style={styles.section}>
