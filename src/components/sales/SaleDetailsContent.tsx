@@ -47,6 +47,7 @@ interface SaleDetailsContentProps {
     deliveryCost?: number | null;
   }) => Promise<void>;
   onCancelEdit: () => void;
+  onClose?: () => void;
   userProfile?: any;
   currentBusiness?: any;
 }
@@ -68,6 +69,7 @@ export default function SaleDetailsContent({
   onEditSale,
   onEditSaleConfirm,
   onCancelEdit,
+  onClose,
   currentBusiness,
 }: SaleDetailsContentProps) {
   const { t } = useTranslation();
@@ -330,7 +332,14 @@ export default function SaleDetailsContent({
           activeOpacity={0.7}
           onPress={() => {
             if (sale.customer_id) {
-              router.push(`/(app)/customer-orders/${sale.customer_id}`);
+              if (onClose) {
+                onClose();
+                setTimeout(() => {
+                  router.push(`/(app)/customer-orders/${sale.customer_id}`);
+                }, 350);
+              } else {
+                router.push(`/(app)/customer-orders/${sale.customer_id}`);
+              }
             }
           }}
           disabled={!sale.customer_id}

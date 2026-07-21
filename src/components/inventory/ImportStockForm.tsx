@@ -898,7 +898,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               />
               <Button
                 title="Discard"
-                onPress={() => { setShowDiscardModal(false); onCancel(); }}
+                onPress={() => {
+                  setShowDiscardModal(false);
+                  setTimeout(() => onCancel(), 300);
+                }}
                 style={{ ...styles.discardButton, backgroundColor: '#dc2626' }}
               />
             </View>
