@@ -350,6 +350,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
               onEditSale={handleEditSale}
               onEditSaleConfirm={handleEditSaleConfirm}
               onCancelEdit={handleCancelEdit}
+              onClose={onClose}
               userProfile={userProfile}
               currentBusiness={currentBusiness}
             />

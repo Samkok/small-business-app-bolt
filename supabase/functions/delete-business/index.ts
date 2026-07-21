@@ -142,6 +142,76 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[delete-business] Deleting business ${businessId}...`);
 
+    // Notify team members before deletion
+    const { data: teamMembers } = await supabaseAdmin
+      .from("user_business_roles")
+      .select("user_id")
+      .eq("business_id", businessId)
+      .neq("user_id", userId);
+
+    if (teamMembers && teamMembers.length > 0) {
+      const { data: businessInfo } = await supabaseAdmin
+        .from("businesses")
+        .select("business_name")
+        .eq("id", businessId)
+        .single();
+
+      const notifications = teamMembers.map((member) => ({
+        user_id: member.user_id,
+        business_id: businessId,
+        type: "business_deleted",
+        title: "Business Deleted",
+        message: `The business "${businessInfo?.business_name || "Unknown"}" has been deleted by the owner. You no longer have access.`,
+        data: { business_id: businessId, deleted_by: userId },
+      }));
+
+      await supabaseAdmin.from("notifications").insert(notifications).catch((err: any) => {
+        console.error("[delete-business] Non-critical: failed to notify team members:", err);
+      });
+    }
+
+    // Delete storage files before deleting the business record
+    console.log("[delete-business] Cleaning up storage files...");
+    
+    // Get product IDs for this business to clean up product-images
+    const { data: products } = await supabaseAdmin
+      .from("products")
+      .select("id, image_url")
+      .eq("business_id", businessId);
+
+    if (products && products.length > 0) {
+      const productImagePaths = products
+        .filter((p) => p.image_url && p.image_url.includes("product-images"))
+        .map((p) => {
+          const url = p.image_url;
+          const match = url.match(/product-images\/(.+)/);
+          return match ? match[1] : null;
+        })
+        .filter(Boolean) as string[];
+
+      if (productImagePaths.length > 0) {
+        const { error: storageErr } = await supabaseAdmin.storage
+          .from("product-images")
+          .remove(productImagePaths);
+        if (storageErr) console.error("[delete-business] Storage cleanup (product-images):", storageErr);
+        else console.log(`[delete-business] Removed ${productImagePaths.length} product images`);
+      }
+    }
+
+    // Clean up business-images bucket (logos etc.)
+    const { data: businessImages } = await supabaseAdmin.storage
+      .from("business-images")
+      .list(businessId);
+
+    if (businessImages && businessImages.length > 0) {
+      const paths = businessImages.map((f) => `${businessId}/${f.name}`);
+      const { error: bizStorageErr } = await supabaseAdmin.storage
+        .from("business-images")
+        .remove(paths);
+      if (bizStorageErr) console.error("[delete-business] Storage cleanup (business-images):", bizStorageErr);
+      else console.log(`[delete-business] Removed ${paths.length} business images`);
+    }
+
     // Delete the business (CASCADE will handle all related records automatically)
     // This is wrapped in a transaction automatically by PostgreSQL
     const { error: deleteError } = await supabaseAdmin

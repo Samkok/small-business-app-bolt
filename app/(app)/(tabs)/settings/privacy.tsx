@@ -195,7 +195,7 @@ export default function PrivacyPolicyScreen() {
           9.2. Business Deletion: You can delete individual businesses you own. This permanently removes all business data including sales, customers, products, expenses, team member associations, and uploaded files. Business deletion is immediate, irreversible, and affects all team members who will lose access. Only business owners can delete businesses.
         </Paragraph>
         <Paragraph>
-          9.3. Account Deletion: You can permanently delete your entire account. This requires first deleting all businesses you own, then removes your user profile, authentication credentials, and all personal data. Account deletion is immediate and irreversible with no recovery or reactivation possible.
+          9.3. Account Deletion: You can permanently delete your entire account. This removes your user profile, authentication credentials, all businesses you own (and their complete data), your membership in other businesses, subscription records, credit balances, referral data, and all uploaded personal files. Account deletion is immediate and irreversible with no recovery or reactivation possible.
         </Paragraph>
         <Paragraph>
           9.4. Pre-Deletion Recommendations: Before deleting any data, we strongly recommend:
