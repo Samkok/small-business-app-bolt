@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import { X, Share2, TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -73,11 +72,8 @@ export function ProfitCard({ visible, onClose, data }: ProfitCardProps) {
       if (Platform.OS === 'web') {
         await Share.share({ message: t('profitCard.shareMonth') });
       } else {
-        const fileUri = `${FileSystem.cacheDirectory}profit-card.png`;
-        await FileSystem.copyAsync({ from: uri, to: fileUri });
-
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
+          await Sharing.shareAsync(uri, {
             mimeType: 'image/png',
             dialogTitle: t('profitCard.shareMonth'),
           });
