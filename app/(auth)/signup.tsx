@@ -72,11 +72,6 @@ export default function SignUpScreen() {
 
     if (error) {
       Alert.alert(t('common.error'), error.message);
-    } else {
-      Alert.alert(
-        t('common.success'),
-        'Account created successfully! Please sign in to create your business.'
-      );
     }
   };
 
