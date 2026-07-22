@@ -20,7 +20,7 @@ import { SkeletonDashboardStats, SkeletonCard, SkeletonLoader } from '@/src/comp
 import ProductForm from '@/src/components/products/ProductForm';
 import CustomerForm from '@/src/components/customers/CustomerForm';
 import SalesForm from '@/src/components/sales/SalesForm';
-import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart, Bell } from 'lucide-react-native';
+import { DollarSign, TrendingUp, TrendingDown, Package, TriangleAlert as AlertTriangle, Users, ShoppingCart, Plus, Receipt, Calculator, ChartBar as BarChart, Bell, Share2 } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import MonthPicker from '@/src/components/ui/MonthPicker';
 import NotificationModal from '@/src/components/notifications/NotificationModal';
@@ -28,6 +28,8 @@ import { useNotifications } from '@/src/context/NotificationContext';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
+import { ProfitCard, ProfitCardData } from '@/src/components/sharing/ProfitCard';
+import { format } from 'date-fns';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -70,6 +72,7 @@ export default function DashboardScreen() {
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfitCard, setShowProfitCard] = useState(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
@@ -502,6 +505,20 @@ export default function DashboardScreen() {
             />
           </View>
 
+          {/* Share Month Button */}
+          {stats.netProfit > 0 && (
+            <TouchableOpacity onPress={() => setShowProfitCard(true)} style={styles.shareMonthBtn}>
+              <Card style={[styles.shareMonthCard, { borderColor: '#2563eb20' }]}>
+                <View style={styles.shareMonthContent}>
+                  <Share2 size={20} color="#2563eb" />
+                  <Text style={[styles.shareMonthText, { color: isDark ? '#93c5fd' : '#2563eb' }]}>
+                    {t('profitCard.shareMonth')}
+                  </Text>
+                </View>
+              </Card>
+            </TouchableOpacity>
+          )}
+
           {/* Reports Card */}
           <TouchableOpacity onPress={handleViewReports}>
             <Card style={styles.reportsCard}>
@@ -583,6 +600,23 @@ export default function DashboardScreen() {
         />
       </Modal>
 
+
+      {stats && (
+        <ProfitCard
+          visible={showProfitCard}
+          onClose={() => setShowProfitCard(false)}
+          data={{
+            businessName: currentBusiness?.business_name || '',
+            period: format(selectedMonth, 'MMMM yyyy'),
+            profit: stats.netProfit,
+            revenue: stats.monthlyRevenue,
+            salesCount: stats.totalProductsSold,
+            topProductName: topProducts[0]?.name,
+            growthPercent: undefined,
+            currencySymbol: '$',
+          }}
+        />
+      )}
       <NotificationModal
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
@@ -844,5 +878,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     margin: 20,
+  },
+  shareMonthBtn: {
+    marginBottom: 12,
+  },
+  shareMonthCard: {
+    borderWidth: 1,
+    borderColor: '#2563eb20',
+  },
+  shareMonthContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  shareMonthText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

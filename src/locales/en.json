@@ -799,5 +799,23 @@
     "joinBusinessTitle": "Waiting for an Invite?",
     "joinBusinessMessage": "Ask your business admin to add you as a team member using your email address. Once added, pull down to refresh and the business will appear automatically.",
     "signOutConfirm": "Are you sure you want to sign out and return to login?"
+  },
+  "referral": {
+    "shareTitle": "Join BizManage",
+    "shareMessage": "\ud83d\udcca I run my shop with BizManage \u2014 it tracks my sales, stock, and real profit in one app. Start free with my code {{code}} and we'll both get a free month of Pro. {{link}}",
+    "shareMessageShort": "Know your real profit. I use BizManage to run my shop \u2014 sales, stock & expenses in one place. Free to start with my code {{code}}. {{link}}"
+  },
+  "profitCard": {
+    "profitLabel": "Profit",
+    "revenueLabel": "Revenue",
+    "salesLabel": "Sales",
+    "vsLastMonth": "vs last month",
+    "profitableBadge": "Profitable month \u2705",
+    "madeWith": "Made with BizManage",
+    "tryFree": "Try free \u2014 code {{code}}",
+    "shareMonth": "Share your month",
+    "showAmounts": "Show amounts",
+    "growthOnly": "Growth only",
+    "topItem": "Top item"
   }
 }
