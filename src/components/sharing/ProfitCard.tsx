@@ -53,13 +53,17 @@ export function ProfitCard({ visible, onClose, data }: ProfitCardProps) {
 
   const formatAmount = (amount: number) => {
     if (!showAmounts) return '***';
-    if (Math.abs(amount) >= 1000000) {
-      return `${currency}${(amount / 1000000).toFixed(1)}M`;
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
+    if (abs >= 1000000) {
+      const val = abs / 1000000;
+      return `${sign}${currency}${val >= 10 ? val.toFixed(0) : val.toFixed(1)}M`;
     }
-    if (Math.abs(amount) >= 1000) {
-      return `${currency}${(amount / 1000).toFixed(1)}K`;
+    if (abs >= 1000) {
+      const val = abs / 1000;
+      return `${sign}${currency}${val >= 10 ? val.toFixed(0) : val.toFixed(1)}K`;
     }
-    return `${currency}${amount.toFixed(0)}`;
+    return `${sign}${currency}${abs.toFixed(0)}`;
   };
 
   const handleShare = useCallback(async () => {
@@ -235,17 +239,6 @@ function CardContent({
           <Text style={cardStyles.statValue}>{data.salesCount}</Text>
           <Text style={cardStyles.statLabel}>{t('profitCard.salesLabel')}</Text>
         </View>
-        {data.topProductName && (
-          <>
-            <View style={cardStyles.statDivider} />
-            <View style={cardStyles.statItem}>
-              <Text style={cardStyles.statValue} numberOfLines={1}>
-                {data.topProductName}
-              </Text>
-              <Text style={cardStyles.statLabel}>{t('profitCard.topItem')}</Text>
-            </View>
-          </>
-        )}
       </View>
 
       <View style={cardStyles.footer}>
