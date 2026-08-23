@@ -121,11 +121,11 @@ export function ProfitCard({ visible, onClose, data }: ProfitCardProps) {
           </View>
 
           <View style={styles.cardPreviewContainer}>
-            <View style={{ transform: [{ scale: SCALE }], width: CARD_WIDTH * SCALE, height: CARD_HEIGHT * SCALE, overflow: 'hidden' }}>
+            <View style={styles.cardPreviewScaler}>
               <ViewShot
                 ref={viewShotRef}
                 options={{ format: 'png', quality: 1, width: CARD_WIDTH, height: CARD_HEIGHT }}
-                style={{ width: CARD_WIDTH, height: CARD_HEIGHT, transform: [{ scale: 1 }], transformOrigin: 'top left' }}
+                style={styles.viewShotFull}
               >
                 <CardContent
                   data={data}
@@ -408,6 +408,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  cardPreviewScaler: {
+    width: CARD_WIDTH * SCALE,
+    height: CARD_HEIGHT * SCALE,
+  },
+  viewShotFull: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    transform: [{ scale: SCALE }],
+    transformOrigin: 'top left',
   },
   shareButton: {
     flexDirection: 'row',
