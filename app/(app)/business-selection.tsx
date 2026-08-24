@@ -32,6 +32,7 @@ export default function BusinessSelectionScreen() {
   const [creatingBusiness, setCreatingBusiness] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [businessesWithAccess, setBusinessesWithAccess] = useState<any[]>([]);
+  const [loadingBusinesses, setLoadingBusinesses] = useState(true);
 
   const router = useRouter();
   const { t } = useTranslation();
@@ -42,11 +43,17 @@ export default function BusinessSelectionScreen() {
   // Fetch accurate business data with access_state from database
   useEffect(() => {
     const fetchBusinessData = async () => {
-      if (!user?.id || !userBusinesses.length) {
-        setBusinessesWithAccess([]);
+      if (!user?.id) {
+        setLoadingBusinesses(false);
         return;
       }
 
+      if (!userBusinesses.length) {
+        // Don't show empty state until we've given auth context time to load
+        return;
+      }
+
+      setLoadingBusinesses(true);
       try {
         const { data, error } = await supabase
           .from('businesses')
@@ -59,6 +66,8 @@ export default function BusinessSelectionScreen() {
         setBusinessesWithAccess(data || []);
       } catch (error) {
         setBusinessesWithAccess(userBusinesses);
+      } finally {
+        setLoadingBusinesses(false);
       }
     };
 
@@ -323,7 +332,11 @@ export default function BusinessSelectionScreen() {
             colors={['#2563eb']}
           />
         }
-        ListEmptyComponent={() => (
+        ListEmptyComponent={() => loadingBusinesses ? (
+          <View style={styles.emptyState}>
+            <LoadingSpinner />
+          </View>
+        ) : (
           <Card style={styles.emptyState}>
             <Building size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
             <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
