@@ -191,6 +191,14 @@ Deno.serve(async (req: Request) => {
 
     if (activateError) {
       console.error('[ChooseBusinesses] Error activating businesses:', activateError);
+      const msg = activateError.message || '';
+      if (msg.includes('INVALID_SELECTION')) {
+        const userMsg = msg.replace(/^.*INVALID_SELECTION:\s*/, '');
+        return new Response(
+          JSON.stringify({ error: userMsg }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw activateError;
     }
 

@@ -237,13 +237,19 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
     try {
       const { data, error } = await supabase.functions.invoke('choose-businesses', {
         body: {
-          userId: userProfile?.user_id,
           selectedBusinessIds: Array.from(selectedBusinessIds),
         },
       });
 
       if (error) {
-        throw error;
+        let errorMessage = 'Failed to update business settings. Please try again.';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errorBody = await error.context.json();
+            if (errorBody?.error) errorMessage = errorBody.error;
+          }
+        } catch {}
+        throw new Error(errorMessage);
       }
 
       if (data?.error) {
