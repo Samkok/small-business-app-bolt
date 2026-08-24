@@ -103,10 +103,10 @@ export function DowngradePick({
 
       const [salesResult, teamResult] = await Promise.all([
         supabase
-          .from('sales')
-          .select('business_id, id')
-          .in('business_id', businessIds)
-          .eq('voided', false),
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', user.id)
+          .in('business_id', businessIds),
         supabase
           .from('user_business_roles')
           .select('business_id, user_id')
@@ -120,8 +120,8 @@ export function DowngradePick({
         console.error('[DowngradePick] Error loading team members:', teamResult.error);
       }
 
-      const salesCount = (salesResult.data || []).reduce((acc, sale) => {
-        acc[sale.business_id] = (acc[sale.business_id] || 0) + 1;
+      const salesCount = (salesResult.data || []).reduce((acc, row) => {
+        acc[row.business_id] = row.sales_count || 0;
         return acc;
       }, {} as Record<string, number>);
 
