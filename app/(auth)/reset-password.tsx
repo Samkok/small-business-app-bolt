@@ -24,11 +24,8 @@ import * as Linking from 'expo-linking';
 const createSessionFromUrl = async (url: string): Promise<boolean> => {
   if (!url) return false;
 
-  // Parse both query params and hash fragment
-  // Some redirects put tokens in ?params, others in #fragment
   let params: Record<string, string> = {};
 
-  // Try hash fragment first (implicit flow)
   const hashIndex = url.indexOf('#');
   if (hashIndex !== -1) {
     const hash = url.substring(hashIndex + 1);
@@ -36,7 +33,6 @@ const createSessionFromUrl = async (url: string): Promise<boolean> => {
     hashParams.forEach((value, key) => { params[key] = value; });
   }
 
-  // Also try query parameters (PKCE flow or some redirect configs)
   try {
     const questionIndex = url.indexOf('?');
     if (questionIndex !== -1) {
@@ -46,13 +42,11 @@ const createSessionFromUrl = async (url: string): Promise<boolean> => {
     }
   } catch (_) {}
 
-  // PKCE: exchange code for session
   if (params.code) {
     const { error } = await supabase.auth.exchangeCodeForSession(params.code);
     return !error;
   }
 
-  // Implicit: set session directly from tokens
   if (params.access_token && params.refresh_token) {
     const { error } = await supabase.auth.setSession({
       access_token: params.access_token,
@@ -63,6 +57,13 @@ const createSessionFromUrl = async (url: string): Promise<boolean> => {
 
   return false;
 };
+
+function simplifyPasswordError(message: string): string {
+  if (message?.includes('should contain') || message?.includes('characters from')) {
+    return 'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.';
+  }
+  return message;
+}
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -77,7 +78,6 @@ export default function ResetPasswordScreen() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionCreated = useRef(false);
 
-  // Use Linking.useURL() to reactively capture deep link URL (official Supabase pattern)
   const deepLinkUrl = Linking.useURL();
 
   useEffect(() => {
@@ -87,7 +87,6 @@ export default function ResetPasswordScreen() {
     }
   }, [isPasswordRecovery, session]);
 
-  // Handle deep link URL when it arrives
   useEffect(() => {
     if (sessionCreated.current || !deepLinkUrl) return;
 
@@ -98,7 +97,6 @@ export default function ResetPasswordScreen() {
     handle();
   }, [deepLinkUrl]);
 
-  // Also handle web hash fragment
   useEffect(() => {
     if (Platform.OS !== 'web' || sessionCreated.current) return;
     if (typeof window !== 'undefined' && (window.location.hash || window.location.search)) {
@@ -145,7 +143,7 @@ export default function ResetPasswordScreen() {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        Alert.alert(t('common.error'), error.message);
+        Alert.alert(t('common.error'), simplifyPasswordError(error.message));
       } else {
         clearPasswordRecovery();
         setResetComplete(true);
@@ -201,7 +199,7 @@ export default function ResetPasswordScreen() {
                 </View>
 
                 <Text style={[styles.subtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Enter your new password below. Make sure it's at least 8 characters long.
+                  Enter your new password below. It must be at least 8 characters and include uppercase, lowercase, a number, and a special character.
                 </Text>
 
                 <Input

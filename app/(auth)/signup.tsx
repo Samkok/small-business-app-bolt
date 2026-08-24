@@ -70,7 +70,10 @@ export default function SignUpScreen() {
     setLoading(false);
 
     if (error) {
-      Alert.alert(t('common.error'), error.message);
+      const msg = error.message?.includes('should contain') || error.message?.includes('characters from')
+        ? 'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.'
+        : error.message;
+      Alert.alert(t('common.error'), msg);
     } else {
       setSignUpSuccess(true);
     }
