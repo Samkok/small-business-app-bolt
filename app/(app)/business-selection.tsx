@@ -20,7 +20,7 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
+import { Briefcase, Plus, ChevronRight, ChevronLeft, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { ManageBusinessSubscription } from '@/src/components/subscription/ManageBusinessSubscription';
 import { supabase } from '@/src/config/supabase';
@@ -264,7 +264,13 @@ export default function BusinessSelectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
-        <View style={styles.headerLeft} />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <ChevronLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Select Business
         </Text>
@@ -459,8 +465,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  headerLeft: {
+  backButton: {
     width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 24,
