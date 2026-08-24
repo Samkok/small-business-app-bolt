@@ -107,7 +107,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
-  const { salesCountData, canAccessFeature, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
+  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
   const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -1056,6 +1056,12 @@ export default function SalesScreen() {
             </Text>
           </View>
         </View>
+      ) : businessDisableReason === 'owner_disabled' ? (
+        <ReadOnlyBanner
+          onUpgrade={() => {}}
+          isOwner={isBusinessOwner}
+          variant="owner_disabled"
+        />
       ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
         <WarningBanner
           salesCount={salesCountData.totalSalesAllBusinesses || 0}
@@ -1103,7 +1109,7 @@ export default function SalesScreen() {
                     opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
                   }
                 ]}
-                onPress={salesCountData.isAtLimit || !canAccessFeature ? () => setShowUpgradePrompt(true) : openInstantCheckoutModal}
+                onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : openInstantCheckoutModal}
                 disabled={salesCountData.isAtLimit || !canAccessFeature}
               >
                 <Zap size={24} color="#ffffff" />

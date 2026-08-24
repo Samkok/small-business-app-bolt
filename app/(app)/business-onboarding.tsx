@@ -10,6 +10,7 @@ import {
   Alert,
   RefreshControl,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -21,10 +22,12 @@ import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
 import { FormSuccessMessage } from '@/src/components/ui/FormSuccessMessage';
 import { storageService } from '@/src/services/storage';
-import { Building2, Briefcase, LogOut, UserPlus, RefreshCw, CircleCheck as CheckCircle } from 'lucide-react-native';
+import { Building2, Briefcase, LogOut, UserPlus, RefreshCw, CircleCheck as CheckCircle, ChevronLeft } from 'lucide-react-native';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { businessNameSchema } from '@/src/lib/validation';
 import { FieldStatus } from '@/src/hooks/useFormValidation';
+import { supabase } from '@/src/config/supabase';
+import { subscriptionService } from '@/src/services/subscriptionService';
 
 export default function BusinessOnboardingScreen() {
   const [businessName, setBusinessName] = useState('');
@@ -43,7 +46,7 @@ export default function BusinessOnboardingScreen() {
   const { t } = useTranslation();
   const subscription = useSubscription();
   const { isDark } = useTheme();
-  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses } = useAuth();
+  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses, user } = useAuth();
   const hasRedirectedRef = useRef(false);
 
   const validateBusinessName = (value: string) => {
@@ -142,10 +145,14 @@ export default function BusinessOnboardingScreen() {
       return;
     }
 
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+    if (!user?.id) return;
+
+    // Server-side check for business creation (counts only active businesses)
+    const canCreate = await subscriptionService.canCreateBusiness(user.id);
+    if (!canCreate) {
       Alert.alert(
         'Business Limit Reached',
-        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        `You've reached your active business limit. Upgrade your plan to create more businesses.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Upgrade', onPress: () => subscription.showPaywall() }

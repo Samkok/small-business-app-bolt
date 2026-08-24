@@ -40,7 +40,7 @@ interface Business {
   id: string;
   business_name: string;
   business_image_url?: string;
-  access_state: 'active' | 'read_only_sales';
+  access_state: 'active' | 'read_only_sales' | 'owner_disabled';
   salesCount?: number;
 }
 
@@ -186,14 +186,9 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
     };
   });
 
-  const allMustBeActive = businesses.length <= maxActiveBusinesses;
+  const allMustBeActive = false;
 
   const toggleBusinessSelection = (businessId: string, currentlyActive: boolean) => {
-    if (allMustBeActive) {
-      Alert.alert('All Businesses Active', 'Your plan covers all your businesses, so they must all remain active.');
-      return;
-    }
-
     const newSelection = new Set(selectedBusinessIds);
 
     if (newSelection.has(businessId)) {
