@@ -30,6 +30,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { supabase } from '@/src/config/supabase';
+import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -40,6 +41,7 @@ interface Business {
   business_name: string;
   business_image_url?: string;
   access_state: 'active' | 'read_only_sales';
+  salesCount?: number;
 }
 
 interface ManageBusinessSubscriptionProps {
@@ -65,8 +67,26 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
+  const [businessSalesCounts, setBusinessSalesCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!visible || !userProfile?.user_id) return;
+    const fetchSalesCounts = async () => {
+      const { data } = await supabase
+        .from('user_sales_counts')
+        .select('business_id, sales_count')
+        .eq('user_id', userProfile.user_id);
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach(row => { counts[row.business_id] = row.sales_count || 0; });
+        setBusinessSalesCounts(counts);
+      }
+    };
+    fetchSalesCounts();
+  }, [visible, userProfile?.user_id]);
+
   const businesses = useMemo(() => {
-    // Only show businesses owned by the current user
+    const isFreeTier = tierInfo.tier === 'free';
     return userBusinesses
       .filter(b => (b as any).owner_user_id === userProfile?.user_id)
       .map(b => ({
@@ -74,8 +94,13 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
         business_name: b.business_name,
         business_image_url: b.business_image_url,
         access_state: (b as any).access_state || 'active',
-      })) as Business[];
-  }, [userBusinesses, userProfile?.user_id]);
+        salesCount: businessSalesCounts[b.id] || 0,
+      }))
+      .filter(b => {
+        if (!isFreeTier) return true;
+        return b.salesCount < FREE_TIER_LIMIT;
+      }) as Business[];
+  }, [userBusinesses, userProfile?.user_id, tierInfo.tier, businessSalesCounts]);
 
   const activeBusinesses = useMemo(() =>
     businesses.filter(b => b.access_state === 'active'),

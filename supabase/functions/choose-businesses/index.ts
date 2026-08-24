@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
     let businessIdsToActivate: string[] = [];
 
     if (selectOldest) {
-      console.log('[ChooseBusinesses] Auto-selecting oldest businesses:', { userId, tierLimit });
+      console.log('[ChooseBusinesses] Auto-selecting oldest eligible businesses:', { userId, tierLimit });
 
       const limit = tierLimit || 1;
 
@@ -81,8 +81,31 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      businessIdsToActivate = allBusinesses.slice(0, limit).map(b => b.id);
-      console.log('[ChooseBusinesses] Selected oldest businesses:', businessIdsToActivate);
+      // For free tier, filter out businesses that already exceeded the sales threshold
+      const FREE_TIER_LIMIT = 50;
+      let eligibleBusinesses = allBusinesses;
+
+      if (subscription?.tier === 'free' || !subscription) {
+        const { data: salesCounts } = await supabase
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', userId);
+
+        const salesMap: Record<string, number> = {};
+        (salesCounts || []).forEach((row: any) => { salesMap[row.business_id] = row.sales_count || 0; });
+
+        eligibleBusinesses = allBusinesses.filter(b => (salesMap[b.id] || 0) < FREE_TIER_LIMIT);
+        console.log('[ChooseBusinesses] Filtered eligible businesses (below sales threshold):', eligibleBusinesses.length);
+
+        // If no eligible businesses, fall back to the oldest one regardless
+        if (eligibleBusinesses.length === 0) {
+          eligibleBusinesses = allBusinesses.slice(0, 1);
+          console.log('[ChooseBusinesses] No eligible businesses below threshold, falling back to oldest');
+        }
+      }
+
+      businessIdsToActivate = eligibleBusinesses.slice(0, limit).map(b => b.id);
+      console.log('[ChooseBusinesses] Selected businesses:', businessIdsToActivate);
     } else {
       if (!selectedBusinessIds || !Array.isArray(selectedBusinessIds)) {
         return new Response(
