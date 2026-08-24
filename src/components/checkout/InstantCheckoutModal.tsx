@@ -66,7 +66,7 @@ export function InstantCheckoutModal() {
 
   const { t } = useTranslation();
   const router = useRouter();
-  const { salesCountData, canAccessFeature, showPaywall, refreshSalesCount } = useSubscription();
+  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, refreshSalesCount } = useSubscription();
   const [completing, setCompleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
@@ -372,6 +372,12 @@ export function InstantCheckoutModal() {
     setCompleting(true);
     try {
       await refreshSalesCount();
+
+      if (businessDisableReason === 'owner_disabled') {
+        Alert.alert('Business Disabled', 'This business has been disabled. Sales cannot be created until it is re-enabled.');
+        setCompleting(false);
+        return;
+      }
 
       if (salesCountData.isAtLimit && !canAccessFeature) {
         setShowUpgradePrompt(true);

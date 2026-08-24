@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
-import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, SubscriptionTier } from '@/src/services/subscriptionService';
+import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, SubscriptionTier, BusinessDisableReason } from '@/src/services/subscriptionService';
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
@@ -64,6 +64,7 @@ interface SubscriptionContextType {
   isLoading: boolean;
   isInitialized: boolean;
   canAccessFeature: boolean;
+  businessDisableReason: BusinessDisableReason;
   tierInfo: TierInfo;
   ownedBusinessCount: number;
   isIAPAvailable: boolean;
@@ -125,6 +126,8 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
   const [offerings, setOfferings] = useState<any | null>(null);
   const [customerInfo, setCustomerInfo] = useState<any | null>(null);
+  const customerInfoRef = useRef<any | null>(null);
+  useEffect(() => { customerInfoRef.current = customerInfo; }, [customerInfo]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -133,6 +136,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [isTeamMemberUpgradeModalVisible, setIsTeamMemberUpgradeModalVisible] = useState(false);
   const [teamMemberOwnedBusinesses, setTeamMemberOwnedBusinesses] = useState<Array<{ id: string; business_name: string }>>([]);
   const [canAccessFeature, setCanAccessFeature] = useState(true);
+  const [businessDisableReason, setBusinessDisableReason] = useState<BusinessDisableReason>(null);
   const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
@@ -344,8 +348,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      const revenueCatSubscribed = customerInfo?.entitlements?.active
-        ? Object.keys(customerInfo.entitlements.active).length > 0
+      const currentCustomerInfo = customerInfoRef.current;
+      const revenueCatSubscribed = currentCustomerInfo?.entitlements?.active
+        ? Object.keys(currentCustomerInfo.entitlements.active).length > 0
         : false;
 
       const actuallySubscribed = supabaseSubscribed || revenueCatSubscribed;
@@ -362,7 +367,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setHasError(true);
       throw error;
     }
-  }, [user?.id, customerInfo]);
+  }, [user?.id]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;
@@ -509,15 +514,19 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const checkFeatureAccess = useCallback(async (forceRefresh = false) => {
     if (!user?.id || !currentBusiness?.id) {
       setCanAccessFeature(false);
+      setBusinessDisableReason(null);
       return;
     }
 
     try {
       const hasAccess = await subscriptionService.canAccessFeature(user.id, currentBusiness.id, forceRefresh);
       setCanAccessFeature(hasAccess);
+      const reason = await subscriptionService.getBusinessDisableReason(currentBusiness.id);
+      setBusinessDisableReason(reason);
     } catch (error) {
       console.error('Error checking feature access:', error);
       setCanAccessFeature(false);
+      setBusinessDisableReason(null);
     }
   }, [user?.id, currentBusiness?.id]);
 
@@ -553,6 +562,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
         if (fullState.canAccessFeature !== null) {
           setCanAccessFeature(fullState.canAccessFeature);
+          setBusinessDisableReason(fullState.businessDisableReason);
         }
 
         return true;
@@ -575,10 +585,39 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
       setCustomerInfo(newCustomerInfo);
 
-      const fullState = await subscriptionService.getFullSubscriptionState(
+      // The webhook may not have written to the DB yet, so retry with delays
+      let fullState = await subscriptionService.getFullSubscriptionState(
         user.id,
         currentBusiness?.id
       );
+
+      if (!fullState.subscriptionStatus.isSubscribed) {
+        // Wait for webhook to process
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
+      }
+
+      if (!fullState.subscriptionStatus.isSubscribed) {
+        // Still not reflected - trust RevenueCat's response directly
+        const hasActiveEntitlements = newCustomerInfo?.entitlements?.active
+          ? Object.keys(newCustomerInfo.entitlements.active).length > 0
+          : false;
+
+        if (hasActiveEntitlements) {
+          fullState = {
+            ...fullState,
+            subscriptionStatus: {
+              ...fullState.subscriptionStatus,
+              isSubscribed: true,
+              subscriptionStatus: 'active',
+            },
+            canAccessFeature: true,
+          };
+        }
+      }
 
       setSubscriptionStatus(fullState.subscriptionStatus);
       setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
@@ -591,6 +630,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
       if (fullState.canAccessFeature !== null) {
         setCanAccessFeature(fullState.canAccessFeature);
+        setBusinessDisableReason(fullState.businessDisableReason);
       }
 
       return true;
@@ -618,6 +658,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
         if (fullState.canAccessFeature !== null) {
           setCanAccessFeature(fullState.canAccessFeature);
+          setBusinessDisableReason(fullState.businessDisableReason);
         }
 
         return true;
@@ -660,6 +701,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
         if (fullState.canAccessFeature !== null) {
           setCanAccessFeature(fullState.canAccessFeature);
+          setBusinessDisableReason(fullState.businessDisableReason);
         }
 
         return true;
@@ -993,6 +1035,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
             if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
               setCanAccessFeature(fullState.canAccessFeature);
+              setBusinessDisableReason(fullState.businessDisableReason);
             }
           } catch (error) {
             console.error('[RevenueCatSubscriptionContext] Error processing subscription change:', error);
@@ -1027,13 +1070,46 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         revenueCatService.addCustomerInfoUpdateListener(async (info: any) => {
           console.log('[RevenueCatSubscriptionContext] Customer info updated via listener');
           setCustomerInfo(info);
-          await refreshCustomerInfo();
+
+          const hasActiveEntitlements = info?.entitlements?.active
+            ? Object.keys(info.entitlements.active).length > 0
+            : false;
+
+          if (hasActiveEntitlements) {
+            setIsSubscribed(true);
+            setCanAccessFeature(true);
+            setBusinessDisableReason(null);
+          }
+
+          try {
+            const fullState = await subscriptionService.getFullSubscriptionState(
+              user.id,
+              currentBusiness?.id || null
+            );
+
+            if (fullState?.subscriptionStatus) {
+              setSubscriptionStatus(fullState.subscriptionStatus);
+              setIsSubscribed(fullState.subscriptionStatus.isSubscribed || hasActiveEntitlements);
+            }
+            if (fullState?.tierInfo) {
+              setTierInfo(fullState.tierInfo);
+            }
+            if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
+              setCanAccessFeature(fullState.canAccessFeature || hasActiveEntitlements);
+              setBusinessDisableReason(fullState.businessDisableReason);
+            }
+            if (fullState?.salesCountData) {
+              setSalesCountData(fullState.salesCountData);
+            }
+          } catch (error) {
+            console.error('[RevenueCatSubscriptionContext] Error refreshing state from listener:', error);
+          }
         });
       }
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error setting up customer info listener:', error);
     }
-  }, [user?.id, refreshCustomerInfo]);
+  }, [user?.id, currentBusiness?.id, refreshCustomerInfo]);
 
   useEffect(() => {
     if (user?.id) {
@@ -1182,6 +1258,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     isLoading,
     isInitialized,
     canAccessFeature,
+    businessDisableReason,
     tierInfo,
     ownedBusinessCount,
     isIAPAvailable: Platform.OS !== 'web' && isRevenueCatAvailable,

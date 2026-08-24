@@ -3,6 +3,7 @@ import { Platform, Share } from 'react-native';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from 'i18next';
 
 const PENDING_REFERRAL_KEY = 'pending_referral_code';
 const DEVICE_FINGERPRINT_KEY = 'device_fingerprint';
@@ -158,11 +159,12 @@ export const referralService = {
   async shareReferralLink(code: string): Promise<boolean> {
     try {
       const link = `https://bizmanage.xtremon.com/refer/${code}`;
-      const message = `Join me on BizManage - the best app for managing your business! Use my referral code ${code} and get bonus credits when you subscribe. ${link}`;
+      const message = i18n.t('referral.shareMessage', { code, link });
+      const title = i18n.t('referral.shareTitle');
 
       const result = await Share.share({
         message,
-        title: 'Join BizManage',
+        title,
       });
 
       return result.action === Share.sharedAction;

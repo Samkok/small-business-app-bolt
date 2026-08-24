@@ -754,5 +754,23 @@
     "joinBusinessTitle": "在等待邀请吗？",
     "joinBusinessMessage": "请让您的企业管理员使用您的电子邮件地址将您添加为团队成员。添加后，下拉刷新即可自动看到企业。",
     "signOutConfirm": "确定要退出登录吗？"
+  },
+  "referral": {
+    "shareTitle": "加入 BizManage",
+    "shareMessage": "\ud83d\udcca 我用 BizManage 管理我的店铺\u2014\u2014销售、库存和真实利润都在一个应用里。用我的邀请码 {{code}} 免费开始，我们俩都能获得一个月免费 Pro。{{link}}",
+    "shareMessageShort": "了解你的真实利润。我用 BizManage 管理店铺\u2014\u2014销售、库存和支出都在一个地方。用我的邀请码 {{code}} 免费开始。{{link}}"
+  },
+  "profitCard": {
+    "profitLabel": "利润",
+    "revenueLabel": "营业额",
+    "salesLabel": "销售",
+    "vsLastMonth": "与上月相比",
+    "profitableBadge": "盈利月份 \u2705",
+    "madeWith": "由 BizManage 制作",
+    "tryFree": "免费试用 \u2014 邀请码 {{code}}",
+    "shareMonth": "分享你的月度成绩",
+    "showAmounts": "显示金额",
+    "growthOnly": "仅显示增长",
+    "topItem": "热销商品"
   }
 }

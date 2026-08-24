@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify JWT authentication (D3 fix)
+    // Verify JWT authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -39,9 +39,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Force userId to the authenticated user — ignore body-supplied userId
     const userId = user.id;
-
     const { selectedBusinessIds, selectOldest } = await req.json();
 
     // Compute tierLimit server-side from the user's actual subscription
@@ -56,7 +54,7 @@ Deno.serve(async (req: Request) => {
     let businessIdsToActivate: string[] = [];
 
     if (selectOldest) {
-      console.log('[ChooseBusinesses] Auto-selecting oldest businesses:', { userId, tierLimit });
+      console.log('[ChooseBusinesses] Auto-selecting oldest eligible businesses:', { userId, tierLimit });
 
       const limit = tierLimit || 1;
 
@@ -81,8 +79,30 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      businessIdsToActivate = allBusinesses.slice(0, limit).map(b => b.id);
-      console.log('[ChooseBusinesses] Selected oldest businesses:', businessIdsToActivate);
+      // For free tier, filter out businesses that already exceeded the sales threshold
+      const FREE_TIER_LIMIT = 50;
+      let eligibleBusinesses = allBusinesses;
+
+      if (subscription?.tier === 'free' || !subscription) {
+        const { data: salesCounts } = await supabase
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', userId);
+
+        const salesMap: Record<string, number> = {};
+        (salesCounts || []).forEach((row: any) => { salesMap[row.business_id] = row.sales_count || 0; });
+
+        eligibleBusinesses = allBusinesses.filter(b => (salesMap[b.id] || 0) < FREE_TIER_LIMIT);
+        console.log('[ChooseBusinesses] Filtered eligible businesses (below sales threshold):', eligibleBusinesses.length);
+
+        if (eligibleBusinesses.length === 0) {
+          eligibleBusinesses = allBusinesses.slice(0, 1);
+          console.log('[ChooseBusinesses] No eligible businesses below threshold, falling back to oldest');
+        }
+      }
+
+      businessIdsToActivate = eligibleBusinesses.slice(0, limit).map(b => b.id);
+      console.log('[ChooseBusinesses] Selected businesses:', businessIdsToActivate);
     } else {
       if (!selectedBusinessIds || !Array.isArray(selectedBusinessIds)) {
         return new Response(
@@ -95,6 +115,15 @@ Deno.serve(async (req: Request) => {
           }
         );
       }
+
+      // Validate at least 1 selected
+      if (selectedBusinessIds.length < 1) {
+        return new Response(
+          JSON.stringify({ error: 'You must keep at least one business active.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       businessIdsToActivate = selectedBusinessIds;
     }
 
@@ -130,27 +159,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { data: tierData } = await supabase
-      .rpc('get_user_subscription_tier', { p_user_id: userId });
-
-    const tierInfo = tierData && tierData.length > 0 ? tierData[0] : null;
-
-    if (!tierInfo) {
-      return new Response(
-        JSON.stringify({ error: 'Could not fetch subscription tier' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const maxBusinesses = tierInfo.max_owned_businesses;
-    if (maxBusinesses !== null && businessIdsToActivate.length > maxBusinesses) {
+    // Validate against tier limit (cannot activate more than allowed)
+    if (tierLimit !== null && businessIdsToActivate.length > tierLimit) {
       return new Response(
         JSON.stringify({
-          error: `Too many businesses selected. Your tier allows ${maxBusinesses} active business(es).`,
-          maxAllowed: maxBusinesses,
+          error: `Too many businesses selected. Your tier allows ${tierLimit} active business(es).`,
+          maxAllowed: tierLimit,
           selectedCount: businessIdsToActivate.length
         }),
         {
@@ -168,6 +182,14 @@ Deno.serve(async (req: Request) => {
 
     if (activateError) {
       console.error('[ChooseBusinesses] Error activating businesses:', activateError);
+      const msg = activateError.message || '';
+      if (msg.includes('INVALID_SELECTION')) {
+        const userMsg = msg.replace(/^.*INVALID_SELECTION:\s*/, '');
+        return new Response(
+          JSON.stringify({ error: userMsg }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw activateError;
     }
 

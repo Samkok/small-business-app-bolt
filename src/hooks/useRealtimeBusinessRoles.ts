@@ -163,13 +163,15 @@ export function useRealtimeBusinessRoles({
                   return m;
                 });
               }
-              await switchBusiness(newId);
-              setTimeout(async () => {
-                await navigateTo('/(app)/(tabs)');
-                setTimeout(() => {
-                  showAlert('Welcome!', `You've been added to ${newBiz.business_name}`);
-                }, 500);
-              }, 200);
+              if (!currentBusinessRef.current) {
+                await switchBusiness(newId);
+                setTimeout(async () => {
+                  await navigateTo('/(app)/(tabs)');
+                  setTimeout(() => {
+                    showAlert('Welcome!', `You've been added to ${newBiz.business_name}`);
+                  }, 500);
+                }, 200);
+              }
             }
           }
         }
@@ -300,7 +302,10 @@ export function useRealtimeBusinessRoles({
                 segments,
                 !!currentBusinessRef.current,
               );
-              await switchBusiness(newBusinessId);
+
+              if (!currentBusinessRef.current) {
+                await switchBusiness(newBusinessId);
+              }
 
               if (shouldRedirect && !autoRedirectRef.current) {
                 autoRedirectRef.current = true;

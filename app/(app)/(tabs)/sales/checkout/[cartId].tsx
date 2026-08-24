@@ -38,7 +38,7 @@ export default function CheckoutScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { getCart, getCartSummary, completeSale } = useCart();
-  const { salesCountData, showPaywall } = useSubscription();
+  const { salesCountData, showPaywall, businessDisableReason } = useSubscription();
   const { currencies, defaultCurrency, convertBetween, formatPrice } = useCurrency(currentBusiness?.id);
   const { isConnected } = useNetwork();
 
@@ -64,6 +64,11 @@ export default function CheckoutScreen() {
   const handleCompleteSale = useCallback(async () => {
     if (!currentBusiness?.id || !cartId || !cart) {
       Alert.alert('Error', 'Missing required information');
+      return;
+    }
+
+    if (businessDisableReason === 'owner_disabled') {
+      Alert.alert('Business Disabled', 'This business has been disabled. Sales cannot be created until it is re-enabled.');
       return;
     }
 

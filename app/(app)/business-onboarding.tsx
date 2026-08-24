@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  RefreshControl
+  RefreshControl,
+  Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -18,24 +20,65 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
+import { FormSuccessMessage } from '@/src/components/ui/FormSuccessMessage';
 import { storageService } from '@/src/services/storage';
-import { Building2, Briefcase, ArrowRight, LogOut, UserPlus, RefreshCw } from 'lucide-react-native';
+import { Building2, Briefcase, LogOut, UserPlus, RefreshCw, CircleCheck as CheckCircle, ChevronLeft } from 'lucide-react-native';
 import { useSubscription } from '@/src/context/SubscriptionContext';
+import { businessNameSchema } from '@/src/lib/validation';
+import { FieldStatus } from '@/src/hooks/useFormValidation';
+import { supabase } from '@/src/config/supabase';
+import { subscriptionService } from '@/src/services/subscriptionService';
 
 export default function BusinessOnboardingScreen() {
   const [businessName, setBusinessName] = useState('');
+  const [businessNameError, setBusinessNameError] = useState<string | null>(null);
+  const [businessNameStatus, setBusinessNameStatus] = useState<FieldStatus>('idle');
+  const [businessNameTouched, setBusinessNameTouched] = useState(false);
   const [businessImageUrl, setBusinessImageUrl] = useState('');
   const [imageFile, setImageFile] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const successAnim = useRef(new Animated.Value(0)).current;
 
   const router = useRouter();
   const { t } = useTranslation();
   const subscription = useSubscription();
   const { isDark } = useTheme();
-  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses } = useAuth();
+  const { createBusiness, userProfile, signOut, userBusinesses, currentBusiness, refreshUserBusinesses, user } = useAuth();
   const hasRedirectedRef = useRef(false);
+
+  const validateBusinessName = (value: string) => {
+    if (!value.trim()) {
+      setBusinessNameError('Please enter a business name');
+      setBusinessNameStatus('error');
+      return false;
+    }
+    const result = businessNameSchema.safeParse(value);
+    if (!result.success) {
+      setBusinessNameError(result.error.errors[0]?.message || 'Invalid business name');
+      setBusinessNameStatus('error');
+      return false;
+    }
+    setBusinessNameError(null);
+    setBusinessNameStatus('valid');
+    return true;
+  };
+
+  const handleBusinessNameChange = (value: string) => {
+    setBusinessName(value);
+    if (businessNameTouched) {
+      validateBusinessName(value);
+    }
+  };
+
+  const handleBusinessNameBlur = () => {
+    setBusinessNameTouched(true);
+    if (businessName) {
+      validateBusinessName(businessName);
+    }
+  };
 
   const handleImageSelect = (file: any) => {
     if (Platform.OS === 'web') {
@@ -55,18 +98,13 @@ export default function BusinessOnboardingScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      console.log('BusinessOnboarding: Manual refresh triggered');
       const [businesses] = await Promise.all([
         refreshUserBusinesses(),
         subscription.refreshTierInfo(),
         subscription.refreshSubscriptionStatus()
       ]);
 
-      // Check if user has been added to any businesses
       if (businesses.length > 0) {
-        console.log('BusinessOnboarding: Businesses found after refresh:', businesses.length);
-
-        // Redirect to business selection page
         Alert.alert(
           'Welcome!',
           businesses.length === 1
@@ -81,8 +119,6 @@ export default function BusinessOnboardingScreen() {
             }
           ]
         );
-      } else {
-        console.log('BusinessOnboarding: No businesses found after refresh');
       }
     } catch (error) {
       console.error('BusinessOnboarding: Error refreshing businesses:', error);
@@ -91,51 +127,32 @@ export default function BusinessOnboardingScreen() {
     }
   };
 
-  // Auto-redirect when user is added to a business
   useEffect(() => {
-    // Prevent duplicate redirects
-    if (hasRedirectedRef.current) {
-      return;
-    }
-
-    // If user has businesses and a current business is set, redirect to main app
+    if (hasRedirectedRef.current) return;
     if (userBusinesses.length > 0 && currentBusiness) {
-      console.log('BusinessOnboarding: User has been added to a business, auto-redirecting to main app');
-      console.log('BusinessOnboarding: Business details:', {
-        businessCount: userBusinesses.length,
-        currentBusinessId: currentBusiness.id,
-        currentBusinessName: currentBusiness.business_name,
-      });
-
       hasRedirectedRef.current = true;
-
-      // Show alert to notify user
       Alert.alert(
         'Welcome!',
         `You've been added to ${currentBusiness.business_name}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/(app)/(tabs)');
-            }
-          }
-        ]
+        [{ text: 'OK', onPress: () => { router.replace('/(app)/(tabs)'); } }]
       );
     }
   }, [userBusinesses, currentBusiness, router]);
 
   const handleCreateBusiness = async () => {
-    if (!businessName.trim()) {
-      Alert.alert('Error', 'Please enter a business name');
+    if (!validateBusinessName(businessName)) {
+      setBusinessNameTouched(true);
       return;
     }
 
-    // Check business limit before attempting creation
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+    if (!user?.id) return;
+
+    // Server-side check for business creation (counts only active businesses)
+    const canCreate = await subscriptionService.canCreateBusiness(user.id);
+    if (!canCreate) {
       Alert.alert(
         'Business Limit Reached',
-        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        `You've reached your active business limit. Upgrade your plan to create more businesses.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Upgrade', onPress: () => subscription.showPaywall() }
@@ -149,7 +166,6 @@ export default function BusinessOnboardingScreen() {
       const { error, business } = await createBusiness(businessName.trim());
 
       if (error) {
-        // Check if it's a business limit error from server
         if (error.message?.includes('BUSINESS_LIMIT_REACHED') || error.message?.includes('maximum number of businesses')) {
           Alert.alert(
             'Business Limit Reached',
@@ -166,34 +182,33 @@ export default function BusinessOnboardingScreen() {
         return;
       }
 
-      // If image was selected, upload it
+      setCreateSuccess(true);
+      Animated.spring(successAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 8,
+      }).start();
+
       if (imageFile && business) {
         setImageLoading(true);
         try {
-          const uploadResult = await storageService.updateBusinessImage(
-            null,
-            imageFile,
-            business.id
-          );
-
-          // Update business with image URL (this will be handled by the context)
-          console.log('Business image uploaded:', uploadResult.url);
+          await storageService.updateBusinessImage(null, imageFile, business.id);
         } catch (imageError) {
           console.error('Error uploading image:', imageError);
-          // Don't block the flow if image upload fails
         } finally {
           setImageLoading(false);
         }
       }
 
-      // Refresh subscription data to update owned business count
       await subscription.refreshTierInfo();
 
-      // Navigate to the main app
-      router.replace('/(app)/(tabs)');
+      setTimeout(() => {
+        router.replace('/(app)/(tabs)');
+      }, 800);
     } catch (error) {
       console.error('Error creating business:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
@@ -203,10 +218,7 @@ export default function BusinessOnboardingScreen() {
       t('common.signOut', 'Sign Out'),
       t('onboarding.signOutConfirm', 'Are you sure you want to sign out and return to login?'),
       [
-        {
-          text: t('common.cancel', 'Cancel'),
-          style: 'cancel'
-        },
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
         {
           text: t('common.signOut', 'Sign Out'),
           style: 'destructive',
@@ -235,6 +247,7 @@ export default function BusinessOnboardingScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -258,83 +271,97 @@ export default function BusinessOnboardingScreen() {
           <View style={[styles.refreshHint, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }]}>
             <RefreshCw size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={[styles.refreshHintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-            {t('onboarding.pullToRefresh', 'Pull down to check if you\'ve been added to a business')}
+              {t('onboarding.pullToRefresh', 'Pull down to check if you\'ve been added to a business')}
             </Text>
           </View>
         </View>
 
         <Card style={styles.card}>
-          <View style={styles.infoSection}>
-            <Briefcase size={24} color="#2563eb" style={styles.infoIcon} />
-            <View style={styles.infoText}>
-              <Text style={[styles.infoTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Create Your Business
-              </Text>
-              <Text style={[styles.infoDescription, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                A business represents your company or store in the app. You can manage products, sales, customers, and more within each business.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <ImageUpload
-            value={businessImageUrl}
-            onImageSelect={handleImageSelect}
-            onImageRemove={handleImageRemove}
-            loading={imageLoading}
-            placeholder="Upload business logo (optional)"
-            label="Business Logo"
+          <FormSuccessMessage
+            visible={createSuccess}
+            message="Business created successfully! Taking you to your dashboard..."
           />
 
-          <Input
-            label="Business Name"
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder="Enter your business name"
-            autoCapitalize="words"
-            required
-          />
+          {!createSuccess && (
+            <>
+              <View style={styles.infoSection}>
+                <Briefcase size={24} color="#2563eb" style={styles.infoIcon} />
+                <View style={styles.infoText}>
+                  <Text style={[styles.infoTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    Create Your Business
+                  </Text>
+                  <Text style={[styles.infoDescription, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    A business represents your company or store in the app. You can manage products, sales, customers, and more within each business.
+                  </Text>
+                </View>
+              </View>
 
-          <Button
-            title="Create Business"
-            onPress={handleCreateBusiness}
-            loading={loading}
-            disabled={refreshing}
-            style={styles.createButton}
-          />
+              <View style={[styles.divider, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
 
-          <View style={styles.alternativeActions}>
-            <Text style={[styles.orText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              or
-            </Text>
+              <ImageUpload
+                value={businessImageUrl}
+                onImageSelect={handleImageSelect}
+                onImageRemove={handleImageRemove}
+                loading={imageLoading}
+                placeholder="Upload business logo (optional)"
+                label="Business Logo"
+              />
 
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-              onPress={handleJoinBusiness}
-            >
-              <UserPlus size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
-              <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {t('onboarding.requestJoin', 'Request to Join a Business')}
-              </Text>
-            </TouchableOpacity>
+              <Input
+                label="Business Name"
+                value={businessName}
+                onChangeText={handleBusinessNameChange}
+                onBlur={handleBusinessNameBlur}
+                placeholder="e.g. My Shop, Fresh Bakery"
+                autoCapitalize="words"
+                required
+                error={businessNameTouched ? businessNameError || undefined : undefined}
+                validationStatus={businessNameTouched ? businessNameStatus : 'idle'}
+                hint="This is how your business will appear in the app"
+                successMessage="Great name!"
+              />
 
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-              onPress={handleBackToLogin}
-            >
-              <LogOut size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
-              <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Back to Login
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <Button
+                title="Create Business"
+                onPress={handleCreateBusiness}
+                loading={loading}
+                disabled={refreshing || loading}
+                style={styles.createButton}
+              />
 
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              You can create additional businesses later from the settings.
-            </Text>
-          </View>
+              <View style={styles.alternativeActions}>
+                <Text style={[styles.orText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  or
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                  onPress={handleJoinBusiness}
+                >
+                  <UserPlus size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
+                  <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {t('onboarding.requestJoin', 'Request to Join a Business')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                  onPress={handleBackToLogin}
+                >
+                  <LogOut size={20} color={isDark ? '#d1d5db' : '#6b7280'} />
+                  <Text style={[styles.secondaryButtonText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Back to Login
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.footer}>
+                <Text style={[styles.footerText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  You can create additional businesses later from the settings.
+                </Text>
+              </View>
+            </>
+          )}
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -415,7 +442,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#e5e7eb',
     marginBottom: 24,
   },
   createButton: {

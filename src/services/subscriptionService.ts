@@ -1,7 +1,6 @@
 import { supabase } from '@/src/config/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { Platform, Alert } from 'react-native';
-import { productIdMapper } from '@/src/utils/productIdMapper';
 import { isNetworkError, retryWithBackoff } from '@/src/lib/network';
 
 export const FREE_TIER_LIMIT = 50;
@@ -16,25 +15,6 @@ function showNetworkErrorAlert(context: string) {
 }
 
 export type SubscriptionTier = 'free' | 'pro' | 'pro_plus' | 'max';
-
-function getTierFromProductId(productId: string | undefined): SubscriptionTier {
-  if (!productId) return 'free';
-  return productIdMapper.getTierFromProductId(productId);
-}
-
-function getMaxOwnedBusinessesFromTier(tier: SubscriptionTier): number | null {
-  switch (tier) {
-    case 'pro':
-      return 1;
-    case 'pro_plus':
-      return 3;
-    case 'max':
-      return 999999;
-    case 'free':
-    default:
-      return null;
-  }
-}
 
 export interface SubscriptionStatus {
   isSubscribed: boolean;
@@ -62,12 +42,16 @@ export interface TierInfo {
   expirationDate: string | null;
 }
 
+export type BusinessDisableReason = 'subscription' | 'owner_disabled' | null;
+
 export interface FullSubscriptionState {
   subscriptionStatus: SubscriptionStatus;
   tierInfo: TierInfo;
   ownedBusinessCount: number;
+  activeBusinessCount: number;
   salesCountData: SalesCountData | null;
   canAccessFeature: boolean | null;
+  businessDisableReason: BusinessDisableReason;
 }
 
 interface CachedSubscriptionData {
@@ -409,65 +393,6 @@ export const subscriptionService = {
     }
   },
 
-  async updateSubscription(
-    userId: string,
-    status: 'active' | 'expired' | 'cancelled' | 'trial',
-    productId?: string,
-    expirationDate?: Date,
-    receiptData?: string
-  ): Promise<boolean> {
-    try {
-      const existingSubscription = await supabase
-        .from('user_subscriptions')
-        .select('id')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const tier = getTierFromProductId(productId);
-      const maxOwnedBusinesses = getMaxOwnedBusinessesFromTier(tier);
-
-      const subscriptionData = {
-        user_id: userId,
-        subscription_status: status,
-        subscription_product_id: productId,
-        subscription_expiration_date: expirationDate?.toISOString(),
-        receipt_data: receiptData,
-        last_validated_at: new Date().toISOString(),
-        platform: Platform.OS as 'ios' | 'android' | 'web',
-        tier: tier,
-        max_owned_businesses: maxOwnedBusinesses,
-        updated_at: new Date().toISOString()
-      };
-
-      let error;
-
-      if (existingSubscription.data) {
-        const result = await supabase
-          .from('user_subscriptions')
-          .update(subscriptionData)
-          .eq('id', existingSubscription.data.id);
-        error = result.error;
-      } else {
-        subscriptionData['subscription_start_date'] = new Date().toISOString();
-        const result = await supabase
-          .from('user_subscriptions')
-          .insert(subscriptionData);
-        error = result.error;
-      }
-
-      if (error) throw error;
-
-      await this.clearSubscriptionCache();
-
-      return true;
-    } catch (error) {
-      console.error('Error updating subscription:', error);
-      return false;
-    }
-  },
-
   isSubscriptionExpired(status: SubscriptionStatus): boolean {
     if (!status.expirationDate) {
       return false;
@@ -480,6 +405,24 @@ export const subscriptionService = {
     } catch (error) {
       console.error('Error checking subscription expiration:', error);
       return false;
+    }
+  },
+
+  async getBusinessDisableReason(businessId: string): Promise<BusinessDisableReason> {
+    try {
+      const { data: business, error } = await supabase
+        .from('businesses')
+        .select('access_state')
+        .eq('id', businessId)
+        .maybeSingle();
+
+      if (error || !business) return null;
+
+      if (business.access_state === 'owner_disabled') return 'owner_disabled';
+      if (business.access_state === 'read_only_sales') return 'subscription';
+      return null;
+    } catch {
+      return null;
     }
   },
 
@@ -498,7 +441,7 @@ export const subscriptionService = {
           throw new Error('Business not found or query failed');
         }
 
-        const active = business.access_state !== 'read_only_sales';
+        const active = business.access_state === 'active';
 
         return result.canCreate && active;
       }, 'check feature access');
@@ -695,14 +638,20 @@ export const subscriptionService = {
               expirationDate: null
             },
             ownedBusinessCount: 0,
+            activeBusinessCount: 0,
             salesCountData: businessId ? {
               salesCount: 0,
               remainingSales: FREE_TIER_LIMIT,
               isAtLimit: false
             } : null,
-            canAccessFeature: businessId ? true : null
+            canAccessFeature: businessId ? true : null,
+            businessDisableReason: null
           };
         }
+
+        const disableReason: BusinessDisableReason = businessId
+          ? await this.getBusinessDisableReason(businessId)
+          : null;
 
         return {
           subscriptionStatus: {
@@ -718,13 +667,15 @@ export const subscriptionService = {
             expirationDate: data.tierInfo.expirationDate
           },
           ownedBusinessCount: data.ownedBusinessCount,
+          activeBusinessCount: data.activeBusinessCount ?? data.ownedBusinessCount,
           salesCountData: data.salesCountData ? {
             salesCount: data.salesCountData.salesCount,
             remainingSales: data.salesCountData.remainingSales,
             isAtLimit: data.salesCountData.isAtLimit,
             totalSalesAllBusinesses: data.salesCountData.totalSalesAllBusinesses
           } : null,
-          canAccessFeature: data.canAccessFeature
+          canAccessFeature: data.canAccessFeature,
+          businessDisableReason: disableReason
         };
       }, 'get full subscription state');
     } catch (error) {
@@ -746,13 +697,15 @@ export const subscriptionService = {
           expirationDate: null
         },
         ownedBusinessCount: 0,
+        activeBusinessCount: 0,
         salesCountData: businessId ? {
           salesCount: 0,
           remainingSales: FREE_TIER_LIMIT,
           isAtLimit: false,
           totalSalesAllBusinesses: 0
         } : null,
-        canAccessFeature: businessId ? true : null
+        canAccessFeature: businessId ? true : null,
+        businessDisableReason: null
       };
     }
   }

@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert
+  Alert,
+  Switch
 } from 'react-native';
 import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -277,23 +278,29 @@ export default function SettingsScreen() {
           onPress={() => router.push('/settings/currencies')}
         />
 
-        <SettingItem
-          icon={<Palette size={20} color="#059669" />}
-          title={t('settings.theme')}
-          subtitle={t('settings.currentTheme', { theme })}
-          onPress={() => {
-            Alert.alert(
-              t('settings.theme'),
-              t('settings.chooseTheme'),
-              [
-                { text: t('settings.light'), onPress: () => handleThemeChange('light') },
-                { text: t('settings.dark'), onPress: () => handleThemeChange('dark') },
-                { text: t('settings.system'), onPress: () => handleThemeChange('system') },
-                { text: t('common.cancel'), style: 'cancel' },
-              ]
-            );
-          }}
-        />
+        <Card style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
+                <Palette size={20} color="#059669" />
+              </View>
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  {t('settings.theme')}
+                </Text>
+                <Text style={[styles.settingSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {isDark ? t('settings.dark') : t('settings.light')}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={isDark}
+              onValueChange={(value) => handleThemeChange(value ? 'dark' : 'light')}
+              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+              thumbColor={isDark ? '#2563eb' : '#f9fafb'}
+            />
+          </View>
+        </Card>
 
         <SettingItem
           icon={<Globe size={20} color="#8b5cf6" />}

@@ -103,10 +103,10 @@ export function DowngradePick({
 
       const [salesResult, teamResult] = await Promise.all([
         supabase
-          .from('sales')
-          .select('business_id, id')
-          .in('business_id', businessIds)
-          .eq('voided', false),
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', user.id)
+          .in('business_id', businessIds),
         supabase
           .from('user_business_roles')
           .select('business_id, user_id')
@@ -120,8 +120,8 @@ export function DowngradePick({
         console.error('[DowngradePick] Error loading team members:', teamResult.error);
       }
 
-      const salesCount = (salesResult.data || []).reduce((acc, sale) => {
-        acc[sale.business_id] = (acc[sale.business_id] || 0) + 1;
+      const salesCount = (salesResult.data || []).reduce((acc, row) => {
+        acc[row.business_id] = row.sales_count || 0;
         return acc;
       }, {} as Record<string, number>);
 
@@ -139,21 +139,19 @@ export function DowngradePick({
         team_member_count: teamCount[business.id] || 0,
       }));
 
-      enrichedBusinesses.sort((a, b) => {
+      // Filter to only show businesses below the free-tier sales threshold (50)
+      const FREE_TIER_SALES_LIMIT = 50;
+      const eligibleBusinesses = enrichedBusinesses.filter(b => (b.sales_count || 0) < FREE_TIER_SALES_LIMIT);
+
+      eligibleBusinesses.sort((a, b) => {
         if (a.sales_count !== b.sales_count) {
-          return (b.sales_count || 0) - (a.sales_count || 0);
+          return (a.sales_count || 0) - (b.sales_count || 0);
         }
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
 
-      console.log('[DowngradePick] Successfully loaded', enrichedBusinesses.length, 'enriched businesses');
-      console.log('[DowngradePick] Enriched businesses data:', enrichedBusinesses.map(b => ({
-        id: b.id,
-        name: b.name || b.business_name,
-        sales_count: b.sales_count,
-        team_member_count: b.team_member_count
-      })));
-      setBusinesses(enrichedBusinesses);
+      console.log('[DowngradePick] Eligible businesses (below threshold):', eligibleBusinesses.length, 'of', enrichedBusinesses.length);
+      setBusinesses(eligibleBusinesses);
       setError(null);
     } catch (error) {
       console.error('[DowngradePick] Error loading business details:', error);
@@ -172,7 +170,7 @@ export function DowngradePick({
     if (selectedBusinessIds.includes(businessId)) {
       setSelectedBusinessIds(selectedBusinessIds.filter(id => id !== businessId));
     } else {
-      if (selectedBusinessIds.length < tierLimit) {
+      if (selectedBusinessIds.length < maxSelectable) {
         setSelectedBusinessIds([...selectedBusinessIds, businessId]);
       } else {
         setSelectedBusinessIds([businessId]);
@@ -249,28 +247,26 @@ export function DowngradePick({
     }
   };
 
-  // Calculate if user must select all businesses (when they have exactly their limit)
-  const userHasExactLimit = ownedBusinesses.length === tierLimit;
-  const userExceedsLimit = ownedBusinesses.length > tierLimit;
+  // Eligible businesses are already filtered to those below the sales threshold.
+  // The user must select up to tierLimit from the eligible list.
+  const eligibleCount = businesses.length;
+  const noEligibleBusinesses = eligibleCount === 0 && !loading;
 
-  // Validation logic:
-  // - If user has exactly their limit, they MUST select all
-  // - If user exceeds their limit, they MUST select exactly the tier limit
-  // - For unlimited tier (max), they can select any number
+  // How many the user should select: min of tierLimit and eligible count
+  const maxSelectable = Math.min(tierLimit, eligibleCount);
+
   let isConfirmDisabled: boolean;
 
-  if (tierLimit === 999999) {
-    // Max tier - just need at least one selected
+  if (noEligibleBusinesses) {
+    isConfirmDisabled = true;
+  } else if (tierLimit === 999999) {
     isConfirmDisabled = selectedBusinessIds.length === 0 || submitting || dismissing;
-  } else if (userHasExactLimit) {
-    // User has exactly their limit - must select ALL businesses
-    isConfirmDisabled = selectedBusinessIds.length !== ownedBusinesses.length || submitting || dismissing;
-  } else if (userExceedsLimit) {
-    // User exceeds limit - must select exactly the tier limit
-    isConfirmDisabled = selectedBusinessIds.length !== tierLimit || submitting || dismissing;
+  } else if (eligibleCount <= tierLimit) {
+    // Fewer eligible than limit - must select all eligible ones
+    isConfirmDisabled = selectedBusinessIds.length !== eligibleCount || submitting || dismissing;
   } else {
-    // User has fewer than limit - can select any amount up to what they have
-    isConfirmDisabled = selectedBusinessIds.length === 0 || submitting || dismissing;
+    // More eligible than limit - must select exactly the tier limit
+    isConfirmDisabled = selectedBusinessIds.length !== tierLimit || submitting || dismissing;
   }
 
   return (
@@ -303,42 +299,35 @@ export function DowngradePick({
             Select Active {tierLimit === 1 ? 'Business' : 'Businesses'}
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {userHasExactLimit ? (
+            {noEligibleBusinesses ? (
               <>
-                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
-                {'\n'}You must select all {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'} to keep them active.
+                All your businesses have reached the free-tier sales limit (50 sales).
+                {'\n'}Upgrade your subscription to continue creating sales.
               </>
-            ) : userExceedsLimit ? (
+            ) : eligibleCount <= tierLimit ? (
               <>
-                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
-                {'\n'}You own {ownedBusinesses.length} businesses. Select exactly {tierLimit} to keep active.
+                Only {eligibleCount} of your {ownedBusinesses.length} {ownedBusinesses.length === 1 ? 'business has' : 'businesses have'} fewer than 50 sales.
+                {'\n'}Select {eligibleCount === 1 ? 'it' : 'all'} to keep {eligibleCount === 1 ? 'it' : 'them'} active.
               </>
             ) : (
               <>
-                Your subscription tier allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
-                {'\n'}Select which {tierLimit === 1 ? 'one' : 'ones'} to keep active.
+                Your plan allows {tierLimit} active {tierLimit === 1 ? 'business' : 'businesses'}.
+                {'\n'}Only businesses with fewer than 50 sales are shown.
+                {'\n'}Select {tierLimit} to keep active.
               </>
             )}
           </Text>
-          {userExceedsLimit && (
+          {!noEligibleBusinesses && (
             <View style={[styles.warningBox, { backgroundColor: colors.warning + '15', borderColor: colors.warning + '40' }]}>
               <AlertCircle size={20} color={colors.warning} />
               <Text style={[styles.warningText, { color: colors.warning }]}>
-                Unselected businesses will be read-only. You can view data and manage products/team, but cannot create sales.
+                Businesses not selected or above the 50-sale limit will be read-only.
               </Text>
             </View>
           )}
-          {userHasExactLimit && (
-            <View style={[styles.warningBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
-              <AlertCircle size={20} color={colors.primary} />
-              <Text style={[styles.warningText, { color: colors.primary }]}>
-                All {tierLimit} businesses will remain active since your plan allows {tierLimit} {tierLimit === 1 ? 'business' : 'businesses'}.
-              </Text>
-            </View>
-          )}
-          {onDismiss && (
+          {onDismiss && !noEligibleBusinesses && (
             <Text style={[styles.dismissHint, { color: colors.textSecondary }]}>
-              Tap X to skip - oldest {tierLimit === 1 ? 'business' : 'businesses'} will be selected automatically.
+              Tap X to skip - the oldest eligible {tierLimit === 1 ? 'business' : 'businesses'} will be selected automatically.
             </Text>
           )}
         </View>
@@ -457,13 +446,7 @@ export function DowngradePick({
               }
             ]}>
               <Text style={[styles.selectionCount, { color: colors.textSecondary }]}>
-                {userHasExactLimit ? (
-                  `${selectedBusinessIds.length} of ${ownedBusinesses.length} selected (all required)`
-                ) : userExceedsLimit ? (
-                  `${selectedBusinessIds.length} of ${tierLimit} selected (exactly ${tierLimit} required)`
-                ) : (
-                  `${selectedBusinessIds.length} of ${tierLimit} selected`
-                )}
+                {`${selectedBusinessIds.length} of ${maxSelectable} selected`}
               </Text>
               <TouchableOpacity
                 style={[

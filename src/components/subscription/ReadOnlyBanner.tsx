@@ -14,7 +14,7 @@ interface ReadOnlyBannerProps {
   onDismiss?: () => void;
   dismissible?: boolean;
   showSelectBusinesses?: boolean;
-  variant?: 'sales_limit' | 'business_readonly';
+  variant?: 'sales_limit' | 'business_readonly' | 'owner_disabled';
   isOwner?: boolean;
   ownershipMessage?: string;
 }
@@ -37,6 +37,10 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   const insets = useSafeAreaInsets();
 
   const getTitle = () => {
+    if (variant === 'owner_disabled') {
+      if (isOwner) return 'Business Disabled';
+      return 'Business Disabled by Owner';
+    }
     if (!isOwner && variant === 'business_readonly') {
       return t('subscription.inactiveBusinessTeamMember.title');
     }
@@ -52,6 +56,10 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
   };
 
   const getMessage = () => {
+    if (variant === 'owner_disabled') {
+      if (isOwner) return 'You have disabled this business. You can turn it back on in Manage Business settings.';
+      return 'This business has been disabled by the owner. Sales cannot be created until it is re-enabled.';
+    }
     if (!isOwner && variant === 'business_readonly') {
       return t('subscription.inactiveBusinessTeamMember.message');
     }
@@ -108,7 +116,7 @@ export const ReadOnlyBanner: React.FC<ReadOnlyBannerProps> = ({
           >
             <Text style={styles.upgradeText}>Choose Active</Text>
           </TouchableOpacity>
-        ) : (
+        ) : variant === 'owner_disabled' ? null : (
           <>
             {!(!isOwner && variant === 'business_readonly') && isOwner && (
               <TouchableOpacity

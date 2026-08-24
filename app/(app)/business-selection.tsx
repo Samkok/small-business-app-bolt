@@ -20,10 +20,11 @@ import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { Briefcase, Plus, ChevronRight, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
+import { Briefcase, Plus, ChevronRight, ChevronLeft, LogOut, Building, RefreshCw, Sliders } from 'lucide-react-native';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { ManageBusinessSubscription } from '@/src/components/subscription/ManageBusinessSubscription';
 import { supabase } from '@/src/config/supabase';
+import { subscriptionService } from '@/src/services/subscriptionService';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
@@ -32,6 +33,7 @@ export default function BusinessSelectionScreen() {
   const [creatingBusiness, setCreatingBusiness] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [businessesWithAccess, setBusinessesWithAccess] = useState<any[]>([]);
+  const [loadingBusinesses, setLoadingBusinesses] = useState(true);
 
   const router = useRouter();
   const { t } = useTranslation();
@@ -42,11 +44,16 @@ export default function BusinessSelectionScreen() {
   // Fetch accurate business data with access_state from database
   useEffect(() => {
     const fetchBusinessData = async () => {
-      if (!user?.id || !userBusinesses.length) {
-        setBusinessesWithAccess([]);
+      if (!user?.id) {
+        setLoadingBusinesses(false);
         return;
       }
 
+      if (!userBusinesses.length) {
+        return;
+      }
+
+      setLoadingBusinesses(true);
       try {
         const { data, error } = await supabase
           .from('businesses')
@@ -59,6 +66,8 @@ export default function BusinessSelectionScreen() {
         setBusinessesWithAccess(data || []);
       } catch (error) {
         setBusinessesWithAccess(userBusinesses);
+      } finally {
+        setLoadingBusinesses(false);
       }
     };
 
@@ -81,7 +90,6 @@ export default function BusinessSelectionScreen() {
         subscription.refreshSubscriptionStatus()
       ]);
 
-      // Fetch fresh business data with accurate access_state
       if (user?.id && userBusinesses.length) {
         const { data, error } = await supabase
           .from('businesses')
@@ -107,14 +115,34 @@ export default function BusinessSelectionScreen() {
     ]);
   };
 
-  const handleOpenCreateModal = () => {
-    // Check if user has reached their business limit
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+  const getActiveOwnedBusinessCount = () => {
+    if (!user?.id) return 0;
+    return businessesWithAccess.filter(
+      b => b.owner_user_id === user.id && b.access_state === 'active'
+    ).length;
+  };
+
+  const handleOpenCreateModal = async () => {
+    const activeCount = getActiveOwnedBusinessCount();
+    const maxAllowed = subscription.tierInfo.maxOwnedBusinesses;
+
+    if (maxAllowed !== null && activeCount >= maxAllowed) {
+      const hasDisabledBusinesses = businessesWithAccess.some(
+        b => b.owner_user_id === user?.id && b.access_state === 'owner_disabled'
+      );
+
+      if (hasDisabledBusinesses) {
+        // User has disabled businesses -- they can re-enable one after disabling another, or just create
+        // Actually the server counts only active, so creation is allowed if active < max
+        // This case shouldn't be reached because activeCount < maxAllowed when there are disabled ones
+      }
+
       Alert.alert(
         'Business Limit Reached',
-        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        `You have ${activeCount} active business${activeCount === 1 ? '' : 'es'} (limit: ${maxAllowed}). You can disable an existing business to free up a slot, or upgrade your plan.`,
         [
           { text: 'Cancel', style: 'cancel' },
+          { text: 'Manage Businesses', onPress: () => setShowManageModal(true) },
           { text: 'Upgrade', onPress: () => subscription.showPaywall() }
         ]
       );
@@ -130,13 +158,17 @@ export default function BusinessSelectionScreen() {
       return;
     }
 
-    // Double-check limit before creating (server-side will also check)
-    if (subscription.tierInfo.maxOwnedBusinesses !== null && subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses) {
+    if (!user?.id) return;
+
+    // Server-side check for business creation
+    const canCreate = await subscriptionService.canCreateBusiness(user.id);
+    if (!canCreate) {
       Alert.alert(
         'Business Limit Reached',
-        `You've reached your business limit of ${subscription.tierInfo.maxOwnedBusinesses} ${subscription.tierInfo.maxOwnedBusinesses === 1 ? 'business' : 'businesses'}. Upgrade your plan to create more businesses.`,
+        'You cannot create more businesses. Disable an existing business first or upgrade your plan.',
         [
           { text: 'Cancel', style: 'cancel' },
+          { text: 'Manage Businesses', onPress: () => { setShowCreateBusinessModal(false); setShowManageModal(true); } },
           { text: 'Upgrade', onPress: () => subscription.showPaywall() }
         ]
       );
@@ -148,13 +180,13 @@ export default function BusinessSelectionScreen() {
       const { error, business } = await createBusiness(newBusinessName.trim());
 
       if (error) {
-        // Check if it's a business limit error
         if (error.message?.includes('BUSINESS_LIMIT_REACHED') || error.message?.includes('maximum number of businesses')) {
           Alert.alert(
             'Business Limit Reached',
-            'You\'ve reached your business limit. Please upgrade your plan to create more businesses.',
+            'You\'ve reached your business limit. Please disable an existing business or upgrade your plan.',
             [
               { text: 'Cancel', style: 'cancel' },
+              { text: 'Manage Businesses', onPress: () => { setShowCreateBusinessModal(false); setShowManageModal(true); } },
               { text: 'Upgrade', onPress: () => subscription.showPaywall() }
             ]
           );
@@ -167,7 +199,6 @@ export default function BusinessSelectionScreen() {
 
         await subscription.refreshTierInfo();
 
-        // If this is the first business, navigate to the main app
         if (userBusinesses.length === 0) {
           router.replace('/(app)/(tabs)');
         }
@@ -183,6 +214,33 @@ export default function BusinessSelectionScreen() {
   const renderBusinessItem = ({ item }: { item: any }) => {
     const isOwner = item.owner_user_id === user?.id;
     const accessState = item.access_state || 'active';
+
+    const getStatusLabel = () => {
+      if (accessState === 'active') return 'Active';
+      if (accessState === 'owner_disabled') return 'Disabled';
+      return 'Read Only';
+    };
+
+    const getStatusColors = () => {
+      if (accessState === 'active') {
+        return {
+          bg: isDark ? '#065f46' : '#d1fae5',
+          text: isDark ? '#6ee7b7' : '#047857',
+        };
+      }
+      if (accessState === 'owner_disabled') {
+        return {
+          bg: isDark ? '#374151' : '#f3f4f6',
+          text: isDark ? '#9ca3af' : '#6b7280',
+        };
+      }
+      return {
+        bg: isDark ? '#78350f' : '#fef3c7',
+        text: isDark ? '#fbbf24' : '#92400e',
+      };
+    };
+
+    const statusColors = getStatusColors();
 
     return (
       <TouchableOpacity
@@ -224,23 +282,9 @@ export default function BusinessSelectionScreen() {
             <Text style={[styles.businessRole, { color: '#2563eb' }]}>
               {getUserRole(item.id) === 'admin' ? 'Admin' : 'Staff'}
             </Text>
-            <View style={[
-              styles.statusBadge,
-              {
-                backgroundColor: accessState === 'active'
-                  ? (isDark ? '#065f46' : '#d1fae5')
-                  : (isDark ? '#78350f' : '#fef3c7')
-              }
-            ]}>
-              <Text style={[
-                styles.statusBadgeText,
-                {
-                  color: accessState === 'active'
-                    ? (isDark ? '#6ee7b7' : '#047857')
-                    : (isDark ? '#fbbf24' : '#92400e')
-                }
-              ]}>
-                {accessState === 'active' ? 'Active' : 'Read Only'}
+            <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
+              <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>
+                {getStatusLabel()}
               </Text>
             </View>
           </View>
@@ -255,7 +299,13 @@ export default function BusinessSelectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.header}>
-        <View style={styles.headerLeft} />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <ChevronLeft size={24} color={isDark ? '#f9fafb' : '#111827'} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Select Business
         </Text>
@@ -286,24 +336,20 @@ export default function BusinessSelectionScreen() {
           <View style={[
             styles.limitBadge,
             {
-              backgroundColor: subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses
+              backgroundColor: getActiveOwnedBusinessCount() >= (subscription.tierInfo.maxOwnedBusinesses || 0)
                 ? (isDark ? '#7f1d1d' : '#fee2e2')
-                : subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses * 0.8
-                ? (isDark ? '#78350f' : '#fef3c7')
                 : (isDark ? '#065f46' : '#d1fae5')
             }
           ]}>
             <Text style={[
               styles.limitBadgeText,
               {
-                color: subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses
+                color: getActiveOwnedBusinessCount() >= (subscription.tierInfo.maxOwnedBusinesses || 0)
                   ? (isDark ? '#fca5a5' : '#991b1b')
-                  : subscription.ownedBusinessCount >= subscription.tierInfo.maxOwnedBusinesses * 0.8
-                  ? (isDark ? '#fbbf24' : '#92400e')
                   : (isDark ? '#6ee7b7' : '#047857')
               }
             ]}>
-              {subscription.ownedBusinessCount} / {subscription.tierInfo.maxOwnedBusinesses === 999999 ? '∞' : subscription.tierInfo.maxOwnedBusinesses} businesses owned
+              {getActiveOwnedBusinessCount()} / {subscription.tierInfo.maxOwnedBusinesses === 999999 ? '\u221E' : subscription.tierInfo.maxOwnedBusinesses} active businesses
             </Text>
           </View>
         )}
@@ -323,7 +369,11 @@ export default function BusinessSelectionScreen() {
             colors={['#2563eb']}
           />
         }
-        ListEmptyComponent={() => (
+        ListEmptyComponent={() => loadingBusinesses ? (
+          <View style={styles.emptyState}>
+            <LoadingSpinner />
+          </View>
+        ) : (
           <Card style={styles.emptyState}>
             <Building size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
             <Text style={[styles.emptyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -446,8 +496,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  headerLeft: {
+  backButton: {
     width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 24,

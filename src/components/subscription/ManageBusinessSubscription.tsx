@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { supabase } from '@/src/config/supabase';
+import { FREE_TIER_LIMIT } from '@/src/services/subscriptionService';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -39,7 +40,8 @@ interface Business {
   id: string;
   business_name: string;
   business_image_url?: string;
-  access_state: 'active' | 'read_only_sales';
+  access_state: 'active' | 'read_only_sales' | 'owner_disabled';
+  salesCount?: number;
 }
 
 interface ManageBusinessSubscriptionProps {
@@ -55,7 +57,7 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
 }) => {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { userBusinesses, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const subscription = useSubscription();
   const { tierInfo } = subscription;
 
@@ -64,32 +66,71 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
   const [isSheetVisible, setIsSheetVisible] = useState(false);
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
 
-  const businesses = useMemo(() => {
-    // Only show businesses owned by the current user
-    return userBusinesses
-      .filter(b => (b as any).owner_user_id === userProfile?.user_id)
-      .map(b => ({
-        id: b.id,
-        business_name: b.business_name,
-        business_image_url: b.business_image_url,
-        access_state: (b as any).access_state || 'active',
-      })) as Business[];
-  }, [userBusinesses, userProfile?.user_id]);
+  // Fetch owned businesses with accurate access_state directly from DB
+  useEffect(() => {
+    if (!visible || !userProfile?.user_id) return;
 
-  const activeBusinesses = useMemo(() =>
-    businesses.filter(b => b.access_state === 'active'),
-    [businesses]
-  );
+    const fetchBusinessData = async () => {
+      setLoading(true);
+      try {
+        const [businessResult, salesResult] = await Promise.all([
+          supabase
+            .from('businesses')
+            .select('id, business_name, business_image_url, owner_user_id, access_state')
+            .eq('owner_user_id', userProfile.user_id)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('user_sales_counts')
+            .select('business_id, sales_count')
+            .eq('user_id', userProfile.user_id),
+        ]);
+
+        if (businessResult.error) throw businessResult.error;
+
+        const salesCounts: Record<string, number> = {};
+        (salesResult.data || []).forEach(row => {
+          salesCounts[row.business_id] = row.sales_count || 0;
+        });
+
+        const isFreeTier = tierInfo.tier === 'free';
+        const enriched: Business[] = (businessResult.data || [])
+          .map(b => ({
+            id: b.id,
+            business_name: b.business_name,
+            business_image_url: b.business_image_url,
+            access_state: b.access_state || 'active',
+            salesCount: salesCounts[b.id] || 0,
+          }))
+          .filter(b => {
+            if (!isFreeTier) return true;
+            return (b.salesCount || 0) < FREE_TIER_LIMIT;
+          });
+
+        setBusinesses(enriched);
+
+        // Initialize selection from actual DB access_state
+        const initialActive = new Set(enriched.filter(b => b.access_state === 'active').map(b => b.id));
+        setSelectedBusinessIds(initialActive);
+      } catch (error) {
+        console.error('[ManageBusinessSubscription] Error fetching businesses:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBusinessData();
+  }, [visible, userProfile?.user_id, tierInfo.tier]);
+
+  const activeBusinesses = businesses.filter(b => b.access_state === 'active');
 
   const maxActiveBusinesses = tierInfo.maxOwnedBusinesses || 1;
-  const currentActiveCount = activeBusinesses.length;
   const availableSlots = Math.max(0, maxActiveBusinesses - selectedBusinessIds.size);
 
   useEffect(() => {
     if (visible) {
-      const initialActive = new Set(activeBusinesses.map(b => b.id));
-      setSelectedBusinessIds(initialActive);
       setIsSheetVisible(true);
       translateY.value = withSpring(MAX_TRANSLATE_Y, {
         damping: 50,
@@ -145,6 +186,8 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
     };
   });
 
+  const allMustBeActive = false;
+
   const toggleBusinessSelection = (businessId: string, currentlyActive: boolean) => {
     const newSelection = new Set(selectedBusinessIds);
 
@@ -196,13 +239,19 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
     try {
       const { data, error } = await supabase.functions.invoke('choose-businesses', {
         body: {
-          userId: userProfile?.user_id,
           selectedBusinessIds: Array.from(selectedBusinessIds),
         },
       });
 
       if (error) {
-        throw error;
+        let errorMessage = 'Failed to update business settings. Please try again.';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errorBody = await error.context.json();
+            if (errorBody?.error) errorMessage = errorBody.error;
+          }
+        } catch {}
+        throw new Error(errorMessage);
       }
 
       if (data?.error) {
@@ -341,6 +390,11 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
                   style={styles.businessList}
                   showsVerticalScrollIndicator={false}
                 >
+                  {loading && (
+                    <View style={{ alignItems: 'center', padding: 24 }}>
+                      <LoadingSpinner />
+                    </View>
+                  )}
                   {businesses.map((business) => {
                     const isSelected = selectedBusinessIds.has(business.id);
                     return (
