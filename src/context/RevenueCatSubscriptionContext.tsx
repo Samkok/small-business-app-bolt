@@ -146,6 +146,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
   const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
   const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
+  const businessAccessChannelRef = useRef<RealtimeChannel | null>(null);
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -1218,6 +1219,50 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
     };
   }, [user?.id, setupRealtimeSubscription, setupBusinessCountSubscription, setupUserProfileSubscription, setupSalesCountSubscription]);
+
+  // Realtime subscription for business access_state changes (so team members see owner_disabled immediately)
+  useEffect(() => {
+    if (!currentBusiness?.id) return;
+
+    if (businessAccessChannelRef.current) {
+      try {
+        businessAccessChannelRef.current.unsubscribe();
+      } catch (_) {}
+      businessAccessChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`business-access-state-${currentBusiness.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'businesses',
+          filter: `id=eq.${currentBusiness.id}`,
+        },
+        (payload) => {
+          const newState = payload.new?.access_state;
+          const oldState = payload.old?.access_state;
+          if (newState !== oldState) {
+            console.log('[RevenueCatSubscriptionContext] Business access_state changed:', oldState, '->', newState);
+            checkFeatureAccess(true);
+          }
+        }
+      )
+      .subscribe();
+
+    businessAccessChannelRef.current = channel;
+
+    return () => {
+      if (businessAccessChannelRef.current) {
+        try {
+          businessAccessChannelRef.current.unsubscribe();
+        } catch (_) {}
+        businessAccessChannelRef.current = null;
+      }
+    };
+  }, [currentBusiness?.id, checkFeatureAccess]);
 
   const isBusinessReadOnly = useCallback((businessId: string) => {
     return readOnlyBusinessIds.includes(businessId);
