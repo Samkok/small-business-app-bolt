@@ -91,7 +91,10 @@ export default function ChangePasswordScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to change password. Please try again.');
+      const msg = error.message?.includes('should contain') || error.message?.includes('characters from')
+        ? 'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.'
+        : (error.message || 'Failed to change password. Please try again.');
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
