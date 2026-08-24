@@ -186,7 +186,14 @@ export const ManageBusinessSubscription: React.FC<ManageBusinessSubscriptionProp
     };
   });
 
+  const allMustBeActive = businesses.length <= maxActiveBusinesses;
+
   const toggleBusinessSelection = (businessId: string, currentlyActive: boolean) => {
+    if (allMustBeActive) {
+      Alert.alert('All Businesses Active', 'Your plan covers all your businesses, so they must all remain active.');
+      return;
+    }
+
     const newSelection = new Set(selectedBusinessIds);
 
     if (newSelection.has(businessId)) {
