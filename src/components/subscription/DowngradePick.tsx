@@ -446,13 +446,7 @@ export function DowngradePick({
               }
             ]}>
               <Text style={[styles.selectionCount, { color: colors.textSecondary }]}>
-                {userHasExactLimit ? (
-                  `${selectedBusinessIds.length} of ${ownedBusinesses.length} selected (all required)`
-                ) : userExceedsLimit ? (
-                  `${selectedBusinessIds.length} of ${tierLimit} selected (exactly ${tierLimit} required)`
-                ) : (
-                  `${selectedBusinessIds.length} of ${tierLimit} selected`
-                )}
+                {`${selectedBusinessIds.length} of ${maxSelectable} selected`}
               </Text>
               <TouchableOpacity
                 style={[
