@@ -312,7 +312,7 @@ export default function SalesScreen() {
         setIsBusinessOwner(isOwner);
 
         // If not owner and business is read-only, fetch owner's subscription status
-        if (!isOwner && !canAccessFeature) {
+        if (!isOwner && !canAccessFeature && businessDisableReason !== 'owner_disabled') {
           const ownerTier = await subscriptionService.getBusinessOwnerSubscriptionTier(currentBusiness.id);
 
           if (ownerTier && ownerTier.isExpired) {
@@ -334,7 +334,7 @@ export default function SalesScreen() {
     };
 
     checkOwnershipAndFetchOwnerStatus();
-  }, [currentBusiness?.id, userProfile?.user_id, canAccessFeature]);
+  }, [currentBusiness?.id, userProfile?.user_id, canAccessFeature, businessDisableReason]);
 
   const handleDismissWarning = useCallback(async () => {
     if (!currentBusiness?.id) return;
