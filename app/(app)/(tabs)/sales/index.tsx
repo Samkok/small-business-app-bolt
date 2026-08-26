@@ -1056,6 +1056,13 @@ export default function SalesScreen() {
             </Text>
           </View>
         </View>
+      ) : salesCountData.isAtLimit || (!canAccessFeature && businessDisableReason !== 'owner_disabled') ? (
+        <ReadOnlyBanner
+          salesCount={salesCountData.totalSalesAllBusinesses || 0}
+          onUpgrade={showPaywall}
+          isOwner={isBusinessOwner}
+          ownershipMessage={ownerSubscriptionMessage || undefined}
+        />
       ) : businessDisableReason === 'owner_disabled' ? (
         <ReadOnlyBanner
           onUpgrade={() => {}}
@@ -1070,13 +1077,6 @@ export default function SalesScreen() {
           onUpgrade={showPaywall}
           onDismiss={handleDismissWarning}
           dismissible={true}
-          isOwner={isBusinessOwner}
-          ownershipMessage={ownerSubscriptionMessage || undefined}
-        />
-      ) : salesCountData.isAtLimit || !canAccessFeature ? (
-        <ReadOnlyBanner
-          salesCount={salesCountData.totalSalesAllBusinesses || 0}
-          onUpgrade={showPaywall}
           isOwner={isBusinessOwner}
           ownershipMessage={ownerSubscriptionMessage || undefined}
         />
