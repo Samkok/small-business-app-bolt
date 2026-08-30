@@ -11,6 +11,7 @@ import {
   Platform
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -45,6 +46,8 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
   const [includeDeliveryCost, setIncludeDeliveryCost] = useState(false);
 
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
+  const fmt = (amount: number) => formatPrice(amount, sale?.currency_id);
   const { currentBusiness, userProfile } = useAuth();
 
   useEffect(() => {
@@ -184,7 +187,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
 
       Alert.alert(
         'Return Processed',
-        `Successfully processed return for ${getTotalReturnItems()} items. Refund amount: $${calculateRefundAmount().toFixed(2)}`,
+        `Successfully processed return for ${getTotalReturnItems()} items. Refund amount: ${fmt(calculateRefundAmount())}`,
         [{ text: 'OK', onPress: onComplete }]
       );
     } catch (error) {
@@ -283,7 +286,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                 Total Amount:
               </Text>
               <Text style={[styles.saleInfoValue, { color: '#059669' }]}>
-                ${sale.total_amount.toFixed(2)}
+                {fmt(sale.total_amount)}
               </Text>
             </View>
           </View>
@@ -310,10 +313,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                     {item.productName}
                   </Text>
                   <Text style={[styles.itemDetails, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    Original: {item.originalQuantity} × ${item.unitPrice.toFixed(2)}
+                    Original: {item.originalQuantity} × {fmt(item.unitPrice)}
                   </Text>
                   <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
-                    Subtotal: ${(item.originalQuantity * item.unitPrice).toFixed(2)}
+                    Subtotal: {fmt(item.originalQuantity * item.unitPrice)}
                   </Text>
                 </View>
 
@@ -368,7 +371,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                 
                 {item.returnQuantity > 0 && (
                   <Text style={[styles.returnAmount, { color: '#dc2626' }]}>
-                    Refund: ${(item.returnQuantity * item.unitPrice).toFixed(2)}
+                    Refund: {fmt(item.returnQuantity * item.unitPrice)}
                   </Text>
                 )}
                 </View>
@@ -511,7 +514,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                   Total Refund Amount:
                 </Text>
                 <Text style={[styles.totalRefundValue, { color: '#dc2626' }]}>
-                  ${calculateRefundAmount().toFixed(2)}
+                  {fmt(calculateRefundAmount())}
                 </Text>
               </View>
             </View>
@@ -580,7 +583,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
           style={styles.footerButton}
         />
         <Button
-          title={`Process Return - $${calculateRefundAmount().toFixed(2)}`}
+          title={`Process Return - ${fmt(calculateRefundAmount())}`}
           onPress={handleSubmitReturn}
           loading={loading}
           style={styles.footerButton}

@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart } from 'lucide-react-native';
@@ -38,9 +40,17 @@ export default function ProductSalesScreen() {
   const params = useLocalSearchParams();
   const { productId, productName } = params;
   const { isDark } = useTheme();
+  const { formatPrice, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
   const { currentBusiness } = useAuth();
   const { t } = useTranslation();
   const { openSaleDetails } = useSaleDetailsModal();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
+
+  const displayAmount = useCallback((amount: number): number => {
+    if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
+    return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
+  }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
 
   const dateFilterOptions = [
     { value: 'this_month', label: t('dateRanges.thisMonth') },
@@ -354,7 +364,7 @@ export default function ProductSalesScreen() {
                 Unit Price:
               </Text>
               <Text style={[styles.saleDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${parseFloat(productItem.unit_price).toFixed(2)}
+                {formatPrice(displayAmount(parseFloat(productItem.unit_price)), activeCurrencyId || undefined)}
               </Text>
             </View>
 
@@ -366,19 +376,19 @@ export default function ProductSalesScreen() {
               <View style={styles.saleDetailValue}>
                 {(isVoided || isFullyReturned) ? (
                   <Text style={{ textDecorationLine: 'line-through', color: '#dc2626', fontWeight: '600' }}>
-                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                    {formatPrice(displayAmount(parseFloat(productItem.subtotal)), activeCurrencyId || undefined)}
                   </Text>
                 ) : isPartiallyReturned ? (
                   <Text>
                     <Text style={{ textDecorationLine: 'line-through', color: '#9ca3af', fontSize: 12 }}>
-                      ${parseFloat(productItem.subtotal).toFixed(2)}
+                      {formatPrice(displayAmount(parseFloat(productItem.subtotal)), activeCurrencyId || undefined)}
                     </Text>
                     <Text> → </Text>
-                    <Text style={{ color: '#2563eb', fontWeight: '600' }}>${netRevenue.toFixed(2)}</Text>
+                    <Text style={{ color: '#2563eb', fontWeight: '600' }}>{formatPrice(displayAmount(netRevenue), activeCurrencyId || undefined)}</Text>
                   </Text>
                 ) : (
                   <Text style={{ color: '#2563eb', fontWeight: '600' }}>
-                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                    {formatPrice(displayAmount(parseFloat(productItem.subtotal)), activeCurrencyId || undefined)}
                   </Text>
                 )}
               </View>
@@ -387,7 +397,7 @@ export default function ProductSalesScreen() {
             {isPartiallyReturned && (
               <View style={[styles.returnInfo, { borderColor: '#3b82f6', backgroundColor: '#3b82f620' }]}>
                 <Text style={{ color: '#3b82f6', fontSize: 12 }}>
-                  ⚠️ {returnedQty} unit(s) returned (${returnedRevenue.toFixed(2)})
+                  ⚠️ {returnedQty} unit(s) returned ({formatPrice(displayAmount(returnedRevenue), activeCurrencyId || undefined)})
                 </Text>
               </View>
             )}
@@ -463,6 +473,17 @@ export default function ProductSalesScreen() {
       </View>
 
       <View style={styles.content}>
+        {/* Currency Switcher */}
+        {currencies.length > 1 && (
+          <View style={styles.currencySwitcher}>
+            <CurrencyDropdown
+              currencies={currencies}
+              selectedCurrencyId={activeCurrencyId}
+              onSelect={setSelectedCurrencyId}
+            />
+          </View>
+        )}
+
         {/* Date Filter */}
         <View style={styles.dateFilterContainer}>
           <TouchableOpacity
@@ -502,7 +523,7 @@ export default function ProductSalesScreen() {
 
           <Card style={styles.statsCard}>
             <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.totalRevenue.toFixed(2)}
+              {formatPrice(displayAmount(stats.totalRevenue), activeCurrencyId || undefined)}
             </Text>
             <Text style={[styles.statsLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
               {t('financials.totalRevenue')}
@@ -664,6 +685,10 @@ const styles = StyleSheet.create({
   },
   dateFilterContainer: {
     marginBottom: 16,
+  },
+  currencySwitcher: {
+    marginBottom: 12,
+    alignItems: 'flex-start',
   },
   dateFilterButton: {
     flexDirection: 'row',

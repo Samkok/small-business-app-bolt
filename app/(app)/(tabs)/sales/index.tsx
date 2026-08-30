@@ -38,6 +38,8 @@ import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCo
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
+
 import { dataCache } from '@/src/lib/dataCache';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -69,6 +71,7 @@ export default function SalesScreen() {
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateFilterTypeModal, setShowDateFilterTypeModal] = useState(false);
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
@@ -107,6 +110,14 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
+  const { formatPrice, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
+
+  const displayAmt = useCallback((amount: number): number => {
+    if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
+    return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
+  }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
   const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
   const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -759,29 +770,48 @@ export default function SalesScreen() {
   const totalProfit = analytics.totalProfit;
 
 
-  const renderDateFilter = useCallback(() => (
+  const activeCurrency = currencies.find(c => c.id === activeCurrencyId);
+
+  const renderDateFilter = () => (
     <View style={styles.dateFilterContainer}>
-      <TouchableOpacity
-        style={[
-          styles.dateFilterButton,
-          { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
-        ]}
-        onPress={() => setShowDateFilterTypeModal(true)}
-      >
-        <Calendar size={16} color="#2563eb" />
-        <Text style={[styles.dateFilterText, { color: isDark ? '#f9fafb' : '#374151' }]}>
-          {dateRangeText}
-        </Text>
-        <ChevronDown size={16} color="#2563eb" />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.exportIconButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-        onPress={handleExportSales}
-      >
-        <Download size={20} color="#059669" />
-      </TouchableOpacity>
+      <View style={styles.dateFilterRow}>
+        <TouchableOpacity
+          style={[
+            styles.dateFilterButton,
+            { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+          ]}
+          onPress={() => setShowDateFilterTypeModal(true)}
+        >
+          <Calendar size={16} color="#2563eb" />
+          <Text style={[styles.dateFilterText, { color: isDark ? '#f9fafb' : '#374151' }]}>
+            {dateRangeText}
+          </Text>
+          <ChevronDown size={16} color="#2563eb" />
+        </TouchableOpacity>
+        {currencies.length > 1 && (
+          <TouchableOpacity
+            style={[
+              styles.dateFilterButton,
+              { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+            ]}
+            onPress={() => setShowCurrencyModal(true)}
+          >
+            <DollarSign size={16} color="#2563eb" />
+            <Text style={[styles.dateFilterText, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              {activeCurrency?.code || activeCurrency?.symbol || 'Currency'}
+            </Text>
+            <ChevronDown size={16} color="#2563eb" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.exportIconButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+          onPress={handleExportSales}
+        >
+          <Download size={20} color="#059669" />
+        </TouchableOpacity>
+      </View>
     </View>
-  ), [isDark, dateRangeText]);
+  );
 
   const renderDateFilterTypeModal = useCallback(() => (
     <Modal
@@ -865,26 +895,36 @@ export default function SalesScreen() {
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
+  type CurrencyTotal = { revenue: number; profit: number };
+
   type SaleFlatItem =
-    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }
     | { type: 'sale'; item: any };
 
   const buildGroupedSalesList = useCallback((salesData: any[]): SaleFlatItem[] => {
-    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }> = {};
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }> = {};
 
     salesData.forEach((sale) => {
       const dateKey = format(new Date(sale.sale_date), 'yyyy-MM-dd');
       if (!groups[dateKey]) {
-        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0, currencyTotals: {} };
       }
 
       const isVoided = sale.status === 'voided';
       const displayAmount = calculateSaleDisplayAmount(sale);
       const productCount = calculateSaleProductCount(sale);
       const saleProfit = calculateSaleProfit(sale);
+      const currId = sale.currency_id || 'default';
 
       groups[dateKey].sales.push(sale);
-      if (!isVoided) groups[dateKey].totalOrders += 1;
+      if (!isVoided) {
+        groups[dateKey].totalOrders += 1;
+        if (!groups[dateKey].currencyTotals[currId]) {
+          groups[dateKey].currencyTotals[currId] = { revenue: 0, profit: 0 };
+        }
+        groups[dateKey].currencyTotals[currId].revenue += displayAmount;
+        groups[dateKey].currencyTotals[currId].profit += saleProfit;
+      }
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
       groups[dateKey].totalProfit += saleProfit;
@@ -894,14 +934,21 @@ export default function SalesScreen() {
     Object.entries(groups)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([date, data]) => {
-        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit });
+        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit, currencyTotals: data.currencyTotals });
         data.sales.forEach(sale => result.push({ type: 'sale', item: sale }));
       });
 
     return result;
   }, []);
 
-  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, totalRevenue: number, totalProfit: number) => (
+  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, currencyTotals: Record<string, CurrencyTotal>) => {
+    const currencyEntries = Object.entries(currencyTotals);
+    const hasSingleCurrency = currencyEntries.length <= 1;
+    const singleCurrId = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][0] : undefined;
+    const singleRevenue = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].revenue : 0;
+    const singleProfit = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].profit : 0;
+
+    return (
     <View style={[styles.saleDateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.saleDatePillRow}>
         <View style={[styles.saleDatePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
@@ -922,22 +969,95 @@ export default function SalesScreen() {
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
-        <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
-          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
-        </View>
-        <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
-        <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
-          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
-        </View>
+        {hasSingleCurrency ? (
+          <>
+            <View style={styles.saleDateSummaryItem}>
+              <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(displayAmt(singleRevenue), activeCurrencyId || singleCurrId)}</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+            </View>
+            <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+            <View style={styles.saleDateSummaryItem}>
+              <Text style={[styles.saleDateSummaryValue, { color: singleProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(displayAmt(singleProfit), activeCurrencyId || singleCurrId)}</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.saleDateSummaryMultiCurrency}>
+            {currencyEntries.map(([currId, totals]) => (
+              <View key={currId} style={styles.saleDateCurrencyRow}>
+                <Text style={[styles.saleDateSummaryValue, { color: '#059669', fontSize: 12 }]} numberOfLines={1}>{formatPrice(displayAmt(totals.revenue), activeCurrencyId || currId)}</Text>
+                <Text style={[styles.saleDateSummaryValue, { color: totals.profit >= 0 ? '#2563eb' : '#dc2626', fontSize: 12 }]} numberOfLines={1}>{formatPrice(displayAmt(totals.profit), activeCurrencyId || currId)}</Text>
+              </View>
+            ))}
+            <View style={styles.saleDateCurrencyLabels}>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
-  ), [isDark]);
+  );
+  }, [isDark, formatPrice, displayAmt, activeCurrencyId]);
+
+  const renderCurrencyModal = () => (
+    <Modal
+      visible={showCurrencyModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowCurrencyModal(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCurrencyModal(false)}
+      >
+        <View
+          style={[
+            styles.dateFilterModal,
+            { backgroundColor: isDark ? '#374151' : '#ffffff' }
+          ]}
+          onStartShouldSetResponder={() => true}
+        >
+          <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {t('settings.currency')}
+          </Text>
+          <View style={styles.dateFilterOptions}>
+            {currencies.map(currency => (
+              <TouchableOpacity
+                key={currency.id}
+                style={[
+                  styles.dateFilterOption,
+                  {
+                    backgroundColor: activeCurrencyId === currency.id
+                      ? '#2563eb'
+                      : (isDark ? '#4b5563' : '#f3f4f6')
+                  }
+                ]}
+                onPress={() => {
+                  setSelectedCurrencyId(currency.id);
+                  setShowCurrencyModal(false);
+                }}
+              >
+                <Text style={{
+                  color: activeCurrencyId === currency.id
+                    ? '#ffffff'
+                    : (isDark ? '#f9fafb' : '#374151'),
+                  fontWeight: '500'
+                }}>
+                  {currency.code} ({currency.symbol})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
     if (item.type === 'header') {
-      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue, item.totalProfit);
+      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.currencyTotals);
     }
     return (
       <SaleCard
@@ -1230,7 +1350,7 @@ export default function SalesScreen() {
                   <DollarSign size={20} color="#2563eb" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${todayRevenue.toFixed(2)}
+                      {formatPrice(displayAmt(todayRevenue), activeCurrencyId || undefined)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.todayRevenue')}
@@ -1244,7 +1364,7 @@ export default function SalesScreen() {
                   <TrendingUp size={20} color="#059669" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${totalRevenue.toFixed(2)}
+                      {formatPrice(displayAmt(totalRevenue), activeCurrencyId || undefined)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.totalRevenue')}
@@ -1258,7 +1378,7 @@ export default function SalesScreen() {
                   <Receipt size={20} color="#8b5cf6" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: totalProfit >= 0 ? (isDark ? '#f9fafb' : '#111827') : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${totalProfit.toFixed(2)}
+                      {formatPrice(displayAmt(totalProfit), activeCurrencyId || undefined)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.totalProfit')}
@@ -1272,7 +1392,7 @@ export default function SalesScreen() {
                   <ShoppingCart size={20} color="#ea580c" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${averageSale.toFixed(2)}
+                      {formatPrice(displayAmt(averageSale), activeCurrencyId || undefined)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.averageSale')}
@@ -1430,6 +1550,9 @@ export default function SalesScreen() {
       {/* Custom Date Range Picker Modal */}
       {renderCustomDateRangePicker()}
 
+      {/* Currency Picker Modal */}
+      {renderCurrencyModal()}
+
       {/* Void Sale Modal */}
       {saleToVoid && (
         <VoidSaleModal
@@ -1538,10 +1661,12 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   dateFilterContainer: {
+    marginBottom: 12,
+  },
+  dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 8,
   },
   dateFilterLabel: {
     fontSize: 14,
@@ -1907,5 +2032,21 @@ const styles = StyleSheet.create({
   saleDateSummarySep: {
     width: 1,
     height: 26,
+  },
+  saleDateSummaryMultiCurrency: {
+    flex: 1,
+    paddingHorizontal: 8,
+    gap: 2,
+  },
+  saleDateCurrencyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  saleDateCurrencyLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 2,
   },
 });

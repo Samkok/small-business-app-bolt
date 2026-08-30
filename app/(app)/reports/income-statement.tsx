@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -33,6 +34,7 @@ export default function IncomeStatementScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
 
   useEffect(() => {
     if (currentBusiness?.id && startDate && endDate) {
@@ -381,7 +383,7 @@ export default function IncomeStatementScreen() {
               Total Revenue
             </Text>
             <Text style={[styles.totalValue, { color: '#059669' }]}>
-              ${incomeData.revenue.total.toFixed(2)}
+              {formatPrice(incomeData.revenue.total)}
             </Text>
           </View>
         </Card>
@@ -400,7 +402,7 @@ export default function IncomeStatementScreen() {
               Total COGS
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              ${incomeData.cogs.total.toFixed(2)}
+              {formatPrice(incomeData.cogs.total)}
             </Text>
           </View>
         </Card>
@@ -419,7 +421,7 @@ export default function IncomeStatementScreen() {
               Gross Profit
             </Text>
             <Text style={[styles.value, { color: incomeData.grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
-              ${incomeData.grossProfit.toFixed(2)}
+              {formatPrice(incomeData.grossProfit)}
             </Text>
           </View>
           
@@ -448,7 +450,7 @@ export default function IncomeStatementScreen() {
                 {category.category}
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                ${Number(category.total || 0).toFixed(2)}
+                {formatPrice(Number(category.total || 0))}
               </Text>
             </View>
           ))}
@@ -458,7 +460,7 @@ export default function IncomeStatementScreen() {
               Total Expenses
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              ${incomeData.expenses.total.toFixed(2)}
+              {formatPrice(incomeData.expenses.total)}
             </Text>
           </View>
         </Card>
@@ -478,7 +480,7 @@ export default function IncomeStatementScreen() {
                 Total Losses
               </Text>
               <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-                ${incomeData.totalLossAmount.toFixed(2)}
+                {formatPrice(incomeData.totalLossAmount)}
               </Text>
             </View>
           </Card>
@@ -498,7 +500,7 @@ export default function IncomeStatementScreen() {
               Net Income
             </Text>
             <Text style={[styles.value, { color: incomeData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
-              ${incomeData.netIncome.toFixed(2)}
+              {formatPrice(incomeData.netIncome)}
             </Text>
           </View>
           

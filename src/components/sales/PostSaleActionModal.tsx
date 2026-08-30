@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { CheckCircle, Eye, Plus, X } from 'lucide-react-native';
@@ -31,6 +32,7 @@ export function PostSaleActionModal({
   onNewSale,
 }: PostSaleActionModalProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
 
   return (
     <Modal
@@ -61,7 +63,7 @@ export function PostSaleActionModal({
                 Amount:
               </Text>
               <Text style={[styles.saleInfoValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${saleAmount.toFixed(2)}
+                {formatPrice(saleAmount)}
               </Text>
             </View>
             <View style={styles.saleInfoRow}>

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
@@ -68,6 +69,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { currentBusiness, user } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
   const costTypeRefs = useRef<Map<number, TextInput>>(new Map());
@@ -779,7 +781,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                   Total Base Value:
                 </Text>
                 <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                  ${totalBaseValue.toFixed(2)}
+                  {formatPrice(totalBaseValue)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
@@ -787,7 +789,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                   Additional Costs:
                 </Text>
                 <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                  ${totalAdditionalCosts.toFixed(2)}
+                  {formatPrice(totalAdditionalCosts)}
                 </Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
@@ -795,7 +797,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                   Total Batch Cost:
                 </Text>
                 <Text style={[styles.totalValue, { color: '#059669' }]}>
-                  ${totalBatchCost.toFixed(2)}
+                  {formatPrice(totalBatchCost)}
                 </Text>
               </View>
             </View>
@@ -816,7 +818,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
                       {factor > 1 ? ` (${item.quantity * factor} base)` : ''}:
                     </Text>
                     <Text style={[styles.itemCostValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                      ${item.total_cost_for_item.toFixed(2)}
+                      {formatPrice(item.total_cost_for_item)}
                     </Text>
                   </View>
                 );

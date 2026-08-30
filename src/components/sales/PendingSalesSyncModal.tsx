@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { offlineSaleQueue, OfflineSalePayload } from '@/src/lib/offlineSaleQueue';
@@ -12,6 +13,7 @@ import { format } from 'date-fns';
 
 export function PendingSalesSyncModal() {
   const { colors } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { isConnected, wasOffline, setPendingSalesCount } = useNetwork();
   const { currentBusiness, user } = useAuth();
   const [visible, setVisible] = useState(false);
@@ -155,7 +157,7 @@ export function PendingSalesSyncModal() {
           </View>
           <View style={styles.saleAmountContainer}>
             <Text style={[styles.saleAmount, { color: colors.text }]}>
-              ${item.totalAmount.toFixed(2)}
+              {formatPrice(item.totalAmount)}
             </Text>
             {result === 'success' && <CheckCircle size={16} color="#16A34A" />}
             {result === 'failed' && <XCircle size={16} color="#DC2626" />}

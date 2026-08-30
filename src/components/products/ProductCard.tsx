@@ -146,18 +146,22 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
 
           {hasVariants && showUnits && (
             <View style={[styles.variantsBox, { borderColor: isDark ? '#374151' : '#e5e7eb', backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-              {units!.map((unit, idx) => {
-                const pu = unitPrices?.find(p => p.unit_id === unit.id);
-                const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
-                const variantPrice = pu?.price ?? product.price;
-                const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
-                const variantName = pu?.name || unit.name;
+              {(() => {
+                const sorted = units!.slice().sort((a, b) => b.conversion_factor_to_base - a.conversion_factor_to_base);
+                let remainder = product.current_stock;
+                return sorted.map((unit, idx) => {
+                  const qty = Math.floor(remainder / unit.conversion_factor_to_base);
+                  remainder -= qty * unit.conversion_factor_to_base;
+                  const pu = unitPrices?.find(p => p.unit_id === unit.id);
+                  const variantPrice = pu?.price ?? product.price;
+                  const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
+                  const variantName = pu?.name || unit.name;
                 return (
                   <View
                     key={unit.id}
                     style={[
                       styles.variantRow,
-                      idx < units!.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
+                      idx < sorted.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
                     ]}
                   >
                     <View style={styles.variantMain}>
@@ -180,7 +184,8 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
                     </View>
                   </View>
                 );
-              })}
+                });
+              })()}
             </View>
           )}
 

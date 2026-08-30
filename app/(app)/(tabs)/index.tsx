@@ -30,6 +30,8 @@ import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
 import { ProfitCard, ProfitCardData } from '@/src/components/sharing/ProfitCard';
 import { format } from 'date-fns';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -73,12 +75,21 @@ export default function DashboardScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfitCard, setShowProfitCard] = useState(false);
+
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
   const { isConnected, wasOffline } = useNetwork();
+  const { formatPrice, getSymbol, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
   const router = useRouter();
+
+  const displayAmount = useCallback((amount: number): number => {
+    if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
+    return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
+  }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
 
   useEffect(() => {
     loadDashboardData();
@@ -237,7 +248,7 @@ export default function DashboardScreen() {
           )}
         </View>
         <View style={styles.statContent}>
-          <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+          <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
             {value}
           </Text>
           <Text style={[styles.statTitle, { color: isDark ? '#d1d5db' : '#6b7280' }]} numberOfLines={2}>
@@ -260,10 +271,10 @@ export default function DashboardScreen() {
       </View>
       <View style={styles.topItemValues}>
         <Text style={[styles.topItemValue, { color: '#059669' }]}>
-          ${product.revenue.toFixed(2)}
+          {formatPrice(displayAmount(product.revenue), activeCurrencyId || undefined)}
         </Text>
         <Text style={[styles.topItemProfit, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
-          {t('financials.profit')}: ${product.profit.toFixed(2)}
+          {t('financials.profit')}: {formatPrice(displayAmount(product.profit), activeCurrencyId || undefined)}
         </Text>
       </View>
     </View>
@@ -280,7 +291,7 @@ export default function DashboardScreen() {
         </Text>
       </View>
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
-        ${customer.totalSpent.toFixed(2)}
+        {formatPrice(displayAmount(customer.totalSpent), activeCurrencyId || undefined)}
       </Text>
     </View>
   );
@@ -407,11 +418,20 @@ export default function DashboardScreen() {
               </View>
             )}
           </TouchableOpacity>
-          <MonthPicker
-            selectedMonth={selectedMonth}
-            onMonthChange={setSelectedMonth}
-            maxDate={new Date()}
-          />
+          <View style={styles.dateAndCurrency}>
+            <MonthPicker
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+              maxDate={new Date()}
+            />
+            {currencies.length > 1 && (
+              <CurrencyDropdown
+                currencies={currencies}
+                selectedCurrencyId={activeCurrencyId}
+                onSelect={setSelectedCurrencyId}
+              />
+            )}
+          </View>
         </View>
       </View>
 
@@ -450,40 +470,40 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               title={t('financials.todayRevenue')}
-              value={`$${stats.todayRevenue.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.todayRevenue), activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
               trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('financials.monthlyRevenue')}
-              value={`$${stats.monthlyRevenue.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.monthlyRevenue), activeCurrencyId || undefined)}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
               trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('dashboard.monthlyCOGS')}
-              value={`$${stats.monthlyCOGS.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.monthlyCOGS), activeCurrencyId || undefined)}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title={t('financials.totalProfit')}
-              value={`$${stats.totalProfit.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.totalProfit), activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
               trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title={t('expenses.totalExpenses')}
-              value={`$${stats.totalExpenses.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.totalExpenses), activeCurrencyId || undefined)}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
               title={t('financials.netProfit')}
-              value={`$${stats.netProfit.toFixed(2)}`}
+              value={formatPrice(displayAmount(stats.netProfit), activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
               color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
               trend={stats.netProfit >= 0 ? "up" : "down"}
@@ -608,12 +628,12 @@ export default function DashboardScreen() {
           data={{
             businessName: currentBusiness?.business_name || '',
             period: format(selectedMonth, 'MMMM yyyy'),
-            profit: stats.netProfit,
-            revenue: stats.monthlyRevenue,
+            profit: displayAmount(stats.netProfit),
+            revenue: displayAmount(stats.monthlyRevenue),
             salesCount: stats.totalProductsSold,
             topProductName: topProducts[0]?.name,
             growthPercent: undefined,
-            currencySymbol: '$',
+            currencySymbol: getSymbol(activeCurrencyId || undefined),
           }}
         />
       )}
@@ -645,9 +665,12 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
     paddingTop: 4,
+  },
+  dateAndCurrency: {
+    gap: 6,
   },
   notificationButton: {
     position: 'relative',
@@ -730,7 +753,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statCardContainer: {
-    width: '48%',
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 0,
   },
   statCard: {
     padding: 12,
@@ -760,7 +785,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 2,
-    lineHeight: 22,
   },
   statTitle: {
     fontSize: 11,

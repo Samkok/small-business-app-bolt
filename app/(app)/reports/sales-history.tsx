@@ -15,6 +15,8 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -55,6 +57,14 @@ export default function SalesHistoryScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
+
+  const displayAmount = useCallback((amount: number): number => {
+    if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
+    return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
+  }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
 
   useEffect(() => {
     if (currentBusiness?.id) {
@@ -222,7 +232,7 @@ export default function SalesHistoryScreen() {
   }, [groupedSales]);
 
   const renderSaleItem = (item: any) => {
-    const displayAmount = calculateSaleDisplayAmount(item);
+    const saleAmount = calculateSaleDisplayAmount(item);
 
     const creatorName = getUserDisplayName(item.created_by_name || item.carts?.created_by_name);
     const isDeleted = creatorName.includes('deleted');
@@ -245,7 +255,7 @@ export default function SalesHistoryScreen() {
             </View>
           </View>
           <Text style={[styles.saleAmount, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            ${displayAmount.toFixed(2)}
+            {formatPrice(displayAmount(saleAmount), activeCurrencyId || undefined)}
           </Text>
         </View>
 
@@ -301,12 +311,12 @@ export default function SalesHistoryScreen() {
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(displayAmount(totalRevenue), activeCurrencyId || undefined)}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(displayAmount(totalProfit), activeCurrencyId || undefined)}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
         </View>
       </View>
@@ -480,6 +490,16 @@ export default function SalesHistoryScreen() {
         </TouchableOpacity>
       </View>
 
+      {currencies.length > 1 && (
+        <View style={styles.currencySwitcher}>
+          <CurrencyDropdown
+            currencies={currencies}
+            selectedCurrencyId={activeCurrencyId}
+            onSelect={setSelectedCurrencyId}
+          />
+        </View>
+      )}
+
       <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={[styles.controlButton, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
@@ -517,7 +537,7 @@ export default function SalesHistoryScreen() {
               {t('reports.totalRevenue')}:
             </Text>
             <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.totalRevenue.toFixed(2)}
+              {formatPrice(displayAmount(stats.totalRevenue), activeCurrencyId || undefined)}
             </Text>
           </View>
           <View style={styles.statRow}>
@@ -525,7 +545,7 @@ export default function SalesHistoryScreen() {
               {t('reports.averageSale')}:
             </Text>
             <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.averageSale.toFixed(2)}
+              {formatPrice(displayAmount(stats.averageSale), activeCurrencyId || undefined)}
             </Text>
           </View>
         </Card>
@@ -594,6 +614,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     gap: 12,
+  },
+  currencySwitcher: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    alignItems: 'flex-start',
   },
   controlButton: {
     flex: 1,

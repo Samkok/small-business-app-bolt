@@ -10,6 +10,7 @@ import {
   Platform
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
@@ -35,6 +36,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
   const [loading, setLoading] = useState(false);
   
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { profile } = useAuth();
 
   const paymentMethods = [
@@ -236,7 +238,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
                   {product.name}
                 </Text>
                 <Text style={[styles.productPrice, { color: '#059669' }]}>
-                  ${product.price.toFixed(2)}
+                  {formatPrice(product.price)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -260,7 +262,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
                     {item.product_name}
                   </Text>
                   <Text style={[styles.cartItemPrice, { color: '#059669' }]}>
-                    ${item.unit_price.toFixed(2)} each
+                    {formatPrice(item.unit_price)} each
                   </Text>
                 </View>
                 
@@ -285,7 +287,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
                 </View>
                 
                 <Text style={[styles.cartItemTotal, { color: '#059669' }]}>
-                  ${item.subtotal.toFixed(2)}
+                  {formatPrice(item.subtotal)}
                 </Text>
               </View>
             ))}
@@ -295,7 +297,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
                 Total:
               </Text>
               <Text style={[styles.totalAmount, { color: '#059669' }]}>
-                ${getTotal().toFixed(2)}
+                {formatPrice(getTotal())}
               </Text>
             </View>
           </Card>
@@ -364,7 +366,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
           style={styles.footerButton}
         />
         <Button
-          title={`Complete Sale - $${getTotal().toFixed(2)}`}
+          title={`Complete Sale - ${formatPrice(getTotal())}`}
           onPress={handleCompleteSale}
           loading={loading}
           style={styles.footerButton}

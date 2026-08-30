@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -32,6 +33,7 @@ export default function CashFlowScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
 
   useEffect(() => {
     if (currentBusiness?.id && month !== undefined && year !== undefined) {
@@ -294,7 +296,7 @@ export default function CashFlowScreen() {
                 Net Income
               </Text>
               <Text style={[styles.value, { color: cashFlowData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
-                ${cashFlowData.netIncome.toFixed(2)}
+                {formatPrice(cashFlowData.netIncome)}
               </Text>
             </View>
 
@@ -304,7 +306,7 @@ export default function CashFlowScreen() {
                   Add Back: Capital Items
                 </Text>
                 <Text style={[styles.value, { color: '#059669' }]}>
-                  ${cashFlowData.equipmentPurchases.toFixed(2)}
+                  {formatPrice(cashFlowData.equipmentPurchases)}
                 </Text>
               </View>
             )}
@@ -314,7 +316,7 @@ export default function CashFlowScreen() {
                 Net Cash from Operations
               </Text>
               <Text style={[styles.subtotalValue, { color: cashFlowData.operatingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                ${cashFlowData.operatingCashFlow.toFixed(2)}
+                {formatPrice(cashFlowData.operatingCashFlow)}
               </Text>
             </View>
           </View>
@@ -333,7 +335,7 @@ export default function CashFlowScreen() {
                 Equipment Purchases
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                ${cashFlowData.equipmentPurchases.toFixed(2)}
+                {formatPrice(cashFlowData.equipmentPurchases)}
               </Text>
             </View>
             
@@ -342,7 +344,7 @@ export default function CashFlowScreen() {
                 Net Cash from Investing
               </Text>
               <Text style={[styles.subtotalValue, { color: cashFlowData.investingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                ${cashFlowData.investingCashFlow.toFixed(2)}
+                {formatPrice(cashFlowData.investingCashFlow)}
               </Text>
             </View>
           </View>
@@ -361,7 +363,7 @@ export default function CashFlowScreen() {
                 Owner Contributions
               </Text>
               <Text style={[styles.value, { color: '#059669' }]}>
-                ${cashFlowData.ownerContributions.toFixed(2)}
+                {formatPrice(cashFlowData.ownerContributions)}
               </Text>
             </View>
             
@@ -370,7 +372,7 @@ export default function CashFlowScreen() {
                 Owner Withdrawals
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                ${cashFlowData.ownerWithdrawals.toFixed(2)}
+                {formatPrice(cashFlowData.ownerWithdrawals)}
               </Text>
             </View>
             
@@ -379,7 +381,7 @@ export default function CashFlowScreen() {
                 Net Cash from Financing
               </Text>
               <Text style={[styles.subtotalValue, { color: cashFlowData.financingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                ${cashFlowData.financingCashFlow.toFixed(2)}
+                {formatPrice(cashFlowData.financingCashFlow)}
               </Text>
             </View>
           </View>
@@ -390,7 +392,7 @@ export default function CashFlowScreen() {
               Net Change in Cash
             </Text>
             <Text style={[styles.totalValue, { color: cashFlowData.netCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-              ${cashFlowData.netCashFlow.toFixed(2)}
+              {formatPrice(cashFlowData.netCashFlow)}
             </Text>
           </View>
         </Card>

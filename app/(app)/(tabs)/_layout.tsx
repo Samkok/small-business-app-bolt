@@ -25,6 +25,13 @@ export default function TabLayout() {
   const tabBarActiveTintColor = '#2563eb';
   const tabBarInactiveTintColor = isDark ? '#9ca3af' : '#6b7280';
 
+  const popToIndex = (navigation: any, tabName: string) => ({
+    tabPress: (e: any) => {
+      e.preventDefault();
+      navigation.navigate(tabName, { screen: 'index' });
+    },
+  });
+
   return (
     <Tabs
       screenOptions={{
@@ -54,6 +61,7 @@ export default function TabLayout() {
             <Package size={size} color={color} />
           ),
         }}
+        listeners={({ navigation }) => popToIndex(navigation, 'inventory')}
       />
       <Tabs.Screen
         name="customers"
@@ -74,6 +82,7 @@ export default function TabLayout() {
           tabBarBadge: pendingSalesCount > 0 ? pendingSalesCount : undefined,
           tabBarBadgeStyle: pendingSalesCount > 0 ? { backgroundColor: '#F59E0B', fontSize: 10 } : undefined,
         }}
+        listeners={({ navigation }) => popToIndex(navigation, 'sales')}
       />
       <Tabs.Screen
         name="expenses"
@@ -92,6 +101,7 @@ export default function TabLayout() {
             <Settings size={size} color={color} />
           ),
         }}
+        listeners={({ navigation }) => popToIndex(navigation, 'settings')}
       />
     </Tabs>
   );

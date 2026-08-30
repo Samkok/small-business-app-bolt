@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -49,6 +50,7 @@ export default function ReportsScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
 
   useEffect(() => {
     if (currentBusiness?.id) {
@@ -717,7 +719,7 @@ export default function ReportsScreen() {
                 Total Revenue
               </Text>
               <Text style={[styles.incomeValue, { color: '#059669' }]}>
-                ${totalRevenue.toFixed(2)}
+                {formatPrice(totalRevenue)}
               </Text>
             </View>
             
@@ -726,7 +728,7 @@ export default function ReportsScreen() {
                 Cost of Goods Sold
               </Text>
               <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                ${totalCOGS.toFixed(2)}
+                {formatPrice(totalCOGS)}
               </Text>
             </View>
             
@@ -735,7 +737,7 @@ export default function ReportsScreen() {
                 Gross Profit
               </Text>
               <Text style={[styles.subtotalValue, { color: grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
-                ${grossProfit.toFixed(2)}
+                {formatPrice(grossProfit)}
               </Text>
             </View>
             
@@ -744,7 +746,7 @@ export default function ReportsScreen() {
                 Operating Expenses
               </Text>
               <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                ${totalExpenses.toFixed(2)}
+                {formatPrice(totalExpenses)}
               </Text>
             </View>
             
@@ -753,7 +755,7 @@ export default function ReportsScreen() {
                 Net Profit
               </Text>
               <Text style={[styles.totalValue, { color: netProfit >= 0 ? '#059669' : '#dc2626' }]}>
-                ${netProfit.toFixed(2)}
+                {formatPrice(netProfit)}
               </Text>
             </View>
           </View>

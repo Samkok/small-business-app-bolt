@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -61,6 +62,7 @@ export default function ExpensesScreen() {
   
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { currentBusiness } = useAuth();
   const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -623,7 +625,7 @@ export default function ExpensesScreen() {
               <DollarSign size={20} color="#dc2626" />
               <View style={styles.statsText}>
                 <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                  ${todayTotal.toFixed(2)}
+                  {formatPrice(todayTotal)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   {t('expenses.todayExpenses')}
@@ -637,7 +639,7 @@ export default function ExpensesScreen() {
               <TrendingDown size={20} color="#ea580c" />
               <View style={styles.statsText}>
                 <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                  ${totalExpenses.toFixed(2)}
+                  {formatPrice(totalExpenses)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   {t('expenses.totalExpenses')}
@@ -665,7 +667,7 @@ export default function ExpensesScreen() {
               <BarChart3 size={20} color="#06b6d4" />
               <View style={styles.statsText}>
                 <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                  ${averageExpense.toFixed(2)}
+                  {formatPrice(averageExpense)}
                 </Text>
                 <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                   {t('expenses.averageExpense')}
@@ -688,7 +690,7 @@ export default function ExpensesScreen() {
                     {category.name}
                   </Text>
                   <Text style={[styles.categoryAmount, { color: '#dc2626' }]}>
-                    ${category.total.toFixed(2)}
+                    {formatPrice(category.total)}
                   </Text>
                 </View>
               ))}

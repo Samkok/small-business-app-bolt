@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -33,6 +34,7 @@ export default function BatchDetailsScreen() {
   const router = useRouter();
   const { batchId } = useLocalSearchParams();
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { currentBusiness } = useAuth();
 
   useEffect(() => {
@@ -130,7 +132,7 @@ export default function BatchDetailsScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return formatPrice(amount);
   };
 
   const getStatusColor = (status: 'pending' | 'completed') => {
