@@ -105,7 +105,7 @@ export default function TopProductsScreen() {
   };
 
   const handleProductPress = (product: TopProduct) => {
-    router.push(`/inventory/product-details?productId=${product.id}`);
+    router.navigate(`/(app)/(tabs)/inventory/product-details?productId=${product.id}`);
   };
 
   const formatCurrency = (amount: number) => formatPrice(amount);
