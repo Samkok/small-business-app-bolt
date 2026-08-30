@@ -87,7 +87,7 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(false, activeCurrencyId);
   }, [currentBusiness, selectedMonth, activeCurrencyId]);
 
   useEffect(() => {
@@ -101,14 +101,14 @@ export default function DashboardScreen() {
     router.navigate('/sales/customer-selection');
   }, [router]);
 
-  const loadDashboardData = async (isRefresh = false) => {
+  const loadDashboardData = async (isRefresh = false, currencyId: string | null = activeCurrencyId) => {
     if (!currentBusiness?.id) {
       console.log('DashboardScreen: No profile ID available, skipping data load');
       setLoading(false);
       return;
     }
 
-    const currencySuffix = activeCurrencyId || 'all';
+    const currencySuffix = currencyId || 'all';
     const monthKey = `${selectedMonth.getFullYear()}_${selectedMonth.getMonth() + 1}_${currencySuffix}`;
     const businessId = currentBusiness.id;
 
@@ -150,9 +150,9 @@ export default function DashboardScreen() {
       const month = selectedMonth.getMonth() + 1;
 
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(businessId, year, month, activeCurrencyId || undefined),
-        reportsService.getTopProducts(businessId, 3, year, month, activeCurrencyId || undefined),
-        reportsService.getTopCustomers(businessId, 3, year, month, activeCurrencyId || undefined)
+        reportsService.getDashboardStats(businessId, year, month, currencyId || undefined),
+        reportsService.getTopProducts(businessId, 3, year, month, currencyId || undefined),
+        reportsService.getTopCustomers(businessId, 3, year, month, currencyId || undefined)
       ]);
 
       setStats(dashboardStats);
@@ -401,36 +401,35 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => setShowNotifications(true)}
-          >
-            <Bell size={24} color={isDark ? '#f9fafb' : '#111827'} />
-            {unreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <MonthPicker
-            selectedMonth={selectedMonth}
-            onMonthChange={setSelectedMonth}
-            maxDate={new Date()}
-          />
+          <View style={styles.headerControls}>
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={() => setShowNotifications(true)}
+            >
+              <Bell size={24} color={isDark ? '#f9fafb' : '#111827'} />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <MonthPicker
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+              maxDate={new Date()}
+            />
+          </View>
+          {currencies.length > 1 && (
+            <CurrencyDropdown
+              currencies={currencies}
+              selectedCurrencyId={activeCurrencyId}
+              onSelect={setSelectedCurrencyId}
+            />
+          )}
         </View>
       </View>
-
-      {currencies.length > 1 && (
-        <View style={styles.currencyRow}>
-          <CurrencyDropdown
-            currencies={currencies}
-            selectedCurrencyId={activeCurrencyId}
-            onSelect={setSelectedCurrencyId}
-          />
-        </View>
-      )}
 
       {loading ? (
         <>
@@ -661,14 +660,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerRight: {
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingTop: 4,
+  },
+  headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingTop: 4,
-  },
-  currencyRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
   },
   notificationButton: {
     position: 'relative',
