@@ -399,39 +399,44 @@ export default function ProductDetailsScreen() {
                   <Text style={[styles.unitsHeaderCell, styles.unitCellQty, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Qty</Text>
                   <Text style={[styles.unitsHeaderCell, styles.unitCellPrice, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Price</Text>
                 </View>
-                {units.map((unit, idx) => {
-                  const pu = unitPrices.find(p => p.unit_id === unit.id);
-                  const qty = Math.floor(product.current_stock / unit.conversion_factor_to_base);
-                  const variantPrice = pu?.price ?? product.price;
-                  const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
-                  const variantName = pu?.name || unit.name;
-                  return (
-                    <View
-                      key={unit.id}
-                      style={[
-                        styles.unitRow,
-                        idx < units.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
-                      ]}
-                    >
-                      <View style={styles.unitCellName}>
-                        <Text style={[styles.unitName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                          {variantName}
-                        </Text>
-                        {pu?.barcode ? (
-                          <Text style={[styles.unitBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                            {pu.barcode}
+                {(() => {
+                  const sorted = units.slice().sort((a, b) => b.conversion_factor_to_base - a.conversion_factor_to_base);
+                  let remainder = product.current_stock;
+                  return sorted.map((unit, idx) => {
+                    const qty = Math.floor(remainder / unit.conversion_factor_to_base);
+                    remainder -= qty * unit.conversion_factor_to_base;
+                    const pu = unitPrices.find(p => p.unit_id === unit.id);
+                    const variantPrice = pu?.price ?? product.price;
+                    const variantCurrency = pu?.currency_id ?? product.currency_id ?? undefined;
+                    const variantName = pu?.name || unit.name;
+                    return (
+                      <View
+                        key={unit.id}
+                        style={[
+                          styles.unitRow,
+                          idx < sorted.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' },
+                        ]}
+                      >
+                        <View style={styles.unitCellName}>
+                          <Text style={[styles.unitName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                            {variantName}
                           </Text>
-                        ) : null}
+                          {pu?.barcode ? (
+                            <Text style={[styles.unitBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                              {pu.barcode}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={[styles.unitQty, styles.unitCellQty, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                          {qty}
+                        </Text>
+                        <Text style={[styles.unitPrice, styles.unitCellPrice, { color: '#059669' }]}>
+                          {formatPrice(variantPrice, variantCurrency)}
+                        </Text>
                       </View>
-                      <Text style={[styles.unitQty, styles.unitCellQty, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                        {qty}
-                      </Text>
-                      <Text style={[styles.unitPrice, styles.unitCellPrice, { color: '#059669' }]}>
-                        {formatPrice(variantPrice, variantCurrency)}
-                      </Text>
-                    </View>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </View>
             </View>
           )}

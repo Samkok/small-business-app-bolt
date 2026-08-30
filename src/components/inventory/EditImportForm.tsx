@@ -11,13 +11,13 @@ import {
   Modal
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { X, Package, DollarSign, Plus, Trash2, Calendar, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
 import { inventoryService } from '@/src/services/inventory';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
-import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface EditImportFormProps {
   importRecord: any;
@@ -41,6 +41,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
   const [costAmountInputs, setCostAmountInputs] = useState<Map<number, string>>(new Map());
 
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
 
   const validateDecimalInput = (text: string): string => {
     if (text === '') return '';
@@ -480,7 +481,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   Final Unit Cost:
                 </Text>
                 <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#374151' }]}>
-                  ${finalUnitCost.toFixed(2)}
+                  {formatPrice(finalUnitCost)}
                 </Text>
               </View>
               
@@ -489,7 +490,7 @@ export default function EditImportForm({ importRecord, onComplete, onCancel }: E
                   Total Cost:
                 </Text>
                 <Text style={[styles.totalValue, { color: '#059669' }]}>
-                  ${totalCost.toFixed(2)}
+                  {formatPrice(totalCost)}
                 </Text>
               </View>
             </View>

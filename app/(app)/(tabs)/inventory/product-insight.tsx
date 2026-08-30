@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import {
@@ -78,6 +79,7 @@ export default function ProductInsightScreen() {
 
   const router = useRouter();
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { currentBusiness } = useAuth();
   const glowAnim = useRef(new Animated.Value(0)).current;
 
@@ -350,7 +352,7 @@ export default function ProductInsightScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              ${(data?.totalStockValue ?? 0).toFixed(0)}
+              {formatPrice(data?.totalStockValue ?? 0)}
             </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Stock Value</Text>
           </Card>
@@ -361,7 +363,7 @@ export default function ProductInsightScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              ${(data?.avgSellingPrice ?? 0).toFixed(2)}
+              {formatPrice(data?.avgSellingPrice ?? 0)}
             </Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Price</Text>
           </Card>
@@ -533,11 +535,11 @@ export default function ProductInsightScreen() {
                         {p.name}
                       </Text>
                       <Text style={[styles.rankSub, { color: colors.subtext }]}>
-                        {p.currentStock} units @ ${p.price.toFixed(2)}
+                        {p.currentStock} units @ {formatPrice(p.price)}
                       </Text>
                     </View>
                     <Text style={[styles.rankRevenue, { color: '#059669' }]}>
-                      ${p.value.toFixed(2)}
+                      {formatPrice(p.value)}
                     </Text>
                   </View>
                   {i < (data?.highestValueProducts ?? []).length - 1 && (

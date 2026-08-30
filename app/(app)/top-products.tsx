@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
@@ -42,6 +43,7 @@ export default function TopProductsScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
   const [products, setProducts] = useState<TopProduct[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<TopProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,9 +108,7 @@ export default function TopProductsScreen() {
     router.push(`/inventory/product-details?productId=${product.id}`);
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number) => formatPrice(amount);
 
   const getStockStatus = (product: TopProduct) => {
     if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: t('inventory.outOfStock') };

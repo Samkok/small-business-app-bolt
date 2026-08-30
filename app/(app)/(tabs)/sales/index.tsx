@@ -38,6 +38,7 @@ import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCo
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { dataCache } from '@/src/lib/dataCache';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -107,6 +108,7 @@ export default function SalesScreen() {
   const { currentBusiness, userProfile, userBusinesses } = useAuth();
   const { carts, loading: cartsLoading, deleteCart, refreshCarts } = useCart();
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
+  const { formatPrice } = useCurrencyContext();
   const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
   const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -923,12 +925,12 @@ export default function SalesScreen() {
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalRevenue)}</Text>
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
+          <Text style={[styles.saleDateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalProfit)}</Text>
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
         </View>
       </View>
@@ -1230,7 +1232,7 @@ export default function SalesScreen() {
                   <DollarSign size={20} color="#2563eb" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${todayRevenue.toFixed(2)}
+                      {formatPrice(todayRevenue)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.todayRevenue')}
@@ -1244,7 +1246,7 @@ export default function SalesScreen() {
                   <TrendingUp size={20} color="#059669" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${totalRevenue.toFixed(2)}
+                      {formatPrice(totalRevenue)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.totalRevenue')}
@@ -1258,7 +1260,7 @@ export default function SalesScreen() {
                   <Receipt size={20} color="#8b5cf6" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: totalProfit >= 0 ? (isDark ? '#f9fafb' : '#111827') : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${totalProfit.toFixed(2)}
+                      {formatPrice(totalProfit)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.totalProfit')}
@@ -1272,7 +1274,7 @@ export default function SalesScreen() {
                   <ShoppingCart size={20} color="#ea580c" />
                   <View style={styles.statsText}>
                     <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      ${averageSale.toFixed(2)}
+                      {formatPrice(averageSale)}
                     </Text>
                     <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                       {t('financials.averageSale')}

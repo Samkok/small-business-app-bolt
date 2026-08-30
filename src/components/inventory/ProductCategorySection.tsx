@@ -9,6 +9,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { ClassifiedProduct, ProductCategory } from '@/src/services/productInsight';
 
@@ -96,14 +97,14 @@ function getSubtext(product: ClassifiedProduct): string {
   }
 }
 
-function getRightText(product: ClassifiedProduct): { text: string; color: string } {
+function getRightText(product: ClassifiedProduct, formatPrice: (amount: number) => string): { text: string; color: string } {
   switch (product.category) {
     case 'out_of_stock':
       return { text: '0 units', color: '#dc2626' };
     case 'must_order':
       return { text: `${product.currentStock} left`, color: '#ea580c' };
     case 'hot_selling':
-      return { text: `$${product.totalRevenue.toFixed(0)}`, color: '#059669' };
+      return { text: formatPrice(product.totalRevenue), color: '#059669' };
     case 'do_not_order':
       return { text: `${product.currentStock} units`, color: '#2563eb' };
     case 'slow_moving':
@@ -120,6 +121,7 @@ function getRightText(product: ClassifiedProduct): { text: string; color: string
 
 export default function ProductCategorySection({ category, products }: ProductCategorySectionProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const config = CATEGORY_CONFIG[category];
   const Icon = config.icon;
 
@@ -156,7 +158,7 @@ export default function ProductCategorySection({ category, products }: ProductCa
           <Text style={[styles.emptyText, { color: colors.subtext }]}>{config.emptyMessage}</Text>
         ) : (
           sorted.map((product, i) => {
-            const right = getRightText(product);
+            const right = getRightText(product, formatPrice);
             return (
               <View key={product.id}>
                 <View style={styles.productRow}>

@@ -11,6 +11,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
@@ -31,6 +32,7 @@ export default function TopCustomersScreen() {
   const { year: yearParam, month: monthParam } = useLocalSearchParams<{ year?: string; month?: string }>();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
   const [customers, setCustomers] = useState<TopCustomer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<TopCustomer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,9 +94,7 @@ export default function TopCustomersScreen() {
     setSearchQuery('');
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number) => formatPrice(amount);
 
   const CustomerCard = ({ customer, index }: { customer: TopCustomer; index: number }) => (
     <TouchableOpacity onPress={() => router.push(`/customer-orders/${customer.id}`)}>

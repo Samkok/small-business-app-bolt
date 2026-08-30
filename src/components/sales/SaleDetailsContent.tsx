@@ -18,6 +18,7 @@ import ReturnSaleForm from './ReturnSaleForm';
 import VoidSaleModal from './VoidSaleModal';
 import SaleEditModal from './SaleEditModal';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -75,6 +76,8 @@ export default function SaleDetailsContent({
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const router = useRouter();
+  const { formatPrice } = useCurrencyContext();
+  const fmt = (amount: number) => formatPrice(amount, sale?.currency_id);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -289,12 +292,12 @@ export default function SaleDetailsContent({
               {sale.status === 'voided' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    {t('sales.original')}: ${sale.total_amount.toFixed(2)}
+                    {t('sales.original')}: {fmt(sale.total_amount)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#dc2626' }]}>
-                    ${(() => {
+                    {(() => {
                       const voidAction = sale.sale_actions?.find((a: any) => a.action_type === 'void');
-                      return (voidAction?.adjusted_amount ?? sale.total_amount).toFixed(2);
+                      return fmt(voidAction?.adjusted_amount ?? sale.total_amount);
                     })()}
                   </Text>
                   <Text style={[styles.returnedAmount, { color: '#6b7280' }]}>
@@ -304,23 +307,23 @@ export default function SaleDetailsContent({
               ) : sale.status === 'partially_returned' ? (
                 <>
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    {t('sales.original')}: ${sale.total_amount.toFixed(2)}
+                    {t('sales.original')}: {fmt(sale.total_amount)}
                   </Text>
                   <Text style={[styles.currentAmount, { color: '#059669' }]}>
-                    ${(sale.current_total_amount ?? sale.total_amount).toFixed(2)}
+                    {fmt(sale.current_total_amount ?? sale.total_amount)}
                   </Text>
                   <Text style={[styles.returnedAmount, { color: '#dc2626' }]}>
-                    (${(() => {
+                    ({(() => {
                       const totalReturned = sale.sale_actions
                         ?.filter((a: any) => a.action_type === 'return')
                         ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
-                      return totalReturned.toFixed(2);
+                      return fmt(totalReturned);
                     })()} {t('sales.returned')})
                   </Text>
                 </>
               ) : (
                 <Text style={[styles.amount, { color: '#059669' }]}>
-                  ${sale.total_amount.toFixed(2)}
+                  {fmt(sale.total_amount)}
                 </Text>
               )}
             </View>
@@ -398,7 +401,7 @@ export default function SaleDetailsContent({
                     {item.products?.name}
                   </Text>
                   <Text style={[styles.itemPrice, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    ${item.unit_price.toFixed(2)} × {item.quantity}
+                    {fmt(item.unit_price)} × {item.quantity}
                   </Text>
 
                   {item.item_discount_type && (
@@ -407,9 +410,9 @@ export default function SaleDetailsContent({
                       <Text style={[styles.discountText, { color: '#dc2626' }]}>
                         {item.item_discount_type === 'percentage'
                           ? `${item.item_discount_value}% ${t('sales.off')}`
-                          : `$${item.item_discount_value} ${t('sales.off')}`
+                          : `${fmt(item.item_discount_value)} ${t('sales.off')}`
                         }
-                        {item.item_discount_amount > 0 && ` (-$${item.item_discount_amount.toFixed(2)})`}
+                        {item.item_discount_amount > 0 && ` (-${fmt(item.item_discount_amount)})`}
                       </Text>
                     </View>
                   )}
@@ -418,11 +421,11 @@ export default function SaleDetailsContent({
                 <View style={styles.itemTotal}>
                   {item.original_subtotal > item.subtotal && (
                     <Text style={[styles.originalPrice, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                      ${item.original_subtotal.toFixed(2)}
+                      {fmt(item.original_subtotal)}
                     </Text>
                   )}
                   <Text style={[styles.subtotal, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                    ${item.subtotal.toFixed(2)}
+                    {fmt(item.subtotal)}
                   </Text>
                 </View>
               </View>
@@ -445,7 +448,7 @@ export default function SaleDetailsContent({
                 {t('sales.itemsSubtotal')}:
               </Text>
               <Text style={[styles.priceValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${saleDetails?.items_original_total.toFixed(2)}
+                {fmt(saleDetails?.items_original_total)}
               </Text>
             </View>
 
@@ -455,7 +458,7 @@ export default function SaleDetailsContent({
                   {t('sales.itemDiscounts')}:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${saleDetails.items_total_discount.toFixed(2)}
+                  -{fmt(saleDetails.items_total_discount)}
                 </Text>
               </View>
             )}
@@ -465,7 +468,7 @@ export default function SaleDetailsContent({
                 {t('sales.subtotalAfterItemDiscounts')}:
               </Text>
               <Text style={[styles.priceValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${saleDetails?.items_subtotal_after_discount.toFixed(2)}
+                {fmt(saleDetails?.items_subtotal_after_discount)}
               </Text>
             </View>
 
@@ -476,11 +479,11 @@ export default function SaleDetailsContent({
                   {saleDetails.cart_discount_type && saleDetails.cart_discount_value &&
                     ` (${saleDetails.cart_discount_type === 'percentage'
                       ? `${saleDetails.cart_discount_value}%`
-                      : `$${saleDetails.cart_discount_value}`})`
+                      : fmt(saleDetails.cart_discount_value)})`
                   }:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${saleDetails.cart_discount_amount.toFixed(2)}
+                  -{fmt(saleDetails.cart_discount_amount)}
                 </Text>
               </View>
             )}
@@ -491,7 +494,7 @@ export default function SaleDetailsContent({
                   {t('sales.deliveryCost')}:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
-                  -${saleDetails.delivery_cost.toFixed(2)}
+                  -{fmt(saleDetails.delivery_cost)}
                 </Text>
               </View>
             )}
@@ -501,7 +504,7 @@ export default function SaleDetailsContent({
                 {sale.returned_amount > 0 ? t('sales.currentTotal') : t('common.total')}:
               </Text>
               <Text style={[styles.totalValue, { color: '#059669' }]}>
-                ${(sale.total_amount - (sale.returned_amount || 0)).toFixed(2)}
+                {fmt(sale.total_amount - (sale.returned_amount || 0))}
               </Text>
             </View>
 
@@ -512,7 +515,7 @@ export default function SaleDetailsContent({
                     {t('sales.originalTotal')}:
                   </Text>
                   <Text style={[styles.originalTotalValue, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                    ${sale.total_amount.toFixed(2)}
+                    {fmt(sale.total_amount)}
                   </Text>
                 </View>
 
@@ -521,7 +524,7 @@ export default function SaleDetailsContent({
                     {t('sales.returnedAmount')}:
                   </Text>
                   <Text style={[styles.returnedAmountValue, { color: '#dc2626' }]}>
-                    -${(sale.returned_amount || 0).toFixed(2)}
+                    -{fmt(sale.returned_amount || 0)}
                   </Text>
                 </View>
               </>
@@ -579,7 +582,7 @@ export default function SaleDetailsContent({
                             Original Amount:
                           </Text>
                           <Text style={[styles.amountValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                            ${action.amount.toFixed(2)}
+                            {fmt(action.amount)}
                           </Text>
                         </View>
                       )}
@@ -591,7 +594,7 @@ export default function SaleDetailsContent({
                             {action.delivery_cost_included ? 'Delivery (included):' : 'Delivery (excluded):'}
                           </Text>
                           <Text style={[styles.amountValue, { color: action.delivery_cost_included ? isDark ? '#f9fafb' : '#111827' : '#f59e0b' }]}>
-                            ${action.delivery_cost_amount.toFixed(2)}
+                            {fmt(action.delivery_cost_amount)}
                           </Text>
                         </View>
                       )}
@@ -604,7 +607,7 @@ export default function SaleDetailsContent({
                               Loss Adjustment:
                             </Text>
                             <Text style={[styles.amountValue, { color: '#dc2626' }]}>
-                              -${action.loss_amount.toFixed(2)}
+                              -{fmt(action.loss_amount)}
                             </Text>
                           </View>
                           {action.loss_type && (
@@ -626,7 +629,7 @@ export default function SaleDetailsContent({
                             Final Amount:
                           </Text>
                           <Text style={[styles.amountValue, styles.adjustedAmountValue, { color: '#2563eb' }]}>
-                            ${action.adjusted_amount.toFixed(2)}
+                            {fmt(action.adjusted_amount)}
                           </Text>
                         </View>
                       )}

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { Card } from '@/src/components/ui/Card';
@@ -38,6 +39,7 @@ export default function ProductSalesScreen() {
   const params = useLocalSearchParams();
   const { productId, productName } = params;
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
   const { currentBusiness } = useAuth();
   const { t } = useTranslation();
   const { openSaleDetails } = useSaleDetailsModal();
@@ -354,7 +356,7 @@ export default function ProductSalesScreen() {
                 Unit Price:
               </Text>
               <Text style={[styles.saleDetailValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                ${parseFloat(productItem.unit_price).toFixed(2)}
+                {formatPrice(parseFloat(productItem.unit_price))}
               </Text>
             </View>
 
@@ -366,19 +368,19 @@ export default function ProductSalesScreen() {
               <View style={styles.saleDetailValue}>
                 {(isVoided || isFullyReturned) ? (
                   <Text style={{ textDecorationLine: 'line-through', color: '#dc2626', fontWeight: '600' }}>
-                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                    {formatPrice(parseFloat(productItem.subtotal))}
                   </Text>
                 ) : isPartiallyReturned ? (
                   <Text>
                     <Text style={{ textDecorationLine: 'line-through', color: '#9ca3af', fontSize: 12 }}>
-                      ${parseFloat(productItem.subtotal).toFixed(2)}
+                      {formatPrice(parseFloat(productItem.subtotal))}
                     </Text>
                     <Text> → </Text>
-                    <Text style={{ color: '#2563eb', fontWeight: '600' }}>${netRevenue.toFixed(2)}</Text>
+                    <Text style={{ color: '#2563eb', fontWeight: '600' }}>{formatPrice(netRevenue)}</Text>
                   </Text>
                 ) : (
                   <Text style={{ color: '#2563eb', fontWeight: '600' }}>
-                    ${parseFloat(productItem.subtotal).toFixed(2)}
+                    {formatPrice(parseFloat(productItem.subtotal))}
                   </Text>
                 )}
               </View>
@@ -387,7 +389,7 @@ export default function ProductSalesScreen() {
             {isPartiallyReturned && (
               <View style={[styles.returnInfo, { borderColor: '#3b82f6', backgroundColor: '#3b82f620' }]}>
                 <Text style={{ color: '#3b82f6', fontSize: 12 }}>
-                  ⚠️ {returnedQty} unit(s) returned (${returnedRevenue.toFixed(2)})
+                  ⚠️ {returnedQty} unit(s) returned ({formatPrice(returnedRevenue)})
                 </Text>
               </View>
             )}
@@ -502,7 +504,7 @@ export default function ProductSalesScreen() {
 
           <Card style={styles.statsCard}>
             <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.totalRevenue.toFixed(2)}
+              {formatPrice(stats.totalRevenue)}
             </Text>
             <Text style={[styles.statsLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
               {t('financials.totalRevenue')}

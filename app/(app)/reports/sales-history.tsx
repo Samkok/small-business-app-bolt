@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
@@ -55,6 +56,7 @@ export default function SalesHistoryScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
+  const { formatPrice } = useCurrencyContext();
 
   useEffect(() => {
     if (currentBusiness?.id) {
@@ -245,7 +247,7 @@ export default function SalesHistoryScreen() {
             </View>
           </View>
           <Text style={[styles.saleAmount, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            ${displayAmount.toFixed(2)}
+            {formatPrice(displayAmount)}
           </Text>
         </View>
 
@@ -301,12 +303,12 @@ export default function SalesHistoryScreen() {
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalRevenue)}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
         </View>
         <View style={[styles.dateSummarySeparator, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
         <View style={styles.dateSummaryItem}>
-          <Text style={[styles.dateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>${totalProfit.toFixed(2)}</Text>
+          <Text style={[styles.dateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalProfit)}</Text>
           <Text style={[styles.dateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
         </View>
       </View>
@@ -517,7 +519,7 @@ export default function SalesHistoryScreen() {
               {t('reports.totalRevenue')}:
             </Text>
             <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.totalRevenue.toFixed(2)}
+              {formatPrice(stats.totalRevenue)}
             </Text>
           </View>
           <View style={styles.statRow}>
@@ -525,7 +527,7 @@ export default function SalesHistoryScreen() {
               {t('reports.averageSale')}:
             </Text>
             <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              ${stats.averageSale.toFixed(2)}
+              {formatPrice(stats.averageSale)}
             </Text>
           </View>
         </Card>

@@ -30,6 +30,7 @@ import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
 import { ProfitCard, ProfitCardData } from '@/src/components/sharing/ProfitCard';
 import { format } from 'date-fns';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -78,6 +79,7 @@ export default function DashboardScreen() {
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
   const { isConnected, wasOffline } = useNetwork();
+  const { formatPrice, getSymbol } = useCurrencyContext();
   const router = useRouter();
 
   useEffect(() => {
@@ -260,10 +262,10 @@ export default function DashboardScreen() {
       </View>
       <View style={styles.topItemValues}>
         <Text style={[styles.topItemValue, { color: '#059669' }]}>
-          ${product.revenue.toFixed(2)}
+          {formatPrice(product.revenue)}
         </Text>
         <Text style={[styles.topItemProfit, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
-          {t('financials.profit')}: ${product.profit.toFixed(2)}
+          {t('financials.profit')}: {formatPrice(product.profit)}
         </Text>
       </View>
     </View>
@@ -280,7 +282,7 @@ export default function DashboardScreen() {
         </Text>
       </View>
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
-        ${customer.totalSpent.toFixed(2)}
+        {formatPrice(customer.totalSpent)}
       </Text>
     </View>
   );
@@ -450,40 +452,40 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               title={t('financials.todayRevenue')}
-              value={`$${stats.todayRevenue.toFixed(2)}`}
+              value={formatPrice(stats.todayRevenue)}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
               trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('financials.monthlyRevenue')}
-              value={`$${stats.monthlyRevenue.toFixed(2)}`}
+              value={formatPrice(stats.monthlyRevenue)}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
               trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('dashboard.monthlyCOGS')}
-              value={`$${stats.monthlyCOGS.toFixed(2)}`}
+              value={formatPrice(stats.monthlyCOGS)}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title={t('financials.totalProfit')}
-              value={`$${stats.totalProfit.toFixed(2)}`}
+              value={formatPrice(stats.totalProfit)}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
               trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title={t('expenses.totalExpenses')}
-              value={`$${stats.totalExpenses.toFixed(2)}`}
+              value={formatPrice(stats.totalExpenses)}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
               title={t('financials.netProfit')}
-              value={`$${stats.netProfit.toFixed(2)}`}
+              value={formatPrice(stats.netProfit)}
               icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
               color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
               trend={stats.netProfit >= 0 ? "up" : "down"}
@@ -613,7 +615,7 @@ export default function DashboardScreen() {
             salesCount: stats.totalProductsSold,
             topProductName: topProducts[0]?.name,
             growthPercent: undefined,
-            currencySymbol: '$',
+            currencySymbol: getSymbol(),
           }}
         />
       )}

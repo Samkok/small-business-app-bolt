@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { CreditCard as Edit, Trash2, Calendar, Tag, DollarSign } from 'lucide-react-native';
 
@@ -24,13 +25,14 @@ interface ExpenseCardProps {
 
 export const ExpenseCard = React.memo(function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardProps) {
   const { isDark } = useTheme();
+  const { formatPrice } = useCurrencyContext();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return formatPrice(amount);
   };
 
   return (

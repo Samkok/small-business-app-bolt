@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -11,6 +12,7 @@ interface SaleCardProps {
     id: string;
     total_amount: number;
     display_amount?: number;
+    currency_id?: string;
     payment_method: string;
     status: string;
     sale_date: string;
@@ -37,14 +39,13 @@ interface SaleCardProps {
 export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator = false }: SaleCardProps) {
   const { isDark } = useTheme();
   const router = useRouter();
+  const { formatPrice } = useCurrencyContext();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
-  };
+  const fmtAmount = (amount: number) => formatPrice(amount, sale.currency_id);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -103,11 +104,11 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
               <DollarSign size={18} color="#059669" />
               <View style={styles.amountContainer}>
                 <Text style={[styles.amount, { color: '#059669' }]}>
-                  {formatCurrency(sale.display_amount ?? sale.total_amount)}
+                  {fmtAmount(sale.display_amount ?? sale.total_amount)}
                 </Text>
                 {sale.display_amount != null && sale.display_amount !== sale.total_amount && (
                   <Text style={[styles.originalAmount, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                    {formatCurrency(sale.total_amount)}
+                    {fmtAmount(sale.total_amount)}
                   </Text>
                 )}
               </View>
