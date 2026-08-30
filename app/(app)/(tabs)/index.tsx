@@ -248,7 +248,7 @@ export default function DashboardScreen() {
           )}
         </View>
         <View style={styles.statContent}>
-          <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+          <Text style={[styles.statValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
             {value}
           </Text>
           <Text style={[styles.statTitle, { color: isDark ? '#d1d5db' : '#6b7280' }]} numberOfLines={2}>
@@ -785,7 +785,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 2,
-    lineHeight: 22,
   },
   statTitle: {
     fontSize: 11,
