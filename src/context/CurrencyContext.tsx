@@ -9,6 +9,7 @@ interface CurrencyContextValue {
   loading: boolean;
   getSymbol: (currencyId?: string) => string;
   formatPrice: (amount: number, currencyId?: string) => string;
+  convertAmount: (amount: number, fromCurrencyId: string | null, toCurrencyId: string) => number;
   refreshCurrencies: () => void;
 }
 
@@ -18,6 +19,7 @@ const CurrencyContext = createContext<CurrencyContextValue>({
   loading: false,
   getSymbol: () => '$',
   formatPrice: (amount) => `$${amount.toFixed(2)}`,
+  convertAmount: (amount) => amount,
   refreshCurrencies: () => {},
 });
 
@@ -64,8 +66,18 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     return formatCurrency(amount, getSymbol(currencyId), 2);
   }, [getSymbol]);
 
+  const convertAmount = useCallback((amount: number, fromCurrencyId: string | null, toCurrencyId: string): number => {
+    if (!fromCurrencyId || fromCurrencyId === toCurrencyId) return amount;
+    const fromCurrency = currencies.find(c => c.id === fromCurrencyId);
+    const toCurrency = currencies.find(c => c.id === toCurrencyId);
+    if (!fromCurrency || !toCurrency) return amount;
+    if (!fromCurrency.exchange_rate_to_usd || !toCurrency.exchange_rate_to_usd) return amount;
+    const usdAmount = amount / fromCurrency.exchange_rate_to_usd;
+    return usdAmount * toCurrency.exchange_rate_to_usd;
+  }, [currencies]);
+
   return (
-    <CurrencyContext.Provider value={{ currencies, defaultCurrency, loading, getSymbol, formatPrice, refreshCurrencies: loadCurrencies }}>
+    <CurrencyContext.Provider value={{ currencies, defaultCurrency, loading, getSymbol, formatPrice, convertAmount, refreshCurrencies: loadCurrencies }}>
       {children}
     </CurrencyContext.Provider>
   );

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { ChevronDown, Check } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 
@@ -25,14 +25,17 @@ export function CurrencyDropdown({ currencies, selectedCurrencyId, onSelect }: C
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+        style={[styles.trigger, {
+          backgroundColor: isDark ? '#374151' : '#ffffff',
+          borderColor: isDark ? '#4b5563' : '#d1d5db',
+        }]}
         onPress={() => setOpen(true)}
         activeOpacity={0.7}
       >
         <Text style={[styles.triggerText, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {selected.symbol} {selected.code}
         </Text>
-        <ChevronDown size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+        <ChevronDown size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -68,15 +71,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    alignSelf: 'stretch',
   },
   triggerText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   backdrop: {
