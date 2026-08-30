@@ -867,26 +867,36 @@ export default function SalesScreen() {
     </Modal>
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
+  type CurrencyTotal = { revenue: number; profit: number };
+
   type SaleFlatItem =
-    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }
     | { type: 'sale'; item: any };
 
   const buildGroupedSalesList = useCallback((salesData: any[]): SaleFlatItem[] => {
-    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number }> = {};
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }> = {};
 
     salesData.forEach((sale) => {
       const dateKey = format(new Date(sale.sale_date), 'yyyy-MM-dd');
       if (!groups[dateKey]) {
-        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0 };
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0, currencyTotals: {} };
       }
 
       const isVoided = sale.status === 'voided';
       const displayAmount = calculateSaleDisplayAmount(sale);
       const productCount = calculateSaleProductCount(sale);
       const saleProfit = calculateSaleProfit(sale);
+      const currId = sale.currency_id || 'default';
 
       groups[dateKey].sales.push(sale);
-      if (!isVoided) groups[dateKey].totalOrders += 1;
+      if (!isVoided) {
+        groups[dateKey].totalOrders += 1;
+        if (!groups[dateKey].currencyTotals[currId]) {
+          groups[dateKey].currencyTotals[currId] = { revenue: 0, profit: 0 };
+        }
+        groups[dateKey].currencyTotals[currId].revenue += displayAmount;
+        groups[dateKey].currencyTotals[currId].profit += saleProfit;
+      }
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
       groups[dateKey].totalProfit += saleProfit;
@@ -896,14 +906,21 @@ export default function SalesScreen() {
     Object.entries(groups)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([date, data]) => {
-        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit });
+        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit, currencyTotals: data.currencyTotals });
         data.sales.forEach(sale => result.push({ type: 'sale', item: sale }));
       });
 
     return result;
   }, []);
 
-  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, totalRevenue: number, totalProfit: number) => (
+  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, currencyTotals: Record<string, CurrencyTotal>) => {
+    const currencyEntries = Object.entries(currencyTotals);
+    const hasSingleCurrency = currencyEntries.length <= 1;
+    const singleCurrId = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][0] : undefined;
+    const singleRevenue = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].revenue : 0;
+    const singleProfit = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].profit : 0;
+
+    return (
     <View style={[styles.saleDateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
       <View style={styles.saleDatePillRow}>
         <View style={[styles.saleDatePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
@@ -924,22 +941,40 @@ export default function SalesScreen() {
           <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Products</Text>
         </View>
         <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
-        <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalRevenue)}</Text>
-          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
-        </View>
-        <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
-        <View style={styles.saleDateSummaryItem}>
-          <Text style={[styles.saleDateSummaryValue, { color: totalProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(totalProfit)}</Text>
-          <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
-        </View>
+        {hasSingleCurrency ? (
+          <>
+            <View style={styles.saleDateSummaryItem}>
+              <Text style={[styles.saleDateSummaryValue, { color: '#059669' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(singleRevenue, singleCurrId)}</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+            </View>
+            <View style={[styles.saleDateSummarySep, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]} />
+            <View style={styles.saleDateSummaryItem}>
+              <Text style={[styles.saleDateSummaryValue, { color: singleProfit >= 0 ? '#2563eb' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(singleProfit, singleCurrId)}</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.saleDateSummaryMultiCurrency}>
+            {currencyEntries.map(([currId, totals]) => (
+              <View key={currId} style={styles.saleDateCurrencyRow}>
+                <Text style={[styles.saleDateSummaryValue, { color: '#059669', fontSize: 12 }]} numberOfLines={1}>{formatPrice(totals.revenue, currId)}</Text>
+                <Text style={[styles.saleDateSummaryValue, { color: totals.profit >= 0 ? '#2563eb' : '#dc2626', fontSize: 12 }]} numberOfLines={1}>{formatPrice(totals.profit, currId)}</Text>
+              </View>
+            ))}
+            <View style={styles.saleDateCurrencyLabels}>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Revenue</Text>
+              <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Profit</Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
-  ), [isDark]);
+  );
+  }, [isDark, formatPrice]);
 
   const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
     if (item.type === 'header') {
-      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.totalRevenue, item.totalProfit);
+      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.currencyTotals);
     }
     return (
       <SaleCard
@@ -1909,5 +1944,21 @@ const styles = StyleSheet.create({
   saleDateSummarySep: {
     width: 1,
     height: 26,
+  },
+  saleDateSummaryMultiCurrency: {
+    flex: 1,
+    paddingHorizontal: 8,
+    gap: 2,
+  },
+  saleDateCurrencyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  saleDateCurrencyLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 2,
   },
 });

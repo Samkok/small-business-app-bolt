@@ -5,7 +5,7 @@ import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, endOfDay } from 'date-fns';
 
 export const reportsService = {
-  async getDashboardStats(businessId: string, year?: number, month?: number) {
+  async getDashboardStats(businessId: string, year?: number, month?: number, currencyId?: string) {
     if (!businessId) return null;
 
     const today = new Date();
@@ -27,7 +27,7 @@ export const reportsService = {
 
     try {
       // Today's revenue
-      const { data: todaySalesData } = await supabase
+      let todaySalesQuery = supabase
         .from('sales')
         .select(`
           total_amount,
@@ -37,6 +37,8 @@ export const reportsService = {
         .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', todayStr)
         .lt('sale_date', tomorrowStr);
+      if (currencyId) todaySalesQuery = todaySalesQuery.eq('currency_id', currencyId);
+      const { data: todaySalesData } = await todaySalesQuery;
 
       const todayRevenue = todaySalesData?.reduce((sum, sale) => {
         const returnedAmount = sale.sale_actions
@@ -46,7 +48,7 @@ export const reportsService = {
       }, 0) || 0;
 
       // Monthly revenue
-      const { data: monthlySalesData } = await supabase
+      let monthlySalesQuery = supabase
         .from('sales')
         .select(`
           total_amount,
@@ -56,6 +58,8 @@ export const reportsService = {
         .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', startOfMonthStr)
         .lte('sale_date', endOfMonthStr);
+      if (currencyId) monthlySalesQuery = monthlySalesQuery.eq('currency_id', currencyId);
+      const { data: monthlySalesData } = await monthlySalesQuery;
 
       const monthlyRevenue = monthlySalesData?.reduce((sum, sale) => {
         const returnedAmount = sale.sale_actions
@@ -68,7 +72,8 @@ export const reportsService = {
       const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
         business_id_param: businessId,
         start_date: startOfMonthStr,
-        end_date: endOfMonthStr
+        end_date: endOfMonthStr,
+        ...(currencyId ? { currency_id_param: currencyId } : {})
       });
       
       const monthlyCOGS = monthlyCOGSData || 0;
@@ -77,27 +82,31 @@ export const reportsService = {
       const totalProfit = monthlyRevenue - monthlyCOGS;
 
       // Monthly expenses
-      const { data: monthlyExpenses } = await supabase
+      let expensesQuery = supabase
         .from('expenses')
-        .select('amount')
+        .select('amount, currency_id')
         .eq('business_id', businessId)
         .gte('expense_date', startOfMonthStr)
         .lte('expense_date', endOfMonthStr);
+      if (currencyId) expensesQuery = expensesQuery.eq('currency_id', currencyId);
+      const { data: monthlyExpenses } = await expensesQuery;
 
       const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
 
       // Get loss amounts from sale actions (treated as expenses)
-      const { data: lossData } = await supabase
+      let lossQuery = supabase
         .from('sale_actions')
         .select(`
           loss_amount,
-          sales!inner(business_id, sale_date)
+          sales!inner(business_id, sale_date, currency_id)
         `)
         .eq('sales.business_id', businessId)
         .gte('sales.sale_date', startOfMonthStr)
         .lte('sales.sale_date', endOfMonthStr)
         .not('loss_amount', 'is', null)
         .gt('loss_amount', 0);
+      if (currencyId) lossQuery = lossQuery.eq('sales.currency_id', currencyId);
+      const { data: lossData } = await lossQuery;
 
       const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
 
@@ -156,7 +165,7 @@ export const reportsService = {
     }
   },
 
-  async getTopProducts(businessId: string, limit = 5, year?: number, month?: number) {
+  async getTopProducts(businessId: string, limit = 5, year?: number, month?: number, currencyId?: string) {
     // Helper to check if a sale is completely voided
     const isSaleVoided = (sale: any): boolean => {
       if (!sale.sale_actions || sale.sale_actions.length === 0) return false;
@@ -212,7 +221,7 @@ export const reportsService = {
     endOfMonthDate.setHours(23, 59, 59, 999);
     const endOfMonthStr = endOfMonthDate.toISOString();
 
-    const { data, error } = await supabase
+    let topProductsQuery = supabase
       .from('sales')
       .select(`
         id,
@@ -241,6 +250,8 @@ export const reportsService = {
       .eq('business_id', businessId)
       .gte('sale_date', startOfMonthStr)
       .lte('sale_date', endOfMonthStr);
+    if (currencyId) topProductsQuery = topProductsQuery.eq('currency_id', currencyId);
+    const { data, error } = await topProductsQuery;
 
     if (error) throw error;
 
@@ -327,7 +338,7 @@ export const reportsService = {
       .slice(0, limit);
   },
 
-  async getTopCustomers(businessId: string, limit = 5, year?: number, month?: number) {
+  async getTopCustomers(businessId: string, limit = 5, year?: number, month?: number, currencyId?: string) {
     // Use provided year/month or default to current month
     const targetDate = year && month ? new Date(year, month - 1, 1) : new Date();
     const startOfMonthDate = startOfMonth(targetDate);
@@ -337,7 +348,7 @@ export const reportsService = {
     endOfMonthDate.setHours(23, 59, 59, 999);
     const endOfMonthStr = endOfMonthDate.toISOString();
 
-    const { data, error } = await supabase
+    let topCustomersQuery = supabase
       .from('sales')
       .select(`
         current_total_amount,
@@ -347,6 +358,8 @@ export const reportsService = {
       .in('status', ['completed', 'partially_returned'])
       .gte('sale_date', startOfMonthStr)
       .lte('sale_date', endOfMonthStr);
+    if (currencyId) topCustomersQuery = topCustomersQuery.eq('currency_id', currencyId);
+    const { data, error } = await topCustomersQuery;
 
     if (error) throw error;
 
