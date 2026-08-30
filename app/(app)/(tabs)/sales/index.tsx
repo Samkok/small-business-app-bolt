@@ -39,7 +39,7 @@ import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
-import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
+
 import { dataCache } from '@/src/lib/dataCache';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -71,6 +71,7 @@ export default function SalesScreen() {
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateFilterTypeModal, setShowDateFilterTypeModal] = useState(false);
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(true);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [saleToVoid, setSaleToVoid] = useState<any>(null);
@@ -769,7 +770,9 @@ export default function SalesScreen() {
   const totalProfit = analytics.totalProfit;
 
 
-  const renderDateFilter = useCallback(() => (
+  const activeCurrency = currencies.find(c => c.id === activeCurrencyId);
+
+  const renderDateFilter = () => (
     <View style={styles.dateFilterContainer}>
       <View style={styles.dateFilterRow}>
         <TouchableOpacity
@@ -786,11 +789,19 @@ export default function SalesScreen() {
           <ChevronDown size={16} color="#2563eb" />
         </TouchableOpacity>
         {currencies.length > 1 && (
-          <CurrencyDropdown
-            currencies={currencies}
-            selectedCurrencyId={activeCurrencyId}
-            onSelect={setSelectedCurrencyId}
-          />
+          <TouchableOpacity
+            style={[
+              styles.dateFilterButton,
+              { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
+            ]}
+            onPress={() => setShowCurrencyModal(true)}
+          >
+            <DollarSign size={16} color="#2563eb" />
+            <Text style={[styles.dateFilterText, { color: isDark ? '#f9fafb' : '#374151' }]}>
+              {activeCurrency?.code || activeCurrency?.symbol || 'Currency'}
+            </Text>
+            <ChevronDown size={16} color="#2563eb" />
+          </TouchableOpacity>
         )}
         <TouchableOpacity
           style={[styles.exportIconButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
@@ -800,7 +811,7 @@ export default function SalesScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  ), [isDark, dateRangeText, currencies, activeCurrencyId]);
+  );
 
   const renderDateFilterTypeModal = useCallback(() => (
     <Modal
@@ -987,7 +998,62 @@ export default function SalesScreen() {
       </View>
     </View>
   );
-  }, [isDark, formatPrice]);
+  }, [isDark, formatPrice, displayAmt, activeCurrencyId]);
+
+  const renderCurrencyModal = () => (
+    <Modal
+      visible={showCurrencyModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowCurrencyModal(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCurrencyModal(false)}
+      >
+        <View
+          style={[
+            styles.dateFilterModal,
+            { backgroundColor: isDark ? '#374151' : '#ffffff' }
+          ]}
+          onStartShouldSetResponder={() => true}
+        >
+          <Text style={[styles.dateFilterModalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            {t('settings.currency')}
+          </Text>
+          <View style={styles.dateFilterOptions}>
+            {currencies.map(currency => (
+              <TouchableOpacity
+                key={currency.id}
+                style={[
+                  styles.dateFilterOption,
+                  {
+                    backgroundColor: activeCurrencyId === currency.id
+                      ? '#2563eb'
+                      : (isDark ? '#4b5563' : '#f3f4f6')
+                  }
+                ]}
+                onPress={() => {
+                  setSelectedCurrencyId(currency.id);
+                  setShowCurrencyModal(false);
+                }}
+              >
+                <Text style={{
+                  color: activeCurrencyId === currency.id
+                    ? '#ffffff'
+                    : (isDark ? '#f9fafb' : '#374151'),
+                  fontWeight: '500'
+                }}>
+                  {currency.code} ({currency.symbol})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
     if (item.type === 'header') {
@@ -1483,6 +1549,9 @@ export default function SalesScreen() {
 
       {/* Custom Date Range Picker Modal */}
       {renderCustomDateRangePicker()}
+
+      {/* Currency Picker Modal */}
+      {renderCurrencyModal()}
 
       {/* Void Sale Modal */}
       {saleToVoid && (
