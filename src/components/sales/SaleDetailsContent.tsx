@@ -19,6 +19,7 @@ import VoidSaleModal from './VoidSaleModal';
 import SaleEditModal from './SaleEditModal';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -76,8 +77,17 @@ export default function SaleDetailsContent({
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const router = useRouter();
-  const { formatPrice } = useCurrencyContext();
-  const fmt = (amount: number) => formatPrice(amount, sale?.currency_id);
+  const { formatPrice, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = React.useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || sale?.currency_id || defaultCurrency?.id || null;
+
+  const fmt = (amount: number) => {
+    if (activeCurrencyId && sale?.currency_id && activeCurrencyId !== sale.currency_id) {
+      const converted = convertAmount(amount, sale.currency_id, activeCurrencyId);
+      return formatPrice(converted, activeCurrencyId);
+    }
+    return formatPrice(amount, sale?.currency_id);
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -242,6 +252,13 @@ export default function SaleDetailsContent({
               {t('sales.saleNumber', { number: sale.id.slice(-8) })}
             </Text>
             <View style={styles.saleIdRight}>
+              {currencies.length > 1 && (
+                <CurrencyDropdown
+                  currencies={currencies}
+                  selectedCurrencyId={activeCurrencyId}
+                  onSelect={setSelectedCurrencyId}
+                />
+              )}
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
                 <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
                   {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
