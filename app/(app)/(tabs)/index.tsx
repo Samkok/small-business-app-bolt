@@ -31,7 +31,7 @@ import { dataCache } from '@/src/lib/dataCache';
 import { ProfitCard, ProfitCardData } from '@/src/components/sharing/ProfitCard';
 import { format } from 'date-fns';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
-import { CurrencyPicker } from '@/src/components/ui/CurrencyPicker';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -75,24 +75,20 @@ export default function DashboardScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfitCard, setShowProfitCard] = useState(false);
-  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
   const { isConnected, wasOffline } = useNetwork();
   const { formatPrice, getSymbol, currencies, defaultCurrency } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
   const router = useRouter();
 
   useEffect(() => {
-    if (defaultCurrency && !selectedCurrencyId) {
-      setSelectedCurrencyId(defaultCurrency.id);
-    }
-  }, [defaultCurrency]);
-
-  useEffect(() => {
     loadDashboardData();
-  }, [currentBusiness, selectedMonth, selectedCurrencyId]);
+  }, [currentBusiness, selectedMonth, activeCurrencyId]);
 
   useEffect(() => {
     if (wasOffline && isConnected && currentBusiness?.id) {
@@ -112,7 +108,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    const currencySuffix = selectedCurrencyId || 'all';
+    const currencySuffix = activeCurrencyId || 'all';
     const monthKey = `${selectedMonth.getFullYear()}_${selectedMonth.getMonth() + 1}_${currencySuffix}`;
     const businessId = currentBusiness.id;
 
@@ -154,9 +150,9 @@ export default function DashboardScreen() {
       const month = selectedMonth.getMonth() + 1;
 
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(businessId, year, month, selectedCurrencyId || undefined),
-        reportsService.getTopProducts(businessId, 3, year, month, selectedCurrencyId || undefined),
-        reportsService.getTopCustomers(businessId, 3, year, month, selectedCurrencyId || undefined)
+        reportsService.getDashboardStats(businessId, year, month, activeCurrencyId || undefined),
+        reportsService.getTopProducts(businessId, 3, year, month, activeCurrencyId || undefined),
+        reportsService.getTopCustomers(businessId, 3, year, month, activeCurrencyId || undefined)
       ]);
 
       setStats(dashboardStats);
@@ -271,10 +267,10 @@ export default function DashboardScreen() {
       </View>
       <View style={styles.topItemValues}>
         <Text style={[styles.topItemValue, { color: '#059669' }]}>
-          {formatPrice(product.revenue, selectedCurrencyId || undefined)}
+          {formatPrice(product.revenue, activeCurrencyId || undefined)}
         </Text>
         <Text style={[styles.topItemProfit, { color: product.profit >= 0 ? '#059669' : '#dc2626' }]}>
-          {t('financials.profit')}: {formatPrice(product.profit, selectedCurrencyId || undefined)}
+          {t('financials.profit')}: {formatPrice(product.profit, activeCurrencyId || undefined)}
         </Text>
       </View>
     </View>
@@ -291,7 +287,7 @@ export default function DashboardScreen() {
         </Text>
       </View>
       <Text style={[styles.topItemValue, { color: '#059669' }]}>
-        {formatPrice(customer.totalSpent, selectedCurrencyId || undefined)}
+        {formatPrice(customer.totalSpent, activeCurrencyId || undefined)}
       </Text>
     </View>
   );
@@ -427,11 +423,13 @@ export default function DashboardScreen() {
       </View>
 
       {currencies.length > 1 && (
-        <CurrencyPicker
-          currencies={currencies}
-          selectedCurrencyId={selectedCurrencyId}
-          onSelect={setSelectedCurrencyId}
-        />
+        <View style={styles.currencyRow}>
+          <CurrencyDropdown
+            currencies={currencies}
+            selectedCurrencyId={activeCurrencyId}
+            onSelect={setSelectedCurrencyId}
+          />
+        </View>
       )}
 
       {loading ? (
@@ -469,40 +467,40 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               title={t('financials.todayRevenue')}
-              value={formatPrice(stats.todayRevenue, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.todayRevenue, activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color="#2563eb" />}
               color="#2563eb"
               trend={stats.todayRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('financials.monthlyRevenue')}
-              value={formatPrice(stats.monthlyRevenue, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.monthlyRevenue, activeCurrencyId || undefined)}
               icon={<TrendingUp size={20} color="#059669" />}
               color="#059669"
               trend={stats.monthlyRevenue > 0 ? "up" : undefined}
             />
             <StatCard
               title={t('dashboard.monthlyCOGS')}
-              value={formatPrice(stats.monthlyCOGS, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.monthlyCOGS, activeCurrencyId || undefined)}
               icon={<Calculator size={20} color="#8b5cf6" />}
               color="#8b5cf6"
             />
             <StatCard
               title={t('financials.totalProfit')}
-              value={formatPrice(stats.totalProfit, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.totalProfit, activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color="#059669" />}
               color="#059669"
               trend={stats.totalProfit >= 0 ? "up" : "down"}
             />
             <StatCard
               title={t('expenses.totalExpenses')}
-              value={formatPrice(stats.totalExpenses, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.totalExpenses, activeCurrencyId || undefined)}
               icon={<TrendingDown size={20} color="#ea580c" />}
               color="#ea580c"
             />
             <StatCard
               title={t('financials.netProfit')}
-              value={formatPrice(stats.netProfit, selectedCurrencyId || undefined)}
+              value={formatPrice(stats.netProfit, activeCurrencyId || undefined)}
               icon={<DollarSign size={20} color={stats.netProfit >= 0 ? "#059669" : "#dc2626"} />}
               color={stats.netProfit >= 0 ? "#059669" : "#dc2626"}
               trend={stats.netProfit >= 0 ? "up" : "down"}
@@ -632,7 +630,7 @@ export default function DashboardScreen() {
             salesCount: stats.totalProductsSold,
             topProductName: topProducts[0]?.name,
             growthPercent: undefined,
-            currencySymbol: getSymbol(selectedCurrencyId || undefined),
+            currencySymbol: getSymbol(activeCurrencyId || undefined),
           }}
         />
       )}
@@ -667,6 +665,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingTop: 4,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
   },
   notificationButton: {
     position: 'relative',
