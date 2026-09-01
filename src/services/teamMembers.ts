@@ -113,24 +113,20 @@ export const teamMemberService = {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Query user_profiles table to check if user exists (case-insensitive)
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('user_id, full_name, email')
-        .ilike('email', normalizedEmail)
-        .maybeSingle();
+      const { data: result, error: rpcError } = await supabase.rpc('check_user_exists_by_email', {
+        p_email: normalizedEmail
+      });
 
-      if (profileError) {
-        console.error('Error checking user existence:', profileError);
+      if (rpcError) {
+        console.error('Error checking user existence:', rpcError);
         return { exists: false };
       }
 
-      if (!profile) {
-        console.log('No profile found for email:', normalizedEmail);
+      if (!result || !result.exists) {
         return { exists: false };
       }
 
-      console.log('Found user profile:', profile);
+      const profile = { user_id: result.user_id, full_name: result.full_name };
 
       // If businessId is provided, check if user is already a member
       let isAlreadyMember = false;
