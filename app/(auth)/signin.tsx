@@ -136,6 +136,7 @@ export default function SignInScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              textContentType="username"
               required
             />
 
@@ -145,6 +146,7 @@ export default function SignInScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              textContentType="password"
               showPasswordToggle
               required
             />

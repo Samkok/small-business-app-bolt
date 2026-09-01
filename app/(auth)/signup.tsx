@@ -125,6 +125,8 @@ export default function SignUpScreen() {
               onChangeText={(v) => form.setValue('fullName', v)}
               onBlur={() => form.setTouched('fullName')}
               autoCapitalize="words"
+              autoComplete="name"
+              textContentType="name"
               required
               error={form.fields.fullName?.touched ? form.fields.fullName?.error || undefined : undefined}
               validationStatus={getFieldStatus('fullName')}
@@ -140,6 +142,7 @@ export default function SignUpScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              textContentType="emailAddress"
               required
               error={form.fields.email?.touched ? form.fields.email?.error || undefined : undefined}
               validationStatus={getFieldStatus('email')}
@@ -153,7 +156,8 @@ export default function SignUpScreen() {
               onChangeText={(v) => form.setValue('password', v)}
               onBlur={() => form.setTouched('password')}
               secureTextEntry
-              autoComplete="password"
+              autoComplete="new-password"
+              textContentType="newPassword"
               showPasswordToggle
               required
               error={form.fields.password?.touched ? form.fields.password?.error || undefined : undefined}
@@ -171,6 +175,8 @@ export default function SignUpScreen() {
               onChangeText={(v) => form.setValue('confirmPassword', v)}
               onBlur={() => form.setTouched('confirmPassword')}
               secureTextEntry
+              autoComplete="new-password"
+              textContentType="newPassword"
               showPasswordToggle
               required
               error={form.fields.confirmPassword?.touched ? form.fields.confirmPassword?.error || undefined : undefined}
