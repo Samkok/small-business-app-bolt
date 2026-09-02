@@ -58,10 +58,11 @@ export default function VoidSaleModal({
     let deliveryAdjustment = 0;
     let lossAdjustment = 0;
 
-    // Delivery cost adjustment
+    // Delivery cost adjustment: total_amount already has delivery cost subtracted,
+    // so when excluding delivery from the void, add it back to get the product-only amount
     if (!includeDeliveryCost && hasDeliveryCost) {
       deliveryAdjustment = deliveryCost;
-      adjusted -= deliveryCost;
+      adjusted += deliveryCost;
     }
 
     // Loss adjustment
@@ -309,11 +310,11 @@ export default function VoidSaleModal({
 
               {calculatedAmounts.deliveryAdjustment > 0 && (
                 <View style={styles.breakdownRow}>
-                  <Text style={[styles.breakdownLabel, { color: '#dc2626' }]}>
+                  <Text style={[styles.breakdownLabel, { color: '#059669' }]}>
                     Delivery excluded:
                   </Text>
-                  <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>
-                    -{fmt(calculatedAmounts.deliveryAdjustment)}
+                  <Text style={[styles.breakdownValue, { color: '#059669' }]}>
+                    +{fmt(calculatedAmounts.deliveryAdjustment)}
                   </Text>
                 </View>
               )}

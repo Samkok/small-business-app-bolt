@@ -101,27 +101,32 @@ export function DowngradePick({
       const businessIds = ownedBusinesses.map(b => b.id);
       console.log('[DowngradePick] Loading details for', businessIds.length, 'businesses');
 
-      const [salesResult, teamResult] = await Promise.all([
-        supabase
-          .from('user_sales_counts')
-          .select('business_id, sales_count')
-          .eq('user_id', user.id)
-          .in('business_id', businessIds),
+      const salesCountPromises = businessIds.map(async (bid) => {
+        const { count, error } = await supabase
+          .from('sales')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', bid)
+          .neq('status', 'voided');
+        return { business_id: bid, count: count || 0, error };
+      });
+
+      const [salesResults, teamResult] = await Promise.all([
+        Promise.all(salesCountPromises),
         supabase
           .from('user_business_roles')
           .select('business_id, user_id')
           .in('business_id', businessIds)
       ]);
 
-      if (salesResult.error) {
-        console.error('[DowngradePick] Error loading sales counts:', salesResult.error);
-      }
+      salesResults.forEach(r => {
+        if (r.error) console.error('[DowngradePick] Error loading sales count for', r.business_id, r.error);
+      });
       if (teamResult.error) {
         console.error('[DowngradePick] Error loading team members:', teamResult.error);
       }
 
-      const salesCount = (salesResult.data || []).reduce((acc, row) => {
-        acc[row.business_id] = row.sales_count || 0;
+      const salesCount = salesResults.reduce((acc, row) => {
+        acc[row.business_id] = row.count;
         return acc;
       }, {} as Record<string, number>);
 
