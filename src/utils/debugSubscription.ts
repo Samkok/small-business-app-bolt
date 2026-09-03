@@ -140,7 +140,7 @@ export const debugSubscription = {
 
       console.log(`[DEBUG] Successfully updated user_profiles, rows affected: ${count || updatedProfile.length}`);
 
-      await subscriptionService.clearSubscriptionCache();
+      await subscriptionService.clearSubscriptionCache(userId);
 
       console.log(`[DEBUG] Simulated subscription: ${status}, product: ${finalProductId}, tier: ${tier}`);
     } catch (error) {
@@ -182,7 +182,7 @@ export const debugSubscription = {
       console.log(`[DEBUG] Deleted ${salesResult.data?.length || 0} sales count records`);
       console.log(`[DEBUG] Deleted ${subscriptionsResult.data?.length || 0} subscription records`);
 
-      await subscriptionService.clearSubscriptionCache();
+      await subscriptionService.clearSubscriptionCache(userId);
       await subscriptionService.clearSalesCountCache(businessId);
 
       console.log('[DEBUG] All subscription data reset');

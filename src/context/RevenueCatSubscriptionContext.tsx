@@ -147,6 +147,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const userProfileChannelRef = useRef<RealtimeChannel | null>(null);
   const salesCountChannelRef = useRef<RealtimeChannel | null>(null);
   const businessAccessChannelRef = useRef<RealtimeChannel | null>(null);
+  const customerInfoListenerRemoveRef = useRef<(() => void) | null>(null);
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -1066,10 +1067,15 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const setupCustomerInfoListener = useCallback(() => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !revenueCatService) return;
 
+    // Remove previous listener to prevent memory leaks
+    if (customerInfoListenerRemoveRef.current) {
+      customerInfoListenerRemoveRef.current();
+      customerInfoListenerRemoveRef.current = null;
+    }
+
     try {
       if (revenueCatService.addCustomerInfoUpdateListener) {
-        revenueCatService.addCustomerInfoUpdateListener(async (info: any) => {
-          console.log('[RevenueCatSubscriptionContext] Customer info updated via listener');
+        const remove = revenueCatService.addCustomerInfoUpdateListener(async (info: any) => {
           setCustomerInfo(info);
 
           const hasActiveEntitlements = info?.entitlements?.active
@@ -1106,6 +1112,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
             console.error('[RevenueCatSubscriptionContext] Error refreshing state from listener:', error);
           }
         });
+        customerInfoListenerRemoveRef.current = remove;
       }
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error setting up customer info listener:', error);
@@ -1119,6 +1126,12 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         setupCustomerInfoListener();
       }
     }
+    return () => {
+      if (customerInfoListenerRemoveRef.current) {
+        customerInfoListenerRemoveRef.current();
+        customerInfoListenerRemoveRef.current = null;
+      }
+    };
   }, [user?.id, initializeRevenueCat, setupCustomerInfoListener]);
 
   useEffect(() => {
