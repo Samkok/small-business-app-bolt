@@ -587,7 +587,6 @@ export const subscriptionService = {
   },
 
   async getBusinessOwnerSubscriptionTier(businessId: string): Promise<{
-    ownerId: string;
     tier: SubscriptionTier;
     subscriptionStatus: string;
     expirationDate: string | null;
@@ -607,13 +606,16 @@ export const subscriptionService = {
       }
 
       const ownerData = data[0];
+      const expirationDate: string | null = ownerData.expiration_date ?? null;
+      const isExpired = ownerData.subscription_status === 'expired' ||
+        (expirationDate != null && new Date(expirationDate) < new Date());
+
       return {
-        ownerId: ownerData.owner_id,
         tier: ownerData.tier as SubscriptionTier,
         subscriptionStatus: ownerData.subscription_status,
-        expirationDate: ownerData.expiration_date,
-        maxOwnedBusinesses: ownerData.max_owned_businesses,
-        isExpired: ownerData.is_expired
+        expirationDate,
+        maxOwnedBusinesses: ownerData.max_businesses ?? null,
+        isExpired,
       };
     } catch (error) {
       console.error('Error getting business owner subscription tier:', error);
