@@ -42,9 +42,9 @@ export const accessControl = {
 
   async canCreateSale(userId: string, businessId: string): Promise<AccessCheckResult> {
     try {
-      const [subscription, salesCount, businessAccessState] = await Promise.all([
+      const [subscription, salesCountData, businessAccessState] = await Promise.all([
         subscriptionService.getSubscriptionStatus(userId),
-        subscriptionService.getSalesCount(userId, businessId),
+        subscriptionService.getSalesCountData(userId, businessId),
         this.getBusinessAccessState(businessId)
       ]);
 
@@ -63,7 +63,7 @@ export const accessControl = {
         };
       }
 
-      if (salesCount < FREE_TIER_LIMIT) {
+      if (!salesCountData.isAtLimit) {
         return {
           hasAccess: true,
           reason: 'under_limit'
@@ -94,9 +94,9 @@ export const accessControl = {
     businessId: string
   ): Promise<AccessCheckResult> {
     try {
-      const [subscription, salesCount, businessAccessState] = await Promise.all([
+      const [subscription, salesCountData, businessAccessState] = await Promise.all([
         subscriptionService.getSubscriptionStatus(userId),
-        subscriptionService.getSalesCount(userId, businessId),
+        subscriptionService.getSalesCountData(userId, businessId),
         this.getBusinessAccessState(businessId)
       ]);
 
@@ -124,7 +124,7 @@ export const accessControl = {
       }
 
       if (feature === 'create_sale' || feature === 'edit_sale') {
-        if (salesCount >= FREE_TIER_LIMIT) {
+        if (salesCountData.isAtLimit) {
           return {
             hasAccess: false,
             reason: 'at_limit',
@@ -132,7 +132,7 @@ export const accessControl = {
           };
         }
       } else {
-        if (salesCount >= FREE_TIER_LIMIT) {
+        if (salesCountData.isAtLimit) {
           return {
             hasAccess: false,
             reason: 'at_limit',

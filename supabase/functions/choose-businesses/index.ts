@@ -241,10 +241,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error('[ChooseBusinesses] Error:', error);
     return new Response(
-      JSON.stringify({
-        error: error.message || 'Internal server error',
-        details: error.toString()
-      }),
+      JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

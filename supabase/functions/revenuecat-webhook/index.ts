@@ -326,6 +326,8 @@ async function handleSubscriptionActivation(
       grace_period_ends_at: null,
       cancel_reason: null,
       cancel_reason_at: null,
+      expiration_reason: null,
+      expiration_reason_at: null,
       updated_by: 'webhook',
       last_webhook_update: now,
       updated_at: now,
@@ -397,6 +399,10 @@ async function handleTierChange(
       will_renew: true,
       is_trial_conversion: event.is_trial_conversion || false,
       is_family_share: event.is_family_share || false,
+      cancel_reason: null,
+      cancel_reason_at: null,
+      expiration_reason: null,
+      expiration_reason_at: null,
       updated_by: 'webhook',
       last_webhook_update: now,
       updated_at: now,
@@ -473,13 +479,13 @@ async function handleTierChange(
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
   const encoder = new TextEncoder();
   const aBuf = encoder.encode(a);
   const bBuf = encoder.encode(b);
-  let result = 0;
-  for (let i = 0; i < aBuf.length; i++) {
-    result |= aBuf[i] ^ bBuf[i];
+  const maxLen = Math.max(aBuf.length, bBuf.length);
+  let result = aBuf.length ^ bBuf.length;
+  for (let i = 0; i < maxLen; i++) {
+    result |= (aBuf[i] ?? 0) ^ (bBuf[i] ?? 0);
   }
   return result === 0;
 }
@@ -526,22 +532,51 @@ Deno.serve(async (req: Request) => {
     eventId = event.id || 'no-id';
     const userId = event.app_user_id;
 
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      console.error('[revenuecat-webhook] Missing or invalid app_user_id');
+      return new Response(
+        JSON.stringify({ error: 'Missing app_user_id' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     log(eventId, 'INFO', '========== WEBHOOK EVENT RECEIVED ==========');
     log(eventId, 'INFO', `Event: ${event.type}`);
     log(eventId, 'INFO', `User: ${userId}`);
     log(eventId, 'INFO', `Store: ${event.store || 'N/A'}`);
     log(eventId, 'INFO', `Environment: ${event.environment || 'N/A'}`);
 
-    // Check for idempotency - prevent duplicate processing
-    const { data: alreadyProcessed } = await supabase
-      .rpc('is_webhook_event_processed', { p_event_id: eventId });
+    // Atomic idempotency claim - prevents duplicate processing even under concurrent delivery
+    const { data: claimed, error: claimError } = await supabase
+      .rpc('mark_webhook_event_processed', {
+        p_event_id: eventId,
+        p_event_type: event.type,
+        p_app_user_id: userId,
+        p_event_timestamp_ms: event.event_timestamp_ms || 0,
+        p_processing_duration_ms: 0,
+        p_metadata: { claim: true }
+      });
 
-    if (alreadyProcessed) {
+    // If claim failed due to duplicate, skip processing
+    if (claimError && claimError.message?.includes('duplicate') || claimError?.code === '23505') {
       log(eventId, 'WARN', 'Event already processed (duplicate webhook) - skipping');
       return new Response(
         JSON.stringify({ received: true, duplicate: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Fallback: check via read if claim didn't clearly fail on duplicate
+    if (claimError) {
+      const { data: alreadyProcessed } = await supabase
+        .rpc('is_webhook_event_processed', { p_event_id: eventId });
+      if (alreadyProcessed) {
+        log(eventId, 'WARN', 'Event already processed (duplicate webhook) - skipping');
+        return new Response(
+          JSON.stringify({ received: true, duplicate: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Determine tier
@@ -898,20 +933,20 @@ Deno.serve(async (req: Request) => {
         });
     }
 
-    // Mark event as processed
+    // Update the idempotency record with final processing duration
     const processingDuration = Date.now() - startTime;
-    await supabase.rpc('mark_webhook_event_processed', {
-      p_event_id: eventId,
-      p_event_type: event.type,
-      p_app_user_id: userId,
-      p_event_timestamp_ms: event.event_timestamp_ms,
-      p_processing_duration_ms: processingDuration,
-      p_metadata: {
-        store: event.store,
-        environment: event.environment,
-        product_id: validatedProductId,
-      }
-    });
+    try {
+      await supabase.from('webhook_events_processed').update({
+        processing_duration_ms: processingDuration,
+        metadata: {
+          store: event.store,
+          environment: event.environment,
+          product_id: validatedProductId,
+        }
+      }).eq('event_id', eventId);
+    } catch (_updateErr) {
+      // Non-critical: the event is already claimed
+    }
 
     log(eventId, 'SUCCESS', `Event processed in ${processingDuration}ms`);
     log(eventId, 'INFO', '============================================');
@@ -947,7 +982,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

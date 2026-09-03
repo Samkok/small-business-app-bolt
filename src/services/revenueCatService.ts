@@ -144,7 +144,7 @@ class RevenueCatService {
     try {
       this.initializing = true;
       console.log('[RevenueCat] Configuring SDK...');
-      console.log('[RevenueCat] API Key:', REVENUECAT_API_KEY?.substring(0, 10) + '...');
+
 
       if (!Purchases) {
         throw new Error('Purchases module is null');
@@ -178,8 +178,7 @@ class RevenueCatService {
       }
     } catch (error) {
       console.error('[RevenueCat] Configuration error:', error);
-      this.configured = true;
-      console.log('[RevenueCat] SDK marked as configured despite error - continuing with degraded functionality');
+      this.configured = false;
     } finally {
       this.initializing = false;
       console.log('[RevenueCat] Configuration process complete');
@@ -421,17 +420,17 @@ class RevenueCatService {
     }
   }
 
-  addCustomerInfoUpdateListener(callback: (customerInfo: any) => void): void {
+  addCustomerInfoUpdateListener(callback: (customerInfo: any) => void): (() => void) | null {
     if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
-      console.log('[RevenueCat] Customer info listener not available - native module not loaded');
-      return;
+      return null;
     }
 
     try {
-      console.log('[RevenueCat] Setting up customer info update listener');
-      Purchases.addCustomerInfoUpdateListener(callback);
+      const remove = Purchases.addCustomerInfoUpdateListener(callback);
+      return typeof remove === 'function' ? remove : null;
     } catch (error) {
       console.error('[RevenueCat] Error setting up customer info listener:', error);
+      return null;
     }
   }
 

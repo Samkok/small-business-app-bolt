@@ -59,8 +59,12 @@ interface CachedSubscriptionData {
   cachedAt: number;
 }
 
-const SUBSCRIPTION_CACHE_KEY = 'subscription_status';
+let SUBSCRIPTION_CACHE_KEY = 'subscription_status';
 const SALES_COUNT_CACHE_KEY = 'sales_count_cache';
+
+function getSubscriptionCacheKey(userId?: string): string {
+  return userId ? `subscription_status_${userId}` : 'subscription_status';
+}
 
 export const subscriptionService = {
   async getTierInfo(userId: string, showErrorAlert = false): Promise<TierInfo> {
@@ -278,7 +282,7 @@ export const subscriptionService = {
       return salesCount >= FREE_TIER_LIMIT;
     } catch (error) {
       console.error('Error checking sales limit:', error);
-      return false;
+      return true;
     }
   },
 
@@ -313,8 +317,8 @@ export const subscriptionService = {
       console.error('Error getting sales count data:', error);
       return {
         salesCount: 0,
-        remainingSales: FREE_TIER_LIMIT,
-        isAtLimit: false,
+        remainingSales: 0,
+        isAtLimit: true,
         totalSalesAllBusinesses: 0
       };
     }
@@ -323,7 +327,7 @@ export const subscriptionService = {
   async getSubscriptionStatus(userId: string, forceRefresh = false, showErrorAlert = false): Promise<SubscriptionStatus> {
     try {
       if (!forceRefresh) {
-        const cachedData = await this.getCachedSubscriptionStatus();
+        const cachedData = await this.getCachedSubscriptionStatus(userId);
         if (cachedData) {
           const { status, cachedAt } = cachedData;
           const now = Date.now();
@@ -354,7 +358,7 @@ export const subscriptionService = {
             isSubscribed: false,
             subscriptionStatus: 'trial',
           };
-          await this.cacheSubscriptionStatus(defaultStatus);
+          await this.cacheSubscriptionStatus(defaultStatus, userId);
           return defaultStatus;
         }
 
@@ -368,7 +372,7 @@ export const subscriptionService = {
           willRenew: statusData.will_renew
         };
 
-        await this.cacheSubscriptionStatus(status);
+        await this.cacheSubscriptionStatus(status, userId);
         return status;
       }, 'get subscription status');
     } catch (error) {
@@ -379,7 +383,7 @@ export const subscriptionService = {
           showNetworkErrorAlert('load subscription status');
         }
 
-        const cachedData = await this.getCachedSubscriptionStatus();
+        const cachedData = await this.getCachedSubscriptionStatus(userId);
         if (cachedData) {
           console.log('[SubscriptionService] Using cached data due to network error');
           return cachedData.status;
@@ -404,7 +408,7 @@ export const subscriptionService = {
       return now > expirationDate;
     } catch (error) {
       console.error('Error checking subscription expiration:', error);
-      return false;
+      return true;
     }
   },
 
@@ -422,7 +426,7 @@ export const subscriptionService = {
       if (business.access_state === 'read_only_sales') return 'subscription';
       return null;
     } catch {
-      return null;
+      return 'subscription';
     }
   },
 
@@ -458,7 +462,7 @@ export const subscriptionService = {
 
   async validateFeatureAccessForCriticalOperation(userId: string, businessId: string): Promise<boolean> {
     try {
-      await this.clearSubscriptionCache();
+      await this.clearSubscriptionCache(userId);
       return await this.canAccessFeature(userId, businessId, true, true);
     } catch (error) {
       console.error('Error validating feature access for critical operation:', error);
@@ -471,30 +475,32 @@ export const subscriptionService = {
     }
   },
 
-  async cacheSubscriptionStatus(status: SubscriptionStatus): Promise<void> {
+  async cacheSubscriptionStatus(status: SubscriptionStatus, userId?: string): Promise<void> {
     try {
       const cacheData: CachedSubscriptionData = {
         status,
         cachedAt: Date.now()
       };
+      const key = getSubscriptionCacheKey(userId);
 
       if (Platform.OS === 'web') {
-        localStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cacheData));
+        localStorage.setItem(key, JSON.stringify(cacheData));
       } else {
-        await SecureStore.setItemAsync(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cacheData));
+        await SecureStore.setItemAsync(key, JSON.stringify(cacheData));
       }
     } catch (error) {
       console.error('Error caching subscription status:', error);
     }
   },
 
-  async getCachedSubscriptionStatus(): Promise<CachedSubscriptionData | null> {
+  async getCachedSubscriptionStatus(userId?: string): Promise<CachedSubscriptionData | null> {
     try {
+      const key = getSubscriptionCacheKey(userId);
       let cached: string | null;
       if (Platform.OS === 'web') {
-        cached = localStorage.getItem(SUBSCRIPTION_CACHE_KEY);
+        cached = localStorage.getItem(key);
       } else {
-        cached = await SecureStore.getItemAsync(SUBSCRIPTION_CACHE_KEY);
+        cached = await SecureStore.getItemAsync(key);
       }
 
       if (cached) {
@@ -511,12 +517,13 @@ export const subscriptionService = {
     }
   },
 
-  async clearSubscriptionCache(): Promise<void> {
+  async clearSubscriptionCache(userId?: string): Promise<void> {
     try {
+      const key = getSubscriptionCacheKey(userId);
       if (Platform.OS === 'web') {
-        localStorage.removeItem(SUBSCRIPTION_CACHE_KEY);
+        localStorage.removeItem(key);
       } else {
-        await SecureStore.deleteItemAsync(SUBSCRIPTION_CACHE_KEY);
+        await SecureStore.deleteItemAsync(key);
       }
     } catch (error) {
       console.error('Error clearing subscription cache:', error);
@@ -580,7 +587,6 @@ export const subscriptionService = {
   },
 
   async getBusinessOwnerSubscriptionTier(businessId: string): Promise<{
-    ownerId: string;
     tier: SubscriptionTier;
     subscriptionStatus: string;
     expirationDate: string | null;
@@ -600,13 +606,16 @@ export const subscriptionService = {
       }
 
       const ownerData = data[0];
+      const expirationDate: string | null = ownerData.expiration_date ?? null;
+      const isExpired = ownerData.subscription_status === 'expired' ||
+        (expirationDate != null && new Date(expirationDate) < new Date());
+
       return {
-        ownerId: ownerData.owner_id,
         tier: ownerData.tier as SubscriptionTier,
         subscriptionStatus: ownerData.subscription_status,
-        expirationDate: ownerData.expiration_date,
-        maxOwnedBusinesses: ownerData.max_owned_businesses,
-        isExpired: ownerData.is_expired
+        expirationDate,
+        maxOwnedBusinesses: ownerData.max_businesses ?? null,
+        isExpired,
       };
     } catch (error) {
       console.error('Error getting business owner subscription tier:', error);
@@ -641,10 +650,10 @@ export const subscriptionService = {
             activeBusinessCount: 0,
             salesCountData: businessId ? {
               salesCount: 0,
-              remainingSales: FREE_TIER_LIMIT,
-              isAtLimit: false
+              remainingSales: 0,
+              isAtLimit: true
             } : null,
-            canAccessFeature: businessId ? true : null,
+            canAccessFeature: businessId ? false : null,
             businessDisableReason: null
           };
         }
@@ -700,11 +709,11 @@ export const subscriptionService = {
         activeBusinessCount: 0,
         salesCountData: businessId ? {
           salesCount: 0,
-          remainingSales: FREE_TIER_LIMIT,
-          isAtLimit: false,
+          remainingSales: 0,
+          isAtLimit: true,
           totalSalesAllBusinesses: 0
         } : null,
-        canAccessFeature: businessId ? true : null,
+        canAccessFeature: false,
         businessDisableReason: null
       };
     }

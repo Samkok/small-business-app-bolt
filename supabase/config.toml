@@ -1,0 +1,35 @@
+[project]
+id = ""
+
+[functions.send-push-notification]
+verify_jwt = true
+
+[functions.delete-auth-user]
+verify_jwt = true
+
+[functions.delete-business]
+verify_jwt = true
+
+[functions.validate-subscription]
+verify_jwt = true
+
+[functions.choose-businesses]
+verify_jwt = true
+
+[functions.subscription-status]
+verify_jwt = true
+
+[functions.iap-webhook]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.referral-click]
+verify_jwt = false
+
+[functions.referral-claim]
+verify_jwt = true
+
+[functions.referral-status]
+verify_jwt = true
