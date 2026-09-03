@@ -150,7 +150,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const customerInfoListenerRemoveRef = useRef<(() => void) | null>(null);
   const isAppActiveRef = useRef(true);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttempts = useRef(0);
+  const reconnectAttemptsMap = useRef<Record<string, number>>({});
   const maxReconnectAttempts = 5;
 
   const initializeRevenueCat = useCallback(async () => {
@@ -350,19 +350,12 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      const currentCustomerInfo = customerInfoRef.current;
-      const revenueCatSubscribed = currentCustomerInfo?.entitlements?.active
-        ? Object.keys(currentCustomerInfo.entitlements.active).length > 0
-        : false;
-
-      const actuallySubscribed = supabaseSubscribed || revenueCatSubscribed;
-
       setSubscriptionStatus({
         ...status,
-        isSubscribed: actuallySubscribed,
-        subscriptionStatus: actuallySubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
+        isSubscribed: supabaseSubscribed,
+        subscriptionStatus: supabaseSubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
       });
-      setIsSubscribed(actuallySubscribed);
+      setIsSubscribed(supabaseSubscribed);
       setHasError(false);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
@@ -603,22 +596,12 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
 
       if (!fullState.subscriptionStatus.isSubscribed) {
-        // Still not reflected - trust RevenueCat's response directly
-        const hasActiveEntitlements = newCustomerInfo?.entitlements?.active
-          ? Object.keys(newCustomerInfo.entitlements.active).length > 0
-          : false;
-
-        if (hasActiveEntitlements) {
-          fullState = {
-            ...fullState,
-            subscriptionStatus: {
-              ...fullState.subscriptionStatus,
-              isSubscribed: true,
-              subscriptionStatus: 'active',
-            },
-            canAccessFeature: true,
-          };
-        }
+        // Webhook may still be processing -- retry once more after a longer delay
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        fullState = await subscriptionService.getFullSubscriptionState(
+          user.id,
+          currentBusiness?.id
+        );
       }
 
       setSubscriptionStatus(fullState.subscriptionStatus);
@@ -786,8 +769,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     }
   }, [user?.id, currentBusiness?.id, refreshSubscriptionStatus, refreshTierInfo, loadDowngradeData, refreshSalesCount, checkFeatureAccess]);
 
-  const handleReconnect = useCallback((channelType: 'subscription' | 'business', setupFn: () => void) => {
-    if (reconnectAttempts.current >= maxReconnectAttempts) {
+  const handleReconnect = useCallback((channelType: string, setupFn: () => void) => {
+    const attempts = reconnectAttemptsMap.current[channelType] ?? 0;
+    if (attempts >= maxReconnectAttempts) {
       console.log('[RevenueCatSubscriptionContext] Max reconnect attempts reached for', channelType, '- will retry on next app activity');
       return;
     }
@@ -796,10 +780,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       clearTimeout(reconnectTimeoutRef.current);
     }
 
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-    reconnectAttempts.current += 1;
+    const delay = Math.min(1000 * Math.pow(2, attempts), 30000);
+    reconnectAttemptsMap.current[channelType] = attempts + 1;
 
-    console.log(`[RevenueCatSubscriptionContext] Reconnecting ${channelType} channel in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
+    console.log(`[RevenueCatSubscriptionContext] Reconnecting ${channelType} channel in ${delay}ms (attempt ${attempts + 1}/${maxReconnectAttempts})`);
 
     reconnectTimeoutRef.current = setTimeout(() => {
       setupFn();
@@ -845,7 +829,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         console.log('[RevenueCatSubscriptionContext] Business count channel status:', status);
 
         if (status === 'SUBSCRIBED') {
-          reconnectAttempts.current = 0;
+          reconnectAttemptsMap.current['business'] = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.log('[RevenueCatSubscriptionContext] Business count channel connection issue, attempting reconnect');
           handleReconnect('business', setupBusinessCountSubscription);
@@ -895,10 +879,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         console.log('[RevenueCatSubscriptionContext] User profile channel status:', status);
 
         if (status === 'SUBSCRIBED') {
-          reconnectAttempts.current = 0;
+          reconnectAttemptsMap.current['user-profile'] = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.log('[RevenueCatSubscriptionContext] User profile channel connection issue, attempting reconnect');
-          handleReconnect('subscription', setupUserProfileSubscription);
+          handleReconnect('user-profile', setupUserProfileSubscription);
         }
       });
 
@@ -950,10 +934,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         console.log('[RevenueCatSubscriptionContext] Sales count channel status:', status);
 
         if (status === 'SUBSCRIBED') {
-          reconnectAttempts.current = 0;
+          reconnectAttemptsMap.current['sales-count'] = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.log('[RevenueCatSubscriptionContext] Sales count channel connection issue, attempting reconnect');
-          handleReconnect('subscription', setupSalesCountSubscription);
+          handleReconnect('sales-count', setupSalesCountSubscription);
         }
       });
 
@@ -1054,7 +1038,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         console.log('[RevenueCatSubscriptionContext] Subscription channel status:', status);
 
         if (status === 'SUBSCRIBED') {
-          reconnectAttempts.current = 0;
+          reconnectAttemptsMap.current['subscription'] = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.log('[RevenueCatSubscriptionContext] Subscription channel connection issue, attempting reconnect');
           handleReconnect('subscription', setupRealtimeSubscription);
@@ -1082,12 +1066,6 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
             ? Object.keys(info.entitlements.active).length > 0
             : false;
 
-          if (hasActiveEntitlements) {
-            setIsSubscribed(true);
-            setCanAccessFeature(true);
-            setBusinessDisableReason(null);
-          }
-
           try {
             const fullState = await subscriptionService.getFullSubscriptionState(
               user.id,
@@ -1096,13 +1074,13 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
             if (fullState?.subscriptionStatus) {
               setSubscriptionStatus(fullState.subscriptionStatus);
-              setIsSubscribed(fullState.subscriptionStatus.isSubscribed || hasActiveEntitlements);
+              setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
             }
             if (fullState?.tierInfo) {
               setTierInfo(fullState.tierInfo);
             }
             if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
-              setCanAccessFeature(fullState.canAccessFeature || hasActiveEntitlements);
+              setCanAccessFeature(fullState.canAccessFeature);
               setBusinessDisableReason(fullState.businessDisableReason);
             }
             if (fullState?.salesCountData) {

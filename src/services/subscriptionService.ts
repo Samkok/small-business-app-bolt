@@ -317,8 +317,8 @@ export const subscriptionService = {
       console.error('Error getting sales count data:', error);
       return {
         salesCount: 0,
-        remainingSales: FREE_TIER_LIMIT,
-        isAtLimit: false,
+        remainingSales: 0,
+        isAtLimit: true,
         totalSalesAllBusinesses: 0
       };
     }
@@ -408,7 +408,7 @@ export const subscriptionService = {
       return now > expirationDate;
     } catch (error) {
       console.error('Error checking subscription expiration:', error);
-      return false;
+      return true;
     }
   },
 
@@ -426,7 +426,7 @@ export const subscriptionService = {
       if (business.access_state === 'read_only_sales') return 'subscription';
       return null;
     } catch {
-      return null;
+      return 'subscription';
     }
   },
 

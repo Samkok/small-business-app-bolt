@@ -635,6 +635,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
 
     try {
+      const { subscriptionService } = require('../services/subscriptionService');
+      if (user?.id) await subscriptionService.clearSubscriptionCache(user.id);
+    } catch {}
+
+    try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch {}
 
