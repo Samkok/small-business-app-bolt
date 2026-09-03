@@ -619,7 +619,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          subscription_status: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_status: 'active' | 'expired' | 'cancelled';
           subscription_product_id?: string;
           subscription_start_date?: string;
           subscription_expiration_date?: string;
@@ -637,7 +637,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          subscription_status?: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_status?: 'active' | 'expired' | 'cancelled';
           subscription_product_id?: string;
           subscription_start_date?: string;
           subscription_expiration_date?: string;
@@ -655,7 +655,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          subscription_status?: 'active' | 'expired' | 'cancelled' | 'trial';
+          subscription_status?: 'active' | 'expired' | 'cancelled';
           subscription_product_id?: string;
           subscription_start_date?: string;
           subscription_expiration_date?: string;

@@ -31,7 +31,7 @@ export const debugSubscription = {
 
   async simulateSubscription(
     userId: string,
-    status: 'active' | 'expired' | 'cancelled' | 'trial',
+    status: 'active' | 'expired' | 'cancelled',
     productId?: string
   ): Promise<void> {
     if (!__DEV__) {
