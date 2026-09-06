@@ -72,9 +72,8 @@ export function DowngradePick({
   }, [visible, retryCount]);
 
   useEffect(() => {
-    console.log('[DowngradePick] ownedBusinesses prop changed:', ownedBusinesses.length);
-    if (ownedBusinesses.length > 0) {
-      setBusinesses(ownedBusinesses);
+    if (visible && ownedBusinesses.length > 0) {
+      loadBusinessDetails();
     }
   }, [ownedBusinesses]);
 
@@ -83,60 +82,47 @@ export function DowngradePick({
     setError(null);
 
     try {
-      console.log('[DowngradePick] Loading business details...');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('No user found');
       }
 
-      console.log('[DowngradePick] User found:', user.id);
-
       if (ownedBusinesses.length === 0) {
-        console.warn('[DowngradePick] ownedBusinesses is empty, cannot load details');
         setError('No businesses found. Please try refreshing.');
         setLoading(false);
         return;
       }
 
       const businessIds = ownedBusinesses.map(b => b.id);
-      console.log('[DowngradePick] Loading details for', businessIds.length, 'businesses');
 
-      const salesCountPromises = businessIds.map(async (bid) => {
-        const { count, error } = await supabase
-          .from('sales')
-          .select('id', { count: 'exact', head: true })
-          .eq('business_id', bid)
-          .neq('status', 'voided');
-        return { business_id: bid, count: count || 0, error };
-      });
-
-      const [salesResults, teamResult] = await Promise.all([
-        Promise.all(salesCountPromises),
+      const [salesResult, teamResult] = await Promise.all([
+        supabase
+          .from('user_sales_counts')
+          .select('business_id, sales_count')
+          .eq('user_id', user.id)
+          .in('business_id', businessIds),
         supabase
           .from('user_business_roles')
           .select('business_id, user_id')
-          .in('business_id', businessIds)
+          .in('business_id', businessIds),
       ]);
 
-      salesResults.forEach(r => {
-        if (r.error) console.error('[DowngradePick] Error loading sales count for', r.business_id, r.error);
-      });
+      if (salesResult.error) {
+        console.error('[DowngradePick] Error loading sales counts:', salesResult.error);
+      }
       if (teamResult.error) {
         console.error('[DowngradePick] Error loading team members:', teamResult.error);
       }
 
-      const salesCount = salesResults.reduce((acc, row) => {
-        acc[row.business_id] = row.count;
-        return acc;
-      }, {} as Record<string, number>);
+      const salesCount: Record<string, number> = {};
+      (salesResult.data || []).forEach(row => {
+        salesCount[row.business_id] = row.sales_count || 0;
+      });
 
-      const teamCount = (teamResult.data || []).reduce((acc, member) => {
-        acc[member.business_id] = (acc[member.business_id] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      console.log('[DowngradePick] Sales counts:', salesCount);
-      console.log('[DowngradePick] Team member counts:', teamCount);
+      const teamCount: Record<string, number> = {};
+      (teamResult.data || []).forEach(member => {
+        teamCount[member.business_id] = (teamCount[member.business_id] || 0) + 1;
+      });
 
       const enrichedBusinesses = ownedBusinesses.map(business => ({
         ...business,
@@ -144,7 +130,6 @@ export function DowngradePick({
         team_member_count: teamCount[business.id] || 0,
       }));
 
-      // Filter to only show businesses below the free-tier sales threshold (50)
       const FREE_TIER_SALES_LIMIT = 50;
       const eligibleBusinesses = enrichedBusinesses.filter(b => (b.sales_count || 0) < FREE_TIER_SALES_LIMIT);
 
@@ -155,7 +140,6 @@ export function DowngradePick({
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
 
-      console.log('[DowngradePick] Eligible businesses (below threshold):', eligibleBusinesses.length, 'of', enrichedBusinesses.length);
       setBusinesses(eligibleBusinesses);
       setError(null);
     } catch (error) {
