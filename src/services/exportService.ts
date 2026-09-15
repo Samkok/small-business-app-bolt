@@ -170,13 +170,13 @@ export const exportService = {
    * @param endDate End date for export range
    * @returns CSV string
    */
-  async exportIncomeStatementToCsv(businessId: string, startDate: string, endDate: string) {
+  async exportIncomeStatementToCsv(businessId: string, startDate: string, endDate: string, currencyId?: string) {
     if (typeof businessId !== 'string' || !businessId) return '';
     if (typeof startDate !== 'string' || !startDate) return '';
     if (typeof endDate !== 'string' || !endDate) return '';
     
     try {
-      const statement = await reportsService.getIncomeStatement(businessId, startDate, endDate);
+      const statement = await reportsService.getIncomeStatement(businessId, startDate, endDate, currencyId);
       if (!statement) return '';
       const fmt = (v: number) => (Number(v) || 0).toFixed(2);
 
@@ -221,14 +221,14 @@ export const exportService = {
    * @param year Year
    * @returns CSV string
    */
-  async exportCashFlowToCsv(businessId: string, month: number, year: number) {
+  async exportCashFlowToCsv(businessId: string, month: number, year: number, currencyId?: string) {
     if (typeof businessId !== 'string' || !businessId) return '';
     if (typeof month !== 'number' || isNaN(month) || month < 0 || month > 11) return '';
     if (typeof year !== 'number' || isNaN(year)) return '';
 
     try {
       // Get cash flow data
-      const cashFlowData = await reportsService.getCashFlowStatement(businessId, month, year);
+      const cashFlowData = await reportsService.getCashFlowStatement(businessId, month, year, currencyId);
       
       // Create CSV content
       let csv = 'CASH FLOW STATEMENT\n';
@@ -236,21 +236,18 @@ export const exportService = {
       
       const fmt = (v: number | undefined) => (v != null ? Number(v).toFixed(2) : '0.00');
 
-      // Operating Activities
       csv += 'OPERATING ACTIVITIES\n';
       csv += `Net Income,${fmt(cashFlowData.netIncome)}\n`;
+      csv += `Add back: Cost of Goods Sold,${fmt(cashFlowData.cogsAddBack)}\n`;
+      csv += `Less: Inventory Purchases,${fmt(-cashFlowData.inventoryPurchases)}\n`;
+      if (cashFlowData.equipmentPurchases > 0) {
+        csv += `Add back: Capital Items in Expenses,${fmt(cashFlowData.equipmentPurchases)}\n`;
+      }
       csv += `Net Cash from Operations,${fmt(cashFlowData.operatingCashFlow)}\n\n`;
 
-      // Investing Activities
       csv += 'INVESTING ACTIVITIES\n';
-      csv += `Equipment Purchases,${fmt(cashFlowData.equipmentPurchases)}\n`;
+      csv += `Equipment Purchases,${fmt(-cashFlowData.equipmentPurchases)}\n`;
       csv += `Net Cash from Investing,${fmt(cashFlowData.investingCashFlow)}\n\n`;
-
-      // Financing Activities
-      csv += 'FINANCING ACTIVITIES\n';
-      csv += `Owner Contributions,${fmt(cashFlowData.ownerContributions)}\n`;
-      csv += `Owner Withdrawals,${fmt(cashFlowData.ownerWithdrawals)}\n`;
-      csv += `Net Cash from Financing,${fmt(cashFlowData.financingCashFlow)}\n\n`;
 
       // Net Cash Flow
       csv += `NET CHANGE IN CASH,${fmt(cashFlowData.netCashFlow)}\n`;

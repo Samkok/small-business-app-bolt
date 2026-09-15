@@ -4,13 +4,17 @@ Reviewed 2026-09-15 on the `uat` branch against the live database (`tevtbyffttmb
 
 ## Status (2026-09-15, later the same day)
 
-Findings 1 and 2 are fixed on `uat` (uncommitted). Findings 6, 8 and 9 were fixed along the way because they are the same question. Findings 3, 4, 5, 7 and 10 are still open.
+Findings 1 to 9 are fixed on `uat`. Finding 10 (three small ones) is still open.
 
 | # | Finding | Status |
 |---|---|---|
 | 1 | Loss counted twice | Fixed. `loss_amount` is now "deduction kept back from the refund"; it stays in revenue and is no longer subtracted from net income. Reported as a memo line. |
 | 2 | Delivery netted out of revenue; refunds over gross price | Fixed. Revenue = customer price (`total_amount + delivery_cost`) net of refunds; "Delivery Fees" is an expense line. Refunds use the price actually paid after the cart discount. |
 | 6 | Two net-amount definitions | Fixed by migration `20260915100000_returned_amount_use_refunded_amount.sql` (trigger uses refunded amount, backfills the 3 negative sales). **Not yet applied to production.** |
+| 3 | Cash flow statement was net income relabelled | Fixed. Operating cash = net income + COGS add-back − inventory purchases (by `purchase_date`) + capital items reclassified; investing = −capital items. Financing section removed (no owner-equity ledger). Screen and CSV updated. |
+| 4 | Revenue chart used a different revenue definition | Fixed. `getRevenueChart` uses the same statuses and `getSaleGrossRevenue` as the statements. |
+| 5 | Chart buckets in UTC | Fixed. All chart grouping goes through `bucketKey()` (local day/month via date-fns). |
+| 7 | Multi-currency ignored | Fixed. Every report is produced in one reporting currency (picked on the screen, else business default). Sales convert with `exchange_rate_at_sale`, expenses with the current rate, COGS per currency; legacy rows with no currency are the default. Dashboard no longer converts a second time. Overview gains the same currency dropdown as the dashboard. See `src/utils/reportCurrency.ts`. |
 | 8 | CSV differs from screen | Fixed. Both call `reportsService.getIncomeStatement`. |
 | 9 | `adjusted_amount \|\| amount` | Fixed everywhere (`??`). |
 
@@ -28,6 +32,18 @@ Effect on the busiest business for August 2026 (61 live sales, computed on live 
 | Net income | 545.26 | 545.26 |
 
 Net income is unchanged for a month with no return deductions; revenue, expenses and margin are restated. Months containing a return with a deduction gain that deduction back in net income.
+
+Cash flow for the same business and month, after finding 3:
+
+| | Before | After |
+|---|---|---|
+| Net income | 545.26 | 545.26 |
+| Add back: cost of goods sold | — | 1,082.55 |
+| Less: inventory purchases (2 imports) | — | −1,303.01 |
+| Net cash from operations | 545.26 | 324.80 |
+| Net change in cash | 545.26 | 324.80 |
+
+The old statement said cash rose by the profit; in fact stock bought that month absorbed 1,303.01 of it.
 
 Apply the migration when ready:
 

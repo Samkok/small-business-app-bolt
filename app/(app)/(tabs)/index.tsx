@@ -81,19 +81,18 @@ export default function DashboardScreen() {
   const { currentBusiness } = useAuth();
   const { unreadCount } = useNotifications();
   const { isConnected, wasOffline } = useNetwork();
-  const { formatPrice, getSymbol, currencies, defaultCurrency, convertAmount } = useCurrencyContext();
+  const { formatPrice, getSymbol, currencies, defaultCurrency } = useCurrencyContext();
   const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
   const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || null;
   const router = useRouter();
 
-  const displayAmount = useCallback((amount: number): number => {
-    if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
-    return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
-  }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
+  // Figures arrive already expressed in activeCurrencyId (the report service converts
+  // each sale with its exchange rate at sale), so nothing is converted again here.
+  const displayAmount = useCallback((amount: number): number => amount, []);
 
   useEffect(() => {
     loadDashboardData();
-  }, [currentBusiness, selectedMonth]);
+  }, [currentBusiness, selectedMonth, activeCurrencyId]);
 
   useEffect(() => {
     if (wasOffline && isConnected && currentBusiness?.id) {
@@ -113,7 +112,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    const monthKey = `${selectedMonth.getFullYear()}_${selectedMonth.getMonth() + 1}`;
+    const monthKey = `${selectedMonth.getFullYear()}_${selectedMonth.getMonth() + 1}_${activeCurrencyId || 'default'}`;
     const businessId = currentBusiness.id;
 
     if (!isRefresh) {
@@ -154,9 +153,9 @@ export default function DashboardScreen() {
       const month = selectedMonth.getMonth() + 1;
 
       const [dashboardStats, products, customers] = await Promise.all([
-        reportsService.getDashboardStats(businessId, year, month),
-        reportsService.getTopProducts(businessId, 3, year, month),
-        reportsService.getTopCustomers(businessId, 3, year, month)
+        reportsService.getDashboardStats(businessId, year, month, activeCurrencyId || undefined),
+        reportsService.getTopProducts(businessId, 3, year, month, activeCurrencyId || undefined),
+        reportsService.getTopCustomers(businessId, 3, year, month, activeCurrencyId || undefined)
       ]);
 
       setStats(dashboardStats);

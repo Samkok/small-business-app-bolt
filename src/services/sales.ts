@@ -1,4 +1,5 @@
 import { calculateReturnRefund, getSaleRefunds, getSaleGrossRevenue, getSaleDeliveryCost } from '../utils/saleMoney';
+import { resolveReportCurrency, saleFactor, scaleSale } from '../utils/reportCurrency';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { cartService } from './carts';
@@ -795,7 +796,7 @@ export const salesService = {
     return data;
   },
 
-  async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
+  async getSalesWithCOGS(businessId: string, startDate: string, endDate: string, currencyId?: string) {
     if (!businessId || !startDate || !endDate) return [];
     
     const { data, error } = await supabase
@@ -806,6 +807,8 @@ export const salesService = {
         delivery_cost,
         sale_date,
         status,
+        currency_id,
+        exchange_rate_at_sale,
         sale_actions(action_type, adjusted_amount, amount, items_metadata),
         carts(
           cart_items(
@@ -828,8 +831,10 @@ export const salesService = {
       .order('sale_date');
 
     if (error) throw error;
+    const rc = await resolveReportCurrency(businessId, currencyId);
 
-    return data.map(sale => {
+    return (data || []).map(raw => {
+      const sale = scaleSale(raw, saleFactor(rc, raw));
       let totalCOGS = 0;
       let totalRevenue = getSaleGrossRevenue(sale);
 

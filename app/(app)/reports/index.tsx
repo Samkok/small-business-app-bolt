@@ -20,6 +20,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
+import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
@@ -50,7 +51,12 @@ export default function ReportsScreen() {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { formatPrice } = useCurrencyContext();
+  const { formatPrice, currencies, defaultCurrency } = useCurrencyContext();
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | null>(null);
+  // Every figure on this screen is in one currency: the one picked here, else the business default.
+  const activeCurrencyId = selectedCurrencyId || defaultCurrency?.id || undefined;
+  const fmt = (amount: number) => formatPrice(amount, activeCurrencyId);
+  const currencyParam = activeCurrencyId ? `&currencyId=${activeCurrencyId}` : '';
 
   useEffect(() => {
     if (currentBusiness?.id) {
@@ -58,7 +64,7 @@ export default function ReportsScreen() {
     } else {
       setInitialLoading(false);
     }
-  }, [currentBusiness?.id, dateRange, customStartDate, customEndDate]);
+  }, [currentBusiness?.id, dateRange, customStartDate, customEndDate, activeCurrencyId]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -147,19 +153,19 @@ export default function ReportsScreen() {
       const { startDate, endDate } = getDateRange();
       
       // Load revenue data
-      const revenueChartData = await reportsService.getRevenueChart(currentBusiness.id, startDate, endDate);
+      const revenueChartData = await reportsService.getRevenueChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setRevenueData(revenueChartData);
       
       // Load expenses data
-      const expensesChartData = await reportsService.getExpenseChart(currentBusiness.id, startDate, endDate);
+      const expensesChartData = await reportsService.getExpenseChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setExpensesData(expensesChartData);
       
       // Load profit data
-      const profitChartData = await reportsService.getProfitChart(currentBusiness.id, startDate, endDate);
+      const profitChartData = await reportsService.getProfitChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setProfitData(profitChartData);
       
       // Load expense categories data
-      const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate);
+      const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setExpenseCategoriesData(expenseCategoriesChartData);
     } catch (error) {
       console.error('Error loading report data:', error);
@@ -186,8 +192,8 @@ export default function ReportsScreen() {
       const dateRangeLabel = `${format(startDate, 'yyyyMMdd')}-${format(endDate, 'yyyyMMdd')}`;
 
       const salesCsv = await exportService.exportSalesToCsv(currentBusiness.id, startDateIso, endDateIso);
-      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, startDateIso, endDateIso);
-      const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear());
+      const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, startDateIso, endDateIso, activeCurrencyId);
+      const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear(), activeCurrencyId);
       const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
 
       const filesToExport = [
@@ -242,14 +248,14 @@ export default function ReportsScreen() {
 
   const handleViewIncomeStatement = () => {
     const { startDate, endDate } = getDateRange();
-    router.push(`/reports/income-statement?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
+    router.push(`/reports/income-statement?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}${currencyParam}`);
   };
 
   const handleViewCashFlow = () => {
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
-    router.push(`/reports/cash-flow?month=${month}&year=${year}`);
+    router.push(`/reports/cash-flow?month=${month}&year=${year}${currencyParam}`);
   };
 
   // Function to process labels for charts to avoid crowding
@@ -721,7 +727,7 @@ export default function ReportsScreen() {
                 Total Revenue
               </Text>
               <Text style={[styles.incomeValue, { color: '#059669' }]}>
-                {formatPrice(totalRevenue)}
+                {fmt(totalRevenue)}
               </Text>
             </View>
             
@@ -730,7 +736,7 @@ export default function ReportsScreen() {
                 Cost of Goods Sold
               </Text>
               <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                {formatPrice(totalCOGS)}
+                {fmt(totalCOGS)}
               </Text>
             </View>
             
@@ -739,7 +745,7 @@ export default function ReportsScreen() {
                 Gross Profit
               </Text>
               <Text style={[styles.subtotalValue, { color: grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(grossProfit)}
+                {fmt(grossProfit)}
               </Text>
             </View>
             
@@ -748,7 +754,7 @@ export default function ReportsScreen() {
                 Operating Expenses
               </Text>
               <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                {formatPrice(totalOperatingExpenses)}
+                {fmt(totalOperatingExpenses)}
               </Text>
             </View>
 
@@ -758,7 +764,7 @@ export default function ReportsScreen() {
                   Delivery Fees
                 </Text>
                 <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                  {formatPrice(totalDeliveryFees)}
+                  {fmt(totalDeliveryFees)}
                 </Text>
               </View>
             )}
@@ -768,7 +774,7 @@ export default function ReportsScreen() {
                 Net Profit
               </Text>
               <Text style={[styles.totalValue, { color: netProfit >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(netProfit)}
+                {fmt(netProfit)}
               </Text>
             </View>
           </View>
@@ -921,7 +927,7 @@ export default function ReportsScreen() {
           <TouchableOpacity
             key={index}
             style={[styles.monthButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-            onPress={() => router.push(`/reports/cash-flow?month=${monthData.month}&year=${monthData.year}`)}
+            onPress={() => router.push(`/reports/cash-flow?month=${monthData.month}&year=${monthData.year}${currencyParam}`)}
           >
             <Calendar size={20} color="#2563eb" />
             <Text style={[styles.monthButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -1004,12 +1010,21 @@ export default function ReportsScreen() {
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Reports
         </Text>
-        <TouchableOpacity
-          style={styles.exportButton}
-          onPress={handleDownloadAllReports}
-        >
-          <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {currencies.length > 1 && (
+            <CurrencyDropdown
+              currencies={currencies}
+              selectedCurrencyId={activeCurrencyId ?? null}
+              onSelect={setSelectedCurrencyId}
+            />
+          )}
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={handleDownloadAllReports}
+          >
+            <Download size={20} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -1206,6 +1221,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   exportButton: {
     padding: 8,

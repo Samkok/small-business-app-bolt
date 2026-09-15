@@ -29,11 +29,13 @@ export default function IncomeStatementScreen() {
   
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { startDate, endDate } = params;
+  const { startDate, endDate, currencyId } = params;
+  const reportCurrencyId = typeof currencyId === 'string' && currencyId ? currencyId : undefined;
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { formatPrice } = useCurrencyContext();
+  const fmt = (amount: number) => formatPrice(amount, reportCurrencyId);
 
   useEffect(() => {
     if (currentBusiness?.id && startDate && endDate) {
@@ -41,7 +43,7 @@ export default function IncomeStatementScreen() {
     } else {
       setLoading(false);
     }
-  }, [currentBusiness?.id, startDate, endDate]);
+  }, [currentBusiness?.id, startDate, endDate, reportCurrencyId]);
 
   const loadIncomeStatement = async () => {
     try {
@@ -49,7 +51,8 @@ export default function IncomeStatementScreen() {
       const statement = await reportsService.getIncomeStatement(
         currentBusiness!.id,
         startDate as string,
-        endDate as string
+        endDate as string,
+        reportCurrencyId
       );
       setIncomeData(statement);
     } catch (error) {
@@ -68,9 +71,10 @@ export default function IncomeStatementScreen() {
 
     try {
       const csvData = await exportService.exportIncomeStatementToCsv(
-        currentBusiness.id, 
-        startDate as string, 
-        endDate as string
+        currentBusiness.id,
+        startDate as string,
+        endDate as string,
+        reportCurrencyId
       );
       
       if (Platform.OS === 'web') {
@@ -306,7 +310,7 @@ export default function IncomeStatementScreen() {
               Gross Sales
             </Text>
             <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {formatPrice(incomeData.revenue.gross)}
+              {fmt(incomeData.revenue.gross)}
             </Text>
           </View>
 
@@ -316,7 +320,7 @@ export default function IncomeStatementScreen() {
                 Less: Returns
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                -{formatPrice(incomeData.revenue.refunds)}
+                -{fmt(incomeData.revenue.refunds)}
               </Text>
             </View>
           )}
@@ -326,7 +330,7 @@ export default function IncomeStatementScreen() {
               Total Revenue
             </Text>
             <Text style={[styles.totalValue, { color: '#059669' }]}>
-              {formatPrice(incomeData.revenue.total)}
+              {fmt(incomeData.revenue.total)}
             </Text>
           </View>
         </Card>
@@ -345,7 +349,7 @@ export default function IncomeStatementScreen() {
               Total COGS
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              {formatPrice(incomeData.cogs.total)}
+              {fmt(incomeData.cogs.total)}
             </Text>
           </View>
         </Card>
@@ -364,7 +368,7 @@ export default function IncomeStatementScreen() {
               Gross Profit
             </Text>
             <Text style={[styles.value, { color: incomeData.grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
-              {formatPrice(incomeData.grossProfit)}
+              {fmt(incomeData.grossProfit)}
             </Text>
           </View>
           
@@ -393,7 +397,7 @@ export default function IncomeStatementScreen() {
                 {category.category}
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                {formatPrice(Number(category.total || 0))}
+                {fmt(Number(category.total || 0))}
               </Text>
             </View>
           ))}
@@ -404,7 +408,7 @@ export default function IncomeStatementScreen() {
                 Delivery Fees
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                {formatPrice(incomeData.expenses.deliveryFees)}
+                {fmt(incomeData.expenses.deliveryFees)}
               </Text>
             </View>
           )}
@@ -414,7 +418,7 @@ export default function IncomeStatementScreen() {
               Total Expenses
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              {formatPrice(incomeData.expenses.total)}
+              {fmt(incomeData.expenses.total)}
             </Text>
           </View>
         </Card>
@@ -433,7 +437,7 @@ export default function IncomeStatementScreen() {
               Net Income
             </Text>
             <Text style={[styles.value, { color: incomeData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
-              {formatPrice(incomeData.netIncome)}
+              {fmt(incomeData.netIncome)}
             </Text>
           </View>
           
