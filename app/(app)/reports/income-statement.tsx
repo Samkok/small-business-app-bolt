@@ -18,8 +18,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
-import { supabase } from '@/src/config/supabase';
-import { expenseService } from '@/src/services/expenses';
+import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -30,11 +29,13 @@ export default function IncomeStatementScreen() {
   
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { startDate, endDate } = params;
+  const { startDate, endDate, currencyId } = params;
+  const reportCurrencyId = typeof currencyId === 'string' && currencyId ? currencyId : undefined;
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { formatPrice } = useCurrencyContext();
+  const fmt = (amount: number) => formatPrice(amount, reportCurrencyId);
 
   useEffect(() => {
     if (currentBusiness?.id && startDate && endDate) {
@@ -42,93 +43,18 @@ export default function IncomeStatementScreen() {
     } else {
       setLoading(false);
     }
-  }, [currentBusiness?.id, startDate, endDate]);
+  }, [currentBusiness?.id, startDate, endDate, reportCurrencyId]);
 
   const loadIncomeStatement = async () => {
     try {
       setLoading(true);
-
-      // Get sales data with consistent return amount handling (adjusted_amount takes priority)
-      const { data: revenueData, error: revenueError } = await supabase
-        .from('sales')
-        .select(`
-          total_amount,
-          sale_actions!left(amount, action_type, adjusted_amount)
-        `)
-        .eq('business_id', currentBusiness!.id)
-        .in('status', ['completed', 'partially_returned'])
-        .gte('sale_date', startDate as string)
-        .lte('sale_date', endDate as string);
-
-      if (revenueError) throw revenueError;
-
-      const totalRevenue = revenueData?.reduce((sum, sale) => {
-        const returnedAmount = sale.sale_actions
-          ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-        return sum + (sale.total_amount - returnedAmount);
-      }, 0) || 0;
-
-      // Use the same RPC as the dashboard for consistent COGS
-      const { data: cogsData } = await supabase.rpc('calculate_cogs', {
-        business_id_param: currentBusiness!.id,
-        start_date: startDate as string,
-        end_date: endDate as string
-      });
-
-      const totalCOGS = cogsData || 0;
-      const grossProfit = totalRevenue - totalCOGS;
-      const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
-
-      // Get expense data grouped by category
-      const expenseCategories = await expenseService.getExpensesByCategory(
+      const statement = await reportsService.getIncomeStatement(
         currentBusiness!.id,
         startDate as string,
-        endDate as string
+        endDate as string,
+        reportCurrencyId
       );
-
-      const totalExpenses = expenseCategories.reduce((sum, category) => sum + parseFloat(category.total), 0);
-
-      // Get loss amounts from void/return actions to match dashboard net income
-      const { data: lossData } = await supabase
-        .from('sale_actions')
-        .select(`
-          loss_amount,
-          sales!inner(business_id, sale_date)
-        `)
-        .eq('sales.business_id', currentBusiness!.id)
-        .gte('sales.sale_date', startDate as string)
-        .lte('sales.sale_date', endDate as string)
-        .not('loss_amount', 'is', null)
-        .gt('loss_amount', 0);
-
-      const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
-
-      const netIncome = grossProfit - totalExpenses - totalLossAmount;
-      const netMargin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
-
-      setIncomeData({
-        period: {
-          start: new Date(startDate as string).toLocaleDateString(),
-          end: new Date(endDate as string).toLocaleDateString()
-        },
-        revenue: {
-          total: totalRevenue
-        },
-        cogs: {
-          total: totalCOGS
-        },
-        grossProfit,
-        grossMargin,
-        expenses: {
-          categories: expenseCategories,
-          total: totalExpenses
-        },
-        totalLossAmount,
-        netIncome,
-        netMargin
-      });
-      
+      setIncomeData(statement);
     } catch (error) {
       console.error('Error loading income statement:', error);
       Alert.alert('Error', 'Failed to load income statement');
@@ -145,9 +71,10 @@ export default function IncomeStatementScreen() {
 
     try {
       const csvData = await exportService.exportIncomeStatementToCsv(
-        currentBusiness.id, 
-        startDate as string, 
-        endDate as string
+        currentBusiness.id,
+        startDate as string,
+        endDate as string,
+        reportCurrencyId
       );
       
       if (Platform.OS === 'web') {
@@ -365,7 +292,7 @@ export default function IncomeStatementScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.periodCard}>
           <Text style={[styles.periodText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Period: {incomeData.period.start} - {incomeData.period.end}
+            Period: {new Date(incomeData.period.start).toLocaleDateString()} - {new Date(incomeData.period.end).toLocaleDateString()}
           </Text>
         </Card>
 
@@ -378,12 +305,32 @@ export default function IncomeStatementScreen() {
             </Text>
           </View>
           
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Gross Sales
+            </Text>
+            <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {fmt(incomeData.revenue.gross)}
+            </Text>
+          </View>
+
+          {incomeData.revenue.refunds > 0 && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Less: Returns
+              </Text>
+              <Text style={[styles.value, { color: '#dc2626' }]}>
+                -{fmt(incomeData.revenue.refunds)}
+              </Text>
+            </View>
+          )}
+
           <View style={[styles.row, styles.totalRow]}>
             <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Total Revenue
             </Text>
             <Text style={[styles.totalValue, { color: '#059669' }]}>
-              {formatPrice(incomeData.revenue.total)}
+              {fmt(incomeData.revenue.total)}
             </Text>
           </View>
         </Card>
@@ -402,7 +349,7 @@ export default function IncomeStatementScreen() {
               Total COGS
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              {formatPrice(incomeData.cogs.total)}
+              {fmt(incomeData.cogs.total)}
             </Text>
           </View>
         </Card>
@@ -421,7 +368,7 @@ export default function IncomeStatementScreen() {
               Gross Profit
             </Text>
             <Text style={[styles.value, { color: incomeData.grossProfit >= 0 ? '#059669' : '#dc2626' }]}>
-              {formatPrice(incomeData.grossProfit)}
+              {fmt(incomeData.grossProfit)}
             </Text>
           </View>
           
@@ -450,41 +397,31 @@ export default function IncomeStatementScreen() {
                 {category.category}
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                {formatPrice(Number(category.total || 0))}
+                {fmt(Number(category.total || 0))}
               </Text>
             </View>
           ))}
           
+          {incomeData.expenses.deliveryFees > 0 && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Delivery Fees
+              </Text>
+              <Text style={[styles.value, { color: '#dc2626' }]}>
+                {fmt(incomeData.expenses.deliveryFees)}
+              </Text>
+            </View>
+          )}
+
           <View style={[styles.row, styles.totalRow]}>
             <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Total Expenses
             </Text>
             <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-              {formatPrice(incomeData.expenses.total)}
+              {fmt(incomeData.expenses.total)}
             </Text>
           </View>
         </Card>
-
-        {/* Loss Amounts Section */}
-        {incomeData.totalLossAmount > 0 && (
-          <Card style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <TrendingDown size={20} color="#dc2626" />
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Losses (Voids & Returns)
-              </Text>
-            </View>
-
-            <View style={[styles.row, styles.totalRow]}>
-              <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Total Losses
-              </Text>
-              <Text style={[styles.totalValue, { color: '#dc2626' }]}>
-                {formatPrice(incomeData.totalLossAmount)}
-              </Text>
-            </View>
-          </Card>
-        )}
 
         {/* Net Income Section */}
         <Card style={styles.section}>
@@ -500,7 +437,7 @@ export default function IncomeStatementScreen() {
               Net Income
             </Text>
             <Text style={[styles.value, { color: incomeData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
-              {formatPrice(incomeData.netIncome)}
+              {fmt(incomeData.netIncome)}
             </Text>
           </View>
           

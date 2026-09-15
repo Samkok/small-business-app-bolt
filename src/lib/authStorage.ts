@@ -1,54 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-
-function getSupabaseStorageKey(): string {
-  const url = new URL(supabaseUrl);
-  const projectRef = url.hostname.split('.')[0];
-  return `sb-${projectRef}-auth-token`;
-}
-
 export async function clearAuthStorage(): Promise<void> {
-  const supabaseStorageKey = getSupabaseStorageKey();
-
-  if (Platform.OS === 'web') {
-    try {
-      const allKeys = await AsyncStorage.getAllKeys();
-      const supabaseKeys = allKeys.filter(
-        key =>
-          key.includes('supabase') ||
-          key.includes('sb-') ||
-          key.includes('auth-token') ||
-          key.includes('auth.token'),
-      );
-      if (!supabaseKeys.includes(supabaseStorageKey)) {
-        supabaseKeys.push(supabaseStorageKey);
-      }
-      if (supabaseKeys.length > 0) {
-        await AsyncStorage.multiRemove(supabaseKeys);
-      }
-      await AsyncStorage.removeItem(supabaseStorageKey);
-    } catch (error) {
-      console.error('clearAuthStorage: Error clearing web storage:', error);
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const supabaseKeys = allKeys.filter(
+      key =>
+        key.includes('supabase') ||
+        key.includes('sb-') ||
+        key.includes('auth-token') ||
+        key.includes('auth.token'),
+    );
+    if (supabaseKeys.length > 0) {
+      await AsyncStorage.multiRemove(supabaseKeys);
     }
-  } else {
-    const possibleKeys = [
-      supabaseStorageKey,
-      'supabase.auth.token',
-      `${supabaseUrl}-auth-token`,
-      `sb-${supabaseUrl}-auth-token`,
-      'sb-auth-token',
-    ];
-    for (const key of possibleKeys) {
-      try {
-        await SecureStore.deleteItemAsync(key);
-      } catch {
-        // key doesn't exist
-      }
-    }
+  } catch (error) {
+    console.error('clearAuthStorage: Error clearing storage:', error);
   }
 }
 

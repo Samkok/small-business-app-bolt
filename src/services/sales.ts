@@ -1,3 +1,5 @@
+import { calculateReturnRefund, getSaleRefunds, getSaleGrossRevenue, getSaleDeliveryCost } from '../utils/saleMoney';
+import { resolveReportCurrency, saleFactor, scaleSale } from '../utils/reportCurrency';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { cartService } from './carts';
@@ -339,7 +341,7 @@ export const salesService = {
           // Calculate: total - sum of adjusted return amounts
           const totalReturned = sale.sale_actions
             ?.filter((a: any) => a.action_type === 'return')
-            ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
+            ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount ?? a.amount ?? 0), 0) || 0;
           displayAmount = sale.total_amount - totalReturned;
         }
       }
@@ -395,9 +397,7 @@ export const salesService = {
     if (error) throw error;
     
     // Calculate total returned amount
-    const returnedAmount = data.sale_actions
-      ?.filter(action => action.action_type === 'return')
-      ?.reduce((sum, action) => sum + (action.amount || 0), 0) || 0;
+    const returnedAmount = getSaleRefunds(data);
     
     // Add returned_amount to the sale data
     data.returned_amount = returnedAmount;
@@ -677,79 +677,39 @@ export const salesService = {
       throw new Error(`Cannot return items from a sale with status: ${sale.status}`);
     }
 
-    let returnAmount = 0;
-    let totalLossAmount = 0;
-    const itemsMetadata: any[] = [];
+    // Refund at the price the customer actually paid (after item and cart discounts).
+    // `loss` is the deduction the business keeps back; `refund` is what goes to the customer.
+    const refund = calculateReturnRefund(sale, returnedItems, {
+      includeDeliveryCost: options?.includeDeliveryCost,
+    });
+    if (refund.items.length === 0) return null;
 
-    // Calculate return amount and restore inventory
-    for (const returnItem of returnedItems) {
-      const cartItem = sale.carts.cart_items.find(item => item.product_id === returnItem.productId);
-      if (cartItem) {
-        const itemReturnAmount = (cartItem.subtotal / cartItem.quantity) * returnItem.quantity;
-        let itemAdjustedAmount = itemReturnAmount;
-        let itemLoss = 0;
-
-        // Apply item-level loss adjustment
-        if (returnItem.lossType === 'fixed' && returnItem.lossAmount) {
-          itemLoss = returnItem.lossAmount;
-          itemAdjustedAmount = Math.max(0, itemReturnAmount - itemLoss);
-        } else if (returnItem.lossType === 'percentage' && returnItem.lossPercentage) {
-          itemLoss = (itemReturnAmount * returnItem.lossPercentage) / 100;
-          itemAdjustedAmount = itemReturnAmount - itemLoss;
-        }
-
-        returnAmount += itemReturnAmount;
-        totalLossAmount += itemLoss;
-
-        // Store metadata for this item
-        itemsMetadata.push({
-          productId: returnItem.productId,
-          productName: cartItem.products?.name || 'Unknown',
-          quantity: returnItem.quantity,
-          originalAmount: itemReturnAmount,
-          lossAmount: itemLoss,
-          lossPercentage: returnItem.lossPercentage || 0,
-          lossType: returnItem.lossType,
-          adjustedAmount: itemAdjustedAmount,
-        });
-
-        // Restore inventory with proper unit conversion (I4 fix)
-        const product = await productService.getProduct(returnItem.productId);
-        let baseQuantityToRestore = returnItem.quantity;
-        if (cartItem.unit_id) {
-          const conversionFactor = await unitService.getConversionFactor(cartItem.unit_id);
-          baseQuantityToRestore = returnItem.quantity * conversionFactor;
-        }
-        await productService.updateStock(returnItem.productId, product.current_stock + baseQuantityToRestore);
+    // Restore inventory with proper unit conversion (I4 fix)
+    for (const line of refund.items) {
+      const cartItem = sale.carts.cart_items.find(item => item.product_id === line.productId);
+      const product = await productService.getProduct(line.productId);
+      let baseQuantityToRestore = line.quantity;
+      if (cartItem?.unit_id) {
+        const conversionFactor = await unitService.getConversionFactor(cartItem.unit_id);
+        baseQuantityToRestore = line.quantity * conversionFactor;
       }
+      await productService.updateStock(line.productId, product.current_stock + baseQuantityToRestore);
     }
-
-    // Calculate prorated delivery cost if included
-    let deliveryCostAmount = 0;
-    if (options?.includeDeliveryCost && sale.carts?.delivery_cost) {
-      const totalItems = sale.carts.cart_items.reduce((sum, item) => sum + item.quantity, 0);
-      const returnedQuantity = returnedItems.reduce((sum, item) => sum + item.quantity, 0);
-      const proratedPercentage = returnedQuantity / totalItems;
-      deliveryCostAmount = sale.carts.delivery_cost * proratedPercentage;
-    }
-
-    // Calculate final adjusted amount
-    const adjustedAmount = returnAmount + deliveryCostAmount - totalLossAmount;
 
     return this.performSaleAction(
       saleId,
       'return',
       reason,
       performedBy,
-      returnAmount,
+      refund.itemsAmount,
       {
         deliveryCostIncluded: options?.includeDeliveryCost ?? false,
-        deliveryCostAmount: deliveryCostAmount,
-        lossAmount: totalLossAmount,
+        deliveryCostAmount: refund.deliveryRefund,
+        lossAmount: refund.totalLoss,
         lossPercentage: 0,
         lossType: undefined,
-        adjustedAmount: adjustedAmount,
-        itemsMetadata: itemsMetadata,
+        adjustedAmount: refund.refund,
+        itemsMetadata: refund.items,
       }
     );
   },
@@ -836,7 +796,7 @@ export const salesService = {
     return data;
   },
 
-  async getSalesWithCOGS(businessId: string, startDate: string, endDate: string) {
+  async getSalesWithCOGS(businessId: string, startDate: string, endDate: string, currencyId?: string) {
     if (!businessId || !startDate || !endDate) return [];
     
     const { data, error } = await supabase
@@ -844,8 +804,11 @@ export const salesService = {
       .select(`
         id,
         total_amount,
+        delivery_cost,
         sale_date,
         status,
+        currency_id,
+        exchange_rate_at_sale,
         sale_actions(action_type, adjusted_amount, amount, items_metadata),
         carts(
           cart_items(
@@ -868,10 +831,12 @@ export const salesService = {
       .order('sale_date');
 
     if (error) throw error;
+    const rc = await resolveReportCurrency(businessId, currencyId);
 
-    return data.map(sale => {
+    return (data || []).map(raw => {
+      const sale = scaleSale(raw, saleFactor(rc, raw));
       let totalCOGS = 0;
-      let totalRevenue = parseFloat(sale.total_amount);
+      let totalRevenue = getSaleGrossRevenue(sale);
 
       const costMap = new Map<string, number>();
 
@@ -886,7 +851,6 @@ export const salesService = {
       if (sale.status === 'partially_returned' && sale.sale_actions) {
         for (const action of sale.sale_actions) {
           if (action.action_type !== 'return') continue;
-          totalRevenue -= (action.adjusted_amount || action.amount || 0);
           const items = action.items_metadata as any[] || [];
           for (const m of items) {
             const cost = costMap.get(m.productId) || 0;
@@ -900,6 +864,7 @@ export const salesService = {
         date: sale.sale_date,
         revenue: totalRevenue,
         cogs: totalCOGS,
+        deliveryCost: getSaleDeliveryCost(sale),
         profit: totalRevenue - totalCOGS,
         profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0
       };

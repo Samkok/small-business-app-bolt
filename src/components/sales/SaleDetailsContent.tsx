@@ -333,7 +333,7 @@ export default function SaleDetailsContent({
                     ({(() => {
                       const totalReturned = sale.sale_actions
                         ?.filter((a: any) => a.action_type === 'return')
-                        ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount || a.amount || 0), 0) || 0;
+                        ?.reduce((sum: number, a: any) => sum + (a.adjusted_amount ?? a.amount ?? 0), 0) || 0;
                       return fmt(totalReturned);
                     })()} {t('sales.returned')})
                   </Text>

@@ -93,7 +93,7 @@ export function calculateSaleDisplayAmount(sale: SaleData): number {
   if (sale.status === 'partially_returned') {
     const returnedAmount = (sale.sale_actions || []).reduce((sum, a) => {
       if (a.action_type !== 'return') return sum;
-      return sum + (a.adjusted_amount || a.amount || 0);
+      return sum + (a.adjusted_amount ?? a.amount ?? 0);
     }, 0);
     return (sale.total_amount ?? 0) - returnedAmount;
   }

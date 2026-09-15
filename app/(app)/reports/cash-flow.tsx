@@ -17,7 +17,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, Download, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -29,11 +29,13 @@ export default function CashFlowScreen() {
   
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { month, year } = params;
+  const { month, year, currencyId } = params;
+  const reportCurrencyId = typeof currencyId === 'string' && currencyId ? currencyId : undefined;
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { formatPrice } = useCurrencyContext();
+  const fmt = (amount: number) => formatPrice(amount, reportCurrencyId);
 
   useEffect(() => {
     if (currentBusiness?.id && month !== undefined && year !== undefined) {
@@ -41,16 +43,17 @@ export default function CashFlowScreen() {
     } else {
       setLoading(false);
     }
-  }, [currentBusiness?.id, month, year]);
+  }, [currentBusiness?.id, month, year, reportCurrencyId]);
 
   const loadCashFlowStatement = async () => {
     try {
       setLoading(true);
       
       const data = await reportsService.getCashFlowStatement(
-        currentBusiness!.id, 
+        currentBusiness!.id,
         parseInt(month as string),
-        parseInt(year as string)
+        parseInt(year as string),
+        reportCurrencyId
       );
       
       setCashFlowData(data);
@@ -70,9 +73,10 @@ export default function CashFlowScreen() {
 
     try {
       const csvData = await exportService.exportCashFlowToCsv(
-        currentBusiness.id, 
+        currentBusiness.id,
         parseInt(month as string),
-        parseInt(year as string)
+        parseInt(year as string),
+        reportCurrencyId
       );
 
       if (csvData === undefined) {
@@ -148,31 +152,6 @@ export default function CashFlowScreen() {
             <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Investing Activities
             </Text>
-          </View>
-          
-          <View style={styles.row}>
-            <SkeletonLoader height={14} width="40%" />
-            <SkeletonLoader height={14} width="30%" />
-          </View>
-          
-          <View style={[styles.row, styles.subtotalRow]}>
-            <SkeletonLoader height={14} width="50%" />
-            <SkeletonLoader height={14} width="30%" />
-          </View>
-        </View>
-        
-        {/* Financing Activities */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <DollarSign size={20} color="#ea580c" />
-            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Financing Activities
-            </Text>
-          </View>
-          
-          <View style={styles.row}>
-            <SkeletonLoader height={14} width="40%" />
-            <SkeletonLoader height={14} width="30%" />
           </View>
           
           <View style={styles.row}>
@@ -290,23 +269,41 @@ export default function CashFlowScreen() {
                 Operating Activities
               </Text>
             </View>
-            
+
             <View style={styles.row}>
               <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Net Income
               </Text>
               <Text style={[styles.value, { color: cashFlowData.netIncome >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(cashFlowData.netIncome)}
+                {fmt(cashFlowData.netIncome)}
+              </Text>
+            </View>
+
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Add back: Cost of Goods Sold
+              </Text>
+              <Text style={[styles.value, { color: '#059669' }]}>
+                {fmt(cashFlowData.cogsAddBack)}
+              </Text>
+            </View>
+
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                Less: Inventory Purchases
+              </Text>
+              <Text style={[styles.value, { color: '#dc2626' }]}>
+                -{fmt(cashFlowData.inventoryPurchases)}
               </Text>
             </View>
 
             {cashFlowData.equipmentPurchases > 0 && (
               <View style={styles.row}>
                 <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Add Back: Capital Items
+                  Add back: Capital Items in Expenses
                 </Text>
                 <Text style={[styles.value, { color: '#059669' }]}>
-                  {formatPrice(cashFlowData.equipmentPurchases)}
+                  {fmt(cashFlowData.equipmentPurchases)}
                 </Text>
               </View>
             )}
@@ -316,11 +313,11 @@ export default function CashFlowScreen() {
                 Net Cash from Operations
               </Text>
               <Text style={[styles.subtotalValue, { color: cashFlowData.operatingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(cashFlowData.operatingCashFlow)}
+                {fmt(cashFlowData.operatingCashFlow)}
               </Text>
             </View>
           </View>
-          
+
           {/* Investing Activities */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -329,72 +326,39 @@ export default function CashFlowScreen() {
                 Investing Activities
               </Text>
             </View>
-            
+
             <View style={styles.row}>
               <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Equipment Purchases
               </Text>
               <Text style={[styles.value, { color: '#dc2626' }]}>
-                {formatPrice(cashFlowData.equipmentPurchases)}
+                -{fmt(cashFlowData.equipmentPurchases)}
               </Text>
             </View>
-            
+
             <View style={[styles.row, styles.subtotalRow]}>
               <Text style={[styles.subtotalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Net Cash from Investing
               </Text>
               <Text style={[styles.subtotalValue, { color: cashFlowData.investingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(cashFlowData.investingCashFlow)}
+                {fmt(cashFlowData.investingCashFlow)}
               </Text>
             </View>
           </View>
-          
-          {/* Financing Activities */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <DollarSign size={20} color="#ea580c" />
-              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Financing Activities
-              </Text>
-            </View>
-            
-            <View style={styles.row}>
-              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Owner Contributions
-              </Text>
-              <Text style={[styles.value, { color: '#059669' }]}>
-                {formatPrice(cashFlowData.ownerContributions)}
-              </Text>
-            </View>
-            
-            <View style={styles.row}>
-              <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Owner Withdrawals
-              </Text>
-              <Text style={[styles.value, { color: '#dc2626' }]}>
-                {formatPrice(cashFlowData.ownerWithdrawals)}
-              </Text>
-            </View>
-            
-            <View style={[styles.row, styles.subtotalRow]}>
-              <Text style={[styles.subtotalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                Net Cash from Financing
-              </Text>
-              <Text style={[styles.subtotalValue, { color: cashFlowData.financingCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-                {formatPrice(cashFlowData.financingCashFlow)}
-              </Text>
-            </View>
-          </View>
-          
+
           {/* Net Cash Flow */}
           <View style={[styles.row, styles.totalRow]}>
             <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
               Net Change in Cash
             </Text>
             <Text style={[styles.totalValue, { color: cashFlowData.netCashFlow >= 0 ? '#059669' : '#dc2626' }]}>
-              {formatPrice(cashFlowData.netCashFlow)}
+              {fmt(cashFlowData.netCashFlow)}
             </Text>
           </View>
+
+          <Text style={[styles.note, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            Sales are settled when made. Stock bought this month is a cash outflow; cost of goods sold is not. No owner contributions or withdrawals are recorded in the app.
+          </Text>
         </Card>
       </ScrollView>
     </View>
@@ -498,6 +462,11 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  note: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 16,
   },
   errorContainer: {
     flex: 1,
