@@ -3,6 +3,7 @@ import { salesService } from './sales';
 import { expenseService } from './expenses';
 import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, endOfDay } from 'date-fns';
+import { getSaleGrossRevenue, getSaleDeliveryCost, summarizeRevenue } from '../utils/saleMoney';
 
 export const reportsService = {
   async getDashboardStats(businessId: string, year?: number, month?: number, currencyId?: string) {
@@ -31,6 +32,8 @@ export const reportsService = {
         .from('sales')
         .select(`
           total_amount,
+          delivery_cost,
+          status,
           sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
@@ -40,18 +43,15 @@ export const reportsService = {
       if (currencyId) todaySalesQuery = todaySalesQuery.eq('currency_id', currencyId);
       const { data: todaySalesData } = await todaySalesQuery;
 
-      const todayRevenue = todaySalesData?.reduce((sum, sale) => {
-        const returnedAmount = sale.sale_actions
-          ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-        return sum + (sale.total_amount - returnedAmount);
-      }, 0) || 0;
+      const todayRevenue = summarizeRevenue(todaySalesData).grossRevenue;
 
       // Monthly revenue
       let monthlySalesQuery = supabase
         .from('sales')
         .select(`
           total_amount,
+          delivery_cost,
+          status,
           sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
@@ -61,12 +61,10 @@ export const reportsService = {
       if (currencyId) monthlySalesQuery = monthlySalesQuery.eq('currency_id', currencyId);
       const { data: monthlySalesData } = await monthlySalesQuery;
 
-      const monthlyRevenue = monthlySalesData?.reduce((sum, sale) => {
-        const returnedAmount = sale.sale_actions
-          ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-        return sum + (sale.total_amount - returnedAmount);
-      }, 0) || 0;
+      // Gross revenue = customer price (sale total + courier fee) net of refunds.
+      const monthlySummary = summarizeRevenue(monthlySalesData);
+      const monthlyRevenue = monthlySummary.grossRevenue;
+      const deliveryFees = monthlySummary.deliveryFees;
 
       // Monthly COGS (Cost of Goods Sold) - based on actual sold items
       const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
@@ -91,7 +89,9 @@ export const reportsService = {
       if (currencyId) expensesQuery = expensesQuery.eq('currency_id', currencyId);
       const { data: monthlyExpenses } = await expensesQuery;
 
-      const totalExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      const operatingExpenses = monthlyExpenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      // Courier fees are a cost of the business, reported as an expense rather than netted from revenue.
+      const totalExpenses = operatingExpenses + deliveryFees;
 
       // Get loss amounts from sale actions (treated as expenses)
       let lossQuery = supabase
@@ -108,10 +108,12 @@ export const reportsService = {
       if (currencyId) lossQuery = lossQuery.eq('sales.currency_id', currencyId);
       const { data: lossData } = await lossQuery;
 
-      const totalLossAmount = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
+      // Deductions the business kept back from refunds. Revenue already subtracts only the
+      // refunded amount, so this money is still inside revenue and must not be expensed again.
+      const refundDeductionsRetained = lossData?.reduce((sum, action) => sum + (action.loss_amount || 0), 0) || 0;
 
-      // Net Profit = Total Profit - Total Expenses - Loss Amounts
-      const netProfit = totalProfit - totalExpenses - totalLossAmount;
+      // Net Profit = Gross Profit - Operating Expenses - Delivery Fees
+      const netProfit = totalProfit - totalExpenses;
 
       // Low stock count
       const lowStockProducts = await productService.getLowStockProducts(businessId);
@@ -150,8 +152,10 @@ export const reportsService = {
         monthlyRevenue,
         monthlyCOGS,
         totalProfit,
+        operatingExpenses,
+        deliveryFees,
         totalExpenses,
-        totalLossAmount,
+        refundDeductionsRetained,
         netProfit,
         lowStockCount,
         totalCustomers: totalCustomers || 0,
@@ -519,6 +523,8 @@ export const reportsService = {
       .from('sales')
       .select(`
         total_amount,
+        delivery_cost,
+        status,
         sale_date,
         sale_actions!left(amount, action_type, adjusted_amount)
       `)
@@ -583,13 +589,9 @@ export const reportsService = {
           return saleMonth === monthStr;
         });
         
-        // Calculate revenue for this month (subtracting returned amounts with adjustments)
-        const revenue = monthRevenueSales.reduce((sum, sale) => {
-          const returnedAmount = sale.sale_actions
-            ?.filter(action => action.action_type === 'return')
-            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-          return sum + (sale.total_amount - returnedAmount);
-        }, 0);
+        // Gross revenue (customer price net of refunds) and the courier fees behind it
+        const revenue = monthRevenueSales.reduce((sum, sale) => sum + getSaleGrossRevenue(sale), 0);
+        const deliveryFees = monthRevenueSales.reduce((sum, sale) => sum + getSaleDeliveryCost(sale), 0);
         
         // Filter COGS sales data for this month
         const monthSales = salesData.filter(sale => {
@@ -607,8 +609,9 @@ export const reportsService = {
           return expenseMonth === monthStr;
         });
         
-        // Calculate total expenses for this month
-        const expenses = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+        // Operating expenses plus courier fees
+        const operatingExpenses = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+        const expenses = operatingExpenses + deliveryFees;
 
         // Filter loss amounts for this month
         const monthLosses = lossData?.filter(loss => {
@@ -619,8 +622,9 @@ export const reportsService = {
         // Calculate total loss for this month
         const lossAmount = monthLosses.reduce((sum, loss) => sum + (loss.loss_amount || 0), 0);
 
-        // Calculate net profit (profit - expenses - losses)
-        const netProfit = profit - expenses - lossAmount;
+        // Net profit = gross profit - operating expenses - delivery fees.
+        // Refund deductions kept by the business are already inside revenue.
+        const netProfit = profit - expenses;
 
         return {
           date: format(month, 'yyyy-MM-dd'),
@@ -629,7 +633,9 @@ export const reportsService = {
           cogs,
           profit,
           expenses,
-          lossAmount,
+          operatingExpenses,
+          deliveryFees,
+          refundDeductionsRetained: lossAmount,
           netProfit
         };
       });
@@ -646,13 +652,9 @@ export const reportsService = {
           return saleDate === dayStr;
         });
         
-        // Calculate revenue for this day (subtracting returned amounts with adjustments)
-        const revenue = dayRevenueSales.reduce((sum, sale) => {
-          const returnedAmount = sale.sale_actions
-            ?.filter(action => action.action_type === 'return')
-            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-          return sum + (sale.total_amount - returnedAmount);
-        }, 0);
+        // Gross revenue (customer price net of refunds) and the courier fees behind it
+        const revenue = dayRevenueSales.reduce((sum, sale) => sum + getSaleGrossRevenue(sale), 0);
+        const deliveryFees = dayRevenueSales.reduce((sum, sale) => sum + getSaleDeliveryCost(sale), 0);
         
         // Filter COGS sales data for this day
         const daySales = salesData.filter(sale => {
@@ -670,8 +672,9 @@ export const reportsService = {
           return expenseDate === dayStr;
         });
         
-        // Calculate total expenses for this day
-        const expenses = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        // Operating expenses plus courier fees
+        const operatingExpenses = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const expenses = operatingExpenses + deliveryFees;
 
         // Filter loss amounts for this day
         const dayLosses = lossData?.filter(loss => {
@@ -682,8 +685,9 @@ export const reportsService = {
         // Calculate total loss for this day
         const lossAmount = dayLosses.reduce((sum, loss) => sum + (loss.loss_amount || 0), 0);
 
-        // Calculate net profit (profit - expenses - losses)
-        const netProfit = profit - expenses - lossAmount;
+        // Net profit = gross profit - operating expenses - delivery fees.
+        // Refund deductions kept by the business are already inside revenue.
+        const netProfit = profit - expenses;
 
         return {
           date: dayStr,
@@ -692,7 +696,9 @@ export const reportsService = {
           cogs,
           profit,
           expenses,
-          lossAmount,
+          operatingExpenses,
+          deliveryFees,
+          refundDeductionsRetained: lossAmount,
           netProfit
         };
       });
@@ -746,6 +752,8 @@ export const reportsService = {
         .from('sales')
         .select(`
           total_amount,
+          delivery_cost,
+          status,
           sale_actions!left(amount, action_type, adjusted_amount)
         `)
         .eq('business_id', businessId)
@@ -755,13 +763,10 @@ export const reportsService = {
 
       if (salesError) throw salesError;
 
-      // Calculate total revenue (subtracting returned amounts with adjustments)
-      const totalRevenue = salesData?.reduce((sum, sale) => {
-        const returnedAmount = sale.sale_actions
-          ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-        return sum + (sale.total_amount - returnedAmount);
-      }, 0) || 0;
+      // Gross revenue (customer price net of refunds) and the courier fees behind it
+      const salesSummary = summarizeRevenue(salesData);
+      const totalRevenue = salesSummary.grossRevenue;
+      const deliveryFees = salesSummary.deliveryFees;
 
       // Get monthly COGS (Cost of Goods Sold)
       const { data: monthlyCOGSData } = await supabase.rpc('calculate_cogs', {
@@ -822,9 +827,10 @@ export const reportsService = {
       const ownerContributions = 0;
       const ownerWithdrawals = 0;
 
-      // Calculate net income (revenue - COGS - expenses - loss amounts) to align with dashboard
+      // Net income (gross revenue - COGS - operating expenses - delivery fees), same as the dashboard.
+      // Refund deductions kept by the business are already inside revenue.
       const grossProfit = totalRevenue - monthlyCOGS;
-      const netIncome = grossProfit - totalExpenses - totalLossAmount;
+      const netIncome = grossProfit - totalExpenses - deliveryFees;
 
       // Operating cash flow (indirect method):
       // Start with net income and add back capital items that were included in expenses
@@ -843,7 +849,8 @@ export const reportsService = {
       return {
         period: `${month + 1}/${year}`,
         netIncome,
-        totalLossAmount,
+        deliveryFees,
+        refundDeductionsRetained: totalLossAmount,
         operatingCashFlow,
         equipmentPurchases,
         investingCashFlow,
@@ -858,6 +865,95 @@ export const reportsService = {
     }
   },
 
+  /**
+   * Income statement for a period. Single source for the screen and the CSV export.
+   *
+   * Revenue is the customer price (sale total + courier fee) net of refunds.
+   * Courier fees are an operating expense. Deductions kept back from refunds are
+   * already inside revenue and are reported for information only.
+   */
+  async getIncomeStatement(businessId: string, startDate: string, endDate: string, currencyId?: string) {
+    if (!businessId) return null;
+
+    let salesQuery = supabase
+      .from('sales')
+      .select(`
+        total_amount,
+        delivery_cost,
+        status,
+        sale_actions!left(amount, action_type, adjusted_amount, loss_amount)
+      `)
+      .eq('business_id', businessId)
+      .in('status', ['completed', 'partially_returned'])
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate);
+    if (currencyId) salesQuery = salesQuery.eq('currency_id', currencyId);
+    const { data: salesData, error: salesError } = await salesQuery;
+    if (salesError) throw salesError;
+
+    const revenue = summarizeRevenue(salesData);
+
+    const { data: cogsData } = await supabase.rpc('calculate_cogs', {
+      business_id_param: businessId,
+      start_date: startDate,
+      end_date: endDate,
+      ...(currencyId ? { currency_id_param: currencyId } : {})
+    });
+    const totalCOGS = Number(cogsData) || 0;
+    const grossProfit = revenue.grossRevenue - totalCOGS;
+
+    let expensesQuery = supabase
+      .from('expenses')
+      .select('amount, expense_categories(name)')
+      .eq('business_id', businessId)
+      .gte('expense_date', startDate)
+      .lte('expense_date', endDate);
+    if (currencyId) expensesQuery = expensesQuery.eq('currency_id', currencyId);
+    const { data: expensesData, error: expensesError } = await expensesQuery;
+    if (expensesError) throw expensesError;
+
+    const categoryTotals: Record<string, number> = {};
+    for (const expense of expensesData || []) {
+      const name = (expense as any).expense_categories?.name || 'Uncategorized';
+      categoryTotals[name] = (categoryTotals[name] || 0) + (Number((expense as any).amount) || 0);
+    }
+    const categories = Object.entries(categoryTotals)
+      .map(([category, total]) => ({ category, total }))
+      .sort((a, b) => b.total - a.total);
+    const operatingExpenses = categories.reduce((sum, c) => sum + c.total, 0);
+    const totalExpenses = operatingExpenses + revenue.deliveryFees;
+
+    const refundDeductionsRetained = (salesData || []).reduce((sum, sale) => {
+      const kept = (sale.sale_actions || [])
+        .filter((a: any) => a.action_type === 'return')
+        .reduce((s: number, a: any) => s + (Number(a.loss_amount) || 0), 0);
+      return sum + kept;
+    }, 0);
+
+    const netIncome = grossProfit - totalExpenses;
+
+    return {
+      period: { start: startDate, end: endDate },
+      revenue: {
+        gross: revenue.grossRevenue + revenue.refunds,
+        refunds: revenue.refunds,
+        total: revenue.grossRevenue
+      },
+      cogs: { total: totalCOGS },
+      grossProfit,
+      grossMargin: revenue.grossRevenue > 0 ? (grossProfit / revenue.grossRevenue) * 100 : 0,
+      expenses: {
+        categories,
+        operating: operatingExpenses,
+        deliveryFees: revenue.deliveryFees,
+        total: totalExpenses
+      },
+      refundDeductionsRetained,
+      netIncome,
+      netMargin: revenue.grossRevenue > 0 ? (netIncome / revenue.grossRevenue) * 100 : 0
+    };
+  },
+
   async getSalesCOGSReport(businessId: string, startDate: string, endDate: string) {
     // Get sales data
     const { data: salesData } = await supabase
@@ -865,6 +961,7 @@ export const reportsService = {
       .select(`
         id,
         total_amount,
+        delivery_cost,
         sale_date,
         status,
         cart_id,
@@ -891,7 +988,7 @@ export const reportsService = {
 
     return salesData.map(sale => {
       let totalCOGS = 0;
-      let revenue = parseFloat(sale.total_amount);
+      let revenue = getSaleGrossRevenue(sale);
       const itemDetails: any[] = [];
       const costMap = new Map<string, number>();
 
@@ -914,7 +1011,6 @@ export const reportsService = {
       if (sale.status === 'partially_returned' && (sale as any).sale_actions) {
         for (const action of (sale as any).sale_actions) {
           if (action.action_type !== 'return') continue;
-          revenue -= (action.adjusted_amount || action.amount || 0);
           const items = action.items_metadata as any[] || [];
           for (const m of items) {
             const cost = costMap.get(m.productId) || 0;
@@ -928,6 +1024,7 @@ export const reportsService = {
         date: sale.sale_date,
         revenue,
         cogs: totalCOGS,
+        deliveryCost: getSaleDeliveryCost(sale),
         profit: revenue - totalCOGS,
         profitMargin: revenue > 0 ? ((revenue - totalCOGS) / revenue) * 100 : 0,
         items: itemDetails
@@ -1148,11 +1245,11 @@ export const reportsService = {
       const returnActions = data.filter(action => action.action_type === 'return');
 
       const totalVoidAmount = voidActions.reduce((sum, action) => sum + (action.amount || 0), 0);
-      const totalVoidAdjustedAmount = voidActions.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0);
+      const totalVoidAdjustedAmount = voidActions.reduce((sum, action) => sum + (action.adjusted_amount ?? action.amount ?? 0), 0);
       const totalVoidLoss = voidActions.reduce((sum, action) => sum + (action.loss_amount || 0), 0);
 
       const totalReturnAmount = returnActions.reduce((sum, action) => sum + (action.amount || 0), 0);
-      const totalReturnAdjustedAmount = returnActions.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0);
+      const totalReturnAdjustedAmount = returnActions.reduce((sum, action) => sum + (action.adjusted_amount ?? action.amount ?? 0), 0);
       const totalReturnLoss = returnActions.reduce((sum, action) => sum + (action.loss_amount || 0), 0);
 
       const totalDeliveryCostExcluded = [...voidActions, ...returnActions]
@@ -1333,6 +1430,7 @@ export const reportsService = {
           id,
           sale_date,
           total_amount,
+          delivery_cost,
           payment_method,
           status,
           notes,
@@ -1406,13 +1504,7 @@ export const reportsService = {
 
       // Calculate statistics
       const totalSales = sales?.length || 0;
-      const totalRevenue = sales?.reduce((sum, sale) => {
-        if (sale.status === 'voided') return sum;
-        const returnedAmount = sale.sale_actions
-          ?.filter(action => action.action_type === 'return')
-          ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-        return sum + (sale.total_amount - returnedAmount);
-      }, 0) || 0;
+      const totalRevenue = sales?.reduce((sum, sale) => sum + getSaleGrossRevenue(sale), 0) || 0;
 
       const stats = {
         totalSales,
@@ -1446,6 +1538,7 @@ export const reportsService = {
           created_by,
           created_by_name,
           total_amount,
+          delivery_cost,
           status,
           sale_actions(action_type, amount, adjusted_amount)
         `)
@@ -1478,10 +1571,7 @@ export const reportsService = {
           acc[creatorId].voidedSales++;
         } else {
           acc[creatorId].completedSales++;
-          const returnedAmount = sale.sale_actions
-            ?.filter(action => action.action_type === 'return')
-            ?.reduce((sum, action) => sum + (action.adjusted_amount || action.amount || 0), 0) || 0;
-          acc[creatorId].totalRevenue += (sale.total_amount - returnedAmount);
+          acc[creatorId].totalRevenue += getSaleGrossRevenue(sale);
         }
 
         return acc;

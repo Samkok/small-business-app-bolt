@@ -702,7 +702,9 @@ export default function ReportsScreen() {
     // Calculate totals
     const totalRevenue = profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
     const totalCOGS = profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
-    const totalExpenses = profitData.reduce((sum: number, item: any) => sum + item.expenses, 0);
+    const totalOperatingExpenses = profitData.reduce((sum: number, item: any) => sum + (item.operatingExpenses ?? item.expenses), 0);
+    const totalDeliveryFees = profitData.reduce((sum: number, item: any) => sum + (item.deliveryFees ?? 0), 0);
+    const totalExpenses = totalOperatingExpenses + totalDeliveryFees;
     const grossProfit = totalRevenue - totalCOGS;
     const netProfit = grossProfit - totalExpenses;
 
@@ -746,9 +748,20 @@ export default function ReportsScreen() {
                 Operating Expenses
               </Text>
               <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
-                {formatPrice(totalExpenses)}
+                {formatPrice(totalOperatingExpenses)}
               </Text>
             </View>
+
+            {totalDeliveryFees > 0 && (
+              <View style={styles.incomeRow}>
+                <Text style={[styles.incomeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Delivery Fees
+                </Text>
+                <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
+                  {formatPrice(totalDeliveryFees)}
+                </Text>
+              </View>
+            )}
             
             <View style={[styles.incomeRow, styles.totalRow]}>
               <Text style={[styles.totalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>

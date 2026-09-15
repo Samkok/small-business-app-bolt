@@ -19,6 +19,7 @@ import Input from '@/src/components/ui/Input';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
+import { calculateReturnRefund } from '@/src/utils/saleMoney';
 
 interface ReturnItem {
   productId: string;
@@ -101,36 +102,20 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
     }));
   }, []);
 
+  // Same rule as salesService.returnItems: refund at the price actually paid,
+  // minus any deduction kept back, plus a prorated courier fee when opted in.
   const calculateRefundAmount = useCallback(() => {
-    let total = 0;
-    let totalLoss = 0;
-
-    returnItems.forEach(item => {
-      if (item.returnQuantity > 0) {
-        const itemAmount = item.returnQuantity * item.unitPrice;
-        let itemLoss = 0;
-
-        if (item.lossType === 'fixed') {
-          itemLoss = item.lossAmount;
-        } else if (item.lossType === 'percentage') {
-          itemLoss = (itemAmount * item.lossPercentage) / 100;
-        }
-
-        total += itemAmount;
-        totalLoss += itemLoss;
-      }
-    });
-
-    // Add prorated delivery cost if included
-    let deliveryCost = 0;
-    if (includeDeliveryCost && sale?.carts?.delivery_cost) {
-      const totalItems = sale.carts.cart_items.reduce((sum: number, item: any) => sum + item.quantity, 0);
-      const returnedQuantity = getTotalReturnItems();
-      const proratedPercentage = returnedQuantity / totalItems;
-      deliveryCost = sale.carts.delivery_cost * proratedPercentage;
-    }
-
-    return Math.max(0, total + deliveryCost - totalLoss);
+    return calculateReturnRefund(
+      sale,
+      returnItems.map(item => ({
+        productId: item.productId,
+        quantity: item.returnQuantity,
+        lossType: item.lossType,
+        lossAmount: item.lossAmount,
+        lossPercentage: item.lossPercentage,
+      })),
+      { includeDeliveryCost }
+    ).refund;
   }, [returnItems, includeDeliveryCost, sale]);
 
   const getTotalReturnItems = useCallback(() => {

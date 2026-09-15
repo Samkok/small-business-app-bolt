@@ -1,5 +1,4 @@
 import { supabase } from '../config/supabase';
-import { salesService } from './sales';
 import { reportsService } from './reports';
 
 export const exportService = {
@@ -177,46 +176,37 @@ export const exportService = {
     if (typeof endDate !== 'string' || !endDate) return '';
     
     try {
-      // Get sales data with COGS
-      const salesData = await salesService.getSalesWithCOGS(businessId, startDate, endDate);
-      
-      // Get expense data
-      const expenseCategories = await reportsService.getExpensesByCategory(businessId, new Date(startDate), new Date(endDate));
-      
-      // Calculate totals
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.revenue, 0);
-      const totalCOGS = salesData.reduce((sum, sale) => sum + sale.cogs, 0);
-      const grossProfit = totalRevenue - totalCOGS;
-      
-      // Calculate total expenses
-      const totalExpenses = expenseCategories.reduce((sum, category) => sum + category.amount, 0);
-      const netIncome = grossProfit - totalExpenses;
-      
-      // Create CSV content
+      const statement = await reportsService.getIncomeStatement(businessId, startDate, endDate);
+      if (!statement) return '';
+      const fmt = (v: number) => (Number(v) || 0).toFixed(2);
+
       let csv = 'INCOME STATEMENT\n';
       csv += `Period: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}\n\n`;
-      
-      // Revenue section
+
       csv += 'REVENUE\n';
-      csv += `Total Revenue,${totalRevenue.toFixed(2)}\n\n`;
-      
-      // COGS section
+      csv += `Gross Sales,${fmt(statement.revenue.gross)}\n`;
+      csv += `Less: Returns,${fmt(statement.revenue.refunds)}\n`;
+      csv += `Total Revenue,${fmt(statement.revenue.total)}\n\n`;
+
       csv += 'COST OF GOODS SOLD\n';
-      csv += `Total COGS,${totalCOGS.toFixed(2)}\n\n`;
-      
-      // Gross Profit
-      csv += `GROSS PROFIT,${grossProfit.toFixed(2)}\n\n`;
-      
-      // Expenses section
+      csv += `Total COGS,${fmt(statement.cogs.total)}\n\n`;
+
+      csv += `GROSS PROFIT,${fmt(statement.grossProfit)}\n`;
+      csv += `Gross Margin %,${fmt(statement.grossMargin)}\n\n`;
+
       csv += 'OPERATING EXPENSES\n';
-      expenseCategories.forEach(category => {
-        csv += `${category.category},${category.amount.toFixed(2)}\n`;
+      statement.expenses.categories.forEach(category => {
+        csv += `${category.category},${fmt(category.total)}\n`;
       });
-      csv += `Total Expenses,${totalExpenses.toFixed(2)}\n\n`;
-      
-      // Net Income
-      csv += `NET INCOME,${netIncome.toFixed(2)}\n`;
-      
+      csv += `Delivery Fees,${fmt(statement.expenses.deliveryFees)}\n`;
+      csv += `Total Expenses,${fmt(statement.expenses.total)}\n\n`;
+
+      csv += `NET INCOME,${fmt(statement.netIncome)}\n`;
+      csv += `Net Margin %,${fmt(statement.netMargin)}\n`;
+      if (statement.refundDeductionsRetained > 0) {
+        csv += `\nMemo: deductions kept from refunds (included in revenue),${fmt(statement.refundDeductionsRetained)}\n`;
+      }
+
       return csv;
     } catch (error) {
       console.error('Error generating income statement CSV:', error);
