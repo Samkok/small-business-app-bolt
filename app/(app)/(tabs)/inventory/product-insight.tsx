@@ -59,6 +59,7 @@ export default function ProductInsightScreen() {
   const [data, setData] = useState<InsightSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settings, setSettings] = useState<SettingsState>(() => {
@@ -109,16 +110,17 @@ export default function ProductInsightScreen() {
       if (!currentBusiness?.id) return;
       try {
         const { startDate, endDate, lookbackDays } = productInsightService.getDateRange(currentSettings);
-        const { products, salesByProduct } = await productInsightService.fetchProductsAndSales(
+        const { products, demandByProduct, windowStart } = await productInsightService.fetchProductsAndSales(
           currentBusiness.id,
           startDate,
           endDate
         );
         const summary = productInsightService.classifyProducts(
           products,
-          salesByProduct,
+          demandByProduct,
           currentSettings,
-          lookbackDays
+          lookbackDays,
+          windowStart
         );
         setData(summary);
       } catch (e) {
@@ -328,6 +330,54 @@ export default function ProductInsightScreen() {
           </Text>
         )}
 
+        {/* How to read the page */}
+        <Card style={StyleSheet.flatten([styles.legendCard, { backgroundColor: colors.card, borderColor: colors.border }])}>
+          <TouchableOpacity style={styles.legendHeader} onPress={() => setLegendOpen(o => !o)} activeOpacity={0.7}>
+            <Text style={[styles.legendTitle, { color: colors.text }]}>How to read this page</Text>
+            <Text style={[styles.legendToggle, { color: '#2563eb' }]}>{legendOpen ? 'Hide' : 'Show'}</Text>
+          </TouchableOpacity>
+          {legendOpen && (
+            <View style={styles.legendBody}>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: '#059669' }]}>A · B · C</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  How much profit each product brought in this period. A products together earn the top 80% of gross profit, B the next 15%, C the last 5%, including anything that did not sell. Watch A closely; C is where dead stock hides.
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: colors.text }]}>steady · variable · erratic</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  How predictable weekly sales are. Steady sells about the same every week, variable swings, erratic is hard to predict (often only occasional sales). The less predictable, the bigger the safety buffer the app keeps.
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: '#ea580c' }]}>Order 13 units</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  Yes, that is what the app suggests you buy, in base units. It covers expected sales over your lead time plus the next 30 days, adds the safety buffer, and subtracts what you still have.
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: colors.text }]}>reorder at 12</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  The stock level at which to place the next order so it arrives before you run out.
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: colors.text }]}>▲ 25% vs prior</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  Sales speed compared with the period of the same length just before this one.
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <Text style={[styles.legendKey, { color: colors.text }]}>Stock-out in 6d</Text>
+                <Text style={[styles.legendText, { color: colors.subtext }]}>
+                  Days until stock hits zero at the current selling rate. Tap any product to open it.
+                </Text>
+              </View>
+            </View>
+          )}
+        </Card>
+
         {/* Overview */}
         <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Overview</Text>
         <View style={styles.statGrid}>
@@ -352,9 +402,12 @@ export default function ProductInsightScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              {formatPrice(data?.totalStockValue ?? 0)}
+              {formatPrice(data?.totalStockCost ?? 0)}
             </Text>
-            <Text style={[styles.statLabel, { color: colors.subtext }]}>Stock Value</Text>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Stock at Cost</Text>
+            <Text style={[styles.statHint, { color: colors.subtext }]} numberOfLines={1}>
+              {formatPrice(data?.totalStockValue ?? 0)} at retail
+            </Text>
           </Card>
           <Card style={[styles.statCard, { backgroundColor: colors.card }]}>
             <BarChart3 size={22} color="#ea580c" />
@@ -363,9 +416,12 @@ export default function ProductInsightScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              {formatPrice(data?.avgSellingPrice ?? 0)}
+              {formatPrice(data?.deadStockCost ?? 0)}
             </Text>
-            <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Price</Text>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Dead Stock (cost)</Text>
+            <Text style={[styles.statHint, { color: colors.subtext }]} numberOfLines={1}>
+              no sales this period
+            </Text>
           </Card>
         </View>
 
@@ -500,11 +556,72 @@ export default function ProductInsightScreen() {
           return <ProductCategorySection key={cat} category={cat} products={products} />;
         })}
 
+        {/* ABC split */}
+        {data && data.totalActiveProducts > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
+              Profit Contribution (ABC)
+            </Text>
+            <Card style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.abcRow}>
+                {(['A', 'B', 'C'] as const).map(cls => (
+                  <View key={cls} style={styles.abcItem}>
+                    <Text style={[styles.abcValue, { color: cls === 'A' ? '#059669' : cls === 'B' ? '#2563eb' : colors.subtext }]}>
+                      {data.abcCounts[cls]}
+                    </Text>
+                    <Text style={[styles.abcLabel, { color: colors.subtext }]}>
+                      {cls === 'A' ? 'A · top 80% of profit' : cls === 'B' ? 'B · next 15%' : 'C · last 5%'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.abcHint, { color: colors.subtext }]}>
+                Hot Selling = A products. Reorder points use tighter safety stock for A than for C.
+              </Text>
+            </Card>
+          </>
+        )}
+
+        {/* Consider discontinuing */}
+        {(data?.killList ?? []).length > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
+              Consider Discontinuing
+            </Text>
+            <Card style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.abcHint, { color: colors.subtext, marginBottom: 6 }]}>
+                Low-profit products with more than 26 weeks of stock whose sales have halved. Discount or stop reordering.
+              </Text>
+              {(data?.killList ?? []).map((p, i) => (
+                <View key={p.id}>
+                  <View style={styles.rankRow}>
+                    <View style={styles.rankInfo}>
+                      <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <Text style={[styles.rankSub, { color: colors.subtext }]}>
+                        {p.currentStock} units · {p.weeksOfSupply === null ? 'no sales' : `${Math.round(p.weeksOfSupply)} wks of supply`}
+                        {p.velocityChangePct !== null ? ` · ${Math.round(p.velocityChangePct)}% vs prior` : ''}
+                      </Text>
+                    </View>
+                    <Text style={[styles.rankRevenue, { color: '#dc2626' }]}>
+                      {formatPrice(p.stockCost)}
+                    </Text>
+                  </View>
+                  {i < (data?.killList ?? []).length - 1 && (
+                    <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
+
         {/* Highest Stock Value */}
         {(data?.highestValueProducts ?? []).length > 0 && (
           <>
             <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
-              Highest Stock Value
+              Most Cash Tied Up
             </Text>
             <Card
               style={[
@@ -535,7 +652,7 @@ export default function ProductInsightScreen() {
                         {p.name}
                       </Text>
                       <Text style={[styles.rankSub, { color: colors.subtext }]}>
-                        {p.currentStock} units @ {formatPrice(p.price)}
+                        {p.currentStock} units · cost {formatPrice(p.currentStock > 0 ? p.value / p.currentStock : 0)} each
                       </Text>
                     </View>
                     <Text style={[styles.rankRevenue, { color: '#059669' }]}>
@@ -649,6 +766,66 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     marginTop: 2,
+  },
+  statHint: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  abcRow: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+  },
+  legendCard: {
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  legendHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  legendTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  legendToggle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  legendBody: {
+    marginTop: 10,
+    gap: 10,
+  },
+  legendRow: {
+    gap: 2,
+  },
+  legendKey: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  legendText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  abcItem: {
+    flex: 1,
+  },
+  abcValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  abcLabel: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  abcHint: {
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    lineHeight: 17,
   },
   statLabel: {
     fontSize: 12,

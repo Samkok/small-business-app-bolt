@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import {
   XCircle,
   AlertTriangle,
@@ -7,6 +9,7 @@ import {
   PackageX,
   TrendingDown,
   CheckCircle2,
+  Package,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
@@ -82,7 +85,7 @@ function getSubtext(product: ClassifiedProduct): string {
       if (product.dailySalesRate > 0) return `Was selling ${formatRate(product.dailySalesRate)}`;
       return 'No recent sales data';
     case 'must_order':
-      return `Stock-out in ${formatDays(product.daysOfStockRemaining)}`;
+      return `Stock-out in ${formatDays(product.daysOfStockRemaining)} · reorder at ${Math.ceil(product.reorderPoint)}`;
     case 'hot_selling':
       return `${formatRate(product.dailySalesRate)} | ${formatDays(product.daysOfStockRemaining)} remaining`;
     case 'do_not_order':
@@ -100,9 +103,9 @@ function getSubtext(product: ClassifiedProduct): string {
 function getRightText(product: ClassifiedProduct, formatPrice: (amount: number) => string): { text: string; color: string } {
   switch (product.category) {
     case 'out_of_stock':
-      return { text: '0 units', color: '#dc2626' };
+      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} units` : '0 units', color: '#dc2626' };
     case 'must_order':
-      return { text: `${product.currentStock} left`, color: '#ea580c' };
+      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} units` : `${product.currentStock} left`, color: '#ea580c' };
     case 'hot_selling':
       return { text: formatPrice(product.totalRevenue), color: '#059669' };
     case 'do_not_order':
@@ -122,6 +125,7 @@ function getRightText(product: ClassifiedProduct, formatPrice: (amount: number) 
 export default function ProductCategorySection({ category, products }: ProductCategorySectionProps) {
   const { isDark } = useTheme();
   const { formatPrice } = useCurrencyContext();
+  const router = useRouter();
   const config = CATEGORY_CONFIG[category];
   const Icon = config.icon;
 
@@ -161,7 +165,18 @@ export default function ProductCategorySection({ category, products }: ProductCa
             const right = getRightText(product, formatPrice);
             return (
               <View key={product.id}>
-                <View style={styles.productRow}>
+                <TouchableOpacity
+                  style={styles.productRow}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/inventory/product-details?productId=${product.id}`)}
+                >
+                  {product.imageUrl ? (
+                    <OptimizedImage source={{ uri: product.imageUrl }} style={styles.thumb} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.muted }]}>
+                      <Package size={18} color={colors.subtext} />
+                    </View>
+                  )}
                   <View style={styles.productInfo}>
                     <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
                       {product.name}
@@ -169,9 +184,26 @@ export default function ProductCategorySection({ category, products }: ProductCa
                     <Text style={[styles.productSub, { color: colors.subtext }]}>
                       {getSubtext(product)}
                     </Text>
+                    <View style={styles.tagRow}>
+                      <View style={[styles.tag, { backgroundColor: product.abcClass === 'A' ? '#05966918' : product.abcClass === 'B' ? '#2563eb18' : colors.muted }]}>
+                        <Text style={[styles.tagText, { color: product.abcClass === 'A' ? '#059669' : product.abcClass === 'B' ? '#2563eb' : colors.subtext }]}>
+                          {product.abcClass}
+                        </Text>
+                      </View>
+                      <View style={[styles.tag, { backgroundColor: colors.muted }]}>
+                        <Text style={[styles.tagText, { color: colors.subtext }]}>
+                          {product.xyzClass === 'X' ? 'steady' : product.xyzClass === 'Y' ? 'variable' : 'erratic'}
+                        </Text>
+                      </View>
+                      {product.velocityChangePct !== null && (
+                        <Text style={[styles.trendText, { color: product.velocityChangePct >= 0 ? '#059669' : '#dc2626' }]}>
+                          {product.velocityChangePct >= 0 ? '▲' : '▼'} {Math.abs(Math.round(product.velocityChangePct))}% vs prior
+                        </Text>
+                      )}
+                    </View>
                   </View>
                   <Text style={[styles.rightText, { color: right.color }]}>{right.text}</Text>
-                </View>
+                </TouchableOpacity>
                 {i < sorted.length - 1 && (
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 )}
@@ -227,6 +259,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 10,
   },
+  thumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  thumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   productInfo: {
     flex: 1,
   },
@@ -237,6 +278,26 @@ const styles = StyleSheet.create({
   productSub: {
     fontSize: 12,
     marginTop: 2,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  tag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  trendText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   rightText: {
     fontSize: 13,
