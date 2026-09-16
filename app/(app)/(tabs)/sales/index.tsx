@@ -1131,13 +1131,15 @@ export default function SalesScreen() {
               style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
               onPress={openInstantCheckoutModal}
             >
-              <Zap size={24} color="#ffffff" />
+              <Zap size={18} color="#ffffff" />
+                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
               onPress={handleNewSale}
             >
-              <Plus size={24} color="#ffffff" />
+              <Plus size={18} color="#ffffff" />
+                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1232,7 +1234,8 @@ export default function SalesScreen() {
                 onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : openInstantCheckoutModal}
                 disabled={salesCountData.isAtLimit || !canAccessFeature}
               >
-                <Zap size={24} color="#ffffff" />
+                <Zap size={18} color="#ffffff" />
+                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -1246,7 +1249,8 @@ export default function SalesScreen() {
                 onPress={handleNewSale}
                 disabled={salesCountData.isAtLimit || !canAccessFeature}
               >
-                <Plus size={24} color="#ffffff" />
+                <Plus size={18} color="#ffffff" />
+                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1611,11 +1615,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  headerActionText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorBanner: {
     marginHorizontal: 16,

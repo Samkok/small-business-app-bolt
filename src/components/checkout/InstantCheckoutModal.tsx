@@ -243,8 +243,21 @@ export function InstantCheckoutModal() {
       }
 
       if (!matchedProduct) {
-        Alert.alert('Not Found', 'Product with this barcode was not found.');
-        return;
+        // The loaded list only holds in-stock products, so look the code up directly
+        // to tell "out of stock" apart from "unknown barcode".
+        const dbProduct = currentBusiness?.id
+          ? await productService.searchByBarcode(barcode, currentBusiness.id).catch(() => null)
+          : null;
+        if (!dbProduct) {
+          Alert.alert('Not Found', 'Product with this barcode was not found.');
+          return;
+        }
+        if ((dbProduct.current_stock ?? 0) <= 0) {
+          Alert.alert('Out of Stock', `${dbProduct.name} is currently out of stock.`);
+          return;
+        }
+        // In stock but added since the list loaded: use it as is.
+        matchedProduct = dbProduct;
       }
 
       if (matchedProduct.current_stock <= 0) {
@@ -573,13 +586,23 @@ export function InstantCheckoutModal() {
               <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Products
               </Text>
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: '#2563eb' }]}
-                onPress={() => setShowProductSelector(true)}
-              >
-                <Plus size={16} color="#ffffff" />
-                <Text style={styles.addButtonText}>Add Product</Text>
-              </TouchableOpacity>
+              <View style={styles.sectionActions}>
+                <TouchableOpacity
+                  style={[styles.addButton, { backgroundColor: '#2563eb' }]}
+                  onPress={() => setShowProductSelector(true)}
+                >
+                  <Plus size={16} color="#ffffff" />
+                  <Text style={styles.addButtonText}>Add Product</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.scanIconButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', borderColor: isDark ? '#4b5563' : '#bfdbfe' }]}
+                  onPress={() => setShowBarcodeScanner(true)}
+                  accessibilityLabel="Scan barcode"
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Barcode size={20} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
             </View>
             <InstantCheckoutProductList
               items={session?.items || []}
@@ -1229,6 +1252,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scanIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addButtonText: {
     color: '#ffffff',

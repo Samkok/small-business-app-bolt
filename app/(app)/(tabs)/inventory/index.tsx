@@ -31,7 +31,7 @@ import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import EditImportForm from '@/src/components/inventory/EditImportForm';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
-import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers, Download } from 'lucide-react-native';
+import { Package, Plus, Search, ChartBar as BarChart3, TriangleAlert as AlertTriangle, Barcode, History, TrendingUp, Archive, ArrowUp, X, Trash2, SquareCheck as CheckSquare, Square, Filter, Calendar, ArrowDown, ShoppingCart, Clock, CalendarDays, Sparkles, Layers, Download, ClipboardList, PackageMinus } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
@@ -41,6 +41,8 @@ import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckout
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { fetchProductsForExport, buildProductsCsv, buildProductsBarcodeHtml, shareProductsBarcodePdf } from '@/src/services/productBarcodeExport';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
@@ -95,12 +97,15 @@ export default function InventoryScreen() {
 
   // Export states
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFields, setExportFields] = useState({ name: true, price: true, cost: false, qty: false });
+  const [exportFields, setExportFields] = useState({ name: true, price: true, cost: false, qty: false, barcode: true });
+  // PDF draws each barcode as a scannable Code 128 image; CSV can only carry the value.
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
   const [exporting, setExporting] = useState(false);
   
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { getSymbol } = useCurrencyContext();
   const { currentBusiness } = useAuth();
   const { isConnected, wasOffline } = useNetwork();
   const flatListRef = useRef<FlatList>(null);
@@ -836,40 +841,26 @@ export default function InventoryScreen() {
 
     setExporting(true);
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('name, price, cost_per_unit, current_stock')
-        .eq('business_id', currentBusiness.id)
-        .is('archived_at', null)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
+      const rows = await fetchProductsForExport(currentBusiness.id);
+      if (rows.length === 0) {
         Alert.alert(t('common.error'), 'No products to export');
         return;
       }
 
-      const headers: string[] = [];
-      if (exportFields.name) headers.push('Name');
-      if (exportFields.price) headers.push('Price');
-      if (exportFields.cost) headers.push('Cost');
-      if (exportFields.qty) headers.push('Quantity');
+      const baseName = `products_${currentBusiness.business_name?.replace(/\s+/g, '_') || 'export'}`;
 
-      let csv = headers.join(',') + '\n';
+      if (exportFormat === 'pdf') {
+        const html = buildProductsBarcodeHtml(rows, exportFields, {
+          businessName: currentBusiness.business_name || undefined,
+          currencySymbol: getSymbol(),
+        });
+        await shareProductsBarcodePdf(html, `${baseName}.pdf`);
+        setShowExportModal(false);
+        return;
+      }
 
-      data.forEach(product => {
-        const row: string[] = [];
-        if (exportFields.name) {
-          const name = (product.name || '').replace(/"/g, '""');
-          row.push(`"${name}"`);
-        }
-        if (exportFields.price) row.push(String(product.price ?? 0));
-        if (exportFields.cost) row.push(String(product.cost_per_unit ?? 0));
-        if (exportFields.qty) row.push(String(product.current_stock ?? 0));
-        csv += row.join(',') + '\n';
-      });
-
-      const fileName = `products_${currentBusiness.name?.replace(/\s+/g, '_') || 'export'}.csv`;
+      const csv = buildProductsCsv(rows, exportFields);
+      const fileName = `${baseName}.csv`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(fileUri, csv, {
@@ -1079,6 +1070,33 @@ export default function InventoryScreen() {
               </Text>
               <Text style={[styles.unitGroupsChipArrow, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>›</Text>
             </TouchableOpacity>
+
+            <View style={styles.stockToolsRow}>
+              <TouchableOpacity
+                style={[styles.stockToolChip, { backgroundColor: isDark ? '#3b2f0b' : '#fffbeb', borderColor: isDark ? '#d97706' : '#fde68a' }]}
+                onPress={() => router.push('/inventory/stock-count')}
+                activeOpacity={0.7}
+              >
+                <ClipboardList size={16} color="#d97706" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.unitGroupsChipText, { color: isDark ? '#fbbf24' : '#b45309' }]}>Stock Count</Text>
+                  <Text style={[styles.stockToolChipSub, { color: isDark ? '#fcd34d' : '#d97706' }]}>Count shelves, post differences</Text>
+                </View>
+                <Text style={[styles.unitGroupsChipArrow, { color: '#d97706' }]}>›</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.stockToolChip, { backgroundColor: isDark ? '#3f1d1d' : '#fef2f2', borderColor: isDark ? '#dc2626' : '#fecaca' }]}
+                onPress={() => router.push('/inventory/stock-adjustments')}
+                activeOpacity={0.7}
+              >
+                <PackageMinus size={16} color="#dc2626" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.unitGroupsChipText, { color: isDark ? '#f87171' : '#b91c1c' }]}>Adjustments</Text>
+                  <Text style={[styles.stockToolChipSub, { color: isDark ? '#fca5a5' : '#dc2626' }]}>Damaged, expired, lost</Text>
+                </View>
+                <Text style={[styles.unitGroupsChipArrow, { color: '#dc2626' }]}>›</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
 
@@ -1612,6 +1630,46 @@ export default function InventoryScreen() {
                   Quantity
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exportFieldRow, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => setExportFields(prev => ({ ...prev, barcode: !prev.barcode }))}
+              >
+                {exportFields.barcode ? (
+                  <CheckSquare size={22} color="#2563eb" />
+                ) : (
+                  <Square size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
+                )}
+                <Text style={[styles.exportFieldLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Barcode
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.exportModalSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Format
+            </Text>
+            <View style={styles.exportFormatRow}>
+              {([
+                { key: 'pdf', label: 'PDF with barcodes' },
+                { key: 'csv', label: 'CSV' },
+              ] as const).map(opt => {
+                const active = exportFormat === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[
+                      styles.exportFormatChip,
+                      { borderColor: active ? '#2563eb' : (isDark ? '#374151' : '#e5e7eb'), backgroundColor: active ? '#2563eb' : 'transparent' },
+                    ]}
+                    onPress={() => setExportFormat(opt.key)}
+                  >
+                    <Text style={[styles.exportFormatChipText, { color: active ? '#ffffff' : (isDark ? '#d1d5db' : '#374151') }]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <View style={styles.exportModalActions}>
@@ -1627,10 +1685,10 @@ export default function InventoryScreen() {
               <TouchableOpacity
                 style={[
                   styles.exportModalExportButton,
-                  (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty) && { opacity: 0.5 }
+                  (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty && !exportFields.barcode) && { opacity: 0.5 }
                 ]}
                 onPress={handleExportProducts}
-                disabled={exporting || (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty)}
+                disabled={exporting || (!exportFields.name && !exportFields.price && !exportFields.cost && !exportFields.qty && !exportFields.barcode)}
               >
                 {exporting ? (
                   <ActivityIndicator size="small" color="#ffffff" />
@@ -1865,6 +1923,25 @@ const styles = StyleSheet.create({
   unitGroupsChipArrow: {
     fontSize: 18,
     fontWeight: '300',
+  },
+  stockToolsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  stockToolChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  stockToolChipSub: {
+    fontSize: 11,
+    marginTop: 1,
   },
   insightButton: {
     flexDirection: 'row',
@@ -2124,6 +2201,23 @@ const styles = StyleSheet.create({
   exportFieldLabel: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  exportFormatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  exportFormatChip: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  exportFormatChipText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   exportModalActions: {
     flexDirection: 'row',
