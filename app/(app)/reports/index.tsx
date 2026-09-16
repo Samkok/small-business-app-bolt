@@ -21,8 +21,8 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
-import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download } from 'lucide-react-native';
-import { LineChart, PieChart as PieChartKit } from 'react-native-chart-kit';
+import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download, Package } from 'lucide-react-native';
+import { LineChart, PieChart as PieChartKit, BarChart as BarChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, startOfWeek, endOfWeek, endOfDay, startOfYear, endOfYear } from 'date-fns';
@@ -43,6 +43,9 @@ export default function ReportsScreen() {
   const [expensesData, setExpensesData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
   const [expenseCategoriesData, setExpenseCategoriesData] = useState<any>(null);
+  // First month with any sale or expense; the cash flow list runs from there to today.
+  const [activityStart, setActivityStart] = useState<Date | null>(null);
+  const [inventorySpendData, setInventorySpendData] = useState<any>(null);
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
@@ -151,6 +154,8 @@ export default function ReportsScreen() {
     
     try {
       const { startDate, endDate } = getDateRange();
+
+      reportsService.getActivityStart(currentBusiness.id).then(setActivityStart).catch(() => setActivityStart(null));
       
       // Load revenue data
       const revenueChartData = await reportsService.getRevenueChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
@@ -167,6 +172,10 @@ export default function ReportsScreen() {
       // Load expense categories data
       const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setExpenseCategoriesData(expenseCategoriesChartData);
+
+      // Load inventory spend (what was paid for stock in the period)
+      const inventorySpend = await reportsService.getInventorySpend(currentBusiness.id, startDate, endDate, activeCurrencyId);
+      setInventorySpendData(inventorySpend);
     } catch (error) {
       console.error('Error loading report data:', error);
       if (Platform.OS !== 'web') {
@@ -195,12 +204,14 @@ export default function ReportsScreen() {
       const incomeCsv = await exportService.exportIncomeStatementToCsv(currentBusiness.id, startDateIso, endDateIso, activeCurrencyId);
       const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear(), activeCurrencyId);
       const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
+      const inventorySpendCsv = await exportService.exportInventorySpendToCsv(currentBusiness.id, startDateIso, endDateIso, activeCurrencyId);
 
       const filesToExport = [
         { name: `${EXPORT_FILE_PREFIX}_Sales_${dateRangeLabel}.csv`, content: salesCsv },
         { name: `${EXPORT_FILE_PREFIX}_IncomeStatement_${dateRangeLabel}.csv`, content: incomeCsv },
         { name: `${EXPORT_FILE_PREFIX}_CashFlow_${format(startDate, 'yyyyMM')}.csv`, content: cashFlowCsv },
         { name: `${EXPORT_FILE_PREFIX}_Products.csv`, content: productsCsv },
+        { name: `${EXPORT_FILE_PREFIX}_InventorySpend_${dateRangeLabel}.csv`, content: inventorySpendCsv },
       ];
 
       const sectionSeparator = '\n\n\n';
@@ -635,6 +646,109 @@ export default function ReportsScreen() {
           </View>
         </Card>
 
+        {/* Inventory Spend */}
+        <Card style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <View style={styles.chartTitleContainer}>
+              <Package size={20} color="#7c3aed" />
+              <Text style={[styles.chartTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Inventory Spend
+              </Text>
+            </View>
+          </View>
+
+          {!inventorySpendData || (inventorySpendData.imports === 0 && !inventorySpendData.writeOffUnits && !inventorySpendData.foundUnits) ? (
+            <View style={styles.noDataContainer}>
+              <Text style={[styles.noDataText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                No stock purchased or written off in this period
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.spendStats}>
+                <View style={styles.spendStat}>
+                  <Text style={[styles.spendStatValue, { color: '#7c3aed' }]}>{fmt(inventorySpendData.total)}</Text>
+                  <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Total spent</Text>
+                </View>
+                <View style={styles.spendStat}>
+                  <Text style={[styles.spendStatValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{inventorySpendData.units}</Text>
+                  <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Units received</Text>
+                </View>
+                <View style={styles.spendStat}>
+                  <Text style={[styles.spendStatValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{inventorySpendData.batches}</Text>
+                  <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Batches</Text>
+                </View>
+              </View>
+
+              {inventorySpendData.series.some((s: any) => s.amount > 0) && (
+                <View style={styles.chartContainer}>
+                  <BarChartKit
+                    data={{
+                      labels: getProcessedLabels(inventorySpendData.series.map((s: any) => s.label), 7),
+                      datasets: [{ data: inventorySpendData.series.map((s: any) => s.amount) }],
+                    }}
+                    width={screenWidth - 64}
+                    height={200}
+                    yAxisLabel=""
+                    yAxisSuffix=""
+                    fromZero
+                    withInnerLines={false}
+                    chartConfig={{
+                      backgroundColor: isDark ? '#374151' : '#ffffff',
+                      backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
+                      backgroundGradientTo: isDark ? '#374151' : '#ffffff',
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
+                      labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
+                      barPercentage: 0.6,
+                      style: { borderRadius: 16 },
+                    }}
+                    style={{ marginVertical: 8, borderRadius: 16 }}
+                  />
+                </View>
+              )}
+
+              <View style={[styles.spendRow, { borderTopColor: isDark ? '#374151' : '#e5e7eb' }]}>
+                <Text style={[styles.spendRowLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Base cost of goods</Text>
+                <Text style={[styles.spendRowValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{fmt(inventorySpendData.baseCost)}</Text>
+              </View>
+              <View style={styles.spendRow}>
+                <Text style={[styles.spendRowLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Added costs (shipping, fees)</Text>
+                <Text style={[styles.spendRowValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{fmt(inventorySpendData.addedCosts)}</Text>
+              </View>
+              <TouchableOpacity style={styles.spendRow} onPress={() => router.push('/inventory/stock-adjustments')}>
+                <Text style={[styles.spendRowLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Written off (damaged, expired, lost) · {inventorySpendData.writeOffUnits || 0} units
+                </Text>
+                <Text style={[styles.spendRowValue, { color: inventorySpendData.writeOffs > 0 ? '#dc2626' : (isDark ? '#f9fafb' : '#111827') }]}>{fmt(inventorySpendData.writeOffs || 0)}</Text>
+              </TouchableOpacity>
+              {inventorySpendData.foundUnits > 0 && (
+                <View style={styles.spendRow}>
+                  <Text style={[styles.spendRowLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Found stock · {inventorySpendData.foundUnits} units</Text>
+                  <Text style={[styles.spendRowValue, { color: '#059669' }]}>{fmt(inventorySpendData.found)}</Text>
+                </View>
+              )}
+
+              <Text style={[styles.spendSubtitle, { color: isDark ? '#f9fafb' : '#111827' }]}>Top products by spend</Text>
+              {inventorySpendData.topProducts.map((p: any) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.spendProductRow, { borderBottomColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={() => router.push(`/inventory/product-details?productId=${p.id}`)}
+                >
+                  <View style={styles.spendProductText}>
+                    <Text style={[styles.spendProductName, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>{p.name}</Text>
+                    <Text style={[styles.spendProductMeta, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      {p.quantity} units · {fmt(p.avgUnitCost)} each · {p.imports} {p.imports === 1 ? 'import' : 'imports'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.spendProductAmount, { color: '#7c3aed' }]}>{fmt(p.spend)}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </Card>
+
         {/* Financial Statements */}
         <Card style={styles.statementsCard}>
           <Text style={[styles.statementsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -896,21 +1010,24 @@ export default function ReportsScreen() {
     if (chartsLoading) {
       return <SkeletonCashFlowMonths />;
     }
-    
-    // Get current month and year
+
+    // Every month from the first recorded activity up to the current month, newest first,
+    // grouped under a heading per year. Falls back to the last 12 months when nothing is recorded yet.
     const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    
-    // Get previous months
-    const months = [];
-    for (let i = 0; i < 6; i++) {
-      const date = new Date(currentYear, currentMonth-i, 1);
-      months.push({
-        month: date.getMonth(),
-        year: date.getFullYear(),
-        label: format(date, 'MMMM yyyy')
-      });
+    const first = activityStart ?? new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const firstKey = first.getFullYear() * 12 + first.getMonth();
+    const lastKey = now.getFullYear() * 12 + now.getMonth();
+
+    const years: { year: number; months: { month: number; year: number; label: string }[] }[] = [];
+    for (let key = lastKey; key >= firstKey; key--) {
+      const year = Math.floor(key / 12);
+      const month = key - year * 12;
+      let bucket = years[years.length - 1];
+      if (!bucket || bucket.year !== year) {
+        bucket = { year, months: [] };
+        years.push(bucket);
+      }
+      bucket.months.push({ month, year, label: format(new Date(year, month, 1), 'MMMM') });
     }
 
     return (
@@ -918,22 +1035,37 @@ export default function ReportsScreen() {
         <Text style={[styles.cashFlowTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
           Cash Flow Statements
         </Text>
-        
+
         <Text style={[styles.cashFlowSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
           Select a month to view the cash flow statement
         </Text>
-        
-        {months.map((monthData, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[styles.monthButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-            onPress={() => router.push(`/reports/cash-flow?month=${monthData.month}&year=${monthData.year}${currencyParam}`)}
-          >
-            <Calendar size={20} color="#2563eb" />
-            <Text style={[styles.monthButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              {monthData.label}
-            </Text>
-          </TouchableOpacity>
+
+        {years.map(group => (
+          <View key={group.year} style={styles.yearGroup}>
+            <View style={[styles.yearHeader, { borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+              <Text style={[styles.yearHeaderText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {group.year}
+              </Text>
+              <Text style={[styles.yearHeaderCount, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {group.months.length} {group.months.length === 1 ? 'month' : 'months'}
+              </Text>
+            </View>
+            {group.months.map(monthData => (
+              <TouchableOpacity
+                key={`${monthData.year}-${monthData.month}`}
+                style={[styles.monthButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={() => router.push(`/reports/cash-flow?month=${monthData.month}&year=${monthData.year}${currencyParam}`)}
+              >
+                <Calendar size={20} color="#2563eb" />
+                <Text style={[styles.monthButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  {monthData.label}
+                </Text>
+                <Text style={[styles.monthButtonYear, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                  {monthData.year}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         ))}
       </View>
     );
@@ -1361,6 +1493,67 @@ const styles = StyleSheet.create({
   chartContainer: {
     alignItems: 'center',
   },
+  spendStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  spendStat: {
+    flex: 1,
+  },
+  spendStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  spendStatLabel: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  spendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  spendRowLabel: {
+    fontSize: 14,
+  },
+  spendRowValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  spendSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  spendProductRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 12,
+  },
+  spendProductText: {
+    flex: 1,
+  },
+  spendProductName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  spendProductMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  spendProductAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
   statementsCard: {
     padding: 16,
     marginBottom: 20,
@@ -1458,6 +1651,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 12,
+    flex: 1,
+  },
+  monthButtonYear: {
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+  },
+  yearGroup: {
+    marginBottom: 8,
+  },
+  yearHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+  },
+  yearHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  yearHeaderCount: {
+    fontSize: 12,
   },
   datePickerScreen: {
     flex: 1,

@@ -288,6 +288,17 @@ export default function CashFlowScreen() {
               </Text>
             </View>
 
+            {cashFlowData.writeOffAddBack !== 0 && (
+              <View style={styles.row}>
+                <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {cashFlowData.writeOffAddBack > 0 ? 'Add back: Inventory Write-offs' : 'Less: Found Stock'}
+                </Text>
+                <Text style={[styles.value, { color: cashFlowData.writeOffAddBack > 0 ? '#059669' : '#dc2626' }]}>
+                  {cashFlowData.writeOffAddBack > 0 ? '' : '-'}{fmt(Math.abs(cashFlowData.writeOffAddBack))}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.row}>
               <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 Less: Inventory Purchases

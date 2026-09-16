@@ -16,8 +16,9 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
-import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers, Plus, Pencil } from 'lucide-react-native';
+import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers, Plus, Pencil, RefreshCw } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
+import { stockAdjustmentService } from '@/src/services/stockAdjustments';
 import { storageService } from '@/src/services/storage';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
@@ -44,6 +45,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  // 'product' while generating the product barcode, or the unit id for a variant
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [barcodeError, setBarcodeError] = useState('');
   const [selectedCurrencyId, setSelectedCurrencyId] = useState<string | undefined>(undefined);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -236,6 +239,29 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   };
 
+  // Ask the server for a barcode nothing in this business uses, and drop it in the field.
+  // Works for new products and for replacing an existing product's barcode.
+  const handleGenerateBarcode = async (unitId?: string) => {
+    if (!currentBusiness?.id) return;
+    setGeneratingFor(unitId ?? 'product');
+    try {
+      const code = await productService.generateBarcode(currentBusiness.id);
+      if (unitId) {
+        setUnitBarcodes(prev => ({ ...prev, [unitId]: code }));
+        validateUnitBarcode(unitId, code);
+      } else {
+        setBarcode(code);
+        setBarcodeError('');
+        validateBarcode(code);
+      }
+    } catch (error) {
+      console.error('Error generating barcode:', error);
+      Alert.alert('Error', 'Could not generate a barcode. Check your connection and try again.');
+    } finally {
+      setGeneratingFor(null);
+    }
+  };
+
   const handleBarcodeScanned = (scannedBarcode: string) => {
     if (scanningUnitId) {
       const unitId = scanningUnitId;
@@ -373,7 +399,28 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
       let savedProduct;
       if (product) {
-        savedProduct = await productService.updateProduct(product.id, productData, currentBusiness.owner_user_id);
+        // Stock is never overwritten on edit: the difference is posted as a
+        // count correction so the stock_adjustments ledger stays complete.
+        const { current_stock: _ignored, ...updates } = productData;
+        const stockDelta = stockValue - (product.current_stock ?? 0);
+        savedProduct = await productService.updateProduct(product.id, updates, currentBusiness.owner_user_id);
+        if (stockDelta !== 0) {
+          try {
+            const adjustment = await stockAdjustmentService.adjust({
+              businessId: currentBusiness.id,
+              productId: product.id,
+              quantity: stockDelta,
+              reason: 'count',
+              notes: 'Changed on the product form',
+            });
+            savedProduct = { ...(savedProduct as any), current_stock: adjustment.stock_after };
+          } catch (adjustError: any) {
+            Alert.alert(
+              'Stock not changed',
+              `The product was saved, but the stock change was not: ${adjustError?.message || 'only the owner or an admin can adjust stock.'}`
+            );
+          }
+        }
       } else {
         savedProduct = await productService.createProduct(productData);
       }
@@ -467,15 +514,30 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 {barcodeError ? (
                   <Text style={styles.barcodeErrorText}>{barcodeError}</Text>
                 ) : null}
-                <TouchableOpacity
-                  style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
-                  onPress={() => setShowBarcodeScanner(true)}
-                >
-                  <Barcode size={20} color="#2563eb" />
-                  <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
-                    Scan Barcode
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.barcodeActions}>
+                  <TouchableOpacity
+                    style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                    onPress={() => setShowBarcodeScanner(true)}
+                  >
+                    <Barcode size={20} color="#2563eb" />
+                    <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
+                      Scan Barcode
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }, generatingFor === 'product' && { opacity: 0.6 }]}
+                    onPress={() => handleGenerateBarcode()}
+                    disabled={generatingFor !== null}
+                  >
+                    <RefreshCw size={20} color="#2563eb" />
+                    <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
+                      {generatingFor === 'product' ? 'Generating…' : (barcode ? 'Generate New' : 'Generate')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  Generate creates a barcode no other product in this business uses.
+                </Text>
               </View>
             )}
           </View>
@@ -555,7 +617,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             {isMultiUnit ? (
               <>
                 <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280', marginBottom: 12 }]}>
-                  Enter stock in each unit's own quantity. All quantities are converted to base units internally.
+                  Enter stock in each unit's own quantity. All quantities are converted to base units internally.{product ? ' Changes to stock are recorded as a count correction.' : ''}
                 </Text>
                 {units.map((unit) => {
                   const isBase = unit.is_base_unit;
@@ -607,6 +669,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   value={currentStock}
                   onChangeText={setCurrentStock}
                   placeholder="0"
+                  hint={product ? 'Changes are recorded as a count correction' : undefined}
                 />
                 <Input
                   label="Minimum Stock Level"
@@ -711,16 +774,28 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                         {unitBarcodeErrors[unit.id] ? (
                           <Text style={styles.barcodeErrorText}>{unitBarcodeErrors[unit.id]}</Text>
                         ) : null}
-                        <TouchableOpacity
-                          style={[styles.scanButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }]}
-                          onPress={() => {
-                            setScanningUnitId(unit.id);
-                            setShowBarcodeScanner(true);
-                          }}
-                        >
-                          <Barcode size={18} color="#2563eb" />
-                          <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>Scan</Text>
-                        </TouchableOpacity>
+                        <View style={styles.barcodeActions}>
+                          <TouchableOpacity
+                            style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }]}
+                            onPress={() => {
+                              setScanningUnitId(unit.id);
+                              setShowBarcodeScanner(true);
+                            }}
+                          >
+                            <Barcode size={18} color="#2563eb" />
+                            <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>Scan</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }, generatingFor === unit.id && { opacity: 0.6 }]}
+                            onPress={() => handleGenerateBarcode(unit.id)}
+                            disabled={generatingFor !== null}
+                          >
+                            <RefreshCw size={18} color="#2563eb" />
+                            <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
+                              {generatingFor === unit.id ? 'Generating…' : 'Generate'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -942,6 +1017,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   footerButton: {
+    flex: 1,
+  },
+  barcodeActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  barcodeActionButton: {
     flex: 1,
   },
   scanButton: {

@@ -352,6 +352,31 @@ export default function IncomeStatementScreen() {
               {fmt(incomeData.cogs.total)}
             </Text>
           </View>
+
+          {(incomeData.inventory?.writeOffs > 0 || incomeData.inventory?.found > 0) && (
+            <>
+              {incomeData.inventory.writeOffs > 0 && (
+                <View style={styles.row}>
+                  <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Inventory Write-offs ({incomeData.inventory.writeOffUnits} units lost)
+                  </Text>
+                  <Text style={[styles.value, { color: '#dc2626' }]}>
+                    {fmt(incomeData.inventory.writeOffs)}
+                  </Text>
+                </View>
+              )}
+              {incomeData.inventory.found > 0 && (
+                <View style={styles.row}>
+                  <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    Less: Found Stock ({incomeData.inventory.foundUnits} units)
+                  </Text>
+                  <Text style={[styles.value, { color: '#059669' }]}>
+                    -{fmt(incomeData.inventory.found)}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
         </Card>
 
         {/* Gross Profit Section */}

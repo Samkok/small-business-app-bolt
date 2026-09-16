@@ -17,7 +17,10 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonProductDetails } from '@/src/components/ui/SkeletonLoader';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2, Archive } from 'lucide-react-native';
+import { BarcodeView } from '@/src/components/products/BarcodeView';
+import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2, Archive, SlidersHorizontal, PackageMinus } from 'lucide-react-native';
+import StockAdjustmentModal from '@/src/components/inventory/StockAdjustmentModal';
+import { stockAdjustmentService, StockAdjustment, reasonLabel } from '@/src/services/stockAdjustments';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
@@ -38,12 +41,14 @@ export default function ProductDetailsScreen() {
   const [unarchiving, setUnarchiving] = useState(false);
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<ProductUnit[]>([]);
+  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
   
   const router = useRouter();
   const params = useLocalSearchParams();
   const { productId } = params;
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, isStaff } = useAuth();
   const { formatPrice } = useCurrencyContext();
   const { t } = useTranslation();
   const { isConnected } = useNetwork();
@@ -87,6 +92,13 @@ export default function ProductDetailsScreen() {
       // Load import history for this product
       const importData = await inventoryService.getImportsByProductId(productId as string);
       setImportHistory(importData || []);
+
+      // Manual stock adjustments (damage, expiry, counts)
+      try {
+        setAdjustments(await stockAdjustmentService.getForProduct(productId as string));
+      } catch {
+        setAdjustments([]);
+      }
       
       // Get financial summary for this product
       // Default to last 6 months
@@ -337,9 +349,12 @@ export default function ProductDetailsScreen() {
               )}
               
               {product.barcode && (
-                <Text style={[styles.productBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                  {t('inventory.barcode')}: {product.barcode}
-                </Text>
+                <View style={styles.barcodeBlock}>
+                  <Text style={[styles.productBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
+                    {t('inventory.barcode')}
+                  </Text>
+                  <BarcodeView value={product.barcode} height={44} maxWidth={230} />
+                </View>
               )}
 
               {product.is_archived && (
@@ -388,6 +403,18 @@ export default function ProductDetailsScreen() {
             </View>
           </View>
 
+          {!isStaff && !product.is_archived && (
+            <TouchableOpacity
+              style={[styles.adjustButton, { borderColor: isDark ? '#4b5563' : '#d1d5db', backgroundColor: isDark ? '#374151' : '#f9fafb' }]}
+              onPress={() => setShowAdjustModal(true)}
+              activeOpacity={0.7}
+            >
+              <SlidersHorizontal size={16} color="#2563eb" />
+              <Text style={styles.adjustButtonText}>Adjust Stock</Text>
+              <Text style={[styles.adjustButtonHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>damaged, expired, lost, count</Text>
+            </TouchableOpacity>
+          )}
+
           {units.length > 0 && (
             <View style={styles.unitsSection}>
               <Text style={[styles.unitsHeading, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -422,9 +449,9 @@ export default function ProductDetailsScreen() {
                             {variantName}
                           </Text>
                           {pu?.barcode ? (
-                            <Text style={[styles.unitBarcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
-                              {pu.barcode}
-                            </Text>
+                            <View style={styles.unitBarcodeBlock}>
+                              <BarcodeView value={pu.barcode} height={26} maxWidth={150} moduleWidth={1.5} />
+                            </View>
                           ) : null}
                         </View>
                         <Text style={[styles.unitQty, styles.unitCellQty, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -534,6 +561,46 @@ export default function ProductDetailsScreen() {
           />
         </Card>
 
+        {/* Stock Adjustments */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <PackageMinus size={20} color="#dc2626" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Stock Adjustments
+            </Text>
+          </View>
+          {adjustments.length === 0 ? (
+            <Text style={[styles.emptyText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              No adjustments yet. Stock changes here only come from sales, imports and returns.
+            </Text>
+          ) : (
+            adjustments.map((a, index) => (
+              <View key={a.id} style={[styles.adjustmentRow, index < adjustments.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.adjustmentReason, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                    {reasonLabel(a.reason)}
+                    {a.units?.name ? ` · ${Number(a.quantity_entered)} ${a.units.name}` : ''}
+                  </Text>
+                  <Text style={[styles.adjustmentMeta, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    {formatDate(a.adjustment_date)} · {a.stock_before} → {a.stock_after}{a.adjusted_by_name ? ` · ${a.adjusted_by_name}` : ''}
+                  </Text>
+                  {a.notes ? (
+                    <Text style={[styles.adjustmentNote, { color: isDark ? '#d1d5db' : '#4b5563' }]}>{a.notes}</Text>
+                  ) : null}
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.adjustmentQty, { color: a.quantity < 0 ? '#dc2626' : '#059669' }]}>
+                    {a.quantity > 0 ? '+' : ''}{a.quantity}
+                  </Text>
+                  <Text style={[styles.adjustmentCost, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    {formatCurrency(Math.abs(Number(a.total_cost)))}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
+
         {/* Import History */}
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -637,6 +704,14 @@ export default function ProductDetailsScreen() {
 
       </ScrollView>
 
+      <StockAdjustmentModal
+        visible={showAdjustModal}
+        product={product}
+        units={units}
+        onClose={() => setShowAdjustModal(false)}
+        onPosted={() => loadProductDetails(true)}
+      />
+
       {deleting && (
         <View style={styles.loadingOverlay}>
           <LoadingSpinner text={t('common.processing')} />
@@ -732,6 +807,15 @@ const styles = StyleSheet.create({
   productBarcode: {
     fontSize: 12,
     fontFamily: 'monospace',
+    marginBottom: 4,
+  },
+  barcodeBlock: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  unitBarcodeBlock: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
   stockInfo: {
     flexDirection: 'row',
@@ -754,6 +838,53 @@ const styles = StyleSheet.create({
   },
   importButton: {
     marginTop: 8,
+  },
+  adjustButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  adjustButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  adjustButtonHint: {
+    flex: 1,
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  adjustmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  adjustmentReason: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  adjustmentMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  adjustmentNote: {
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  adjustmentQty: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  adjustmentCost: {
+    fontSize: 12,
+    marginTop: 2,
   },
   section: {
     padding: 16,
