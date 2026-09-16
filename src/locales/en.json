@@ -179,6 +179,8 @@
   },
   "sales": {
     "title": "Sales",
+    "quickCheckout": "Quick Checkout",
+    "createCart": "Create Cart",
     "salesUsed": "sales used",
     "newSale": "New Sale",
     "selectCustomer": "Select Customer",
@@ -487,6 +489,8 @@
   },
   "sales": {
     "title": "Sales",
+    "quickCheckout": "Quick Checkout",
+    "createCart": "Create Cart",
     "salesUsed": "sales used",
     "newSale": "New Sale",
     "selectCustomer": "Select Customer",

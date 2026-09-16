@@ -236,14 +236,28 @@ export default function ProductSelectionScreen() {
     setSearchQuery(barcode);
 
     // If the barcode exactly matches a unit-specific barcode, auto-select that unit
+    let known = false;
     for (const product of products) {
+      if (product.barcode === barcode) known = true;
       const unitPrices = unitPricesMap[product.id];
       if (unitPrices) {
         const matchedUnit = unitPrices.find(up => up.barcode === barcode);
         if (matchedUnit) {
+          known = true;
           setSelectedUnits(prev => ({ ...prev, [product.id]: matchedUnit.unit_id }));
           break;
         }
+      }
+    }
+
+    // The loaded list only holds in-stock products, so an unmatched code is either
+    // out of stock or unknown. Look it up directly to say which.
+    if (!known && currentBusiness?.id) {
+      const dbProduct = await productService.searchByBarcode(barcode, currentBusiness.id).catch(() => null);
+      if (!dbProduct) {
+        Alert.alert('Not Found', 'Product with this barcode was not found.');
+      } else if ((dbProduct.current_stock ?? 0) <= 0) {
+        Alert.alert('Out of Stock', `${dbProduct.name} is currently out of stock.`);
       }
     }
   };

@@ -228,6 +228,18 @@ export const productService = {
     }
   },
 
+  /**
+   * A barcode no product or unit variant in this business uses yet.
+   * Generated server-side (EAN-13 style, '2' prefix) so uniqueness is checked
+   * against the same indexes that guard saves.
+   */
+  async generateBarcode(businessId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('generate_product_barcode', { p_business_id: businessId });
+    if (error) throw error;
+    if (!data || typeof data !== 'string') throw new Error('No barcode returned');
+    return data;
+  },
+
   async searchByBarcode(barcode: string, businessId: string) {
     const { data, error } = await supabase
       .from('products')

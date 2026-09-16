@@ -189,7 +189,14 @@ export const exportService = {
       csv += `Total Revenue,${fmt(statement.revenue.total)}\n\n`;
 
       csv += 'COST OF GOODS SOLD\n';
-      csv += `Total COGS,${fmt(statement.cogs.total)}\n\n`;
+      csv += `Total COGS,${fmt(statement.cogs.total)}\n`;
+      if (statement.inventory.writeOffs > 0) {
+        csv += `Inventory Write-offs (${statement.inventory.writeOffUnits} units),${fmt(statement.inventory.writeOffs)}\n`;
+      }
+      if (statement.inventory.found > 0) {
+        csv += `Less: Found Stock (${statement.inventory.foundUnits} units),${fmt(-statement.inventory.found)}\n`;
+      }
+      csv += '\n';
 
       csv += `GROSS PROFIT,${fmt(statement.grossProfit)}\n`;
       csv += `Gross Margin %,${fmt(statement.grossMargin)}\n\n`;
@@ -239,6 +246,11 @@ export const exportService = {
       csv += 'OPERATING ACTIVITIES\n';
       csv += `Net Income,${fmt(cashFlowData.netIncome)}\n`;
       csv += `Add back: Cost of Goods Sold,${fmt(cashFlowData.cogsAddBack)}\n`;
+      if (cashFlowData.writeOffAddBack > 0) {
+        csv += `Add back: Inventory Write-offs,${fmt(cashFlowData.writeOffAddBack)}\n`;
+      } else if (cashFlowData.writeOffAddBack < 0) {
+        csv += `Less: Found Stock,${fmt(cashFlowData.writeOffAddBack)}\n`;
+      }
       csv += `Less: Inventory Purchases,${fmt(-cashFlowData.inventoryPurchases)}\n`;
       if (cashFlowData.equipmentPurchases > 0) {
         csv += `Add back: Capital Items in Expenses,${fmt(cashFlowData.equipmentPurchases)}\n`;
@@ -255,6 +267,44 @@ export const exportService = {
       return csv;
     } catch (error) {
       console.error('Error generating cash flow CSV:', error);
+      throw error;
+    }
+  },
+
+  /** Inventory spend for a period: totals, per-bucket series and top products, in the reporting currency. */
+  async exportInventorySpendToCsv(businessId: string, startDate: string, endDate: string, currencyId?: string) {
+    if (typeof businessId !== 'string' || !businessId) return '';
+    if (!startDate || !endDate) return '';
+    try {
+      const spend = await reportsService.getInventorySpend(businessId, new Date(startDate), new Date(endDate), currencyId);
+      const fmt = (v: number) => (Number(v) || 0).toFixed(2);
+      const q = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+
+      let csv = 'INVENTORY SPEND\n';
+      csv += `Period: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}\n\n`;
+      csv += `Total Spent,${fmt(spend.total)}\n`;
+      csv += `Base Cost,${fmt(spend.baseCost)}\n`;
+      csv += `Added Costs (shipping etc.),${fmt(spend.addedCosts)}\n`;
+      csv += `Units Received,${spend.units}\n`;
+      csv += `Imports,${spend.imports}\n`;
+      csv += `Batches,${spend.batches}\n`;
+      csv += `Written Off (units),${spend.writeOffUnits}\n`;
+      csv += `Written Off (at cost),${fmt(spend.writeOffs)}\n`;
+      if (spend.foundUnits > 0) {
+        csv += `Found Stock (units),${spend.foundUnits}\n`;
+        csv += `Found Stock (at cost),${fmt(spend.found)}\n`;
+      }
+      csv += '\n';
+
+      csv += 'BY PERIOD\n';
+      csv += 'Date,Amount\n';
+      spend.series.forEach(s => { csv += `${s.date},${fmt(s.amount)}\n`; });
+      csv += '\nTOP PRODUCTS\n';
+      csv += 'Product,Units,Spend,Avg Landed Cost,Imports\n';
+      spend.topProducts.forEach(p => { csv += `${q(p.name)},${p.quantity},${fmt(p.spend)},${fmt(p.avgUnitCost)},${p.imports}\n`; });
+      return csv;
+    } catch (error) {
+      console.error('Error generating inventory spend CSV:', error);
       throw error;
     }
   },

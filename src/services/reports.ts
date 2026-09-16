@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { summarizeAdjustments } from './stockAdjustments';
 import { salesService } from './sales';
 import { expenseService } from './expenses';
 import { productService } from './products.ts';
@@ -48,6 +49,32 @@ async function getConvertedCOGS(businessId: string, startDate: string, endDate: 
   }
   converted += (all - tagged) * conversionFactor(rc, rc.defaultId);
   return converted;
+}
+
+/**
+ * Manual stock adjustments in a period at cost, in the reporting currency.
+ * writeOffs = stock removed (damaged, expired, lost, samples, count shortfalls);
+ * found = stock added by count surpluses or found stock. Each row carries the
+ * product's currency at posting time; untagged rows are the business default.
+ */
+async function getConvertedAdjustments(businessId: string, startDate: string, endDate: string, rc: ReportCurrency) {
+  const { data, error } = await supabase
+    .from('stock_adjustments')
+    .select('quantity, total_cost, reason, currency_id')
+    .eq('business_id', businessId)
+    .gte('adjustment_date', startDate)
+    .lte('adjustment_date', endDate);
+  if (error) throw error;
+  const totals = summarizeAdjustments((data || []) as any[]);
+  const convert = (byCurrency: Record<string, number>) =>
+    Object.entries(byCurrency).reduce((sum, [id, amount]) => sum + amount * conversionFactor(rc, id || rc.defaultId), 0);
+  return {
+    writeOffs: convert(totals.writeOffs.byCurrency),
+    writeOffUnits: totals.writeOffs.units,
+    found: convert(totals.found.byCurrency),
+    foundUnits: totals.found.units,
+    count: totals.count,
+  };
 }
 
 export const reportsService = {
@@ -808,7 +835,9 @@ export const reportsService = {
 
       const netIncome = statement.netIncome;
       const cogsAddBack = statement.cogs.total;
-      const operatingCashFlow = netIncome + cogsAddBack - inventoryPurchases + equipmentPurchases;
+      // Write-offs reduced net income without any cash leaving; found stock the reverse
+      const writeOffAddBack = statement.inventory.writeOffs - statement.inventory.found;
+      const operatingCashFlow = netIncome + cogsAddBack + writeOffAddBack - inventoryPurchases + equipmentPurchases;
       const investingCashFlow = -equipmentPurchases;
       const netCashFlow = operatingCashFlow + investingCashFlow;
 
@@ -821,6 +850,9 @@ export const reportsService = {
         deliveryFees: statement.expenses.deliveryFees,
         netIncome,
         cogsAddBack,
+        writeOffAddBack,
+        inventoryWriteOffs: statement.inventory.writeOffs,
+        inventoryFound: statement.inventory.found,
         inventoryPurchases,
         equipmentPurchases,
         operatingCashFlow,
@@ -832,6 +864,110 @@ export const reportsService = {
       console.error('Error generating cash flow statement:', error);
       throw error;
     }
+  },
+
+  /**
+   * What the business spent on stock in a period: every import whose purchase_date
+   * falls in range, at landed cost (base cost plus allocated import costs), in the
+   * reporting currency. Imports carry no currency column, so they are treated as the
+   * business default currency.
+   */
+  async getInventorySpend(businessId: string, startDate: Date, endDate: Date, currencyId?: string) {
+    const empty = {
+      total: 0, baseCost: 0, addedCosts: 0, units: 0, imports: 0, batches: 0,
+      series: [] as { date: string; label: string; amount: number }[],
+      topProducts: [] as { id: string; name: string; quantity: number; spend: number; avgUnitCost: number; imports: number }[],
+      writeOffs: 0, writeOffUnits: 0, found: 0, foundUnits: 0,
+      currencyId: undefined as string | undefined,
+    };
+    if (!businessId) return empty;
+
+    const rc = await resolveReportCurrency(businessId, currencyId);
+    const adjustments = await getConvertedAdjustments(businessId, startDate.toISOString(), endDate.toISOString(), rc);
+    const withAdjustments = {
+      writeOffs: adjustments.writeOffs,
+      writeOffUnits: adjustments.writeOffUnits,
+      found: adjustments.found,
+      foundUnits: adjustments.foundUnits,
+      currencyId: rc.targetId,
+    };
+
+    const { data, error } = await supabase
+      .from('inventory_imports')
+      .select('id, product_id, quantity, base_unit_cost_per_item, final_unit_cost_per_item, total_cost_for_item, purchase_date, batch_id, products(name)')
+      .eq('business_id', businessId)
+      .gte('purchase_date', startDate.toISOString())
+      .lte('purchase_date', endDate.toISOString())
+      .order('purchase_date');
+    if (error) throw error;
+    const rows = data || [];
+    if (rows.length === 0) return { ...empty, ...withAdjustments };
+
+    const factor = conversionFactor(rc, rc.defaultId);
+
+    let total = 0, baseCost = 0, units = 0;
+    const batches = new Set<string>();
+    const byProduct = new Map<string, { id: string; name: string; quantity: number; spend: number; imports: number }>();
+    const byBucket = new Map<string, number>();
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const unit: 'day' | 'month' = dayDiff > 31 ? 'month' : 'day';
+
+    for (const r of rows as any[]) {
+      const qty = Number(r.quantity) || 0;
+      const landed = (Number(r.total_cost_for_item) || (Number(r.final_unit_cost_per_item) || 0) * qty) * factor;
+      const base = (Number(r.base_unit_cost_per_item) || 0) * qty * factor;
+      total += landed; baseCost += base; units += qty;
+      if (r.batch_id) batches.add(r.batch_id);
+
+      const key = bucketKey(r.purchase_date, unit);
+      byBucket.set(key, (byBucket.get(key) || 0) + landed);
+
+      const pid = r.product_id || 'unknown';
+      const entry = byProduct.get(pid) || { id: pid, name: r.products?.name || 'Unknown product', quantity: 0, spend: 0, imports: 0 };
+      entry.quantity += qty; entry.spend += landed; entry.imports += 1;
+      byProduct.set(pid, entry);
+    }
+
+    const buckets = unit === 'month' ? eachMonthOfInterval({ start, end }) : eachDayOfInterval({ start, end });
+    const series = buckets.map(d => {
+      const key = format(d, unit === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd');
+      return { date: format(d, 'yyyy-MM-dd'), label: format(d, unit === 'month' ? 'MMM' : 'dd/MM'), amount: byBucket.get(key) || 0 };
+    });
+
+    const topProducts = Array.from(byProduct.values())
+      .map(p => ({ ...p, avgUnitCost: p.quantity > 0 ? p.spend / p.quantity : 0 }))
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 8);
+
+    return {
+      total,
+      baseCost,
+      addedCosts: Math.max(0, total - baseCost),
+      units,
+      imports: rows.length,
+      batches: batches.size || rows.length,
+      series,
+      topProducts,
+      ...withAdjustments,
+    };
+  },
+
+  /** Month of the business's first sale or expense, for listing statement periods. Null when there is no activity. */
+  async getActivityStart(businessId: string): Promise<Date | null> {
+    if (!businessId) return null;
+    const [sale, expense] = await Promise.all([
+      supabase.from('sales').select('sale_date').eq('business_id', businessId).order('sale_date', { ascending: true }).limit(1).maybeSingle(),
+      supabase.from('expenses').select('expense_date').eq('business_id', businessId).order('expense_date', { ascending: true }).limit(1).maybeSingle(),
+    ]);
+    const dates = [sale.data?.sale_date, expense.data?.expense_date]
+      .filter(Boolean)
+      .map(d => new Date(d as string))
+      .filter(d => !isNaN(d.getTime()));
+    if (dates.length === 0) return null;
+    return new Date(Math.min(...dates.map(d => d.getTime())));
   },
 
   /**
@@ -866,7 +1002,10 @@ export const reportsService = {
     const revenue = summarizeRevenue(salesData);
 
     const totalCOGS = await getConvertedCOGS(businessId, startDate, endDate, rc);
-    const grossProfit = revenue.grossRevenue - totalCOGS;
+    // Stock written off at cost is expensed in the period it is found (IAS 2.34);
+    // found stock is the mirror image. Both sit next to COGS, before gross profit.
+    const adjustments = await getConvertedAdjustments(businessId, startDate, endDate, rc);
+    const grossProfit = revenue.grossRevenue - totalCOGS - adjustments.writeOffs + adjustments.found;
 
     const { data: expensesData, error: expensesError } = await supabase
       .from('expenses')
@@ -905,6 +1044,12 @@ export const reportsService = {
         total: revenue.grossRevenue
       },
       cogs: { total: totalCOGS },
+      inventory: {
+        writeOffs: adjustments.writeOffs,
+        writeOffUnits: adjustments.writeOffUnits,
+        found: adjustments.found,
+        foundUnits: adjustments.foundUnits,
+      },
       grossProfit,
       grossMargin: revenue.grossRevenue > 0 ? (grossProfit / revenue.grossRevenue) * 100 : 0,
       expenses: {

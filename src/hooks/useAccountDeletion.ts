@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { accountService } from '@/src/services/account';
 import { useTranslation } from '@/src/locales';
+import { clearRememberMeCredentials } from '@/src/lib/secureStorage';
 
 export function useAccountDeletion() {
   const { t } = useTranslation();
@@ -15,6 +16,8 @@ export function useAccountDeletion() {
     try {
       setIsDeleting(true);
 
+      // The account no longer exists, so forget the remembered email too.
+      await clearRememberMeCredentials();
       await signOut();
 
       router.replace('/(auth)/signin');

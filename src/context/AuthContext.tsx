@@ -16,7 +16,6 @@ import * as Linking from 'expo-linking';
 
 import { supabase } from '../config/supabase';
 import { clearAuthStorage, verifySessionCleared, updateLastActivityTimestamp } from '../lib/authStorage';
-import { clearRememberMeCredentials } from '../lib/secureStorage';
 import { businessAccessHistoryService, BusinessAccessHistory } from '../utils/businessAccessHistory';
 import { notificationCleanupService } from '../utils/notificationCleanup';
 import { dataCleanupRegistry } from '../utils/dataCleanupRegistry';
@@ -628,8 +627,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     await clearAuthStorage();
 
+    // "Remember me" is deliberately kept across sign-out: its whole purpose is to
+    // pre-fill the email on the next sign-in. It is cleared only when the user
+    // unticks it on the sign-in screen or deletes the account.
     try {
-      await clearRememberMeCredentials();
       await AsyncStorage.removeItem('lastActivityTimestamp');
       if (user?.id) await AsyncStorage.removeItem(`currentBusiness_${user.id}`);
     } catch {}
