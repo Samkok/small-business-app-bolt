@@ -52,7 +52,8 @@ interface SettingsState {
   lead_time_days: number;
 }
 
-const ACTION_CATEGORIES: ProductCategory[] = ['out_of_stock', 'must_order'];
+// Must Order first: those can still be saved by ordering today; out of stock is already lost sales
+const ACTION_CATEGORIES: ProductCategory[] = ['must_order', 'out_of_stock'];
 const INFO_CATEGORIES: ProductCategory[] = ['hot_selling', 'do_not_order', 'slow_moving', 'healthy'];
 
 export default function ProductInsightScreen() {
