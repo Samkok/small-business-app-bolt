@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { useNetwork } from './NetworkContext';
 import { cartService } from '@/src/services/carts';
+import { unitService } from '../services/units';
+import { costPerSoldUnit } from '../utils/saleMargin';
 import { productService } from '@/src/services/products';
 import { salesService } from '@/src/services/sales';
 import { subscriptionService } from '@/src/services/subscriptionService';
@@ -24,6 +26,9 @@ export interface CartItem {
   item_discount_amount?: number;
   item_discount_scope?: 'per_unit' | 'total';
   subtotal: number;
+  /** cost of ONE sold unit (box / pack variants already multiplied up); feeds the profit preview */
+  cost_per_unit?: number;
+  unit_id?: string | null;
 }
 
 export interface Cart {
@@ -66,7 +71,7 @@ interface CartContextType {
   applyItemDiscount: (cartId: string, itemId: string, discountType: 'percentage' | 'fixed', discountValue: number, discountScope?: 'per_unit' | 'total') => Promise<CartItem>;
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
-  completeSale: (cartId: string, paymentMethod: string, saleDate?: string, customNotes?: string) => Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }>;
+  completeSale: (cartId: string, paymentMethod: string, saleDate?: string, customNotes?: string, paymentStatus?: 'paid' | 'cod') => Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }>;
   refreshCarts: () => Promise<Cart[]>;
 }
 
@@ -236,7 +241,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           item_discount_value: item.item_discount_value,
           item_discount_amount: item.item_discount_amount || 0,
           item_discount_scope: item.item_discount_scope as 'per_unit' | 'total' | undefined,
-          subtotal: item.subtotal
+          subtotal: item.subtotal,
+          cost_per_unit: costPerSoldUnit(
+            (item as any).cost_per_unit,
+            (item as any).products?.cost_per_unit,
+            (item as any).units?.conversion_factor_to_base
+          ),
+          unit_id: (item as any).unit_id ?? null
         })) || []
       }));
 
@@ -363,12 +374,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItemToCart = useCallback(async (cartId: string, product: any, quantity: number = 1): Promise<CartItem> => {
     try {
+      // Cost of ONE sold unit: a Box of 24 costs 24x the base unit. This is snapshotted
+      // onto the line and is what COGS and profit are later built from.
+      const unitFactor = product.unit_id ? await unitService.getConversionFactor(product.unit_id).catch(() => 1) : 1;
       await cartService.addItemToCart({
         cart_id: cartId,
         product_id: product.id,
         quantity: quantity,
         unit_price: product.price,
-        cost_per_unit: product.cost_per_unit || 0,
+        cost_per_unit: (product.cost_per_unit || 0) * (unitFactor > 0 ? unitFactor : 1),
         subtotal: quantity * product.price,
         original_subtotal: quantity * product.price,
         unit_id: product.unit_id || undefined,
@@ -515,7 +529,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     cartId: string,
     paymentMethod: string,
     saleDate?: string,
-    customNotes?: string
+    customNotes?: string,
+    paymentStatus?: 'paid' | 'cod'
   ): Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }> => {
     if (!currentBusiness?.id) {
       return { success: false, error: 'No business currentBusiness found' };
@@ -552,6 +567,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         customerId: cart.customer_id,
         customerName: cart.customer_name,
         paymentMethod: paymentMethod as any,
+        paymentStatus,
         saleDate: saleDate || new Date().toISOString(),
         totalAmount: cart.total_amount,
         businessId: currentBusiness.id,
@@ -588,6 +604,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           cart_id: cartId,
           customer_id: cart.customer_id || '',
           payment_method: paymentMethod as any,
+          payment_status: paymentStatus ?? null,
           notes: customNotes || cart.notes,
           sale_date: saleDate,
           business_id: currentBusiness.id,
@@ -624,6 +641,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           customerId: cart.customer_id,
           customerName: cart.customer_name,
           paymentMethod: paymentMethod as any,
+        paymentStatus,
           saleDate: saleDate || new Date().toISOString(),
           totalAmount: cart.total_amount,
           businessId: currentBusiness.id,

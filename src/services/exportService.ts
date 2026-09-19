@@ -271,6 +271,44 @@ export const exportService = {
     }
   },
 
+  /** Courier fees absorbed and discounts given: totals for the period and a month-by-month breakdown. */
+  async exportFeesAndDiscountsToCsv(businessId: string, startDate: string, endDate: string, currencyId?: string) {
+    if (typeof businessId !== 'string' || !businessId) return '';
+    if (!startDate || !endDate) return '';
+    try {
+      const fees = await reportsService.getFeesAndDiscounts(businessId, new Date(startDate), new Date(endDate), currencyId);
+      const fmt = (v: number) => (Number(v) || 0).toFixed(2);
+
+      let csv = 'FEES AND DISCOUNTS\n';
+      csv += `Period: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}\n\n`;
+      csv += `Delivery Fees Absorbed,${fmt(fees.range.deliveryFees)}\n`;
+      csv += `Cart Discounts Given,${fmt(fees.range.cartDiscounts)}\n`;
+      csv += `Item Discounts Given,${fmt(fees.range.itemDiscounts)}\n`;
+      csv += `Total Given Up,${fmt(fees.range.total)}\n`;
+      csv += `Share of Pre-discount Revenue %,${fmt(fees.range.shareOfRevenue)}\n`;
+      csv += `Sales,${fees.range.sales}\n`;
+      csv += `Sales With Delivery Fee,${fees.range.salesWithDelivery}\n`;
+      csv += `Sales With Discount,${fees.range.salesWithDiscount}\n`;
+      csv += `Average Per Active Month,${fmt(fees.averagePerMonth)}\n\n`;
+
+      const header = 'Month,Sales,Delivery Fees,Cart Discounts,Item Discounts,Total,Revenue,Share %\n';
+      const line = (m: typeof fees.months[number]) =>
+        `${m.key},${m.sales},${fmt(m.deliveryFees)},${fmt(m.cartDiscounts)},${fmt(m.itemDiscounts)},${fmt(m.total)},${fmt(m.revenue)},${fmt(m.shareOfRevenue)}\n`;
+
+      csv += 'BY MONTH WITHIN THE PERIOD (partial months clipped to the dates above)\n';
+      csv += header;
+      fees.rangeMonths.forEach(m => { csv += line(m); });
+
+      csv += '\nTREND: WHOLE MONTHS (at least the last six)\n';
+      csv += header;
+      fees.months.forEach(m => { csv += line(m); });
+      return csv;
+    } catch (error) {
+      console.error('Error generating fees and discounts CSV:', error);
+      throw error;
+    }
+  },
+
   /** Inventory spend for a period: totals, per-bucket series and top products, in the reporting currency. */
   async exportInventorySpendToCsv(businessId: string, startDate: string, endDate: string, currencyId?: string) {
     if (typeof businessId !== 'string' || !businessId) return '';

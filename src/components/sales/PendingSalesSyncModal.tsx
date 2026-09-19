@@ -99,11 +99,12 @@ export function PendingSalesSyncModal() {
           cart_id: cartData.id,
           customer_id: sale.customerId,
           payment_method: sale.paymentMethod as any,
+          payment_status: sale.paymentStatus ?? null,
           notes: sale.notes,
           sale_date: sale.saleDate,
           business_id: sale.businessId,
           created_by: sale.createdBy,
-        });
+        } as any);
 
         await offlineSaleQueue.remove(sale.id);
         results.set(sale.id, 'success');

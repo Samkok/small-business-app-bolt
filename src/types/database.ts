@@ -484,6 +484,10 @@ export interface Database {
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
           delivery_cost?: number;
+          /** PAID or COD; null on sales made before the field existed */
+          payment_status?: 'paid' | 'cod' | null;
+          /** running number per business, assigned by a database trigger */
+          receipt_number?: number | null;
         };
         Insert: {
           id?: string;
@@ -503,6 +507,10 @@ export interface Database {
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
           delivery_cost?: number;
+          /** PAID or COD; null on sales made before the field existed */
+          payment_status?: 'paid' | 'cod' | null;
+          /** running number per business, assigned by a database trigger */
+          receipt_number?: number | null;
         };
         Update: {
           id?: string;
@@ -522,6 +530,10 @@ export interface Database {
           sale_discount_amount?: number;
           subtotal_before_discount?: number;
           delivery_cost?: number;
+          /** PAID or COD; null on sales made before the field existed */
+          payment_status?: 'paid' | 'cod' | null;
+          /** running number per business, assigned by a database trigger */
+          receipt_number?: number | null;
         };
       };
       sale_actions: {

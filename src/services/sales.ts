@@ -7,6 +7,7 @@ import { productService } from './products';
 import { businessAccessGuard } from '../utils/businessAccessGuard';
 import { subscriptionService } from './subscriptionService';
 import { unitService } from './units';
+import { isPaymentStatus, PaymentStatus } from '../utils/paymentStatus';
 
 type Sale = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
@@ -76,9 +77,13 @@ export const salesService = {
       p_sale_discount_value: cart.discount_value || null,
       p_sale_discount_amount: cartSummary.cartDiscountAmount || null,
       p_subtotal_before_discount: cartSummary.itemsOriginalTotal || null,
-      p_delivery_cost: saleData.delivery_cost || null,
+      // The total above was computed from the cart, so the fee recorded on the sale must be
+      // the cart's fee even when the caller did not pass one (otherwise reports lose it)
+      p_delivery_cost: (saleData.delivery_cost ?? cart.delivery_cost) || null,
       p_currency_id: currencyIdForSale,
       p_exchange_rate_at_sale: exchangeRateAtSale,
+      // 'paid' | 'cod'; null only from callers that predate the field
+      p_payment_status: isPaymentStatus((saleData as any).payment_status) ? (saleData as any).payment_status : null,
     });
 
     if (rpcError) {
@@ -385,7 +390,8 @@ export const salesService = {
           *,
           cart_items(
             *,
-            products(*)
+            products(*),
+            units(name)
           )
         ),
         sale_actions(*),
@@ -467,6 +473,7 @@ export const salesService = {
       discountType?: 'percentage' | 'fixed' | null;
       discountValue?: number | null;
       deliveryCost?: number | null;
+      paymentStatus?: PaymentStatus | null;
     }
   ) {
     if (!saleId) throw new Error('saleId is required');
@@ -509,6 +516,9 @@ export const salesService = {
     if (updates.customerId !== undefined) salesUpdates.customer_id = updates.customerId;
     if (updates.discountType !== undefined) salesUpdates.sale_discount_type = updates.discountType;
     if (updates.discountValue !== undefined) salesUpdates.sale_discount_value = updates.discountValue;
+    if (updates.paymentStatus !== undefined && (updates.paymentStatus === null || isPaymentStatus(updates.paymentStatus))) {
+      salesUpdates.payment_status = updates.paymentStatus;
+    }
 
     const { error: updateErr } = await supabase
       .from('sales')
@@ -1010,15 +1020,18 @@ export const salesService = {
 
     const { calculateSaleProfit } = require('../utils/profitCalculation');
 
-    const completedSales = allData.filter(s => s.status === 'completed');
-    const totalRevenue = completedSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
-    const averageSale = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
+    // Revenue here must equal the dashboard and reports: customer price (sale total +
+    // courier fee) net of refunds, over completed and partially returned sales.
+    const liveSales = allData.filter(s => s.status === 'completed' || s.status === 'partially_returned');
+    const totalRevenue = liveSales.reduce((sum, sale) => sum + getSaleGrossRevenue(sale), 0);
+    const averageSale = liveSales.length > 0 ? totalRevenue / liveSales.length : 0;
 
-    const today = new Date().toISOString().split('T')[0];
-    const todaySales = completedSales.filter(sale =>
-      sale.sale_date.split('T')[0] === today
-    );
-    const todayRevenue = todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount.toString()), 0);
+    // "Today" in the device's local time, not UTC: a 6am sale in Phnom Penh is still yesterday in UTC
+    const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = localDay(new Date());
+    const todayRevenue = liveSales
+      .filter(sale => localDay(new Date(sale.sale_date)) === today)
+      .reduce((sum, sale) => sum + getSaleGrossRevenue(sale), 0);
 
     const totalProfit = allData.reduce((sum, sale) => sum + calculateSaleProfit(sale), 0);
 

@@ -181,7 +181,10 @@ export default function ProductSelectionScreen() {
 
       for (const { product, quantity } of additions) {
         const unitId = selectedUnits[product.id];
-        const productWithUnit = unitId ? { ...product, unit_id: unitId } : product;
+        // Sell the variant at the variant's price (the one shown in this list), not the base unit's.
+        // Looked up inline: getDisplayPrice is declared further down, so it cannot be a dependency here.
+        const variantPrice = unitId ? unitPricesMap[product.id]?.find(p => p.unit_id === unitId)?.price : undefined;
+        const productWithUnit = unitId ? { ...product, unit_id: unitId, price: variantPrice ?? product.price } : product;
         await addItemToCart(cartId as string, productWithUnit, quantity);
         // Refresh cart after each addition to get updated state
         await refreshCarts();
@@ -200,7 +203,7 @@ export default function ProductSelectionScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [cartId, selectedProducts, initialProducts, products, getCart, updateCartItem, addItemToCart, refreshCarts, isSaving]);
+  }, [cartId, selectedProducts, selectedUnits, unitPricesMap, initialProducts, products, getCart, updateCartItem, addItemToCart, refreshCarts, isSaving]);
 
   const handleQuantityChange = useCallback((productId: string, change: number) => {
     const currentQuantity = selectedProducts[productId] || 0;

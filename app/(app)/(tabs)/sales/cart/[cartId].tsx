@@ -22,6 +22,8 @@ import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
 import { formatCurrency } from '@/src/utils/formatCurrency';
 import { useCurrency } from '@/src/hooks/useCurrency';
+import { SaleMarginCard } from '@/src/components/sales/SaleMarginCard';
+import { computeSaleMargin } from '@/src/utils/saleMargin';
 
 export default function CartScreen() {
   const { t } = useTranslation();
@@ -276,6 +278,20 @@ export default function CartScreen() {
   }, [cart, localItemQuantities, deliveryCost]);
 
   const cartSummary = getLocalCartSummary();
+
+  // Profit preview, using the same unsaved quantities and delivery fee as the summary above
+  const saleMargin = cart && cartSummary
+    ? computeSaleMargin({
+        itemsOriginalTotal: cartSummary.itemsOriginalTotal,
+        itemsSubtotalAfterDiscount: cartSummary.itemsSubtotalAfterDiscount,
+        cartDiscountAmount: cartSummary.cartDiscountAmount,
+        deliveryCost: cartSummary.deliveryCost,
+        lines: cart.items.map(item => ({
+          quantity: localItemQuantities.get(item.id) ?? item.quantity,
+          cost: item.cost_per_unit ?? 0,
+        })),
+      })
+    : null;
 
   const savePendingChanges = useCallback(async () => {
     if (!cart || isSaving) return;
@@ -1053,6 +1069,8 @@ export default function CartScreen() {
             </View>
           </Card>
         )}
+
+        {saleMargin && <SaleMarginCard margin={saleMargin} formatAmount={displayAmount} />}
       </ScrollView>
 
       {/* Checkout Button */}

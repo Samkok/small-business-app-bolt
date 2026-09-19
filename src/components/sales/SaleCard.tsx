@@ -6,6 +6,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Trash2, User, Calendar, CreditCard, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { paymentStatusLabel } from '@/src/utils/paymentStatus';
 
 interface SaleCardProps {
   sale: {
@@ -14,6 +15,8 @@ interface SaleCardProps {
     display_amount?: number;
     currency_id?: string;
     payment_method: string;
+    /** PAID or COD; null on sales made before the field existed */
+    payment_status?: 'paid' | 'cod' | null;
     status: string;
     sale_date: string;
     notes?: string;
@@ -98,6 +101,14 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
                   {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
                 </Text>
               </View>
+              {/* PAID or COD, so a cash-on-delivery order stands out in the list */}
+              {sale.status !== 'voided' && paymentStatusLabel(sale.payment_status) && (
+                <View style={[styles.statusBadge, { backgroundColor: sale.payment_status === 'cod' ? '#d9770620' : '#05966920' }]}>
+                  <Text style={[styles.statusText, { color: sale.payment_status === 'cod' ? '#d97706' : '#059669' }]}>
+                    {paymentStatusLabel(sale.payment_status)}
+                  </Text>
+                </View>
+              )}
             </View>
             
             <View style={styles.amountRow}>

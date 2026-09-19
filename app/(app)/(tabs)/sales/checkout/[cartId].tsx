@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,14 +23,26 @@ import { UpgradePrompt } from '@/src/components/subscription/UpgradePrompt';
 import { ArrowLeft, CreditCard, DollarSign, Check, FileText, Calendar, WifiOff } from 'lucide-react-native';
 import { formatCurrency } from '@/src/utils/formatCurrency';
 import { useCurrency } from '@/src/hooks/useCurrency';
+import { SaleMarginCard } from '@/src/components/sales/SaleMarginCard';
+import { computeSaleMargin } from '@/src/utils/saleMargin';
+import { PostSaleActionModal } from '@/src/components/sales/PostSaleActionModal';
+import { ReceiptInput } from '@/src/utils/receipt';
+import { receiptDraftStore } from '@/src/utils/receiptDraft';
+import { PaymentStatusSelector } from '@/src/components/sales/PaymentStatusSelector';
+import { PaymentStatus } from '@/src/utils/paymentStatus';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('transfer');
+  // PAID or COD has no default on purpose: it must be chosen for every sale
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
+  const [paymentStatusMissing, setPaymentStatusMissing] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
   const [notes, setNotes] = useState('');
   const [saleDate, setSaleDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [completedSale, setCompletedSale] = useState<{ saleId: string; offline: boolean; amount: number; customerName: string } | null>(null);
   const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
 
   const router = useRouter();
@@ -53,6 +65,15 @@ export default function CheckoutScreen() {
   // Get cart and summary
   const cart = getCart(cartId as string);
   const cartSummary = cart ? getCartSummary(cartId as string) : null;
+  const saleMargin = cart && cartSummary
+    ? computeSaleMargin({
+        itemsOriginalTotal: cartSummary.itemsOriginalTotal,
+        itemsSubtotalAfterDiscount: cartSummary.itemsSubtotalAfterDiscount,
+        cartDiscountAmount: cartSummary.cartDiscountAmount,
+        deliveryCost: cartSummary.deliveryCost,
+        lines: cart.items.map(item => ({ quantity: item.quantity, cost: item.cost_per_unit ?? 0 })),
+      })
+    : null;
 
   const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: '💵' },
@@ -77,6 +98,13 @@ export default function CheckoutScreen() {
       return;
     }
 
+    if (!paymentStatus) {
+      setPaymentStatusMissing(true);
+      scrollRef.current?.scrollToEnd({ animated: true });
+      Alert.alert('PAID or COD?', 'Choose whether this sale is already paid or cash on delivery.');
+      return;
+    }
+
     setProcessing(true);
     try {
       // Generate automatic remark if sale date is in the past
@@ -96,22 +124,55 @@ export default function CheckoutScreen() {
         finalNotes = notes ? `${notes}\n${remarkText}` : remarkText;
       }
 
-      const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes);
+      // Snapshot what a receipt needs now: the cart is gone once the sale completes.
+      // Used only for a sale saved offline, which has no server record to print from yet.
+      const summaryNow = getCartSummary(cartId as string);
+      const receiptDraft: ReceiptInput | null = cart
+        ? {
+            business: {
+              name: currentBusiness?.business_name || '',
+              logoUrl: (currentBusiness as any)?.business_image_url ?? null,
+              phone: (currentBusiness as any)?.receipt_phone ?? null,
+              address: (currentBusiness as any)?.receipt_address ?? null,
+              pageName: (currentBusiness as any)?.receipt_page_name ?? null,
+              footer: (currentBusiness as any)?.receipt_footer ?? null,
+            },
+            provisional: true,
+            date: saleDate,
+            status: 'completed',
+            customerName: cart.customer_name,
+            customerPhone: cart.customer_phone ?? null,
+            paymentMethod,
+            paymentStatus,
+            notes: finalNotes || null,
+            lines: cart.items.map(item => ({
+              name: item.product_name,
+              quantity: item.quantity,
+              unitPrice: item.unit_price,
+              itemDiscountAmount: item.item_discount_amount ?? 0,
+              itemDiscountType: item.item_discount_type ?? null,
+              itemDiscountValue: item.item_discount_value ?? null,
+              itemDiscountScope: item.item_discount_scope ?? null,
+            })),
+            orderDiscountAmount: summaryNow.cartDiscountAmount,
+            orderDiscountType: cart.discount_type ?? null,
+            orderDiscountValue: cart.discount_value ?? null,
+            deliveryCost: summaryNow.deliveryCost,
+          }
+        : null;
+      const customerNameNow = cart?.customer_name || 'Customer';
+
+      const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes, paymentStatus);
 
       if (result.success) {
-        const isOfflineSale = (result as any).offline;
-        Alert.alert(
-          isOfflineSale ? 'Sale Saved Offline' : 'Sale Completed',
-          isOfflineSale
-            ? 'You are offline. The sale has been saved and will sync when you reconnect.'
-            : 'The sale has been successfully completed!',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/sales')
-            }
-          ]
-        );
+        const isOfflineSale = !!(result as any).offline;
+        if (isOfflineSale && receiptDraft) receiptDraftStore.set(receiptDraft);
+        setCompletedSale({
+          saleId: (result as any).saleId || '',
+          offline: isOfflineSale,
+          amount: summaryNow.finalTotal,
+          customerName: customerNameNow,
+        });
       } else {
         if (result.error?.includes('free limit') || result.error?.includes('upgrade')) {
           setShowUpgradePrompt(true);
@@ -125,7 +186,15 @@ export default function CheckoutScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [currentBusiness?.id, cartId, cart, paymentMethod, saleDate, notes, completeSale, router]);
+  }, [currentBusiness, cartId, cart, paymentMethod, paymentStatus, saleDate, notes, completeSale, getCartSummary]);
+
+  // After the prompt: land on the Sales list first so Back from the next screen goes
+  // there, not to this checkout (its cart no longer exists).
+  const leaveTo = useCallback((next?: string) => {
+    setCompletedSale(null);
+    router.replace('/sales');
+    if (next) setTimeout(() => router.push(next as any), 60);
+  }, [router]);
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
@@ -177,7 +246,7 @@ export default function CheckoutScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} style={styles.content} showsVerticalScrollIndicator={false}>
         {!isConnected && (
           <View style={styles.offlineNotice}>
             <WifiOff size={16} color="#92400E" />
@@ -305,6 +374,8 @@ export default function CheckoutScreen() {
           </View>
         </Card>
 
+        {saleMargin && <SaleMarginCard margin={saleMargin} formatAmount={displayAmount} />}
+
         {/* Sale Date */}
         <Card style={styles.dateCard}>
           <View style={styles.sectionHeader}>
@@ -377,6 +448,19 @@ export default function CheckoutScreen() {
           </View>
         </Card>
 
+        {/* PAID or COD: required, no default */}
+        <Card style={styles.paymentCard}>
+          <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            Paid or Cash on Delivery
+          </Text>
+          <PaymentStatusSelector
+            value={paymentStatus}
+            onChange={(v) => { setPaymentStatus(v); setPaymentStatusMissing(false); }}
+            showError={paymentStatusMissing}
+            disabled={processing}
+          />
+        </Card>
+
         {/* Additional Notes */}
         <Card style={styles.notesCard}>
           <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -437,6 +521,26 @@ export default function CheckoutScreen() {
         salesCount={salesCountData.salesCount}
         message="You've reached the free limit. Upgrade to continue creating sales."
       />
+
+      {completedSale && (
+        <PostSaleActionModal
+          visible
+          saleId={completedSale.saleId}
+          saleAmount={completedSale.amount}
+          customerName={completedSale.customerName}
+          offline={completedSale.offline}
+          onDismiss={() => leaveTo()}
+          onNewSale={() => leaveTo()}
+          onViewSale={() => leaveTo(completedSale.saleId ? `/(app)/(tabs)/sales/details/${completedSale.saleId}` : undefined)}
+          onReceipt={
+            completedSale.saleId
+              ? () => leaveTo(`/(app)/(tabs)/sales/receipt?saleId=${completedSale.saleId}`)
+              : completedSale.offline && receiptDraftStore.get()
+                ? () => leaveTo('/(app)/(tabs)/sales/receipt?draft=1')
+                : undefined
+          }
+        />
+      )}
     </View>
   );
 }

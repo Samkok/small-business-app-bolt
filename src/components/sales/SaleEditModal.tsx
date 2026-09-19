@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PaymentStatusSelector } from './PaymentStatusSelector';
+import { PaymentStatus, isPaymentStatus } from '@/src/utils/paymentStatus';
 import {
   View,
   Text,
@@ -27,6 +29,7 @@ interface SaleEditModalProps {
     discountType?: 'percentage' | 'fixed' | null;
     discountValue?: number | null;
     deliveryCost?: number | null;
+    paymentStatus?: 'paid' | 'cod' | null;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -63,6 +66,9 @@ export default function SaleEditModal({
   // Delivery
   const [deliveryCost, setDeliveryCost] = useState('');
 
+  // PAID or COD
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
+
   // Submission
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -77,6 +83,7 @@ export default function SaleEditModal({
       setDiscountType(saleDetails?.cart_discount_type || null);
       setDiscountValue(saleDetails?.cart_discount_value != null ? String(saleDetails.cart_discount_value) : '');
       setDeliveryCost(saleDetails?.delivery_cost != null && saleDetails.delivery_cost > 0 ? String(saleDetails.delivery_cost) : '');
+      setPaymentStatus(isPaymentStatus(sale.payment_status) ? sale.payment_status : null);
       setErrors({});
       setShowCustomerList(false);
     }
@@ -167,6 +174,8 @@ export default function SaleEditModal({
         discountType: discountType && parsedDiscount != null ? discountType : null,
         discountValue: discountType && parsedDiscount != null ? parsedDiscount : null,
         deliveryCost: parsedDelivery,
+        // Left out when never chosen, so an older sale without a status is not changed by accident
+        ...(paymentStatus ? { paymentStatus } : {}),
       });
     } finally {
       setSaving(false);
@@ -390,6 +399,19 @@ export default function SaleEditModal({
               <Text style={[styles.hint, { color: labelColor }]}>
                 Delivery cost is subtracted from the sale total.
               </Text>
+            </View>
+
+            {/* PAID or COD */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>Paid or Cash on Delivery</Text>
+              </View>
+              <PaymentStatusSelector value={paymentStatus} onChange={setPaymentStatus} disabled={saving} />
+              {!isPaymentStatus(sale?.payment_status) && !paymentStatus && (
+                <Text style={[styles.hint, { color: labelColor }]}>
+                  This sale was made before PAID / COD existed. Choose one to record it.
+                </Text>
+              )}
             </View>
 
             {/* Recalculation notice */}

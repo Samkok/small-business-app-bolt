@@ -29,6 +29,10 @@ import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
 import { InstantCheckoutCustomerSelector } from './InstantCheckoutCustomerSelector';
 import { InstantCheckoutSummary } from './InstantCheckoutSummary';
+import { SaleMarginCard } from '@/src/components/sales/SaleMarginCard';
+import { computeSaleMargin } from '@/src/utils/saleMargin';
+import { receiptDraftStore } from '@/src/utils/receiptDraft';
+import { PaymentStatusSelector } from '@/src/components/sales/PaymentStatusSelector';
 import { UpgradePrompt } from '../subscription/UpgradePrompt';
 import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
@@ -53,6 +57,7 @@ export function InstantCheckoutModal() {
     removeProduct,
     setCustomer,
     setPaymentMethod,
+    setPaymentStatus,
     getSessionSummary,
     clearSession,
     closeModal,
@@ -85,6 +90,7 @@ export function InstantCheckoutModal() {
   const [deliveryFee, setDeliveryFee] = useState('');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
+  const [paymentStatusMissing, setPaymentStatusMissing] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
 
@@ -376,6 +382,12 @@ export function InstantCheckoutModal() {
       return;
     }
 
+    if (!session.payment_status) {
+      setPaymentStatusMissing(true);
+      Alert.alert('PAID or COD?', 'Choose whether this sale is already paid or cash on delivery.');
+      return;
+    }
+
     const validation = instantCheckoutService.validateCheckoutSession(session);
     if (!validation.isValid) {
       Alert.alert('Validation Error', validation.errors.join('\n'));
@@ -451,7 +463,8 @@ export function InstantCheckoutModal() {
             })),
             customerId: session.customer_id || guestCustomer.id,
             customerName: session.customer_name || 'Guest Customer',
-            paymentMethod: session.payment_method || 'cash',
+            paymentMethod: session.payment_method || 'transfer',
+            paymentStatus: session.payment_status,
             saleDate: session.sale_date.toISOString(),
             totalAmount: summary.finalTotal,
             businessId: currentBusiness.id,
@@ -461,12 +474,49 @@ export function InstantCheckoutModal() {
             discountType: session.cart_discount_type,
             discountValue: session.cart_discount_value,
           });
-          Alert.alert(
-            'Sale Saved Offline',
-            'No internet connection. Your sale has been saved and will sync when you are back online.'
-          );
+          // No server record yet, so offer a provisional receipt built from this session
+          receiptDraftStore.set({
+            business: {
+              name: currentBusiness.business_name || '',
+              logoUrl: (currentBusiness as any).business_image_url ?? null,
+              phone: (currentBusiness as any).receipt_phone ?? null,
+              address: (currentBusiness as any).receipt_address ?? null,
+              pageName: (currentBusiness as any).receipt_page_name ?? null,
+              footer: (currentBusiness as any).receipt_footer ?? null,
+            },
+            provisional: true,
+            date: session.sale_date,
+            status: 'completed',
+            customerName: session.customer_id && session.customer_id !== guestCustomer.id ? session.customer_name ?? null : null,
+            customerPhone: session.customer_id && session.customer_id !== guestCustomer.id ? session.customer_phone ?? null : null,
+            paymentMethod: session.payment_method || 'transfer',
+            paymentStatus: session.payment_status,
+            notes: session.notes ?? null,
+            lines: session.items.map(item => ({
+              name: item.product_name,
+              quantity: item.quantity,
+              unitLabel: item.unit_label ?? null,
+              unitPrice: item.unit_price,
+              itemDiscountAmount: item.item_discount_amount ?? 0,
+              itemDiscountType: item.item_discount_type ?? null,
+              itemDiscountValue: item.item_discount_value ?? null,
+              itemDiscountScope: item.item_discount_scope ?? null,
+            })),
+            orderDiscountAmount: summary.cartDiscountAmount,
+            orderDiscountType: session.cart_discount_type ?? null,
+            orderDiscountValue: session.cart_discount_value ?? null,
+            deliveryCost: summary.deliveryCost,
+          });
           clearSession();
           onClose();
+          Alert.alert(
+            'Sale Saved Offline',
+            'No internet connection. Your sale has been saved and will sync when you are back online.',
+            [
+              { text: 'Provisional Receipt', onPress: () => router.push('/(app)/(tabs)/sales/receipt?draft=1') },
+              { text: 'OK', style: 'cancel' },
+            ]
+          );
         } catch (queueError) {
           Alert.alert('Error', 'Failed to save sale offline. Please try again.');
         }
@@ -548,6 +598,17 @@ export function InstantCheckoutModal() {
     }
   };
 
+  const handleReceiptFromPost = () => {
+    const saleId = completedSaleInfo?.saleId;
+    setShowPostSaleModal(false);
+    setCompletedSaleInfo(null);
+    clearSession();
+    closeModal();
+    if (saleId) {
+      router.push(`/(app)/(tabs)/sales/receipt?saleId=${saleId}`);
+    }
+  };
+
   const handleNewSaleFromPost = () => {
     setShowPostSaleModal(false);
     setCompletedSaleInfo(null);
@@ -560,6 +621,14 @@ export function InstantCheckoutModal() {
   };
 
   const summary = getSessionSummary();
+  // Profit preview: same summary numbers, plus what each line costs
+  const saleMargin = computeSaleMargin({
+    itemsOriginalTotal: summary.itemsOriginalTotal,
+    itemsSubtotalAfterDiscount: summary.itemsSubtotalAfterDiscount,
+    cartDiscountAmount: summary.cartDiscountAmount,
+    deliveryCost: summary.deliveryCost,
+    lines: (session?.items || []).map(item => ({ quantity: item.quantity, cost: item.cost_per_unit || 0 })),
+  });
 
   if (!isModalOpen) return null;
 
@@ -709,6 +778,18 @@ export function InstantCheckoutModal() {
           </View>
 
           <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Paid or Cash on Delivery
+            </Text>
+            <PaymentStatusSelector
+              value={session?.payment_status ?? null}
+              onChange={(v) => { setPaymentStatus(v); setPaymentStatusMissing(false); }}
+              showError={paymentStatusMissing}
+              disabled={completing}
+            />
+          </View>
+
+          <View style={styles.section}>
             {currencies.length > 1 && (
               <View style={styles.currencyRow}>
                 {currencies.map(c => {
@@ -733,6 +814,7 @@ export function InstantCheckoutModal() {
               </View>
             )}
             <InstantCheckoutSummary summary={summary} formatAmount={displayAmount} />
+            <SaleMarginCard margin={saleMargin} formatAmount={displayAmount} />
           </View>
         </ScrollView>
 
@@ -1152,6 +1234,7 @@ export function InstantCheckoutModal() {
           onDismiss={handleDismissPostSale}
           onViewSale={handleViewSaleFromPost}
           onNewSale={handleNewSaleFromPost}
+          onReceipt={completedSaleInfo.saleId ? handleReceiptFromPost : undefined}
         />
       )}
 

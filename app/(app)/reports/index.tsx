@@ -21,7 +21,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonCard, SkeletonLoader } from '@/src/components/ui/SkeletonLoader';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
-import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download, Package } from 'lucide-react-native';
+import { ArrowLeft, Calendar, DollarSign, TrendingUp, TrendingDown, ChartBar as BarChart, ChartPie as PieChart, FileText, ChevronDown, Download, Package, Percent } from 'lucide-react-native';
 import { LineChart, PieChart as PieChartKit, BarChart as BarChartKit } from 'react-native-chart-kit';
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
@@ -46,6 +46,7 @@ export default function ReportsScreen() {
   // First month with any sale or expense; the cash flow list runs from there to today.
   const [activityStart, setActivityStart] = useState<Date | null>(null);
   const [inventorySpendData, setInventorySpendData] = useState<any>(null);
+  const [feesData, setFeesData] = useState<any>(null);
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
@@ -176,6 +177,10 @@ export default function ReportsScreen() {
       // Load inventory spend (what was paid for stock in the period)
       const inventorySpend = await reportsService.getInventorySpend(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setInventorySpendData(inventorySpend);
+
+      // Courier fees absorbed and discounts given (not recorded as expenses anywhere else)
+      const fees = await reportsService.getFeesAndDiscounts(currentBusiness.id, startDate, endDate, activeCurrencyId);
+      setFeesData(fees);
     } catch (error) {
       console.error('Error loading report data:', error);
       if (Platform.OS !== 'web') {
@@ -205,6 +210,7 @@ export default function ReportsScreen() {
       const cashFlowCsv = await exportService.exportCashFlowToCsv(currentBusiness.id, startDate.getMonth(), startDate.getFullYear(), activeCurrencyId);
       const productsCsv = await exportService.exportProductsToCsv(currentBusiness.id);
       const inventorySpendCsv = await exportService.exportInventorySpendToCsv(currentBusiness.id, startDateIso, endDateIso, activeCurrencyId);
+      const feesCsv = await exportService.exportFeesAndDiscountsToCsv(currentBusiness.id, startDateIso, endDateIso, activeCurrencyId);
 
       const filesToExport = [
         { name: `${EXPORT_FILE_PREFIX}_Sales_${dateRangeLabel}.csv`, content: salesCsv },
@@ -212,6 +218,7 @@ export default function ReportsScreen() {
         { name: `${EXPORT_FILE_PREFIX}_CashFlow_${format(startDate, 'yyyyMM')}.csv`, content: cashFlowCsv },
         { name: `${EXPORT_FILE_PREFIX}_Products.csv`, content: productsCsv },
         { name: `${EXPORT_FILE_PREFIX}_InventorySpend_${dateRangeLabel}.csv`, content: inventorySpendCsv },
+        { name: `${EXPORT_FILE_PREFIX}_FeesAndDiscounts_${dateRangeLabel}.csv`, content: feesCsv },
       ];
 
       const sectionSeparator = '\n\n\n';
@@ -260,6 +267,11 @@ export default function ReportsScreen() {
   const handleViewIncomeStatement = () => {
     const { startDate, endDate } = getDateRange();
     router.push(`/reports/income-statement?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}${currencyParam}`);
+  };
+
+  const handleViewFeesAndDiscounts = () => {
+    const { startDate, endDate } = getDateRange();
+    router.push(`/reports/fees-discounts?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}${currencyParam}`);
   };
 
   const handleViewCashFlow = () => {
@@ -748,6 +760,54 @@ export default function ReportsScreen() {
             </>
           )}
         </Card>
+
+        {/* Fees & Discounts: summary here, full report on its own screen */}
+        <TouchableOpacity activeOpacity={0.8} onPress={handleViewFeesAndDiscounts}>
+          <Card style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Percent size={20} color="#db2777" />
+                <Text style={[styles.chartTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Fees & Discounts
+                </Text>
+              </View>
+              <Text style={styles.feeLink}>Details ›</Text>
+            </View>
+            <Text style={[styles.feeIntro, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Courier fees you absorbed and discounts you gave. These are not in Expenses.
+            </Text>
+
+            {!feesData || feesData.range.total === 0 ? (
+              <Text style={[styles.feeEmpty, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                None in this period. Tap to look at other dates.
+              </Text>
+            ) : (
+              <>
+                <View style={styles.spendStats}>
+                  <View style={styles.spendStat}>
+                    <Text style={[styles.spendStatValue, { color: '#db2777' }]}>{fmt(feesData.range.total)}</Text>
+                    <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Given up</Text>
+                  </View>
+                  <View style={styles.spendStat}>
+                    <Text style={[styles.spendStatValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{fmt(feesData.range.deliveryFees)}</Text>
+                    <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Delivery fees</Text>
+                  </View>
+                  <View style={styles.spendStat}>
+                    <Text style={[styles.spendStatValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{fmt(feesData.range.discounts)}</Text>
+                    <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Discounts</Text>
+                  </View>
+                </View>
+                <View style={[styles.spendRow, { borderTopColor: isDark ? '#374151' : '#e5e7eb' }]}>
+                  <Text style={[styles.spendRowLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Share of full-price revenue</Text>
+                  <Text style={[styles.spendRowValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{feesData.range.shareOfRevenue.toFixed(1)}%</Text>
+                </View>
+              </>
+            )}
+            <Text style={[styles.feeFooter, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Tap for the month-by-month breakdown and any date range
+            </Text>
+          </Card>
+        </TouchableOpacity>
 
         {/* Financial Statements */}
         <Card style={styles.statementsCard}>
@@ -1523,6 +1583,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
+  },
+  feeIntro: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  feeLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#db2777',
+  },
+  feeEmpty: {
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  feeFooter: {
+    fontSize: 12,
+    marginTop: 10,
   },
   spendSubtitle: {
     fontSize: 14,
