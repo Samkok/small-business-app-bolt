@@ -33,6 +33,8 @@ export interface InstantCheckoutSession {
   customer_name?: string;
   customer_phone?: string;
   payment_method?: 'cash' | 'card' | 'transfer' | 'other';
+  /** PAID or COD. No default: the seller must choose for every sale. */
+  payment_status?: 'paid' | 'cod';
   sale_date: Date;
   cart_discount_type?: 'percentage' | 'fixed';
   cart_discount_value?: number;
@@ -61,6 +63,7 @@ interface InstantCheckoutContextType {
   removeItemDiscount: (productId: string) => void;
   setCustomer: (customerId: string | undefined, customerName?: string, customerPhone?: string) => void;
   setPaymentMethod: (method: 'cash' | 'card' | 'transfer' | 'other') => void;
+  setPaymentStatus: (status: 'paid' | 'cod') => void;
   setSaleDate: (date: Date) => void;
   applyCartDiscount: (discountType: 'percentage' | 'fixed', discountValue: number) => void;
   removeCartDiscount: () => void;
@@ -246,7 +249,9 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
           product_image: product.image_url || undefined,
           quantity,
           unit_price: unitPrice,
-          cost_per_unit: (product as any).cost_per_unit || 0,
+          // Cost of ONE sold unit: a Box of 24 costs 24x the base unit. This value is
+          // snapshotted onto the sale line, so it is what COGS and profit are built from.
+          cost_per_unit: ((product as any).cost_per_unit || 0) * (unitOverride?.conversion_factor && unitOverride.conversion_factor > 0 ? unitOverride.conversion_factor : 1),
           original_subtotal: originalSubtotal,
           subtotal: originalSubtotal,
           available_stock: product.current_stock || 0,
@@ -261,6 +266,8 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
           : {
               items: [newItem],
               sale_date: new Date(),
+              // Most sales are paid by transfer; PAID/COD is left unset on purpose
+              payment_method: 'transfer' as const,
             };
       }
     });
@@ -401,6 +408,15 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
     resetAutoSaveTimer();
   }, [resetAutoSaveTimer]);
 
+  const setPaymentStatus = useCallback((status: 'paid' | 'cod') => {
+    setSession((prev) => {
+      if (!prev) return null;
+      return { ...prev, payment_status: status };
+    });
+
+    resetAutoSaveTimer();
+  }, [resetAutoSaveTimer]);
+
   const setSaleDate = useCallback((date: Date) => {
     setSession((prev) => {
       if (!prev) return null;
@@ -523,6 +539,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
     removeItemDiscount,
     setCustomer,
     setPaymentMethod,
+    setPaymentStatus,
     setSaleDate,
     applyCartDiscount,
     removeCartDiscount,

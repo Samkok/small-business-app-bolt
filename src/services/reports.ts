@@ -6,6 +6,7 @@ import { productService } from './products.ts';
 import { format, subDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, formatISO, endOfDay } from 'date-fns';
 import { getSaleGrossRevenue, getSaleDeliveryCost, summarizeRevenue } from '../utils/saleMoney';
 import { resolveReportCurrency, conversionFactor, saleFactor, expenseFactor, scaleSale, ReportCurrency } from '../utils/reportCurrency';
+import { saleFees, emptyFeeBucket, addSaleToBucket, feeShareOfRevenue, FeeBucket } from '../utils/feesAndDiscounts';
 
 /** Local-time bucket key so a 23:30 sale lands on today's bar, not tomorrow's UTC date. */
 const bucketKey = (iso: string | null | undefined, unit: 'day' | 'month'): string => {
@@ -107,6 +108,7 @@ export const reportsService = {
         .select(`
           total_amount,
           delivery_cost,
+          carts(delivery_cost),
           status,
           currency_id,
           exchange_rate_at_sale,
@@ -126,6 +128,7 @@ export const reportsService = {
         .select(`
           total_amount,
           delivery_cost,
+          carts(delivery_cost),
           status,
           currency_id,
           exchange_rate_at_sale,
@@ -477,6 +480,7 @@ export const reportsService = {
       .select(`
         total_amount,
         delivery_cost,
+        carts(delivery_cost),
         status,
         sale_date,
         currency_id,
@@ -561,6 +565,7 @@ export const reportsService = {
       .select(`
         total_amount,
         delivery_cost,
+        carts(delivery_cost),
         status,
         sale_date,
         currency_id,
@@ -955,6 +960,95 @@ export const reportsService = {
     };
   },
 
+  /**
+   * Money the business chose to give up on sales: courier fees it absorbed and
+   * discounts it gave (whole-cart and per-item). These are not recorded as expenses,
+   * so this is the only place they are totalled. `range` covers the selected period
+   * and `rangeMonths` splits exactly that period by month (partial months are clipped
+   * to the chosen dates, so the rows always add up to `range`). `months` is the trend:
+   * whole months covering at least the last six up to the period's end, so a trend is
+   * visible even when a single month or a few days are selected.
+   * Amounts are as given at sale time on completed and partially returned sales,
+   * converted to the reporting currency at each sale's own rate.
+   */
+  async getFeesAndDiscounts(businessId: string, startDate: Date, endDate: Date, currencyId?: string) {
+    const withShare = (b: FeeBucket) => ({ ...b, discounts: b.cartDiscounts + b.itemDiscounts, shareOfRevenue: feeShareOfRevenue(b) });
+    const empty = {
+      currencyId: undefined as string | undefined,
+      range: withShare(emptyFeeBucket()),
+      months: [] as (ReturnType<typeof withShare> & { key: string; label: string })[],
+      rangeMonths: [] as (ReturnType<typeof withShare> & { key: string; label: string })[],
+      averagePerMonth: 0,
+    };
+    if (!businessId) return empty;
+
+    const rc = await resolveReportCurrency(businessId, currencyId);
+    const sixMonthsBack = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
+    const windowStart = startDate < sixMonthsBack ? startOfMonth(startDate) : sixMonthsBack;
+
+    const PAGE_SIZE = 1000;
+    const rows: any[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          status,
+          sale_date,
+          total_amount,
+          delivery_cost,
+          sale_discount_amount,
+          currency_id,
+          exchange_rate_at_sale,
+          carts(delivery_cost, discount_type, discount_value, cart_items(quantity, unit_price, item_discount_amount)),
+          sale_actions!left(action_type, amount, adjusted_amount)
+        `)
+        .eq('business_id', businessId)
+        .in('status', ['completed', 'partially_returned'])
+        .gte('sale_date', windowStart.toISOString())
+        .lte('sale_date', endDate.toISOString())
+        .order('sale_date')
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < PAGE_SIZE) break;
+    }
+
+    const range = emptyFeeBucket();
+    const byMonth = new Map<string, FeeBucket>();
+    const byRangeMonth = new Map<string, FeeBucket>();
+    const startMs = startDate.getTime();
+    const endMs = endDate.getTime();
+
+    for (const sale of rows) {
+      const fees = saleFees(sale);
+      const revenue = getSaleGrossRevenue(sale);
+      const factor = saleFactor(rc, sale);
+      const key = bucketKey(sale.sale_date, 'month');
+      if (!byMonth.has(key)) byMonth.set(key, emptyFeeBucket());
+      addSaleToBucket(byMonth.get(key)!, fees, revenue, factor);
+      const ms = new Date(sale.sale_date).getTime();
+      if (ms >= startMs && ms <= endMs) {
+        addSaleToBucket(range, fees, revenue, factor);
+        if (!byRangeMonth.has(key)) byRangeMonth.set(key, emptyFeeBucket());
+        addSaleToBucket(byRangeMonth.get(key)!, fees, revenue, factor);
+      }
+    }
+
+    const months = eachMonthOfInterval({ start: windowStart, end: endDate }).map(d => {
+      const key = format(d, 'yyyy-MM');
+      return { key, label: format(d, 'MMM yyyy'), ...withShare(byMonth.get(key) || emptyFeeBucket()) };
+    });
+    const rangeMonths = eachMonthOfInterval({ start: startDate, end: endDate }).map(d => {
+      const key = format(d, 'yyyy-MM');
+      return { key, label: format(d, 'MMM yyyy'), ...withShare(byRangeMonth.get(key) || emptyFeeBucket()) };
+    });
+    const activeMonths = months.filter(m => m.sales > 0);
+    const averagePerMonth = activeMonths.length > 0 ? activeMonths.reduce((sum, m) => sum + m.total, 0) / activeMonths.length : 0;
+
+    return { currencyId: rc.targetId, range: withShare(range), months, rangeMonths, averagePerMonth };
+  },
+
   /** Month of the business's first sale or expense, for listing statement periods. Null when there is no activity. */
   async getActivityStart(businessId: string): Promise<Date | null> {
     if (!businessId) return null;
@@ -987,6 +1081,7 @@ export const reportsService = {
       .select(`
         total_amount,
         delivery_cost,
+        carts(delivery_cost),
         status,
         currency_id,
         exchange_rate_at_sale,
@@ -1077,6 +1172,7 @@ export const reportsService = {
         cart_id,
         sale_actions(action_type, adjusted_amount, amount, items_metadata),
         carts(
+          delivery_cost,
           cart_items(
             quantity,
             product_id,
@@ -1649,6 +1745,7 @@ export const reportsService = {
           created_by_name,
           total_amount,
           delivery_cost,
+          carts(delivery_cost),
           status,
           sale_actions(action_type, amount, adjusted_amount)
         `)

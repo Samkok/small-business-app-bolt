@@ -19,6 +19,7 @@ import VoidSaleModal from './VoidSaleModal';
 import SaleEditModal from './SaleEditModal';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { paymentStatusLabel } from '@/src/utils/paymentStatus';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 
 interface SaleDetailsContentProps {
@@ -42,11 +43,14 @@ interface SaleDetailsContentProps {
   onCancelReturn: () => void;
   onCancelVoid: () => void;
   onEditSale: () => void;
+  /** Opens the receipt screen for this sale. The button is hidden when not provided. */
+  onViewReceipt?: () => void;
   onEditSaleConfirm: (updates: {
     customerId?: string | null;
     discountType?: 'percentage' | 'fixed' | null;
     discountValue?: number | null;
     deliveryCost?: number | null;
+    paymentStatus?: 'paid' | 'cod' | null;
   }) => Promise<void>;
   onCancelEdit: () => void;
   onClose?: () => void;
@@ -69,6 +73,7 @@ export default function SaleDetailsContent({
   onCancelReturn,
   onCancelVoid,
   onEditSale,
+  onViewReceipt,
   onEditSaleConfirm,
   onCancelEdit,
   onClose,
@@ -289,6 +294,30 @@ export default function SaleDetailsContent({
               <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
                 {getPaymentMethodIcon(sale.payment_method)} {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
               </Text>
+            </View>
+          </View>
+
+          {/* PAID or COD. Sales made before the field existed have none; Edit sets it. */}
+          <View style={styles.saleInfoRow}>
+            <View style={styles.saleInfoItem}>
+              <View
+                style={[
+                  styles.paymentStatusTag,
+                  { backgroundColor: sale.payment_status === 'paid' ? '#05966918' : sale.payment_status === 'cod' ? '#d9770618' : (isDark ? '#374151' : '#f3f4f6') },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.paymentStatusTagText,
+                    { color: sale.payment_status === 'paid' ? '#059669' : sale.payment_status === 'cod' ? '#d97706' : (isDark ? '#9ca3af' : '#6b7280') },
+                  ]}
+                >
+                  {paymentStatusLabel(sale.payment_status) ?? 'PAID / COD not set'}
+                </Text>
+              </View>
+              {sale.payment_status === 'cod' && (
+                <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>Cash on delivery</Text>
+              )}
             </View>
           </View>
 
@@ -669,6 +698,12 @@ export default function SaleDetailsContent({
         )}
       </ScrollView>
 
+      {onViewReceipt && (
+        <View style={styles.receiptBar}>
+          <Button title="Receipt" variant="outline" onPress={onViewReceipt} style={styles.receiptButton} />
+        </View>
+      )}
+
       {/* Actions */}
       {(sale.status === 'completed' || sale.status === 'partially_returned') && (
         <View style={styles.footer}>
@@ -1000,6 +1035,23 @@ const styles = StyleSheet.create({
   adjustedAmountValue: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  paymentStatusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  paymentStatusTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  receiptBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  receiptButton: {
+    width: '100%',
   },
   footer: {
     flexDirection: 'row',

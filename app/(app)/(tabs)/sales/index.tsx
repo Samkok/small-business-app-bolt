@@ -34,7 +34,8 @@ import { ShoppingCart, Plus, Search, DollarSign, TrendingUp, Calendar, Receipt, 
 import { format } from 'date-fns';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
-import { calculateSaleProfit, calculateSaleDisplayAmount, calculateSaleProductCount } from '@/src/utils/profitCalculation';
+import { calculateSaleProfit, calculateSaleProductCount } from '@/src/utils/profitCalculation';
+import { getSaleGrossRevenue } from '@/src/utils/saleMoney';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
@@ -911,7 +912,9 @@ export default function SalesScreen() {
       }
 
       const isVoided = sale.status === 'voided';
-      const displayAmount = calculateSaleDisplayAmount(sale);
+      // Same definition as the dashboard and reports: customer price (sale total +
+      // courier fee) net of refunds. Profit below is already after the courier fee.
+      const displayAmount = getSaleGrossRevenue(sale);
       const productCount = calculateSaleProductCount(sale);
       const saleProfit = calculateSaleProfit(sale);
       const currId = sale.currency_id || 'default';

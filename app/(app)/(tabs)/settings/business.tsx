@@ -23,6 +23,11 @@ import { ArrowLeft, Building } from 'lucide-react-native';
 export default function BusinessSettingsScreen() {
   const [businessName, setBusinessName] = useState('');
   const [businessImageUrl, setBusinessImageUrl] = useState('');
+  // Shown on receipts: header (phone, address, page name) and footer message
+  const [receiptPhone, setReceiptPhone] = useState('');
+  const [receiptAddress, setReceiptAddress] = useState('');
+  const [receiptPageName, setReceiptPageName] = useState('');
+  const [receiptFooter, setReceiptFooter] = useState('');
   const [imageFile, setImageFile] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,6 +42,10 @@ export default function BusinessSettingsScreen() {
       setBusinessName(currentBusiness.business_name || '');
       const imageUrl = currentBusiness.business_image_url || '';
       setBusinessImageUrl(imageUrl);
+      setReceiptPhone((currentBusiness as any).receipt_phone || '');
+      setReceiptAddress((currentBusiness as any).receipt_address || '');
+      setReceiptPageName((currentBusiness as any).receipt_page_name || '');
+      setReceiptFooter((currentBusiness as any).receipt_footer || '');
     }
   }, [currentBusiness]);
 
@@ -101,8 +110,12 @@ export default function BusinessSettingsScreen() {
 
       const { error } = await updateBusiness(currentBusiness.id, {
         business_name: businessName.trim(),
-        business_image_url: newImageUrl
-      });
+        business_image_url: newImageUrl,
+        receipt_phone: receiptPhone.trim() || null,
+        receipt_address: receiptAddress.trim() || null,
+        receipt_page_name: receiptPageName.trim() || null,
+        receipt_footer: receiptFooter.trim() || null,
+      } as any);
 
       if (error) {
         Alert.alert('Error', error.message || 'Failed to update business');
@@ -195,6 +208,40 @@ export default function BusinessSettingsScreen() {
             />
           </View>
         </Card>
+
+        <Card style={styles.receiptCard}>
+          <Text style={[styles.receiptTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>Receipt details</Text>
+          <Text style={[styles.receiptHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            Printed under your business name on every receipt. All optional.
+          </Text>
+          <Input
+            label="Phone"
+            value={receiptPhone}
+            onChangeText={setReceiptPhone}
+            placeholder="e.g. 012 345 678"
+            keyboardType="phone-pad"
+          />
+          <Input
+            label="Address"
+            value={receiptAddress}
+            onChangeText={setReceiptAddress}
+            placeholder="Street, city"
+          />
+          <Input
+            label="Page or social name"
+            value={receiptPageName}
+            onChangeText={setReceiptPageName}
+            placeholder="e.g. facebook.com/yourshop"
+            autoCapitalize="none"
+          />
+          <Input
+            label="Footer message"
+            value={receiptFooter}
+            onChangeText={setReceiptFooter}
+            placeholder="e.g. Thank you! Returns within 7 days."
+            multiline
+          />
+        </Card>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -259,6 +306,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  receiptCard: {
+    padding: 16,
+    marginTop: 16,
+  },
+  receiptTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  receiptHint: {
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 12,
   },
   footer: {
     flexDirection: 'row',

@@ -10,7 +10,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { CheckCircle, Eye, Plus, X } from 'lucide-react-native';
+import { CheckCircle, Eye, Plus, X, ReceiptText } from 'lucide-react-native';
 
 interface PostSaleActionModalProps {
   visible: boolean;
@@ -20,6 +20,10 @@ interface PostSaleActionModalProps {
   onDismiss: () => void;
   onViewSale: () => void;
   onNewSale: () => void;
+  /** Opens the receipt (image, PDF, print). Hidden when not provided. */
+  onReceipt?: () => void;
+  /** Saved offline: there is no sale to open yet, and the receipt is provisional */
+  offline?: boolean;
 }
 
 export function PostSaleActionModal({
@@ -30,6 +34,8 @@ export function PostSaleActionModal({
   onDismiss,
   onViewSale,
   onNewSale,
+  onReceipt,
+  offline = false,
 }: PostSaleActionModalProps) {
   const { isDark } = useTheme();
   const { formatPrice } = useCurrencyContext();
@@ -53,7 +59,7 @@ export function PostSaleActionModal({
           <View style={styles.successHeader}>
             <CheckCircle size={64} color="#10b981" />
             <Text style={[styles.successTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Sale Completed!
+              {offline ? 'Sale Saved Offline' : 'Sale Completed!'}
             </Text>
           </View>
 
@@ -84,19 +90,37 @@ export function PostSaleActionModal({
               style={styles.primaryButton}
             />
 
-            <TouchableOpacity
-              style={[
-                styles.secondaryButton,
-                {
-                  borderColor: isDark ? '#4b5563' : '#d1d5db',
-                  backgroundColor: isDark ? '#374151' : '#ffffff',
-                }
-              ]}
-              onPress={onViewSale}
-            >
-              <Eye size={20} color="#2563eb" />
-              <Text style={styles.secondaryButtonText}>View Sale Details</Text>
-            </TouchableOpacity>
+            {onReceipt && (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryButton,
+                  {
+                    borderColor: isDark ? '#4b5563' : '#d1d5db',
+                    backgroundColor: isDark ? '#374151' : '#ffffff',
+                  }
+                ]}
+                onPress={onReceipt}
+              >
+                <ReceiptText size={20} color="#2563eb" />
+                <Text style={styles.secondaryButtonText}>{offline ? 'Provisional Receipt' : 'Receipt'}</Text>
+              </TouchableOpacity>
+            )}
+
+            {!offline && !!saleId && (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryButton,
+                  {
+                    borderColor: isDark ? '#4b5563' : '#d1d5db',
+                    backgroundColor: isDark ? '#374151' : '#ffffff',
+                  }
+                ]}
+                onPress={onViewSale}
+              >
+                <Eye size={20} color="#2563eb" />
+                <Text style={styles.secondaryButtonText}>View Sale Details</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.tertiaryButton}

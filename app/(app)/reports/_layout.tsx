@@ -7,6 +7,7 @@ export default function ReportsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="income-statement" />
       <Stack.Screen name="cash-flow" />
+      <Stack.Screen name="fees-discounts" />
     </Stack>
   );
 }

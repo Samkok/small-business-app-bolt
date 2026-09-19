@@ -23,6 +23,8 @@ export interface OfflineSalePayload {
   customerId: string;
   customerName?: string;
   paymentMethod: 'cash' | 'card' | 'transfer' | 'other';
+  /** PAID or COD, chosen at checkout; absent on sales queued by older app versions */
+  paymentStatus?: 'paid' | 'cod';
   saleDate: string;
   totalAmount: number;
   businessId: string;

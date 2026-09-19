@@ -126,6 +126,7 @@ export default function SaleDetailsScreen() {
     discountType?: 'percentage' | 'fixed' | null;
     discountValue?: number | null;
     deliveryCost?: number | null;
+    paymentStatus?: 'paid' | 'cod' | null;
   }) => {
     if (!sale) return;
     try {
@@ -159,6 +160,7 @@ export default function SaleDetailsScreen() {
       </View>
 
       <SaleDetailsContent
+        onViewReceipt={sale?.id ? () => router.push(`/(app)/(tabs)/sales/receipt?saleId=${sale.id}`) : undefined}
         sale={sale}
         saleDetails={saleDetails}
         loading={loading}

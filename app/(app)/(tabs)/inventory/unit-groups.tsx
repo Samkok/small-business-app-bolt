@@ -144,7 +144,6 @@ export default function UnitGroupsScreen() {
                         {u.is_base_unit
                           ? 'Stock tracked in this unit'
                           : `1 ${u.name} = ${u.conversion_factor_to_base} base unit${u.conversion_factor_to_base === 1 ? '' : 's'}`}
-                        {u.barcode ? `  ·  ${u.barcode}` : ''}
                       </Text>
                     </View>
                   </View>

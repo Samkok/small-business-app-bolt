@@ -282,12 +282,52 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
     setItemCostInputs(prev => { const m = new Map(prev); m.delete(key); return m; });
   };
 
+  // Scroll to and focus the Cost Type field of a cost the user just added.
+  // Costs loaded from the batch never set pendingFocusCostId, so opening the form
+  // does not jump or raise the keyboard.
+  const scrollRef = useRef<ScrollView>(null);
+  const costRowRefs = useRef(new Map<string, View | null>());
+  const costTypeInputRefs = useRef(new Map<string, TextInput | null>());
+  const [pendingFocusCostId, setPendingFocusCostId] = useState<string | null>(null);
+
   const addCost = () => {
+    const id = uuidv4();
     setAdditionalCosts(prev => [
       ...prev,
-      { id: uuidv4(), cost_type: '', amount: 0, calculation_type: 'per_total', description: '' },
+      { id, cost_type: '', amount: 0, calculation_type: 'per_total', description: '' },
     ]);
+    setPendingFocusCostId(id);
   };
+
+  useEffect(() => {
+    if (!pendingFocusCostId) return;
+    const id = pendingFocusCostId;
+    // One frame so the new row has been laid out before it is measured
+    const frame = requestAnimationFrame(() => {
+      const row = costRowRefs.current.get(id);
+      const scroll = scrollRef.current;
+      const inner = (scroll as any)?.getInnerViewRef?.();
+      const focus = () => costTypeInputRefs.current.get(id)?.focus();
+      if (row && scroll && inner) {
+        row.measureLayout(
+          inner,
+          (_x, y) => {
+            scroll.scrollTo({ y: Math.max(0, y - 16), animated: true });
+            focus();
+          },
+          () => {
+            scroll.scrollToEnd({ animated: true });
+            focus();
+          }
+        );
+      } else {
+        scroll?.scrollToEnd({ animated: true });
+        focus();
+      }
+      setPendingFocusCostId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingFocusCostId, additionalCosts]);
 
   const updateCost = (costId: string, field: keyof BatchImportCost, value: any) => {
     setAdditionalCosts(prev =>
@@ -544,7 +584,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Card style={styles.form}>
           {/* Batch Details */}
           <View style={styles.section}>
@@ -732,7 +772,12 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
               </View>
             ) : (
               additionalCosts.map(cost => (
-                <View key={cost.id} style={[styles.costItem, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
+                <View
+                  key={cost.id}
+                  ref={el => { if (el) costRowRefs.current.set(cost.id, el); else costRowRefs.current.delete(cost.id); }}
+                  collapsable={false}
+                  style={[styles.costItem, { borderColor: isDark ? '#374151' : '#e5e7eb' }]}
+                >
                   <View style={styles.costHeader}>
                     <Text style={[styles.costTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                       {cost.cost_type || 'New Cost'}
@@ -748,6 +793,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
                   </View>
 
                   <Input
+                    ref={el => { if (el) costTypeInputRefs.current.set(cost.id, el); else costTypeInputRefs.current.delete(cost.id); }}
                     label="Cost Type"
                     value={cost.cost_type}
                     onChangeText={v => updateCost(cost.id, 'cost_type', v)}

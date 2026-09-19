@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -149,6 +150,24 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
     }
   };
 
+  const router = useRouter();
+
+  // Receipt from inside the sheet: slide the sheet away first, then open the receipt.
+  // Pushing a screen while this modal is still up would leave it sitting on top of the receipt.
+  const openReceiptAfterClose = useCallback((id: string) => {
+    onClose();
+    setTimeout(() => router.push(`/(app)/(tabs)/sales/receipt?saleId=${id}` as any), 120);
+  }, [onClose, router]);
+
+  const handleViewReceipt = useCallback(() => {
+    if (!saleId) return;
+    const id = saleId;
+    translateY.value = withTiming(MODAL_HEIGHT, TIMING_CONFIG, () => {
+      runOnJS(openReceiptAfterClose)(id);
+    });
+    backdropOpacity.value = withTiming(0, TIMING_CONFIG);
+  }, [saleId, openReceiptAfterClose, translateY, backdropOpacity]);
+
   const handleClose = useCallback(() => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -258,6 +277,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
     discountType?: 'percentage' | 'fixed' | null;
     discountValue?: number | null;
     deliveryCost?: number | null;
+    paymentStatus?: 'paid' | 'cod' | null;
   }) => {
     if (!sale) return;
     try {
@@ -334,6 +354,7 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
 
             {/* Sale Details Content */}
             <SaleDetailsContent
+              onViewReceipt={saleId ? handleViewReceipt : undefined}
               sale={sale}
               saleDetails={saleDetails}
               loading={loading}

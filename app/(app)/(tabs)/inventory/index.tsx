@@ -15,7 +15,9 @@ import {
   Platform,
   Easing
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { productInsightService } from '@/src/services/productInsight';
+import { PlanningSettings } from '@/src/utils/inventoryPlanning';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -87,6 +89,7 @@ export default function InventoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalProducts, setTotalProducts] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [mustOrderCount, setMustOrderCount] = useState(0);
 
   // Archived products states
   const [showArchived, setShowArchived] = useState(false);
@@ -156,6 +159,34 @@ export default function InventoryScreen() {
   useEffect(() => {
     filterBatchHistory();
   }, [batchHistory, batchSearchQuery, sortOrder]);
+
+  // Badge on "View Insight": how many products Product Insight says to order now.
+  // Uses the same saved settings and classification as the insight page so the two
+  // always agree. Runs in the background and never blocks the product list.
+  const loadMustOrderCount = useCallback(async () => {
+    if (!currentBusiness?.id) return;
+    try {
+      const saved = await productInsightService.getSettings(currentBusiness.id);
+      const settings = { ...productInsightService.getDefaultSettings(), ...(saved || {}) };
+      const { startDate, endDate, lookbackDays } = productInsightService.getDateRange(settings);
+      const { products: insightProducts, demandByProduct, windowStart } = await productInsightService.fetchProductsAndSales(
+        currentBusiness.id, startDate, endDate
+      );
+      const summary = productInsightService.classifyProducts(
+        insightProducts, demandByProduct, settings as unknown as PlanningSettings, lookbackDays, windowStart
+      );
+      setMustOrderCount(summary.categoryCounts.must_order || 0);
+    } catch {
+      setMustOrderCount(0);
+    }
+  }, [currentBusiness?.id]);
+
+  // Recount whenever the tab regains focus (after a sale, an import, or a visit to Product Insight)
+  useFocusEffect(
+    useCallback(() => {
+      loadMustOrderCount();
+    }, [loadMustOrderCount])
+  );
 
   const loadData = async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -1031,6 +1062,11 @@ export default function InventoryScreen() {
                   >
                     <Sparkles size={13} color="#2563eb" />
                     <Text style={styles.insightButtonText}>View Insight</Text>
+                    {mustOrderCount > 0 && (
+                      <View style={styles.insightBadge} accessibilityLabel={`${mustOrderCount} products to order`}>
+                        <Text style={styles.insightBadgeText}>{mustOrderCount > 99 ? '99+' : mustOrderCount}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </Animated.View>
               </Card>
@@ -1956,6 +1992,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563eb',
+  },
+  insightBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+  },
+  insightBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
   },
   alertIndicator: {
     position: 'absolute',

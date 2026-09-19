@@ -43,6 +43,10 @@ export const instantCheckoutService = {
       errors.push('Please select payment method');
     }
 
+    if (!session.payment_status) {
+      errors.push('Please choose PAID or COD');
+    }
+
     if (session.sale_date && session.sale_date > new Date()) {
       errors.push('Sale date cannot be in future');
     }
@@ -171,6 +175,7 @@ export const instantCheckoutService = {
         cart_id: cartData.id,
         customer_id: customerId,
         payment_method: session.payment_method!,
+        payment_status: session.payment_status ?? null,
         status: 'completed',
         sale_date: session.sale_date.toISOString(),
         notes: session.notes,
