@@ -286,42 +286,26 @@ export const subscriptionService = {
     }
   },
 
+  /**
+   * Sales used and remaining for ONE business. The rule lives on the server
+   * (get_full_subscription_state, the same one can_user_create_sale and the sales
+   * insert trigger apply): on the free plan each business has its own limit of 50
+   * plus the owner's referral credits. Sales in the owner's other businesses do not
+   * count against it; totalSalesAllBusinesses is for information only.
+   */
   async getSalesCountData(userId: string, businessId: string): Promise<SalesCountData> {
-    try {
-      const [salesCount, totalSales, tierInfo] = await Promise.all([
-        this.getSalesCount(userId, businessId),
-        this.getTotalSalesCount(userId),
-        this.getTierInfo(userId)
-      ]);
-      console.log("TOTAL SALES COUNT: ", totalSales);
-
-      if (tierInfo.tier === 'free') {
-        const remainingSales = Math.max(0, FREE_TIER_LIMIT - totalSales);
-        const isAtLimit = totalSales >= FREE_TIER_LIMIT;
-
-        return {
-          salesCount,
-          remainingSales,
-          isAtLimit,
-          totalSalesAllBusinesses: totalSales
-        };
-      }
-
-      return {
-        salesCount,
-        remainingSales: 999999,
-        isAtLimit: false,
-        totalSalesAllBusinesses: totalSales
-      };
-    } catch (error) {
-      console.error('Error getting sales count data:', error);
-      return {
-        salesCount: 0,
-        remainingSales: 0,
-        isAtLimit: true,
-        totalSalesAllBusinesses: 0
-      };
+    const state = await this.getFullSubscriptionState(userId, businessId);
+    const data = state.salesCountData;
+    if (!data) {
+      return { salesCount: 0, remainingSales: 0, isAtLimit: true, totalSalesAllBusinesses: 0 };
     }
+    return {
+      salesCount: data.salesCount ?? 0,
+      // the server sends null on paid plans, which have no limit
+      remainingSales: data.remainingSales ?? 999999,
+      isAtLimit: !!data.isAtLimit,
+      totalSalesAllBusinesses: data.totalSalesAllBusinesses ?? 0,
+    };
   },
 
   async getSubscriptionStatus(userId: string, forceRefresh = false, showErrorAlert = false): Promise<SubscriptionStatus> {
