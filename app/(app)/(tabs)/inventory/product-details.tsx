@@ -42,6 +42,8 @@ export default function ProductDetailsScreen() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<ProductUnit[]>([]);
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  // Tapping an adjustment opens it for correction or deletion (owner and admins)
+  const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   
   const router = useRouter();
@@ -575,7 +577,15 @@ export default function ProductDetailsScreen() {
             </Text>
           ) : (
             adjustments.map((a, index) => (
-              <View key={a.id} style={[styles.adjustmentRow, index < adjustments.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
+              <TouchableOpacity
+                key={a.id}
+                style={[styles.adjustmentRow, index < adjustments.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}
+                onPress={() => { setEditingAdjustment(a); setShowAdjustModal(true); }}
+                disabled={isStaff || product.is_archived}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${reasonLabel(a.reason)}. Edit or delete`}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.adjustmentReason, { color: isDark ? '#f9fafb' : '#111827' }]}>
                     {reasonLabel(a.reason)}
@@ -596,7 +606,7 @@ export default function ProductDetailsScreen() {
                     {formatCurrency(Math.abs(Number(a.total_cost)))}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </Card>
@@ -708,8 +718,10 @@ export default function ProductDetailsScreen() {
         visible={showAdjustModal}
         product={product}
         units={units}
-        onClose={() => setShowAdjustModal(false)}
+        editing={editingAdjustment}
+        onClose={() => { setShowAdjustModal(false); setEditingAdjustment(null); }}
         onPosted={() => loadProductDetails(true)}
+        onDeleted={() => loadProductDetails(true)}
       />
 
       {deleting && (

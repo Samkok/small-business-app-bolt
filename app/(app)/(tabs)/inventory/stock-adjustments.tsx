@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, FlatList, Alert } from 'react-native';
 import { BottomSheet } from '@/src/components/ui/BottomSheet';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, PackageMinus, ClipboardList, Plus, Search, X } from 'lucide-react-native';
@@ -64,6 +64,35 @@ export default function StockAdjustmentsScreen() {
   // Product chosen in the picker; the form opens only after the picker has fully dismissed,
   // because iOS cannot present a second modal while the first is still animating out.
   const pendingProduct = useRef<any | null>(null);
+  // The record being corrected or deleted (tap a row); null when posting a new one
+  const [editing, setEditing] = useState<StockAdjustment | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
+  // Tapping a record opens it for editing. The product is read fresh so the form
+  // works from today's stock, not from what the list loaded earlier.
+  const openEdit = async (adjustment: StockAdjustment) => {
+    if (isStaff || openingId) return;
+    setOpeningId(adjustment.id);
+    try {
+      const product: any = await productService.getProduct(adjustment.product_id);
+      if (!product) {
+        Alert.alert('Product not found', 'This product no longer exists, so the adjustment cannot be changed.');
+        return;
+      }
+      let units: Unit[] = [];
+      if (product.unit_group_id) {
+        try { units = await unitService.getUnits(product.unit_group_id); } catch { units = []; }
+      }
+      setTargetUnits(units);
+      setEditing(adjustment);
+      setTarget(product);
+    } catch (error) {
+      console.error('Error opening adjustment:', error);
+      Alert.alert('Could not open', 'Please try again.');
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   const openPicker = async () => {
     if (!currentBusiness?.id) return;
@@ -97,6 +126,7 @@ export default function StockAdjustmentsScreen() {
     }
     setTargetUnits(units);
     // Give the native modal a beat to finish tearing down before presenting the next one
+    setEditing(null);
     setTimeout(() => setTarget(p), 120);
   };
 
@@ -267,7 +297,11 @@ export default function StockAdjustmentsScreen() {
                   <TouchableOpacity
                     key={a.id}
                     style={[styles.row, i < filtered.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
-                    onPress={() => router.push(`/inventory/product-details?productId=${a.product_id}`)}
+                    onPress={() => openEdit(a)}
+                    disabled={isStaff}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${a.products?.name || 'Product'}, ${reasonLabel(a.reason)}. Edit or delete`}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{a.products?.name || 'Product'}</Text>
@@ -347,8 +381,13 @@ export default function StockAdjustmentsScreen() {
         visible={!!target}
         product={target}
         units={targetUnits}
-        onClose={() => setTarget(null)}
+        editing={editing}
+        onClose={() => { setTarget(null); setEditing(null); }}
         onPosted={() => {
+          setPickerProducts([]);
+          load(true);
+        }}
+        onDeleted={() => {
           setPickerProducts([]);
           load(true);
         }}
