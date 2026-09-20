@@ -8,10 +8,13 @@
  *    It is NOT sales.total_amount, which is after the courier fee the business
  *    absorbed (see src/utils/saleMoney.ts). total_amount + delivery_cost is the
  *    recorded customer price and is used to cross-check the lines.
- *  - A delivery fee recorded on the sale means the BUSINESS paid the courier, so
- *    the customer sees "FREE" and never the amount. No fee recorded means the
- *    customer pays the courier directly, outside this receipt. Walk-in sales have
- *    no delivery line at all.
+ *  - Delivery has two payers (src/utils/deliveryPayer.ts). Shop pays: the fee is
+ *    delivery_cost, the BUSINESS paid the courier, and the customer sees "FREE",
+ *    never the amount. Customer pays: the fee is carts.delivery_charge, it is printed
+ *    as its own line and ADDED to the TOTAL. It is not part of sales.total_amount or
+ *    of revenue, so it is added after the cross-check below. No fee at all means the
+ *    customer pays the courier directly, outside this receipt. Walk-in sales with no
+ *    fee have no delivery line at all.
  *  - PAID or COD is printed as the payment type. A COD receipt does not print a
  *    "Paid by" method (nothing has been paid yet) and its total reads TOTAL DUE.
  *    Sales made before the field existed print only their payment method.
@@ -73,8 +76,10 @@ export interface ReceiptInput {
   orderDiscountAmount?: number | null;
   orderDiscountType?: 'percentage' | 'fixed' | null;
   orderDiscountValue?: number | null;
-  /** courier fee the business paid; 0 / null means the customer pays the courier */
+  /** courier fee the business paid (free delivery for the customer) */
   deliveryCost?: number | null;
+  /** delivery fee charged to the customer on top of the items; wins over deliveryCost */
+  deliveryCharge?: number | null;
   /** false for walk-in sales: no delivery line is printed */
   deliveryApplies?: boolean;
   /** sales.total_amount + delivery cost, when the sale is recorded */
@@ -116,8 +121,9 @@ export interface ReceiptModel {
   orderDiscountAmount: number;
   /** only when the recorded customer price differs from the lines (edited sale) */
   adjustment: number;
-  delivery: { kind: 'free' | 'customer_pays' | 'none'; label: string | null; value: string | null };
-  /** what the customer paid */
+  /** 'charged' carries `amount` (format it with the receipt's currency); the others carry `value` */
+  delivery: { kind: 'free' | 'customer_pays' | 'charged' | 'none'; label: string | null; value: string | null; amount?: number };
+  /** what the customer paid: the goods, plus the delivery fee when it was charged to them */
   total: number;
   totalSavings: number;
   refund: {
@@ -195,15 +201,20 @@ export function buildReceiptModel(input: ReceiptInput): ReceiptModel {
   const recorded = input.recordedCustomerTotal;
   const hasRecorded = recorded !== null && recorded !== undefined && Number.isFinite(n(recorded));
   const adjustment = hasRecorded ? round2(n(recorded) - computedTotal) : 0;
-  const total = round2(computedTotal + (Math.abs(adjustment) >= 0.01 ? adjustment : 0));
+  const goodsTotal = round2(computedTotal + (Math.abs(adjustment) >= 0.01 ? adjustment : 0));
 
   const deliveryCost = Math.max(0, n(input.deliveryCost));
+  const deliveryCharge = round2(Math.max(0, n(input.deliveryCharge)));
   const delivery: ReceiptModel['delivery'] =
-    input.deliveryApplies === false
-      ? { kind: 'none', label: null, value: null }
-      : deliveryCost > 0
-        ? { kind: 'free', label: 'Delivery', value: 'FREE' }
-        : { kind: 'customer_pays', label: 'Delivery', value: 'Paid by customer to courier' };
+    deliveryCharge > 0
+      ? { kind: 'charged', label: 'Delivery fee', value: null, amount: deliveryCharge }
+      : input.deliveryApplies === false
+        ? { kind: 'none', label: null, value: null }
+        : deliveryCost > 0
+          ? { kind: 'free', label: 'Delivery', value: 'FREE' }
+          : { kind: 'customer_pays', label: 'Delivery', value: 'Paid by customer to courier' };
+  // A charged delivery fee is part of what the customer pays, on top of the goods
+  const total = round2(goodsTotal + deliveryCharge);
 
   const returned = (input.returnedItems || []).filter(r => n(r.quantity) > 0 || n(r.refunded) > 0);
   const refund = returned.length > 0
@@ -352,6 +363,8 @@ export function receiptInputFromSale(sale: any, business: any): ReceiptInput {
     orderDiscountType,
     orderDiscountValue,
     deliveryCost,
+    // Only ever stored on the cart (carts.delivery_charge); a sale has exactly one cart
+    deliveryCharge: n(cart.delivery_charge),
     deliveryApplies: sale?.customers?.platform !== 'walk_in',
     recordedCustomerTotal: sale?.total_amount !== null && sale?.total_amount !== undefined ? n(sale.total_amount) + deliveryCost : null,
     returnedItems,

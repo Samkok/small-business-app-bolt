@@ -493,7 +493,12 @@ export const salesService = {
     if (updates.customerId !== undefined) cartUpdates.customer_id = updates.customerId;
     if (updates.discountType !== undefined) cartUpdates.discount_type = updates.discountType;
     if (updates.discountValue !== undefined) cartUpdates.discount_value = updates.discountValue;
-    if (updates.deliveryCost !== undefined) cartUpdates.delivery_cost = updates.deliveryCost ?? 0;
+    if (updates.deliveryCost !== undefined) {
+      cartUpdates.delivery_cost = updates.deliveryCost ?? 0;
+      // A cart has one payer (carts_delivery_one_payer): giving the sale a shop-paid fee
+      // makes it a free-delivery sale, so a fee charged to the customer is dropped.
+      if ((updates.deliveryCost ?? 0) > 0) cartUpdates.delivery_charge = 0;
+    }
 
     if (Object.keys(cartUpdates).length > 0) {
       const { error: cartErr } = await supabase

@@ -8,7 +8,7 @@ import {
   Alert,
   TextInput
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCart } from '@/src/context/CartContext';
@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save, PhoneOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
@@ -26,12 +26,21 @@ import { SaleMarginCard } from '@/src/components/sales/SaleMarginCard';
 import { computeSaleMargin } from '@/src/utils/saleMargin';
 import { WebOrderBadge } from '@/src/components/sales/WebOrderBadge';
 import { webOrderService } from '@/src/services/webOrders';
+import { DeliveryPayerSelector } from '@/src/components/sales/DeliveryPayerSelector';
+import { DeliveryFeeInput } from '@/src/components/sales/DeliveryFeeInput';
+import { DeliveryPayer, readDelivery, deliveryColumns } from '@/src/utils/deliveryPayer';
 
 export default function CartScreen() {
   const { t } = useTranslation();
   const [showDiscountModal, setShowDiscountModal] = useState<string | null>(null);
   const [showCartDiscountModal, setShowCartDiscountModal] = useState(false);
+  // The delivery amount typed in, and who pays it (see src/utils/deliveryPayer.ts)
   const [deliveryCost, setDeliveryCost] = useState('');
+  const [deliveryPayer, setDeliveryPayer] = useState<DeliveryPayer>('shop');
+  // Currency the fee is TYPED in. The order itself is computed and recorded in the business's
+  // default currency, so a fee typed in another currency is converted before it is used or saved.
+  const [deliveryCurrencyId, setDeliveryCurrencyId] = useState<string | null>(null);
+  const deliveryCurrencyTouched = useRef(false);
   const [notes, setNotes] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,12 +52,16 @@ export default function CartScreen() {
   const [initialState, setInitialState] = useState<{
     items: Map<string, number>;
     deliveryCost: string;
+    deliveryPayer: DeliveryPayer;
+    deliveryCurrencyId: string | null;
     notes: string;
     cartDiscount: { type?: 'percentage' | 'fixed'; value?: number };
     itemDiscounts: Map<string, { type: 'percentage' | 'fixed'; value: number }>;
   }>({
     items: new Map(),
     deliveryCost: '',
+    deliveryPayer: 'shop',
+    deliveryCurrencyId: null,
     notes: '',
     cartDiscount: {},
     itemDiscounts: new Map()
@@ -86,7 +99,30 @@ export default function CartScreen() {
   // Get cart
   const cart = getCart(cartId as string);
 
+  // Delivery fee currency. Default: the currency of the products in the cart (when they all
+  // share one), otherwise the business's default currency.
+  const orderCurrencyId = defaultCurrency?.id;
+  const productsCurrencyId = useMemo(() => {
+    const ids = new Set((cart?.items || []).map(item => productCurrencyMap.get(item.product_id)).filter(Boolean) as string[]);
+    return ids.size === 1 ? Array.from(ids)[0] : undefined;
+  }, [cart?.items, productCurrencyMap]);
+  useEffect(() => {
+    if (deliveryCurrencyTouched.current) return;
+    setDeliveryCurrencyId(productsCurrencyId ?? orderCurrencyId ?? null);
+  }, [productsCurrencyId, orderCurrencyId]);
+  const typedDeliveryCurrencyId = deliveryCurrencyId ?? orderCurrencyId ?? null;
+  const deliveryFeeInOrderCurrency = useMemo(() => {
+    const typed = parseFloat(deliveryCost) || 0;
+    if (typed <= 0) return 0;
+    const converted = convertBetween(typed, typedDeliveryCurrencyId ?? undefined, orderCurrencyId);
+    return Math.round(converted * 100) / 100;
+  }, [deliveryCost, typedDeliveryCurrencyId, orderCurrencyId, convertBetween]);
+
   const [cartLookupDone, setCartLookupDone] = useState(false);
+  // A notification can switch business on the way here; look again under the new business
+  useEffect(() => {
+    setCartLookupDone(false);
+  }, [currentBusiness?.id]);
   useEffect(() => {
     if (cart) {
       if (!cartLookupDone) setCartLookupDone(true);
@@ -97,6 +133,25 @@ export default function CartScreen() {
     refreshCarts(true).finally(() => { if (!cancelled) setCartLookupDone(true); });
     return () => { cancelled = true; };
   }, [cart, cartLookupDone, refreshCarts]);
+
+  // Web orders only: is this customer's number already on the block list?
+  const [phoneBlocked, setPhoneBlocked] = useState(false);
+  const webCartBusinessId = cart?.source === 'web' ? (cart.business_id || currentBusiness?.id) : undefined;
+  const webCartPhone = cart?.source === 'web' ? cart.customer_phone : undefined;
+  // Checked every time the screen gains focus, so it is right after unblocking in Settings
+  useFocusEffect(
+    useCallback(() => {
+      if (!webCartBusinessId || !webCartPhone) {
+        setPhoneBlocked(false);
+        return;
+      }
+      let cancelled = false;
+      webOrderService.isPhoneBlocked(webCartBusinessId, webCartPhone)
+        .then(blocked => { if (!cancelled) setPhoneBlocked(blocked); })
+        .catch(error => console.error('Error checking blocked number:', error));
+      return () => { cancelled = true; };
+    }, [webCartBusinessId, webCartPhone])
+  );
 
   // Web orders only: stop this phone number from ordering from the online menu again
   const handleBlockWebNumber = useCallback(() => {
@@ -114,6 +169,7 @@ export default function CartScreen() {
           onPress: async () => {
             try {
               await webOrderService.blockPhone(businessId, phone, user?.id);
+              setPhoneBlocked(true);
               Alert.alert(t('onlineMenu.blockNumberTitle'), t('onlineMenu.blockNumberDone', { phone }));
             } catch (error) {
               console.error('Error blocking web order number:', error);
@@ -183,17 +239,26 @@ export default function CartScreen() {
         }
       });
 
-      const cartDeliveryCost = cart.delivery_cost?.toString() || '';
+      const savedDelivery = readDelivery(cart.delivery_cost, cart.delivery_charge);
+      const cartDeliveryCost = savedDelivery.amount > 0 ? savedDelivery.amount.toString() : (cart.delivery_cost?.toString() || '');
       const cartNotes = cart.notes || '';
 
       setLocalItemQuantities(itemQuantities);
       setLocalItemDiscounts(itemDiscounts);
       setDeliveryCost(cartDeliveryCost);
+      setDeliveryPayer(savedDelivery.payer);
+      // A saved fee is stored in the order's currency, so that is what the box shows
+      if (savedDelivery.amount > 0) {
+        deliveryCurrencyTouched.current = true;
+        setDeliveryCurrencyId(defaultCurrency?.id ?? null);
+      }
       setNotes(cartNotes);
 
       setInitialState({
         items: new Map(itemQuantities),
         deliveryCost: cartDeliveryCost,
+        deliveryPayer: savedDelivery.payer,
+        deliveryCurrencyId: savedDelivery.amount > 0 ? (defaultCurrency?.id ?? null) : null,
         notes: cartNotes,
         cartDiscount: {
           type: cart.discount_type,
@@ -222,7 +287,12 @@ export default function CartScreen() {
     });
 
     // Check delivery cost changes
-    if (deliveryCost !== initialState.deliveryCost) {
+    if (
+      deliveryCost !== initialState.deliveryCost ||
+      deliveryPayer !== initialState.deliveryPayer ||
+      // the same digits in another currency are a different fee
+      ((parseFloat(deliveryCost) || 0) > 0 && (deliveryCurrencyId ?? null) !== (initialState.deliveryCurrencyId ?? deliveryCurrencyId ?? null))
+    ) {
       changes.deliveryCost = deliveryCost;
       hasChanges = true;
     }
@@ -256,7 +326,7 @@ export default function CartScreen() {
     if (discountChanges.length > 0) changes.discountChanges = discountChanges;
 
     return { hasChanges, changes };
-  }, [cart, localItemQuantities, deliveryCost, notes, initialState, localItemDiscounts]);
+  }, [cart, localItemQuantities, deliveryCost, deliveryPayer, deliveryCurrencyId, notes, initialState, localItemDiscounts]);
 
   // Calculate local cart summary using local state values
   const getLocalCartSummary = useCallback(() => {
@@ -306,8 +376,10 @@ export default function CartScreen() {
       }
     }
 
-    // Calculate final total using local delivery cost
-    const localDeliveryCostValue = parseFloat(deliveryCost) || 0;
+    // Only a fee the SHOP pays comes out of the sale. A fee charged to the customer is
+    // added to what the customer pays (receipt) and leaves the shop's total alone.
+    const localDelivery = deliveryColumns(deliveryPayer, deliveryFeeInOrderCurrency);
+    const localDeliveryCostValue = localDelivery.delivery_cost;
     const finalTotal = Math.max(0, itemsSubtotalAfterDiscount - cartDiscountAmount - localDeliveryCostValue);
 
     return {
@@ -316,9 +388,10 @@ export default function CartScreen() {
       itemsSubtotalAfterDiscount,
       cartDiscountAmount,
       deliveryCost: localDeliveryCostValue,
+      deliveryCharge: localDelivery.delivery_charge,
       finalTotal
     };
-  }, [cart, localItemQuantities, deliveryCost]);
+  }, [cart, localItemQuantities, deliveryFeeInOrderCurrency, deliveryPayer]);
 
   const cartSummary = getLocalCartSummary();
 
@@ -361,8 +434,8 @@ export default function CartScreen() {
       // Save cart-level changes (delivery cost, notes, discounts)
       const cartUpdates: any = {};
       if (changes.deliveryCost !== undefined) {
-        const deliveryAmount = parseFloat(changes.deliveryCost) || 0;
-        cartUpdates.delivery_cost = deliveryAmount;
+        // Both columns are written together so only one payer ever holds the amount
+        Object.assign(cartUpdates, deliveryColumns(deliveryPayer, deliveryFeeInOrderCurrency));
       }
       if (changes.notes !== undefined) {
         cartUpdates.notes = changes.notes;
@@ -377,6 +450,8 @@ export default function CartScreen() {
       setInitialState({
         items: new Map(newItemQuantities),
         deliveryCost,
+        deliveryPayer,
+        deliveryCurrencyId,
         notes,
         cartDiscount: changes.cartDiscount || initialState.cartDiscount,
         itemDiscounts: new Map(localItemDiscounts)
@@ -388,7 +463,7 @@ export default function CartScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [cart, isSaving, getPendingChanges, localItemQuantities, deliveryCost, notes, localItemDiscounts, initialState, updateCart, updateCartItem, removeCartItem]);
+  }, [cart, isSaving, getPendingChanges, localItemQuantities, deliveryCost, deliveryPayer, deliveryCurrencyId, deliveryFeeInOrderCurrency, notes, localItemDiscounts, initialState, updateCart, updateCartItem, removeCartItem]);
 
   const handleQuantityChange = useCallback((itemId: string, newQuantity: number) => {
     setLocalItemQuantities(prev => {
@@ -848,18 +923,33 @@ export default function CartScreen() {
 
       {/* Customer Info */}
       <Card style={styles.customerInfo}>
-        <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-          Customer:
-        </Text>
-        <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          {cart.customer_name}
-        </Text>
+        <View style={styles.customerRow}>
+          <Text style={[styles.customerLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            Customer:
+          </Text>
+          <Text style={[styles.customerName, styles.customerNameFlex, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
+            {cart.customer_name}
+          </Text>
+        </View>
         {cart.source === 'web' && (
           <View style={styles.webOrderRow}>
             <WebOrderBadge orderRef={cart.order_ref} />
-            {!!cart.customer_phone && (
+            {!!cart.customer_phone && !phoneBlocked && (
               <TouchableOpacity onPress={handleBlockWebNumber} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button">
                 <Text style={styles.blockNumberText}>{t('onlineMenu.blockNumber')}</Text>
+              </TouchableOpacity>
+            )}
+            {!!cart.customer_phone && phoneBlocked && (
+              <TouchableOpacity
+                style={styles.blockedLink}
+                onPress={() => router.push('/settings/online-menu?section=blocked' as any)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="link"
+                accessibilityLabel={`${t('onlineMenu.numberBlocked')}. ${t('onlineMenu.manageBlocked')}`}
+              >
+                <PhoneOff size={13} color="#dc2626" />
+                <Text style={styles.blockNumberText}>{t('onlineMenu.numberBlocked')}</Text>
+                <Text style={styles.manageBlockedText}>{t('onlineMenu.manageBlocked')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -999,23 +1089,25 @@ export default function CartScreen() {
           </View>
 
           <View style={styles.deliveryCostContainer}>
+            <DeliveryPayerSelector value={deliveryPayer} onChange={setDeliveryPayer} />
+          </View>
+
+          <View style={styles.deliveryCostContainer}>
             <Text style={[styles.deliveryLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>
-              Delivery Cost
+              {t('delivery.fee')}
             </Text>
-            <View style={[styles.deliveryCostInput, { 
-              backgroundColor: isDark ? '#374151' : '#f9fafb',
-              borderColor: isDark ? '#4b5563' : '#d1d5db'
-            }]}>
-              <DollarSign size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <TextInput
-                style={[styles.deliveryCostTextInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                value={deliveryCost}
-                onChangeText={handleDeliveryCostChange}
-                placeholder="0.00"
-                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                keyboardType="decimal-pad"
-              />
-            </View>
+            <DeliveryFeeInput
+              value={deliveryCost}
+              onChangeText={handleDeliveryCostChange}
+              currencies={currencies as any}
+              currencyId={typedDeliveryCurrencyId}
+              onCurrencyChange={(id) => { deliveryCurrencyTouched.current = true; setDeliveryCurrencyId(id); }}
+              convertedHint={
+                deliveryFeeInOrderCurrency > 0 && typedDeliveryCurrencyId && orderCurrencyId && typedDeliveryCurrencyId !== orderCurrencyId
+                  ? t('delivery.convertedHint', { amount: formatPrice(deliveryFeeInOrderCurrency, orderCurrencyId) })
+                  : null
+              }
+            />
           </View>
 
           <View style={styles.notesContainer}>
@@ -1114,7 +1206,7 @@ export default function CartScreen() {
             {cartSummary.deliveryCost > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  Delivery Cost:
+                  {t('delivery.shopPaysRow')}:
                 </Text>
                 <Text style={[styles.discountAmount, { color: '#dc2626' }]}>
                   -{displayAmount(cartSummary.deliveryCost)}
@@ -1130,6 +1222,27 @@ export default function CartScreen() {
                 {displayAmount(cartSummary.finalTotal)}
               </Text>
             </View>
+
+            {cartSummary.deliveryCharge > 0 && (
+              <View style={[styles.customerPaysBox, { backgroundColor: isDark ? '#1e3a8a33' : '#eff6ff' }]}>
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {t('delivery.customerPaysRow')}:
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: '#2563eb', fontWeight: '600' }]}>
+                    +{displayAmount(cartSummary.deliveryCharge)}
+                  </Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                    {t('delivery.customerTotal')}:
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                    {displayAmount(cartSummary.finalTotal + cartSummary.deliveryCharge)}
+                  </Text>
+                </View>
+              </View>
+            )}
           </Card>
         )}
 
@@ -1216,11 +1329,16 @@ const styles = StyleSheet.create({
     lineHeight: 8,
   },
   customerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 12,
+  },
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customerNameFlex: {
+    flexShrink: 1,
   },
   customerLabel: {
     fontSize: 14,
@@ -1230,8 +1348,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  blockedLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  manageBlockedText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   blockNumberText: {
     color: '#dc2626',
@@ -1335,6 +1465,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  customerPaysBox: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 10,
   },
   deliveryCostContainer: {
     marginBottom: 16,

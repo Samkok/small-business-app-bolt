@@ -57,7 +57,11 @@ export function renderReceiptHtml(
     .join('');
 
   const deliveryRow =
-    model.delivery.kind === 'none' ? '' : row(esc(model.delivery.label), esc(model.delivery.value), model.delivery.kind === 'free' ? 'strong-value' : 'small-value');
+    model.delivery.kind === 'none'
+      ? ''
+      : model.delivery.kind === 'charged'
+        ? row(esc(model.delivery.label), money(model.delivery.amount || 0))
+        : row(esc(model.delivery.label), esc(model.delivery.value), model.delivery.kind === 'free' ? 'strong-value' : 'small-value');
 
   const refund = model.refund
     ? `
@@ -119,7 +123,7 @@ export function renderReceiptHtml(
     <div class="rule"></div>
     ${lines}
     <div class="rule"></div>
-    ${model.itemDiscountTotal > 0 || model.orderDiscountAmount > 0 ? row('Subtotal', money(model.subtotal)) : ''}
+    ${model.itemDiscountTotal > 0 || model.orderDiscountAmount > 0 || model.delivery.kind === 'charged' ? row('Subtotal', money(model.subtotal)) : ''}
     ${model.orderDiscountAmount > 0 ? row(esc(model.orderDiscountLabel || 'Order discount'), `-${money(model.orderDiscountAmount)}`) : ''}
     ${model.adjustment !== 0 ? row('Adjustment', `${model.adjustment < 0 ? '-' : ''}${money(Math.abs(model.adjustment))}`) : ''}
     ${deliveryRow}

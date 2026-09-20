@@ -554,6 +554,28 @@ export default function SaleDetailsContent({
               </Text>
             </View>
 
+            {/* Delivery fee the customer paid on top (carts.delivery_charge): receipt only, not the shop's money */}
+            {Number(sale?.carts?.delivery_charge) > 0 && (
+              <>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                    {t('delivery.customerPaysRow')}:
+                  </Text>
+                  <Text style={[styles.priceLabel, { color: '#2563eb', fontWeight: '600' }]}>
+                    +{fmt(Number(sale.carts.delivery_charge))}
+                  </Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.priceLabel, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                    {t('delivery.customerTotal')}:
+                  </Text>
+                  <Text style={[styles.priceLabel, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                    {fmt(sale.total_amount - (sale.returned_amount || 0) + Number(sale.carts.delivery_charge))}
+                  </Text>
+                </View>
+              </>
+            )}
+
             {sale.returned_amount > 0 && (
               <>
                 <View style={styles.priceRow}>

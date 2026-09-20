@@ -389,6 +389,7 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           delivery_cost?: number;
+          delivery_charge?: number | null;
           notes?: string;
           business_id: string;
           created_by?: string;
@@ -407,6 +408,7 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           delivery_cost?: number;
+          delivery_charge?: number | null;
           notes?: string;
           business_id: string;
           created_by?: string;
@@ -425,6 +427,7 @@ export interface Database {
           discount_type?: 'percentage' | 'fixed';
           discount_value?: number;
           delivery_cost?: number;
+          delivery_charge?: number | null;
           notes?: string;
           business_id?: string;
           created_by?: string;

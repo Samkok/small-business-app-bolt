@@ -28,11 +28,14 @@ import { computeSaleMargin } from '@/src/utils/saleMargin';
 import { PostSaleActionModal } from '@/src/components/sales/PostSaleActionModal';
 import { ReceiptInput } from '@/src/utils/receipt';
 import { receiptDraftStore } from '@/src/utils/receiptDraft';
+import { useTranslation } from 'react-i18next';
 import { PaymentStatusSelector } from '@/src/components/sales/PaymentStatusSelector';
 import { PaymentStatus } from '@/src/utils/paymentStatus';
 
 export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
+  // Set once the success prompt is answered, so nothing else renders while we navigate away
+  const [leaving, setLeaving] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'other'>('transfer');
   // PAID or COD has no default on purpose: it must be chosen for every sale
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
@@ -46,6 +49,7 @@ export default function CheckoutScreen() {
   const [displayCurrencyId, setDisplayCurrencyId] = useState<string | undefined>(undefined);
 
   const router = useRouter();
+  const { t } = useTranslation();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
@@ -158,6 +162,7 @@ export default function CheckoutScreen() {
             orderDiscountType: cart.discount_type ?? null,
             orderDiscountValue: cart.discount_value ?? null,
             deliveryCost: summaryNow.deliveryCost,
+            deliveryCharge: cart.delivery_charge ?? 0,
           }
         : null;
       const customerNameNow = cart?.customer_name || 'Customer';
@@ -190,16 +195,57 @@ export default function CheckoutScreen() {
 
   // After the prompt: land on the Sales list first so Back from the next screen goes
   // there, not to this checkout (its cart no longer exists).
+  // The cart screen is also still underneath this one in the stack, and its cart is gone too,
+  // so go back TO the Sales list (dropping both) rather than replacing only this screen:
+  // otherwise Back from Sales lands on "Cart Not Found".
   const leaveTo = useCallback((next?: string) => {
+    setLeaving(true);
     setCompletedSale(null);
-    router.replace('/sales');
-    if (next) setTimeout(() => router.push(next as any), 60);
+    try {
+      router.dismissTo('/sales');
+    } catch {
+      router.replace('/sales');
+    }
+    if (next) setTimeout(() => router.push(next as any), 80);
   }, [router]);
 
   const handleUpgradeFromPrompt = useCallback(() => {
     setShowUpgradePrompt(false);
     showPaywall();
   }, [showPaywall]);
+
+  // Built before the early return below: completing the sale removes the cart from memory,
+  // and the success prompt (receipt, view sale, new sale) must still show at that moment.
+  const postSaleModal = completedSale ? (
+    <PostSaleActionModal
+      visible
+      saleId={completedSale.saleId}
+      saleAmount={completedSale.amount}
+      customerName={completedSale.customerName}
+      offline={completedSale.offline}
+      onDismiss={() => leaveTo()}
+      onNewSale={() => leaveTo()}
+      onViewSale={() => leaveTo(completedSale.saleId ? `/(app)/(tabs)/sales/details/${completedSale.saleId}` : undefined)}
+      onReceipt={
+        completedSale.saleId
+          ? () => leaveTo(`/(app)/(tabs)/sales/receipt?saleId=${completedSale.saleId}`)
+          : completedSale.offline && receiptDraftStore.get()
+            ? () => leaveTo('/(app)/(tabs)/sales/receipt?draft=1')
+            : undefined
+      }
+    />
+  ) : null;
+
+  // The sale just went through: the cart is gone by design, so show the prompt, not an error
+  // (also while the sale is still being saved, so "Cart Not Found" never flashes in between)
+  if ((completedSale || processing || leaving) && (!cart || !cartSummary)) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb', justifyContent: 'center' }]}>
+        {!completedSale && !leaving && <LoadingSpinner />}
+        {postSaleModal}
+      </View>
+    );
+  }
 
   if (!cart || !cartSummary) {
     return (
@@ -356,10 +402,10 @@ export default function CheckoutScreen() {
           {cartSummary?.deliveryCost > 0 && (
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Delivery Cost:
+                {t('delivery.shopPaysRow')}:
               </Text>
-              <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {displayAmount(cartSummary.deliveryCost)}
+              <Text style={[styles.summaryValue, { color: '#dc2626' }]}>
+                -{displayAmount(cartSummary.deliveryCost)}
               </Text>
             </View>
           )}
@@ -372,6 +418,27 @@ export default function CheckoutScreen() {
               {displayAmount(cartSummary?.finalTotal)}
             </Text>
           </View>
+
+          {(cart?.delivery_charge ?? 0) > 0 && (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {t('delivery.customerPaysRow')}:
+                </Text>
+                <Text style={[styles.summaryValue, { color: '#2563eb' }]}>
+                  +{displayAmount(cart?.delivery_charge ?? 0)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                  {t('delivery.customerTotal')}:
+                </Text>
+                <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+                  {displayAmount((cartSummary?.finalTotal ?? 0) + (cart?.delivery_charge ?? 0))}
+                </Text>
+              </View>
+            </>
+          )}
         </Card>
 
         {saleMargin && <SaleMarginCard margin={saleMargin} formatAmount={displayAmount} />}
@@ -522,25 +589,7 @@ export default function CheckoutScreen() {
         message="You've reached the free limit. Upgrade to continue creating sales."
       />
 
-      {completedSale && (
-        <PostSaleActionModal
-          visible
-          saleId={completedSale.saleId}
-          saleAmount={completedSale.amount}
-          customerName={completedSale.customerName}
-          offline={completedSale.offline}
-          onDismiss={() => leaveTo()}
-          onNewSale={() => leaveTo()}
-          onViewSale={() => leaveTo(completedSale.saleId ? `/(app)/(tabs)/sales/details/${completedSale.saleId}` : undefined)}
-          onReceipt={
-            completedSale.saleId
-              ? () => leaveTo(`/(app)/(tabs)/sales/receipt?saleId=${completedSale.saleId}`)
-              : completedSale.offline && receiptDraftStore.get()
-                ? () => leaveTo('/(app)/(tabs)/sales/receipt?draft=1')
-                : undefined
-          }
-        />
-      )}
+      {postSaleModal}
     </View>
   );
 }

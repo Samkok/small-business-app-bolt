@@ -13,6 +13,9 @@ import {
   Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { DeliveryPayerSelector } from '@/src/components/sales/DeliveryPayerSelector';
+import { DeliveryFeeInput } from '@/src/components/sales/DeliveryFeeInput';
+import { DeliveryPayer, readDelivery } from '@/src/utils/deliveryPayer';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
@@ -66,7 +69,7 @@ export function InstantCheckoutModal() {
     removeItemDiscount,
     applyCartDiscount,
     removeCartDiscount,
-    setDeliveryCost,
+    setDelivery,
   } = useInstantCheckout();
 
   const { t } = useTranslation();
@@ -88,6 +91,9 @@ export function InstantCheckoutModal() {
   const [discountValue, setDiscountValue] = useState('');
   const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>('total');
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [deliveryPayer, setDeliveryPayer] = useState<DeliveryPayer>('shop');
+  // Currency the fee is typed in; the sale itself is recorded in the default currency
+  const [deliveryCurrencyId, setDeliveryCurrencyId] = useState<string | null>(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPostSaleModal, setShowPostSaleModal] = useState(false);
   const [paymentStatusMissing, setPaymentStatusMissing] = useState(false);
@@ -110,10 +116,12 @@ export function InstantCheckoutModal() {
   } | null>(null);
 
   useEffect(() => {
-    if (session?.delivery_cost) {
-      setDeliveryFee(session.delivery_cost.toString());
+    const saved = readDelivery(session?.delivery_cost, session?.delivery_charge);
+    if (saved.amount > 0) {
+      setDeliveryFee(saved.amount.toString());
+      setDeliveryPayer(saved.payer);
     }
-  }, [session?.delivery_cost]);
+  }, [session?.delivery_cost, session?.delivery_charge]);
 
   useEffect(() => {
     if (showProductSelector && currentBusiness?.id) {
@@ -327,18 +335,20 @@ export function InstantCheckoutModal() {
 
   const handleApplyDeliveryFee = () => {
     if (!deliveryFee) {
-      setDeliveryCost(0);
+      setDelivery(deliveryPayer, 0);
       setShowDeliveryModal(false);
       return;
     }
 
-    const fee = parseFloat(deliveryFee);
-    if (isNaN(fee) || fee < 0) {
+    const typedFee = parseFloat(deliveryFee);
+    if (isNaN(typedFee) || typedFee < 0) {
       Alert.alert('Error', 'Please enter a valid delivery fee');
       return;
     }
+    // Typed in the chosen currency, kept in the currency the sale is recorded in
+    const fee = Math.round(convertBetween(typedFee, deliveryCurrencyId ?? undefined, defaultCurrency?.id) * 100) / 100;
 
-    setDeliveryCost(fee);
+    setDelivery(deliveryPayer, fee);
     setShowDeliveryModal(false);
   };
 
@@ -470,6 +480,7 @@ export function InstantCheckoutModal() {
             businessId: currentBusiness.id,
             createdBy: user.id,
             deliveryCost: session.delivery_cost,
+            deliveryCharge: session.delivery_charge || 0,
             notes: session.notes,
             discountType: session.cart_discount_type,
             discountValue: session.cart_discount_value,
@@ -506,6 +517,7 @@ export function InstantCheckoutModal() {
             orderDiscountType: session.cart_discount_type ?? null,
             orderDiscountValue: session.cart_discount_value ?? null,
             deliveryCost: summary.deliveryCost,
+            deliveryCharge: summary.deliveryCharge,
           });
           clearSession();
           onClose();
@@ -706,13 +718,23 @@ export function InstantCheckoutModal() {
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
                 onPress={() => {
-                  setDeliveryFee(session?.delivery_cost?.toString() || '');
+                  const saved = readDelivery(session?.delivery_cost, session?.delivery_charge);
+                  setDeliveryFee(saved.amount > 0 ? saved.amount.toString() : '');
+                  setDeliveryPayer(saved.payer);
+                  // A saved fee is already in the sale's currency; a new one defaults to the
+                  // currency of the products being sold (when they all share one)
+                  const itemCurrencies = new Set((session?.items || []).map(item => item.currency_id).filter(Boolean) as string[]);
+                  setDeliveryCurrencyId(
+                    saved.amount > 0
+                      ? defaultCurrency?.id ?? null
+                      : itemCurrencies.size === 1 ? Array.from(itemCurrencies)[0] : defaultCurrency?.id ?? null
+                  );
                   setShowDeliveryModal(true);
                 }}
               >
                 <Truck size={20} color="#f59e0b" />
                 <Text style={[styles.actionButtonText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {session?.delivery_cost ? 'Edit Delivery' : 'Add Delivery'}
+                  {session?.delivery_cost || session?.delivery_charge ? 'Edit Delivery' : 'Add Delivery'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1188,9 +1210,9 @@ export function InstantCheckoutModal() {
               <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
                 Delivery Fee
               </Text>
-              {session?.delivery_cost && session.delivery_cost > 0 && (
+              {((session?.delivery_cost ?? 0) > 0 || (session?.delivery_charge ?? 0) > 0) && (
                 <TouchableOpacity onPress={() => {
-                  setDeliveryCost(0);
+                  setDelivery(deliveryPayer, 0);
                   setDeliveryFee('');
                   setShowDeliveryModal(false);
                 }}>
@@ -1199,13 +1221,27 @@ export function InstantCheckoutModal() {
               )}
             </View>
 
-            <Input
-              label="Delivery Fee ($)"
-              value={deliveryFee}
-              onChangeText={setDeliveryFee}
-              keyboardType="decimal-pad"
-              placeholder="Enter delivery fee"
-            />
+            <View style={{ marginBottom: 14 }}>
+              <DeliveryPayerSelector value={deliveryPayer} onChange={setDeliveryPayer} />
+            </View>
+
+            <Text style={[styles.deliveryFeeLabel, { color: isDark ? '#f9fafb' : '#374151' }]}>{t('delivery.fee')}</Text>
+            <View style={{ marginBottom: 16 }}>
+              <DeliveryFeeInput
+                value={deliveryFee}
+                onChangeText={setDeliveryFee}
+                currencies={currencies as any}
+                currencyId={deliveryCurrencyId ?? defaultCurrency?.id}
+                onCurrencyChange={setDeliveryCurrencyId}
+                convertedHint={(() => {
+                  const typed = parseFloat(deliveryFee) || 0;
+                  const from = deliveryCurrencyId ?? defaultCurrency?.id;
+                  if (typed <= 0 || !from || !defaultCurrency?.id || from === defaultCurrency.id) return null;
+                  const converted = Math.round(convertBetween(typed, from, defaultCurrency.id) * 100) / 100;
+                  return t('delivery.convertedHint', { amount: formatPrice(converted, defaultCurrency.id) });
+                })()}
+              />
+            </View>
 
             <View style={styles.modalActions}>
               <Button
@@ -1251,6 +1287,7 @@ export function InstantCheckoutModal() {
 }
 
 const styles = StyleSheet.create({
+  deliveryFeeLabel: { fontSize: 14, fontWeight: '500', marginBottom: 6 },
   container: {
     flex: 1,
   },
