@@ -21,7 +21,9 @@ export function OnlineMenuButton() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness, isAdmin } = useAuth();
+  const { currentBusiness, user } = useAuth();
+  // Only the owner sets the menu up; every other member views and shares it
+  const isOwner = !!user?.id && currentBusiness?.owner_user_id === user.id;
 
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -108,7 +110,7 @@ export function OnlineMenuButton() {
             <OnlineMenuSharePanel slug={menu.slug} businessName={currentBusiness.business_name} />
             <TouchableOpacity style={styles.settingsLink} onPress={openSettings} accessibilityRole="link">
               <SettingsIcon size={16} color={colors.subtext} />
-              <Text style={[styles.settingsText, { color: colors.subtext }]}>{t('onlineMenu.openSettings')}</Text>
+              <Text style={[styles.settingsText, { color: colors.subtext }]}>{isOwner ? t('onlineMenu.openSettings') : t('onlineMenu.viewDetails')}</Text>
             </TouchableOpacity>
           </ScrollView>
         ) : (
@@ -121,10 +123,10 @@ export function OnlineMenuButton() {
             </Text>
             <Text style={[styles.emptyText, { color: colors.subtext }]}>
               {menu && !menu.active
-                ? t('onlineMenu.inactiveBusiness')
-                : isAdmin ? t('onlineMenu.notSetUp') : t('onlineMenu.notSetUpStaff')}
+                ? (isOwner ? t('onlineMenu.inactiveBusiness') : t('onlineMenu.inactiveBusinessMember'))
+                : isOwner ? t('onlineMenu.notSetUp') : t('onlineMenu.notSetUpStaff')}
             </Text>
-            {isAdmin && (!menu || menu.active) && (
+            {isOwner && (!menu || menu.active) && (
               <Button title={t('onlineMenu.setUp')} onPress={openSettings} style={styles.setUpButton} />
             )}
           </View>

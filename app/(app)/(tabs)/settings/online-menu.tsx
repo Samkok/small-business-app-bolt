@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Store, TriangleAlert as AlertTriangle, Lock } from 'lucide-react-native';
+import { ArrowLeft, Store, TriangleAlert as AlertTriangle, Lock, PhoneOff } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
@@ -11,6 +11,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OnlineMenuSharePanel } from '@/src/components/menu/OnlineMenuSharePanel';
 import { businessService } from '@/src/services/business';
+import { webOrderService } from '@/src/services/webOrders';
 import { isMenuSiteConfigured, MENU_URL } from '@/src/config/menu';
 import { MENU_NOTE_MAX, normalizeTelegram, onlineMenuErrorKey, onlineMenuSchema, suggestMenuSlug } from '@/src/utils/onlineMenu';
 
@@ -18,7 +19,11 @@ export default function OnlineMenuScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { currentBusiness, updateBusiness, isAdmin } = useAuth();
+  const { currentBusiness, updateBusiness, user } = useAuth();
+  // The menu follows the OWNER's plan, so only the owner switches it on or off or renames it.
+  // Every other member (admin or staff) can see and share it. The database enforces the same
+  // rule (trigger enforce_menu_owner_only).
+  const canEdit = !!user?.id && currentBusiness?.owner_user_id === user.id;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,6 +35,19 @@ export default function OnlineMenuScreen() {
   // What is saved on the server: the link and QR only ever show this, never unsaved edits
   const [saved, setSaved] = useState<{ enabled: boolean; slug: string | null }>({ enabled: false, slug: null });
   const [accessState, setAccessState] = useState<string | null>(null);
+  // Numbers blocked from the cart screen ("Block this number"). Any member can block or unblock.
+  const [blocked, setBlocked] = useState<{ phone: string; created_at: string }[]>([]);
+  const [unblocking, setUnblocking] = useState<string | null>(null);
+  // ?section=blocked (from a cart's "Number blocked" link) opens the screen at the block list
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledToBlocked = useRef(false);
+  const [blockedY, setBlockedY] = useState<number | null>(null);
+  useEffect(() => {
+    if (section !== 'blocked' || loading || blockedY === null || scrolledToBlocked.current) return;
+    scrolledToBlocked.current = true;
+    scrollRef.current?.scrollTo({ y: Math.max(0, blockedY - 12), animated: true });
+  }, [section, loading, blockedY]);
 
   const colors = {
     bg: isDark ? '#111827' : '#f9fafb',
@@ -43,20 +61,26 @@ export default function OnlineMenuScreen() {
     setLoading(true);
     try {
       const menu = await businessService.getOnlineMenu(currentBusiness.id);
-      // Someone setting the menu up for the first time came here to switch it on
-      setEnabled(menu?.menu_slug ? !!menu.menu_enabled : true);
+      // The owner setting the menu up for the first time came here to switch it on.
+      // A member only ever sees what is saved.
+      setEnabled(menu?.menu_slug || !canEdit ? !!menu?.menu_enabled : true);
       // Offer a link name only when none has been saved yet
-      setSlug(menu?.menu_slug || suggestMenuSlug(currentBusiness.business_name));
+      setSlug(menu?.menu_slug || (canEdit ? suggestMenuSlug(currentBusiness.business_name) : ''));
       setTelegram(menu?.menu_telegram || '');
       setNote(menu?.menu_note || '');
       setSaved({ enabled: !!menu?.menu_enabled, slug: menu?.menu_slug ?? null });
       setAccessState(menu?.access_state ?? null);
+      try {
+        setBlocked(await webOrderService.listBlockedPhones(currentBusiness.id));
+      } catch (error) {
+        console.error('Error loading blocked numbers:', error);
+      }
     } catch (error) {
       console.error('Error loading online menu settings:', error);
     } finally {
       setLoading(false);
     }
-  }, [currentBusiness?.id, currentBusiness?.business_name]);
+  }, [currentBusiness?.id, currentBusiness?.business_name, canEdit]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -120,6 +144,29 @@ export default function OnlineMenuScreen() {
     persist(payload);
   };
 
+  const handleUnblock = (phone: string) => {
+    if (!currentBusiness?.id) return;
+    const businessId = currentBusiness.id;
+    Alert.alert(t('onlineMenu.unblockTitle'), t('onlineMenu.unblockMessage', { phone }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('onlineMenu.unblock'),
+        onPress: async () => {
+          setUnblocking(phone);
+          try {
+            await webOrderService.unblockPhone(businessId, phone);
+            setBlocked(prev => prev.filter(b => b.phone !== phone));
+          } catch (error) {
+            console.error('Error unblocking number:', error);
+            Alert.alert(t('onlineMenu.unblockTitle'), t('onlineMenu.errors.saveFailed'));
+          } finally {
+            setUnblocking(null);
+          }
+        },
+      },
+    ]);
+  };
+
   const showShare = isMenuSiteConfigured && saved.enabled && !!saved.slug;
 
   return (
@@ -135,13 +182,13 @@ export default function OnlineMenuScreen() {
       {loading ? (
         <LoadingSpinner />
       ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Text style={[styles.intro, { color: colors.subtext }]}>{t('onlineMenu.intro')}</Text>
 
           {accessState && accessState !== 'active' && (
             <View style={[styles.notice, { backgroundColor: isDark ? '#78350f' : '#fef3c7' }]}>
               <AlertTriangle size={18} color="#d97706" />
-              <Text style={[styles.noticeText, { color: isDark ? '#fde68a' : '#92400e' }]}>{t('onlineMenu.inactiveBusiness')}</Text>
+              <Text style={[styles.noticeText, { color: isDark ? '#fde68a' : '#92400e' }]}>{canEdit ? t('onlineMenu.inactiveBusiness') : t('onlineMenu.inactiveBusinessMember')}</Text>
             </View>
           )}
 
@@ -160,10 +207,10 @@ export default function OnlineMenuScreen() {
           )}
 
           <Card style={styles.card}>
-            {!isAdmin && (
+            {!canEdit && (
               <View style={[styles.notice, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6', marginBottom: 14 }]}>
                 <Lock size={16} color={colors.subtext} />
-                <Text style={[styles.noticeText, { color: colors.subtext }]}>{t('onlineMenu.adminOnly')}</Text>
+                <Text style={[styles.noticeText, { color: colors.subtext }]}>{t('onlineMenu.ownerOnly')}</Text>
               </View>
             )}
 
@@ -179,7 +226,7 @@ export default function OnlineMenuScreen() {
               <Switch
                 value={enabled}
                 onValueChange={setEnabled}
-                disabled={!isAdmin}
+                disabled={!canEdit}
                 trackColor={{ false: isDark ? '#4b5563' : '#d1d5db', true: '#86efac' }}
                 thumbColor={enabled ? '#059669' : '#f3f4f6'}
                 accessibilityLabel={t('onlineMenu.switchLabel')}
@@ -194,7 +241,7 @@ export default function OnlineMenuScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               maxLength={40}
-              editable={isAdmin}
+              editable={canEdit}
               error={errors.menu_slug || undefined}
               hint={isMenuSiteConfigured ? `${MENU_URL.replace(/^https?:\/\//, '')}/${slug || 'my-shop'}` : t('onlineMenu.linkNameHint')}
               required={enabled}
@@ -207,7 +254,7 @@ export default function OnlineMenuScreen() {
               placeholder="@myshop"
               autoCapitalize="none"
               autoCorrect={false}
-              editable={isAdmin}
+              editable={canEdit}
               error={errors.menu_telegram || undefined}
               hint={t('onlineMenu.telegramHint')}
             />
@@ -220,15 +267,41 @@ export default function OnlineMenuScreen() {
               multiline
               numberOfLines={3}
               maxLength={MENU_NOTE_MAX}
-              editable={isAdmin}
+              editable={canEdit}
               error={errors.menu_note || undefined}
               hint={`${note.length}/${MENU_NOTE_MAX}`}
             />
 
-            {isAdmin && (
+            {canEdit && (
               <Button title={t('common.save')} onPress={handleSave} loading={saving} disabled={saving} style={styles.saveButton} />
             )}
           </Card>
+
+          <View onLayout={(e) => setBlockedY(e.nativeEvent.layout.y)}>
+          <Card style={styles.card}>
+            <View style={styles.blockedHeader}>
+              <PhoneOff size={18} color="#dc2626" />
+              <Text style={[styles.blockedTitle, { color: colors.text }]}>{t('onlineMenu.blockedTitle')}</Text>
+            </View>
+            <Text style={[styles.switchHint, { color: colors.subtext, marginBottom: blocked.length ? 8 : 0 }]}>
+              {blocked.length ? t('onlineMenu.blockedHint') : t('onlineMenu.blockedEmpty')}
+            </Text>
+            {blocked.map((b, index) => (
+              <View key={b.phone} style={[styles.blockedRow, index > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
+                <Text style={[styles.blockedPhone, { color: colors.text }]} selectable>{b.phone}</Text>
+                <TouchableOpacity
+                  onPress={() => handleUnblock(b.phone)}
+                  disabled={unblocking === b.phone}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('onlineMenu.unblock')} ${b.phone}`}
+                >
+                  <Text style={[styles.unblockText, unblocking === b.phone && { opacity: 0.5 }]}>{t('onlineMenu.unblock')}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </Card>
+          </View>
 
           <Text style={[styles.footnote, { color: colors.subtext }]}>{t('onlineMenu.howItWorks')}</Text>
         </ScrollView>
@@ -253,5 +326,10 @@ const styles = StyleSheet.create({
   switchLabel: { fontSize: 16, fontWeight: '600' },
   switchHint: { fontSize: 12, marginTop: 2 },
   saveButton: { marginTop: 8 },
+  blockedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  blockedTitle: { fontSize: 16, fontWeight: '600' },
+  blockedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  blockedPhone: { fontSize: 15, fontWeight: '600' },
+  unblockText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   footnote: { fontSize: 12, lineHeight: 18, marginBottom: 40, textAlign: 'center' },
 });
