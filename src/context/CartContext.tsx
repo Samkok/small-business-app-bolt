@@ -41,7 +41,10 @@ export interface Cart {
   total_amount: number;
   discount_type?: 'percentage' | 'fixed';
   discount_value?: number;
+  /** courier fee the SHOP pays (free delivery); deducted from the sale */
   delivery_cost?: number;
+  /** delivery fee the CUSTOMER pays; on the receipt only, never deducted. One of the two is 0. */
+  delivery_charge?: number;
   notes?: string;
   /** 'web' = placed by a customer on the public online menu. Missing means 'app'. */
   source?: 'app' | 'web';
@@ -230,6 +233,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
         discount_value: serverCart.discount_value,
         delivery_cost: serverCart.delivery_cost,
+        delivery_charge: Number((serverCart as any).delivery_charge) || 0,
         notes: serverCart.notes,
         source: (serverCart as any).source === 'web' ? 'web' : 'app',
         order_ref: (serverCart as any).order_ref || undefined,
@@ -325,6 +329,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         discount_type: serverCart.discount_type as 'percentage' | 'fixed' | undefined,
         discount_value: serverCart.discount_value,
         delivery_cost: serverCart.delivery_cost,
+        delivery_charge: Number((serverCart as any).delivery_charge) || 0,
         notes: serverCart.notes,
         business_id: serverCart.business_id,
         created_by: serverCart.created_by,
@@ -353,6 +358,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const deliveryCost = parseFloat(updates.delivery_cost as any);
         updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
       }
+      if (updates.delivery_charge !== undefined) {
+        const deliveryCharge = parseFloat(updates.delivery_charge as any);
+        updates.delivery_charge = isNaN(deliveryCharge) ? 0 : deliveryCharge;
+      }
 
       setCarts(prevCarts => prevCarts.map(cart => {
         if (cart.id === cartId) {
@@ -376,6 +385,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         discount_type: updates.discount_type,
         discount_value: updates.discount_value,
         delivery_cost: updates.delivery_cost,
+        ...(updates.delivery_charge !== undefined ? { delivery_charge: updates.delivery_charge } : {}),
         notes: updates.notes
       });
 
@@ -605,6 +615,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         businessId: currentBusiness.id,
         createdBy: user.id,
         deliveryCost: cart.delivery_cost,
+        deliveryCharge: cart.delivery_charge,
         notes: customNotes || cart.notes,
         discountType: cart.discount_type,
         discountValue: cart.discount_value,
@@ -679,6 +690,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           businessId: currentBusiness.id,
           createdBy: user.id,
           deliveryCost: cart.delivery_cost,
+          deliveryCharge: cart.delivery_charge,
           notes: customNotes || cart.notes,
           discountType: cart.discount_type,
           discountValue: cart.discount_value,

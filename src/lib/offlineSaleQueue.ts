@@ -30,6 +30,8 @@ export interface OfflineSalePayload {
   businessId: string;
   createdBy: string;
   deliveryCost?: number;
+  /** delivery fee charged to the customer (carts.delivery_charge); absent on older queued sales */
+  deliveryCharge?: number;
   notes?: string;
   discountType?: 'percentage' | 'fixed';
   discountValue?: number;

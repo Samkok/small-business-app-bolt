@@ -5,10 +5,12 @@ export { summarizeAdjustments };
 export type { AdjustmentTotals };
 
 /**
- * Stock adjustments: the immutable ledger of manual stock changes (damage,
- * expiry, loss, samples, count corrections, found stock). All writes go through
- * the adjust_product_stock / post_stock_count database functions so the ledger
- * row, the product's current_stock and product_history change together.
+ * Stock adjustments: the ledger of manual stock changes (damage, expiry, loss,
+ * samples, count corrections, found stock). All writes go through database
+ * functions (adjust_product_stock, post_stock_count, update_stock_adjustment,
+ * delete_stock_adjustment) so the ledger row, the product's current_stock and
+ * product_history change together. An edit or delete puts the stock back and is
+ * itself recorded in stock_adjustment_changes.
  */
 
 export type AdjustmentReason = 'damaged' | 'expired' | 'lost' | 'sample' | 'count' | 'found' | 'other';
@@ -95,6 +97,35 @@ export const stockAdjustmentService = {
     } as any);
     if (error) throw error;
     return data as unknown as StockAdjustment;
+  },
+
+  /**
+   * Correct an adjustment. quantity is signed in the chosen unit, like adjust().
+   * Only the difference from the old quantity is applied to the stock.
+   */
+  async update(input: {
+    adjustmentId: string;
+    quantity: number;
+    reason: AdjustmentReason;
+    unitId?: string | null;
+    notes?: string;
+  }): Promise<StockAdjustment> {
+    const { data, error } = await supabase.rpc('update_stock_adjustment', {
+      p_adjustment_id: input.adjustmentId,
+      p_quantity: input.quantity,
+      p_reason: input.reason,
+      p_unit_id: input.unitId || null,
+      p_notes: input.notes || null,
+    } as any);
+    if (error) throw error;
+    return data as unknown as StockAdjustment;
+  },
+
+  /** Remove an adjustment and put its quantity back into (or take it out of) the stock. */
+  async remove(adjustmentId: string): Promise<{ id: string; product_id: string; stock_before: number; stock_after: number }> {
+    const { data, error } = await supabase.rpc('delete_stock_adjustment', { p_adjustment_id: adjustmentId } as any);
+    if (error) throw error;
+    return data as any;
   },
 
   /** Post a stock count: one 'count' adjustment per product whose counted quantity differs from the system. */

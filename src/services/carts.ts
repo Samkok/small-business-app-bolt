@@ -128,6 +128,11 @@ export const cartService = {
       const deliveryCost = parseFloat(updates.delivery_cost as any);
       updates.delivery_cost = isNaN(deliveryCost) ? 0 : deliveryCost;
     }
+    // Same for the fee charged to the customer (see src/utils/deliveryPayer.ts)
+    if ((updates as any).delivery_charge !== undefined) {
+      const deliveryCharge = parseFloat((updates as any).delivery_charge as any);
+      (updates as any).delivery_charge = isNaN(deliveryCharge) ? 0 : deliveryCharge;
+    }
     
     const { data, error } = await supabase
       .from('carts')

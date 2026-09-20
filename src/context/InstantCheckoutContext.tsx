@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import { customerService } from '@/src/services/customers';
 import { Database } from '../types/database';
+import { DeliveryPayer, deliveryColumns } from '../utils/deliveryPayer';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 type Product = Database['public']['Tables']['products']['Row'];
@@ -38,7 +39,10 @@ export interface InstantCheckoutSession {
   sale_date: Date;
   cart_discount_type?: 'percentage' | 'fixed';
   cart_discount_value?: number;
+  /** courier fee the SHOP pays (free delivery); deducted from the sale */
   delivery_cost?: number;
+  /** delivery fee the CUSTOMER pays; receipt only, never deducted. One of the two is 0. */
+  delivery_charge?: number;
   notes?: string;
 }
 
@@ -48,6 +52,8 @@ export interface InstantCheckoutSummary {
   itemsSubtotalAfterDiscount: number;
   cartDiscountAmount: number;
   deliveryCost: number;
+  /** fee charged to the customer on top of finalTotal */
+  deliveryCharge: number;
   finalTotal: number;
 }
 
@@ -68,6 +74,8 @@ interface InstantCheckoutContextType {
   applyCartDiscount: (discountType: 'percentage' | 'fixed', discountValue: number) => void;
   removeCartDiscount: () => void;
   setDeliveryCost: (cost: number) => void;
+  /** Who pays the courier and how much; writes both delivery amounts together */
+  setDelivery: (payer: DeliveryPayer, amount: number) => void;
   setNotes: (notes: string) => void;
   getSessionSummary: () => InstantCheckoutSummary;
   clearSession: () => void;
@@ -455,7 +463,16 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
   const setDeliveryCost = useCallback((cost: number) => {
     setSession((prev) => {
       if (!prev) return null;
-      return { ...prev, delivery_cost: cost };
+      return { ...prev, delivery_cost: cost, delivery_charge: 0 };
+    });
+
+    resetAutoSaveTimer();
+  }, [resetAutoSaveTimer]);
+
+  const setDelivery = useCallback((payer: DeliveryPayer, amount: number) => {
+    setSession((prev) => {
+      if (!prev) return null;
+      return { ...prev, ...deliveryColumns(payer, amount) };
     });
 
     resetAutoSaveTimer();
@@ -478,6 +495,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
         itemsSubtotalAfterDiscount: 0,
         cartDiscountAmount: 0,
         deliveryCost: 0,
+        deliveryCharge: 0,
         finalTotal: 0,
       };
     }
@@ -499,6 +517,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
       itemsSubtotalAfterDiscount,
       cartDiscountAmount,
       deliveryCost,
+      deliveryCharge: session.delivery_charge || 0,
       finalTotal,
     };
   }, [session, calculateCartDiscount]);
@@ -544,6 +563,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
     applyCartDiscount,
     removeCartDiscount,
     setDeliveryCost,
+    setDelivery,
     setNotes,
     getSessionSummary,
     clearSession,

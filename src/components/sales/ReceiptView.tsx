@@ -19,7 +19,8 @@ export const RECEIPT_VIEW_WIDTH = 340;
  */
 export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
   const contact = [model.business.phone, model.business.address, model.business.pageName].filter(Boolean) as string[];
-  const showSubtotal = model.itemDiscountTotal > 0 || model.orderDiscountAmount > 0;
+  // A charged delivery fee is added below the goods, so show what the goods came to first
+  const showSubtotal = model.itemDiscountTotal > 0 || model.orderDiscountAmount > 0 || model.delivery.kind === 'charged';
 
   return (
     <View style={styles.paper} collapsable={false}>
@@ -66,7 +67,10 @@ export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
       {model.adjustment !== 0 && (
         <Row label="Adjustment" value={`${model.adjustment < 0 ? '-' : ''}${formatAmount(Math.abs(model.adjustment))}`} />
       )}
-      {model.delivery.kind !== 'none' && (
+      {model.delivery.kind === 'charged' && (
+        <Row label={model.delivery.label || 'Delivery fee'} value={formatAmount(model.delivery.amount || 0)} />
+      )}
+      {model.delivery.kind !== 'none' && model.delivery.kind !== 'charged' && (
         <Row
           label={model.delivery.label || 'Delivery'}
           value={model.delivery.value || ''}

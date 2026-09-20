@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { BottomSheet } from '@/src/components/ui/BottomSheet';
-import { X, Minus, Plus } from 'lucide-react-native';
+import { X, Minus, Plus, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
@@ -28,15 +28,20 @@ interface Props {
   units?: Unit[];
   onClose: () => void;
   onPosted: (adjustment: StockAdjustment) => void;
+  /** An existing record to correct or delete. The form opens filled in with it. */
+  editing?: StockAdjustment | null;
+  onDeleted?: (adjustmentId: string) => void;
 }
 
 /**
- * Post one stock adjustment for a product. The reason decides the direction
+ * Post one stock adjustment for a product, or (with `editing`) correct or delete an
+ * existing one: the stock is put back as if the old entry had never been made, then
+ * the corrected entry is applied. The reason decides the direction
  * (damaged always removes, found always adds, count/other let the user pick),
  * the quantity is entered in the chosen unit, and the preview shows the stock
  * after the change and the cost written off or recovered.
  */
-export default function StockAdjustmentModal({ visible, product, units = [], onClose, onPosted }: Props) {
+export default function StockAdjustmentModal({ visible, product, units = [], onClose, onPosted, editing = null, onDeleted }: Props) {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { formatPrice } = useCurrencyContext();
@@ -47,17 +52,26 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
   const [unitId, setUnitId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [posting, setPosting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (visible) {
+    if (!visible) return;
+    setPosting(false);
+    setDeleting(false);
+    if (editing) {
+      setReason(editing.reason);
+      setDirection(editing.quantity < 0 ? 'out' : 'in');
+      setQuantity(String(Math.abs(Number(editing.quantity_entered) || editing.quantity)));
+      setUnitId(editing.unit_id);
+      setNotes(editing.notes || '');
+    } else {
       setReason('damaged');
       setDirection('out');
       setQuantity('');
       setUnitId(null);
       setNotes('');
-      setPosting(false);
     }
-  }, [visible, product?.id]);
+  }, [visible, product?.id, editing?.id]);
 
   const reasonInfo = ADJUSTMENT_REASONS.find(r => r.key === reason)!;
   const effectiveDirection: 'out' | 'in' = reasonInfo.direction === 'either' ? direction : reasonInfo.direction;
@@ -67,8 +81,11 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
   const qtyNum = Math.max(0, parseFloat(quantity) || 0);
   const baseQty = Math.round(qtyNum * factor);
   const signedBase = effectiveDirection === 'out' ? -baseQty : baseQty;
-  const stockAfter = (product?.current_stock || 0) + signedBase;
-  const unitCost = Number(product?.cost_per_unit) || 0;
+  // Editing: the old entry is taken back out of today's stock before the new one goes in
+  const stockWithoutOld = (product?.current_stock || 0) - (editing ? editing.quantity : 0);
+  const stockAfter = stockWithoutOld + signedBase;
+  // A record keeps the cost it was valued at when it was first posted
+  const unitCost = editing ? Number(editing.unit_cost) || 0 : Number(product?.cost_per_unit) || 0;
   const costImpact = baseQty * unitCost;
   const belowZero = stockAfter < 0;
 
@@ -89,7 +106,7 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
       return;
     }
     if (belowZero) {
-      Alert.alert('Not enough stock', `Only ${product.current_stock} in stock; you cannot remove ${baseQty}.`);
+      Alert.alert('Not enough stock', `Only ${stockWithoutOld} in stock; you cannot remove ${baseQty}.`);
       return;
     }
     if (reason === 'other' && !notes.trim()) {
@@ -98,21 +115,64 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
     }
     setPosting(true);
     try {
-      const row = await stockAdjustmentService.adjust({
-        businessId: currentBusiness.id,
-        productId: product.id,
-        quantity: effectiveDirection === 'out' ? -qtyNum : qtyNum,
-        reason,
-        unitId,
-        notes: notes.trim() || undefined,
-      });
+      const signedQuantity = effectiveDirection === 'out' ? -qtyNum : qtyNum;
+      const row = editing
+        ? await stockAdjustmentService.update({
+            adjustmentId: editing.id,
+            quantity: signedQuantity,
+            reason,
+            unitId,
+            notes: notes.trim() || undefined,
+          })
+        : await stockAdjustmentService.adjust({
+            businessId: currentBusiness.id,
+            productId: product.id,
+            quantity: signedQuantity,
+            reason,
+            unitId,
+            notes: notes.trim() || undefined,
+          });
       onPosted(row);
       onClose();
     } catch (error: any) {
-      Alert.alert('Could not post adjustment', error?.message || 'Please try again.');
+      Alert.alert(editing ? 'Could not save changes' : 'Could not post adjustment', error?.message || 'Please try again.');
     } finally {
       setPosting(false);
     }
+  };
+
+  const handleDelete = () => {
+    if (!editing || !product) return;
+    if (stockWithoutOld < 0) {
+      Alert.alert(
+        'Cannot delete',
+        `This adjustment added ${editing.quantity} units and only ${product.current_stock} are left, so taking them back would leave less than zero.`
+      );
+      return;
+    }
+    Alert.alert(
+      'Delete this adjustment?',
+      `Stock goes from ${product.current_stock} back to ${stockWithoutOld}, and it is removed from your write-off totals. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await stockAdjustmentService.remove(editing.id);
+              onDeleted?.(editing.id);
+              onClose();
+            } catch (error: any) {
+              Alert.alert('Could not delete', error?.message || 'Please try again.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (!product) return null;
@@ -125,7 +185,7 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
       header={
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: colors.text }]}>Adjust Stock</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{editing ? 'Edit Adjustment' : 'Adjust Stock'}</Text>
             <Text style={[styles.subtitle, { color: colors.subtext }]} numberOfLines={1}>
               {product.name} · {product.current_stock} in stock
             </Text>
@@ -182,7 +242,7 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
                 keyboardType="numeric"
                 placeholder="0"
                 placeholderTextColor={colors.subtext}
-                autoFocus
+                autoFocus={!editing}
               />
               {sortedUnits.length > 0 && (
                 <View style={styles.unitChips}>
@@ -240,13 +300,34 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
               )}
             </View>
 
-            <Button
-              title={posting ? 'Posting…' : effectiveDirection === 'out' ? `Remove ${baseQty || ''} units` : `Add ${baseQty || ''} units`}
-              onPress={handlePost}
-              disabled={posting || baseQty <= 0 || belowZero}
-              loading={posting}
-              variant={effectiveDirection === 'out' ? 'danger' : 'primary'}
-            />
+            {editing ? (
+              <>
+                <Button
+                  title={posting ? 'Saving…' : 'Save changes'}
+                  onPress={handlePost}
+                  disabled={posting || deleting || baseQty <= 0 || belowZero}
+                  loading={posting}
+                />
+                <TouchableOpacity
+                  style={[styles.deleteButton, { borderColor: '#dc2626', opacity: posting || deleting ? 0.5 : 1 }]}
+                  onPress={handleDelete}
+                  disabled={posting || deleting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete this adjustment and put the stock back"
+                >
+                  <Trash2 size={16} color="#dc2626" />
+                  <Text style={styles.deleteText}>{deleting ? 'Deleting…' : `Delete and put stock back to ${stockWithoutOld}`}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Button
+                title={posting ? 'Posting…' : effectiveDirection === 'out' ? `Remove ${baseQty || ''} units` : `Add ${baseQty || ''} units`}
+                onPress={handlePost}
+                disabled={posting || baseQty <= 0 || belowZero}
+                loading={posting}
+                variant={effectiveDirection === 'out' ? 'danger' : 'primary'}
+              />
+            )}
           </ScrollView>
     </BottomSheet>
   );
@@ -277,4 +358,6 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: 13 },
   previewValue: { fontSize: 14, fontWeight: '700' },
   previewWarn: { fontSize: 12, marginTop: 4 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: 10, borderWidth: 1, marginTop: 10 },
+  deleteText: { color: '#dc2626', fontSize: 14, fontWeight: '700' },
 });

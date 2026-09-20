@@ -7,7 +7,7 @@ import { pushNotificationService } from '../services/pushNotifications';
 import { BadgeSync } from '../utils/badgeSync';
 import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
 import { useSaleDetailsModal } from './SaleDetailsModalContext';
@@ -36,6 +36,9 @@ interface NotificationContextData {
 
 const NotificationContext = createContext<NotificationContextData>({} as NotificationContextData);
 
+// Push taps already acted on in this app run (see handlePushResponse)
+const handledPushResponses = new Set<string>();
+
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -53,6 +56,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [loading, setLoading] = useState(true);
   const auth = useAuth();
   const router = useRouter();
+  const segments = useSegments();
+  // A push tap can only navigate once the signed-in app is on screen: account data loaded, a
+  // business chosen, and past the loading / onboarding / business-selection screens.
+  const canNavigateFromPush =
+    !!auth.userProfile?.user_id &&
+    !!auth.initialDataLoaded &&
+    !!auth.currentBusiness?.id &&
+    (segments as string[])[0] === '(app)' &&
+    !['business-onboarding', 'business-selection'].includes((segments as string[])[1] || '');
+  const canNavigateFromPushRef = useRef(false);
+  canNavigateFromPushRef.current = canNavigateFromPush;
+  const handlePushResponseRef = useRef<((response: Notifications.NotificationResponse) => Promise<void>) | null>(null);
   const businessSwitch = useBusinessSwitch();
   const saleDetailsModal = useSaleDetailsModal();
   const notificationListener = useRef<Notifications.Subscription | undefined>();
@@ -369,8 +384,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     );
 
-    responseListener.current = pushNotificationService.addNotificationResponseReceivedListener(
-      async (response) => {
+    const handlePushResponse = async (response: Notifications.NotificationResponse) => {
+        // The same tap can reach us twice: once through the listener and once as the
+        // "last response" read below. Handle each notification only once per app run.
+        // App still starting (a tap on a closed app): leave it unhandled. It is read again by
+        // the effect below as soon as the app can navigate.
+        if (!canNavigateFromPushRef.current) return;
+        const responseKey = response.notification.request.identifier;
+        if (handledPushResponses.has(responseKey)) return;
+        handledPushResponses.add(responseKey);
+
         const data = response.notification.request.content.data;
         console.log('Notification tapped:', data);
 
@@ -408,8 +431,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         await handleNotificationWithBusinessSwitch(mockNotification, navigationTarget);
-      }
-    );
+    };
+
+    handlePushResponseRef.current = handlePushResponse;
+    responseListener.current = pushNotificationService.addNotificationResponseReceivedListener(handlePushResponse);
 
     return () => {
       if (notificationListener.current) {
@@ -420,6 +445,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
   }, [router, auth.userProfile?.user_id, handleNotificationWithBusinessSwitch]);
+
+  // A tap that LAUNCHED the app (it was closed) arrives before the app can navigate, and used
+  // to be lost: the app simply opened on the dashboard. Once the app is ready, read the last
+  // tap and handle it. Taps already handled are skipped (handledPushResponses).
+  useEffect(() => {
+    if (!canNavigateFromPush) return;
+    let cancelled = false;
+    // let the tab screens finish mounting before pushing another screen on top
+    const timer = setTimeout(() => {
+      Notifications.getLastNotificationResponseAsync()
+        .then(lastResponse => {
+          if (!cancelled && lastResponse) handlePushResponseRef.current?.(lastResponse);
+        })
+        .catch(error => console.error('Error reading the launching notification:', error));
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [canNavigateFromPush]);
 
   const cleanupNotificationsForBusiness = useCallback((businessId: string) => {
     console.log('Cleaning up notifications for removed business:', businessId);

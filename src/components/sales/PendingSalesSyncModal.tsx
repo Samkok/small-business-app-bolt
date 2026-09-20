@@ -60,6 +60,7 @@ export function PendingSalesSyncModal() {
           discount_type: sale.discountType,
           discount_value: sale.discountValue,
           delivery_cost: sale.deliveryCost,
+          delivery_charge: sale.deliveryCharge || 0,
           notes: sale.notes,
           business_id: sale.businessId,
           created_by: sale.createdBy,

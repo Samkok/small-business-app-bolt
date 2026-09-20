@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { InstantCheckoutSummary as SummaryType } from '@/src/context/InstantCheckoutContext';
 import { formatCurrency } from '@/src/utils/formatCurrency';
@@ -11,6 +12,7 @@ interface InstantCheckoutSummaryProps {
 
 export function InstantCheckoutSummary({ summary, formatAmount }: InstantCheckoutSummaryProps) {
   const { isDark } = useTheme();
+  const { t } = useTranslation();
   const fmt = formatAmount ?? formatCurrency;
 
   return (
@@ -49,10 +51,10 @@ export function InstantCheckoutSummary({ summary, formatAmount }: InstantCheckou
       {summary.deliveryCost > 0 && (
         <View style={styles.row}>
           <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-            Delivery Fee
+            {t('delivery.shopPaysRow')}
           </Text>
-          <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {fmt(summary.deliveryCost)}
+          <Text style={[styles.value, { color: '#dc2626' }]}>
+            -{fmt(summary.deliveryCost)}
           </Text>
         </View>
       )}
@@ -67,6 +69,27 @@ export function InstantCheckoutSummary({ summary, formatAmount }: InstantCheckou
           {fmt(summary.finalTotal)}
         </Text>
       </View>
+
+      {summary.deliveryCharge > 0 && (
+        <>
+          <View style={[styles.row, { marginTop: 8 }]}>
+            <Text style={[styles.label, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              {t('delivery.customerPaysRow')}
+            </Text>
+            <Text style={[styles.value, { color: '#2563eb' }]}>
+              +{fmt(summary.deliveryCharge)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+              {t('delivery.customerTotal')}
+            </Text>
+            <Text style={[styles.value, { color: isDark ? '#f9fafb' : '#111827', fontWeight: '700' }]}>
+              {fmt(summary.finalTotal + summary.deliveryCharge)}
+            </Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }
