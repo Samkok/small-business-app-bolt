@@ -6,7 +6,7 @@ const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Push-Secret",
 };
 
 Deno.serve(async (req) => {
@@ -19,23 +19,44 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify JWT authentication (D4 fix)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Two kinds of caller:
+    //  1. The database trigger on `notifications` (send_push_notification_on_insert). It has no
+    //     user session, so it proves itself with X-Push-Secret, a value that only exists in the
+    //     database vault and is checked there by verify_push_trigger_secret (service role only).
+    //  2. A signed-in user (JWT), who may only notify people they share a business with.
+    const pushSecret = req.headers.get("X-Push-Secret");
+    let callerUserId: string | null = null;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (pushSecret) {
+      const { data: secretOk, error: secretError } = await supabase.rpc(
+        "verify_push_trigger_secret",
+        { p_secret: pushSecret }
       );
+      if (secretError || secretOk !== true) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      callerUserId = user.id;
     }
 
     const { targetUserId, title, body, data, sound = "default", badge, priority = "default" } = await req.json();
@@ -47,17 +68,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Authorization: caller must share at least one business with the target user
-    const { data: hasShared, error: sharedError } = await supabase.rpc(
-      "check_shared_business_membership",
-      { p_caller_id: user.id, p_target_id: targetUserId }
-    );
-
-    if (sharedError || !hasShared) {
-      return new Response(
-        JSON.stringify({ error: "Not authorized to notify this user" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    // Authorization for user callers: must share at least one business with the target user.
+    // The database trigger is already trusted and notifies whoever the notification row is for.
+    if (callerUserId) {
+      const { data: hasShared, error: sharedError } = await supabase.rpc(
+        "check_shared_business_membership",
+        { p_caller_id: callerUserId, p_target_id: targetUserId }
       );
+
+      if (sharedError || !hasShared) {
+        return new Response(
+          JSON.stringify({ error: "Not authorized to notify this user" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Resolve push token server-side from target user profile
@@ -93,10 +117,10 @@ Deno.serve(async (req) => {
       body,
       data: data || {},
       priority,
-      channelId: "",
+      // Android channels created by the app: 'default', 'high', 'low'
+      channelId: priority === "high" ? "high" : "default",
     };
     if (badge !== undefined) message.badge = badge;
-    if (priority === "high") message.channelId = "high";
 
     const response = await fetch(EXPO_PUSH_ENDPOINT, {
       method: "POST",
@@ -109,7 +133,9 @@ Deno.serve(async (req) => {
 
     const result = await response.json();
 
-    if (!response.ok || result[0]?.status === "error") {
+    // Expo answers { data: [ticket] } for an array of messages
+    const ticket = Array.isArray(result?.data) ? result.data[0] : result?.data;
+    if (!response.ok || ticket?.status === "error") {
       return new Response(
         JSON.stringify({ error: "Failed to send push notification", details: result }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
