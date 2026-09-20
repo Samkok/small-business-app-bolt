@@ -1,10 +1,16 @@
 /**
  * The public online-menu website (separate project: bizmanage_menu).
- * EXPO_PUBLIC_MENU_URL is its address without a trailing slash. While it is empty the
- * site is not deployed, so everything that would hand out a link stays hidden.
+ *
+ * The address is built in. It used to come only from EXPO_PUBLIC_MENU_URL, which lives in the
+ * git-ignored .env, so every build not bundled on the developer's machine (EAS, TestFlight,
+ * a team member's phone) had no address and silently hid the whole feature.
+ * EXPO_PUBLIC_MENU_URL still overrides it, e.g. to point a test build at a staging site.
  */
-export const MENU_URL = (process.env.EXPO_PUBLIC_MENU_URL || '').trim().replace(/\/+$/, '');
+const DEFAULT_MENU_URL = 'https://bizmanagemenu.vercel.app';
 
+export const MENU_URL = ((process.env.EXPO_PUBLIC_MENU_URL || '').trim() || DEFAULT_MENU_URL).replace(/\/+$/, '');
+
+/** Always true now that a default exists; kept so callers read naturally. */
 export const isMenuSiteConfigured = MENU_URL.length > 0;
 
 /** What the shop shares with customers. */
