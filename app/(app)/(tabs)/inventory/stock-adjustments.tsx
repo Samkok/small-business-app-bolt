@@ -11,6 +11,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { ScanBarcodeButton, findScannedProduct, searchTextForProduct } from '@/src/components/inventory/ScanBarcodeButton';
 import {
   stockAdjustmentService,
   summarizeAdjustments,
@@ -98,6 +99,20 @@ export default function StockAdjustmentsScreen() {
     // Give the native modal a beat to finish tearing down before presenting the next one
     setTimeout(() => setTarget(p), 120);
   };
+
+  const handlePickerScanned = useCallback(async (barcode: string) => {
+    if (!currentBusiness?.id || !barcode) return;
+    try {
+      const product = await findScannedProduct(barcode, pickerProducts, currentBusiness.id);
+      if (product) {
+        setPickerQuery(searchTextForProduct(product, barcode));
+        return;
+      }
+    } catch (error) {
+      console.error('Error looking up scanned barcode:', error);
+    }
+    setPickerQuery(barcode);
+  }, [currentBusiness?.id, pickerProducts]);
 
   const pickerVisibleProducts = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
@@ -290,6 +305,7 @@ export default function StockAdjustmentsScreen() {
           </View>
         }
       >
+            <View style={styles.pickerSearchRow}>
             <View style={[styles.pickerSearch, { backgroundColor: colors.chip, borderColor: colors.border }]}>
               <Search size={16} color={colors.subtext} />
               <TextInput
@@ -300,6 +316,8 @@ export default function StockAdjustmentsScreen() {
                 placeholderTextColor={colors.subtext}
                 autoFocus
               />
+            </View>
+            <ScanBarcodeButton onScanned={handlePickerScanned} backgroundColor={colors.chip} borderColor={colors.border} />
             </View>
             {pickerLoading ? (
               <LoadingSpinner />
@@ -374,7 +392,8 @@ const styles = StyleSheet.create({
   emptyButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4, borderBottomWidth: 1 },
   pickerTitle: { fontSize: 18, fontWeight: '700' },
-  pickerSearch: { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 12, height: 40, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10 },
+  pickerSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 12 },
+  pickerSearch: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10 },
   pickerSearchInput: { flex: 1, fontSize: 14 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1 },
   emptyText: { fontSize: 13, textAlign: 'center' },
