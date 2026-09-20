@@ -334,6 +334,7 @@ export const pushNotificationService = {
     switch (type) {
       case 'sale_voided':
       case 'low_stock_alert':
+      case 'web_order_received':
         return 'high';
       case 'sale_created':
       case 'role_assigned':

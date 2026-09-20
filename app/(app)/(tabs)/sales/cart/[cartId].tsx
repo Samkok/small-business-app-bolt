@@ -24,6 +24,8 @@ import { formatCurrency } from '@/src/utils/formatCurrency';
 import { useCurrency } from '@/src/hooks/useCurrency';
 import { SaleMarginCard } from '@/src/components/sales/SaleMarginCard';
 import { computeSaleMargin } from '@/src/utils/saleMargin';
+import { WebOrderBadge } from '@/src/components/sales/WebOrderBadge';
+import { webOrderService } from '@/src/services/webOrders';
 
 export default function CartScreen() {
   const { t } = useTranslation();
@@ -59,7 +61,7 @@ export default function CartScreen() {
   const router = useRouter();
   const { cartId } = useLocalSearchParams();
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
   const { formatPrice, getSymbol, currencies, defaultCurrency, convertBetween } = useCurrency(currentBusiness?.id);
 
   const displayAmount = (amount: number) => {
@@ -76,11 +78,52 @@ export default function CartScreen() {
     removeCartItem,
     applyItemDiscount,
     removeItemDiscount,
-    getCartSummary
+    getCartSummary,
+    refreshCarts,
+    loading: cartsLoading
   } = useCart();
 
   // Get cart
   const cart = getCart(cartId as string);
+
+  const [cartLookupDone, setCartLookupDone] = useState(false);
+  useEffect(() => {
+    if (cart) {
+      if (!cartLookupDone) setCartLookupDone(true);
+      return;
+    }
+    if (cartLookupDone) return;
+    let cancelled = false;
+    refreshCarts(true).finally(() => { if (!cancelled) setCartLookupDone(true); });
+    return () => { cancelled = true; };
+  }, [cart, cartLookupDone, refreshCarts]);
+
+  // Web orders only: stop this phone number from ordering from the online menu again
+  const handleBlockWebNumber = useCallback(() => {
+    const phone = cart?.customer_phone;
+    const businessId = cart?.business_id || currentBusiness?.id;
+    if (!phone || !businessId) return;
+    Alert.alert(
+      t('onlineMenu.blockNumberTitle'),
+      t('onlineMenu.blockNumberMessage', { phone }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('onlineMenu.blockNumberConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await webOrderService.blockPhone(businessId, phone, user?.id);
+              Alert.alert(t('onlineMenu.blockNumberTitle'), t('onlineMenu.blockNumberDone', { phone }));
+            } catch (error) {
+              console.error('Error blocking web order number:', error);
+              Alert.alert(t('onlineMenu.blockNumberTitle'), t('onlineMenu.errors.saveFailed'));
+            }
+          },
+        },
+      ]
+    );
+  }, [cart?.customer_phone, cart?.business_id, currentBusiness?.id, user?.id, t]);
 
   // Memoized stock lookup map for O(1) access
   const stockLookup = useMemo(() => {
@@ -742,6 +785,16 @@ export default function CartScreen() {
     );
   }
 
+  // Opened from a notification, the cart may not be in memory yet (new web order, or the
+  // business was just switched). Look once before saying it does not exist.
+  if (!cart && (!cartLookupDone || cartsLoading)) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb', justifyContent: 'center' }]}>
+        <LoadingSpinner />
+      </View>
+    );
+  }
+
   if (!cart || !cartSummary) {
     return (
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
@@ -801,6 +854,16 @@ export default function CartScreen() {
         <Text style={[styles.customerName, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {cart.customer_name}
         </Text>
+        {cart.source === 'web' && (
+          <View style={styles.webOrderRow}>
+            <WebOrderBadge orderRef={cart.order_ref} />
+            {!!cart.customer_phone && (
+              <TouchableOpacity onPress={handleBlockWebNumber} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button">
+                <Text style={styles.blockNumberText}>{t('onlineMenu.blockNumber')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </Card>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -1162,6 +1225,18 @@ const styles = StyleSheet.create({
   customerLabel: {
     fontSize: 14,
     marginRight: 8,
+  },
+  webOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+  },
+  blockNumberText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
   },
   customerName: {
     fontSize: 16,

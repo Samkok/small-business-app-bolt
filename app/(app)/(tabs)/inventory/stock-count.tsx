@@ -18,6 +18,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { ScanBarcodeButton, findScannedProduct, searchTextForProduct } from '@/src/components/inventory/ScanBarcodeButton';
 import { productService } from '@/src/services/products';
 import { productInsightService, AbcClass } from '@/src/services/productInsight';
 import { PlanningSettings } from '@/src/utils/inventoryPlanning';
@@ -92,6 +93,23 @@ export default function StockCountScreen() {
   }, [currentBusiness?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleScanned = useCallback(async (barcode: string) => {
+    if (!currentBusiness?.id || !barcode) return;
+    try {
+      const product = await findScannedProduct(barcode, products, currentBusiness.id);
+      if (product) {
+        // Show it even if it was already counted or is outside the current class filter
+        setFilter('all');
+        setSearch(searchTextForProduct(product, barcode));
+        return;
+      }
+    } catch (error) {
+      console.error('Error looking up scanned barcode:', error);
+    }
+    // Wait for the scanner to finish closing, or iOS drops the alert
+    setTimeout(() => Alert.alert('No product found', `Nothing in this count has the barcode ${barcode}.`), 400);
+  }, [currentBusiness?.id, products]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -237,6 +255,7 @@ export default function StockCountScreen() {
             placeholderTextColor={colors.subtext}
           />
         </View>
+        <ScanBarcodeButton onScanned={handleScanned} backgroundColor={colors.input} borderColor={colors.border} />
         <View style={styles.blindToggle}>
           <EyeOff size={14} color={colors.subtext} />
           <Text style={[styles.blindLabel, { color: colors.subtext }]}>Blind</Text>

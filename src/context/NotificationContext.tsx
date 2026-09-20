@@ -12,6 +12,7 @@ import { supabase } from '../config/supabase';
 import { useBusinessSwitch } from './BusinessSwitchContext';
 import { useSaleDetailsModal } from './SaleDetailsModalContext';
 import { notificationCleanupService } from '../utils/notificationCleanup';
+import { webOrderService } from '@/src/services/webOrders';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationPreferences = Database['public']['Tables']['notification_preferences']['Row'];
@@ -402,6 +403,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           navigationTarget = '/(app)/(tabs)/';
         } else if (data.type === 'expense_added') {
           navigationTarget = '/(app)/(tabs)/expenses';
+        } else if (data.type === 'web_order_received') {
+          navigationTarget = await webOrderService.notificationTarget(data.cart_id as string);
         }
 
         await handleNotificationWithBusinessSwitch(mockNotification, navigationTarget);

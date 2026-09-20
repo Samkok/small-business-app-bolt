@@ -33,8 +33,7 @@ import {
   Crown,
   KeyRound,
   Coins,
-  Gift
-} from 'lucide-react-native';
+  Gift, QrCode } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { UnauthorizedDeleteModal } from '@/src/components/business/UnauthorizedDeleteModal';
@@ -269,6 +268,13 @@ export default function SettingsScreen() {
           title={t('settings.teamMembers')}
           subtitle={t('settings.teamSubtitle')}
           onPress={() => router.push('/settings/team')}
+        />
+
+        <SettingItem
+          icon={<QrCode size={20} color="#2563eb" />}
+          title={t('onlineMenu.title')}
+          subtitle={t('onlineMenu.settingsSubtitle')}
+          onPress={() => router.push('/settings/online-menu')}
         />
 
         <SettingItem

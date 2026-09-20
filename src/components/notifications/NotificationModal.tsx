@@ -29,6 +29,7 @@ import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
+import { webOrderService } from '@/src/services/webOrders';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -197,6 +198,8 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         navigationTarget = '/(app)/(tabs)/';
       } else if (notification.type === 'expense_added') {
         navigationTarget = '/(app)/(tabs)/expenses';
+      } else if (notification.type === 'web_order_received') {
+        navigationTarget = await webOrderService.notificationTarget(data?.cart_id);
       }
 
       setTimeout(async () => {
@@ -246,6 +249,8 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
         return '👥';
       case 'expense_added':
         return '💳';
+      case 'web_order_received':
+        return '🛒';
       default:
         return '📢';
     }

@@ -9,6 +9,10 @@ export interface Database {
           business_image_url?: string;
           access_state: 'active' | 'read_only_sales';
           archived_at?: string;
+          menu_slug?: string | null;
+          menu_enabled?: boolean;
+          menu_telegram?: string | null;
+          menu_note?: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -19,6 +23,10 @@ export interface Database {
           business_image_url?: string;
           access_state?: 'active' | 'read_only_sales';
           archived_at?: string;
+          menu_slug?: string | null;
+          menu_enabled?: boolean;
+          menu_telegram?: string | null;
+          menu_note?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -29,6 +37,10 @@ export interface Database {
           business_image_url?: string;
           access_state?: 'active' | 'read_only_sales';
           archived_at?: string;
+          menu_slug?: string | null;
+          menu_enabled?: boolean;
+          menu_telegram?: string | null;
+          menu_note?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -274,7 +286,7 @@ export interface Database {
           id: string;
           user_id: string;
           business_id: string;
-          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
+          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added' | 'web_order_received';
           title: string;
           message: string;
           data: Record<string, any>;
@@ -285,7 +297,7 @@ export interface Database {
           id?: string;
           user_id: string;
           business_id: string;
-          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
+          type: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added' | 'web_order_received';
           title: string;
           message: string;
           data?: Record<string, any>;
@@ -296,7 +308,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           business_id?: string;
-          type?: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added';
+          type?: 'sale_created' | 'sale_voided' | 'role_assigned' | 'team_invite' | 'low_stock' | 'expense_added' | 'web_order_received';
           title?: string;
           message?: string;
           data?: Record<string, any>;
@@ -310,6 +322,7 @@ export interface Database {
           sales_created_enabled: boolean;
           sales_voided_enabled: boolean;
           role_assigned_enabled: boolean;
+          web_orders_enabled?: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -318,6 +331,7 @@ export interface Database {
           sales_created_enabled?: boolean;
           sales_voided_enabled?: boolean;
           role_assigned_enabled?: boolean;
+          web_orders_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -326,6 +340,7 @@ export interface Database {
           sales_created_enabled?: boolean;
           sales_voided_enabled?: boolean;
           role_assigned_enabled?: boolean;
+          web_orders_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -378,6 +393,9 @@ export interface Database {
           business_id: string;
           created_by?: string;
           created_by_name?: string;
+          source?: 'app' | 'web';
+          order_ref?: string | null;
+          web_order_token?: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -393,6 +411,9 @@ export interface Database {
           business_id: string;
           created_by?: string;
           created_by_name?: string;
+          source?: 'app' | 'web';
+          order_ref?: string | null;
+          web_order_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -408,9 +429,32 @@ export interface Database {
           business_id?: string;
           created_by?: string;
           created_by_name?: string;
+          source?: 'app' | 'web';
+          order_ref?: string | null;
+          web_order_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+      web_order_blocked_phones: {
+        Row: {
+          business_id: string;
+          phone: string;
+          created_by?: string | null;
+          created_at: string;
+        };
+        Insert: {
+          business_id: string;
+          phone: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          business_id?: string;
+          phone?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+      };
       };
       cart_items: {
         Row: {

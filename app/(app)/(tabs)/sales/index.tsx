@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Animated,
   Platform
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -35,7 +35,8 @@ import { format } from 'date-fns';
 import { salesService } from '@/src/services/sales';
 import { exportService } from '@/src/services/exportService';
 import { calculateSaleProfit, calculateSaleProductCount } from '@/src/utils/profitCalculation';
-import { getSaleGrossRevenue } from '@/src/utils/saleMoney';
+import { getSaleGrossRevenue, getSaleNetProceeds } from '@/src/utils/saleMoney';
+import { PaymentStatus, PAYMENT_STATUS_OPTIONS, isPaymentStatus } from '@/src/utils/paymentStatus';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
@@ -69,6 +70,11 @@ export default function SalesScreen() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'carts' | 'sales'>('sales');
+  // ?tab=carts opens Active Carts directly (a web-order notification whose cart is gone lands here)
+  const { tab: requestedTab } = useLocalSearchParams<{ tab?: string }>();
+  useEffect(() => {
+    if (requestedTab === 'carts' || requestedTab === 'sales') setActiveTab(requestedTab);
+  }, [requestedTab]);
   const [deletingCart, setDeletingCart] = useState<string | null>(null);
   const [showDateFilterTypeModal, setShowDateFilterTypeModal] = useState(false);
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
@@ -119,7 +125,7 @@ export default function SalesScreen() {
     if (!activeCurrencyId || !defaultCurrency?.id || activeCurrencyId === defaultCurrency.id) return amount;
     return convertAmount(amount, defaultCurrency.id, activeCurrencyId);
   }, [activeCurrencyId, defaultCurrency?.id, convertAmount]);
-  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, subscriptionStatus, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
+  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, hidePaywall, isPaywallVisible, isSubscribed, isLoading: subscriptionLoading, hasError: subscriptionError, retryInitialization } = useSubscription();
   const { isConnected, wasOffline } = useNetwork();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -364,14 +370,17 @@ export default function SalesScreen() {
     showPaywall();
   }, [showPaywall]);
 
-  const shouldShowWarningBanner = useCallback(() => {
+  // The free limit applies to THIS business (get_full_subscription_state), and it can be
+  // above 50 when referral credits were earned, so derive it from what the server returned.
+  const freeSalesUsed = salesCountData.salesCount || 0;
+  const freeSalesLimit = freeSalesUsed + (salesCountData.remainingSales || 0) || FREE_TIER_LIMIT;
+  const shouldShowWarningBanner = useMemo(() => {
     if (salesCountData.isAtLimit || isSubscribed || warningBannerDismissed) {
       return false;
     }
-    const totalSales = salesCountData.totalSalesAllBusinesses || 0;
-    const percentageUsed = (totalSales / FREE_TIER_LIMIT) * 100;
-    return percentageUsed >= 80;
-  }, [salesCountData, isSubscribed, warningBannerDismissed]);
+    // Only warn when the limit is actually close: 80% used or more
+    return (freeSalesUsed / freeSalesLimit) * 100 >= 80;
+  }, [salesCountData.isAtLimit, isSubscribed, warningBannerDismissed, freeSalesUsed, freeSalesLimit]);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!currentBusiness?.id) return;
@@ -897,18 +906,21 @@ export default function SalesScreen() {
   ), [showCustomDateRangePicker, isDark, startDate, endDate, handleDateRangeConfirm]);
 
   type CurrencyTotal = { revenue: number; profit: number };
+  // Orders and money kept (after discounts, courier fee and refunds) per payment status,
+  // split by currency like the bar above
+  type PaymentSplit = Record<PaymentStatus, { orders: number; amounts: Record<string, number> }>;
 
   type SaleFlatItem =
-    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }
-    | { type: 'sale'; item: any };
+    | { type: 'header'; date: string; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal>; paymentSplit: PaymentSplit; saleCount: number }
+    | { type: 'sale'; item: any; date: string };
 
   const buildGroupedSalesList = useCallback((salesData: any[]): SaleFlatItem[] => {
-    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal> }> = {};
+    const groups: Record<string, { sales: any[]; totalOrders: number; totalProducts: number; totalRevenue: number; totalProfit: number; currencyTotals: Record<string, CurrencyTotal>; paymentSplit: PaymentSplit }> = {};
 
     salesData.forEach((sale) => {
       const dateKey = format(new Date(sale.sale_date), 'yyyy-MM-dd');
       if (!groups[dateKey]) {
-        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0, currencyTotals: {} };
+        groups[dateKey] = { sales: [], totalOrders: 0, totalProducts: 0, totalRevenue: 0, totalProfit: 0, currencyTotals: {}, paymentSplit: { paid: { orders: 0, amounts: {} }, cod: { orders: 0, amounts: {} } } };
       }
 
       const isVoided = sale.status === 'voided';
@@ -927,6 +939,12 @@ export default function SalesScreen() {
         }
         groups[dateKey].currencyTotals[currId].revenue += displayAmount;
         groups[dateKey].currencyTotals[currId].profit += saleProfit;
+        // Sales made before PAID/COD existed have no status and are left out of the split
+        if (isPaymentStatus(sale.payment_status)) {
+          const split = groups[dateKey].paymentSplit[sale.payment_status as PaymentStatus];
+          split.orders += 1;
+          split.amounts[currId] = (split.amounts[currId] || 0) + getSaleNetProceeds(sale);
+        }
       }
       groups[dateKey].totalProducts += productCount;
       groups[dateKey].totalRevenue += displayAmount;
@@ -937,30 +955,71 @@ export default function SalesScreen() {
     Object.entries(groups)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([date, data]) => {
-        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit, currencyTotals: data.currencyTotals });
-        data.sales.forEach(sale => result.push({ type: 'sale', item: sale }));
+        result.push({ type: 'header', date, totalOrders: data.totalOrders, totalProducts: data.totalProducts, totalRevenue: data.totalRevenue, totalProfit: data.totalProfit, currencyTotals: data.currencyTotals, paymentSplit: data.paymentSplit, saleCount: data.sales.length });
+        data.sales.forEach(sale => result.push({ type: 'sale', item: sale, date }));
       });
 
     return result;
   }, []);
 
-  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, currencyTotals: Record<string, CurrencyTotal>) => {
+  // Days the user has folded away. The day's totals stay visible; only its sales are hidden.
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const toggleDateCollapsed = useCallback((date: string) => {
+    setCollapsedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  }, []);
+
+  const groupedSalesList = useMemo(() => buildGroupedSalesList(filteredSales), [buildGroupedSalesList, filteredSales]);
+  // A search must be able to show its matches, so folding is ignored while searching
+  const isSearchingSales = searchQuery.trim().length > 0;
+  const visibleSalesList = useMemo(() => {
+    if (isSearchingSales || collapsedDates.size === 0) return groupedSalesList;
+    return groupedSalesList.filter(row => row.type === 'header' || !collapsedDates.has(row.date));
+  }, [groupedSalesList, collapsedDates, isSearchingSales]);
+
+  const renderSaleDateHeader = useCallback((date: string, totalOrders: number, totalProducts: number, currencyTotals: Record<string, CurrencyTotal>, paymentSplit: PaymentSplit, saleCount: number) => {
+    const collapsed = !isSearchingSales && collapsedDates.has(date);
     const currencyEntries = Object.entries(currencyTotals);
     const hasSingleCurrency = currencyEntries.length <= 1;
     const singleCurrId = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][0] : undefined;
     const singleRevenue = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].revenue : 0;
     const singleProfit = hasSingleCurrency && currencyEntries.length === 1 ? currencyEntries[0][1].profit : 0;
+    const paymentSections = PAYMENT_STATUS_OPTIONS.filter(option => paymentSplit[option.value].orders > 0);
 
     return (
     <View style={[styles.saleDateHeader, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-      <View style={styles.saleDatePillRow}>
+      <TouchableOpacity
+        style={styles.saleDatePillRow}
+        onPress={() => toggleDateCollapsed(date)}
+        disabled={isSearchingSales}
+        activeOpacity={0.7}
+        hitSlop={{ top: 6, bottom: 6 }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: !collapsed }}
+        accessibilityLabel={`${format(new Date(date + 'T00:00:00'), 'EEEE, MMM dd, yyyy')}, ${collapsed ? 'show' : 'hide'} ${saleCount} ${saleCount === 1 ? 'sale' : 'sales'}`}
+      >
         <View style={[styles.saleDatePill, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}>
           <Calendar size={13} color={isDark ? '#9ca3af' : '#6b7280'} />
           <Text style={[styles.saleDatePillText, { color: isDark ? '#f9fafb' : '#111827' }]}>
             {format(new Date(date + 'T00:00:00'), 'EEEE, MMM dd, yyyy')}
           </Text>
         </View>
-      </View>
+        {!isSearchingSales && (
+          <View style={styles.saleDateToggle}>
+            {collapsed && (
+              <Text style={[styles.saleDateToggleText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {saleCount} {saleCount === 1 ? 'sale' : 'sales'} hidden
+              </Text>
+            )}
+            {collapsed
+              ? <ChevronDown size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+              : <ChevronUp size={18} color={isDark ? '#9ca3af' : '#6b7280'} />}
+          </View>
+        )}
+      </TouchableOpacity>
       <View style={[styles.saleDateSummary, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}>
         <View style={styles.saleDateSummaryItem}>
           <Text style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalOrders}</Text>
@@ -999,9 +1058,35 @@ export default function SalesScreen() {
           </View>
         )}
       </View>
+      {paymentSections.length > 0 && (
+        <View style={styles.salePaymentRow}>
+          {paymentSections.map(option => {
+            const split = paymentSplit[option.value];
+            const tone = option.value === 'paid' ? '#059669' : '#d97706';
+            return (
+              <View key={option.value} style={[styles.salePaymentSection, { backgroundColor: `${tone}${isDark ? '26' : '14'}`, borderColor: `${tone}55` }]}>
+                <View style={styles.salePaymentHeader}>
+                  <Text style={[styles.salePaymentLabel, { color: tone }]}>{option.label}</Text>
+                  <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    {split.orders} {split.orders === 1 ? 'order' : 'orders'}
+                  </Text>
+                </View>
+                {Object.entries(split.amounts).map(([currId, amount]) => (
+                  <Text key={currId} style={[styles.saleDateSummaryValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {formatPrice(displayAmt(amount), activeCurrencyId || (currId === 'default' ? undefined : currId))}
+                  </Text>
+                ))}
+                <Text style={[styles.saleDateSummaryLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  {option.value === 'paid' ? 'Received' : 'To collect'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
-  }, [isDark, formatPrice, displayAmt, activeCurrencyId]);
+  }, [isDark, formatPrice, displayAmt, activeCurrencyId, collapsedDates, isSearchingSales, toggleDateCollapsed]);
 
   const renderCurrencyModal = () => (
     <Modal
@@ -1060,7 +1145,7 @@ export default function SalesScreen() {
 
   const renderSaleItem = useCallback(({ item }: { item: SaleFlatItem }) => {
     if (item.type === 'header') {
-      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.currencyTotals);
+      return renderSaleDateHeader(item.date, item.totalOrders, item.totalProducts, item.currencyTotals, item.paymentSplit, item.saleCount);
     }
     return (
       <SaleCard
@@ -1194,11 +1279,11 @@ export default function SalesScreen() {
           isOwner={isBusinessOwner}
           variant="owner_disabled"
         />
-      ) : subscriptionStatus.subscriptionStatus === 'expired' && !salesCountData.isAtLimit ? (
+      ) : shouldShowWarningBanner ? (
         <WarningBanner
-          salesCount={salesCountData.totalSalesAllBusinesses || 0}
+          salesCount={freeSalesUsed}
           remainingSales={salesCountData.remainingSales}
-          totalLimit={FREE_TIER_LIMIT}
+          totalLimit={freeSalesLimit}
           onUpgrade={showPaywall}
           onDismiss={handleDismissWarning}
           dismissible={true}
@@ -1496,7 +1581,7 @@ export default function SalesScreen() {
             ) : null}
 
             <FlatList
-              data={buildGroupedSalesList(filteredSales)}
+              data={visibleSalesList}
               renderItem={renderSaleItem}
               keyExtractor={(item, index) => item.type === 'header' ? `header-${item.date}` : `sale-${item.item.id}`}
               style={styles.salesList}
@@ -2007,7 +2092,19 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   saleDatePillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 6,
+  },
+  saleDateToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  saleDateToggleText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   saleDatePill: {
     flexDirection: 'row',
@@ -2056,6 +2153,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  salePaymentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  salePaymentSection: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  salePaymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  salePaymentLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   saleDateCurrencyLabels: {
     flexDirection: 'row',
