@@ -32,3 +32,9 @@ verify_jwt = true
 
 [functions.referral-status]
 verify_jwt = true
+
+[functions.menu-get]
+verify_jwt = false
+
+[functions.menu-order]
+verify_jwt = false

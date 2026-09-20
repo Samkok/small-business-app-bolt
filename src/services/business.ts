@@ -186,6 +186,31 @@ export const businessService = {
     }
   },
 
+  /** Online menu settings, read fresh: a cached currentBusiness can predate these columns. */
+  async getOnlineMenu(businessId: string): Promise<{
+    menu_slug: string | null;
+    menu_enabled: boolean;
+    menu_telegram: string | null;
+    menu_note: string | null;
+    access_state: string | null;
+  } | null> {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('menu_slug, menu_enabled, menu_telegram, menu_note, access_state')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const row = data as any;
+    return {
+      menu_slug: row.menu_slug ?? null,
+      menu_enabled: !!row.menu_enabled,
+      menu_telegram: row.menu_telegram ?? null,
+      menu_note: row.menu_note ?? null,
+      access_state: row.access_state ?? null,
+    };
+  },
+
   async getBusinessAccessState(businessId: string): Promise<'active' | 'read_only_sales'> {
     try {
       const { data, error } = await supabase

@@ -14,7 +14,8 @@ import { useNotifications } from '@/src/context/NotificationContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, ShoppingCart, AlertTriangle, UserPlus } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, AlertTriangle, UserPlus, Globe } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 
 export default function NotificationPreferencesScreen() {
   const router = useRouter();
@@ -25,12 +26,16 @@ export default function NotificationPreferencesScreen() {
   const [salesCreated, setSalesCreated] = useState(true);
   const [salesVoided, setSalesVoided] = useState(true);
   const [roleAssigned, setRoleAssigned] = useState(true);
+  const [webOrders, setWebOrders] = useState(true);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (preferences) {
       setSalesCreated(preferences.sales_created_enabled);
       setSalesVoided(preferences.sales_voided_enabled);
       setRoleAssigned(preferences.role_assigned_enabled);
+      // Rows created before the online menu existed have no value yet; the column defaults to on
+      setWebOrders(preferences.web_orders_enabled ?? true);
     }
   }, [preferences]);
 
@@ -41,6 +46,7 @@ export default function NotificationPreferencesScreen() {
         sales_created_enabled: salesCreated,
         sales_voided_enabled: salesVoided,
         role_assigned_enabled: roleAssigned,
+        web_orders_enabled: webOrders,
       });
       Alert.alert('Success', 'Notification preferences updated successfully');
     } catch (error) {
@@ -56,7 +62,8 @@ export default function NotificationPreferencesScreen() {
     return (
       salesCreated !== preferences.sales_created_enabled ||
       salesVoided !== preferences.sales_voided_enabled ||
-      roleAssigned !== preferences.role_assigned_enabled
+      roleAssigned !== preferences.role_assigned_enabled ||
+      webOrders !== (preferences.web_orders_enabled ?? true)
     );
   };
 
@@ -214,6 +221,42 @@ export default function NotificationPreferencesScreen() {
                 onValueChange={setRoleAssigned}
                 trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
                 thumbColor={roleAssigned ? '#3b82f6' : '#f3f4f6'}
+              />
+            </View>
+          </Card>
+
+          <Card style={styles.preferenceCard}>
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceLeft}>
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: isDark ? '#4c1d95' : '#ede9fe' },
+                  ]}
+                >
+                  <Globe size={20} color="#7c3aed" />
+                </View>
+                <View style={styles.preferenceText}>
+                  <Text
+                    style={[styles.preferenceTitle, { color: isDark ? '#f9fafb' : '#111827' }]}
+                  >
+                    {t('onlineMenu.prefTitle')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.preferenceDescription,
+                      { color: isDark ? '#9ca3af' : '#6b7280' },
+                    ]}
+                  >
+                    {t('onlineMenu.prefDescription')}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={webOrders}
+                onValueChange={setWebOrders}
+                trackColor={{ false: '#d1d5db', true: '#c4b5fd' }}
+                thumbColor={webOrders ? '#7c3aed' : '#f3f4f6'}
               />
             </View>
           </Card>

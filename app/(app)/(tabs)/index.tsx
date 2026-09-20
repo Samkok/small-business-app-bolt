@@ -32,6 +32,7 @@ import { ProfitCard, ProfitCardData } from '@/src/components/sharing/ProfitCard'
 import { format } from 'date-fns';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
+import { OnlineMenuButton } from '@/src/components/menu/OnlineMenuButton';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -433,6 +434,8 @@ export default function DashboardScreen() {
           </View>
         </View>
       </View>
+
+      <OnlineMenuButton />
 
       {loading ? (
         <>

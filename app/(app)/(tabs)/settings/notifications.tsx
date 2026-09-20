@@ -28,9 +28,9 @@ import {
   AlertTriangle,
   UserPlus,
   Settings,
-  Building2,
-} from 'lucide-react-native';
+  Building2, Globe } from 'lucide-react-native';
 import { format } from 'date-fns';
+import { webOrderService } from '@/src/services/webOrders';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -209,6 +209,8 @@ export default function NotificationsScreen() {
         await handleRoleAssignedNotification(data);
       } else if (notification.type === 'expense_added') {
         router.push('/(app)/(tabs)/expenses');
+      } else if (notification.type === 'web_order_received') {
+        router.push((await webOrderService.notificationTarget(data?.cart_id)) as any);
       }
     } finally {
       // Clear loading state
@@ -280,6 +282,8 @@ export default function NotificationsScreen() {
         return <AlertTriangle size={20} color="#f59e0b" />;
       case 'expense_added':
         return <ShoppingCart size={20} color="#8b5cf6" />;
+      case 'web_order_received':
+        return <Globe size={20} color="#7c3aed" />;
       default:
         return <Bell size={20} color="#6b7280" />;
     }

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { useNetwork } from './NetworkContext';
+import { supabase } from '../config/supabase';
 import { cartService } from '@/src/services/carts';
 import { unitService } from '../services/units';
 import { costPerSoldUnit } from '../utils/saleMargin';
@@ -42,6 +43,10 @@ export interface Cart {
   discount_value?: number;
   delivery_cost?: number;
   notes?: string;
+  /** 'web' = placed by a customer on the public online menu. Missing means 'app'. */
+  source?: 'app' | 'web';
+  /** Reference shown to the web customer, e.g. W-8E35E. Only on web carts. */
+  order_ref?: string;
   business_id: string;
   created_by: string;
   created_at: string;
@@ -72,7 +77,7 @@ interface CartContextType {
   removeItemDiscount: (cartId: string, itemId: string) => Promise<CartItem>;
   getCartSummary: (cartId: string) => CartSummary;
   completeSale: (cartId: string, paymentMethod: string, saleDate?: string, customNotes?: string, paymentStatus?: 'paid' | 'cod') => Promise<{ success: boolean; saleId?: string; error?: string; offline?: boolean }>;
-  refreshCarts: () => Promise<Cart[]>;
+  refreshCarts: (skipCache?: boolean) => Promise<Cart[]>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -226,6 +231,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         discount_value: serverCart.discount_value,
         delivery_cost: serverCart.delivery_cost,
         notes: serverCart.notes,
+        source: (serverCart as any).source === 'web' ? 'web' : 'app',
+        order_ref: (serverCart as any).order_ref || undefined,
         business_id: serverCart.business_id,
         created_by: serverCart.created_by,
         created_at: serverCart.created_at,
@@ -265,6 +272,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, [currentBusiness?.id, CACHE_TTL]);
+
+  // A web order is inserted server-side as an active cart. Listen for it so it shows up in
+  // Active Carts without a pull-to-refresh. Carts made in the app are already in state.
+  useEffect(() => {
+    const businessId = currentBusiness?.id;
+    if (!businessId) return;
+
+    const channel = supabase
+      .channel(`web-carts:${businessId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'carts', filter: `business_id=eq.${businessId}` },
+        (payload) => {
+          if ((payload.new as any)?.source === 'web') {
+            refreshCarts(true);
+          }
+        }
+      )
+      .subscribe();
+
+    // Runs on business switch and on sign-out (currentBusiness becomes null)
+    return () => {
+      supabase.removeChannel(channel).catch(() => {});
+    };
+  }, [currentBusiness?.id, refreshCarts]);
 
   const createCart = useCallback(async (customerData: { id: string; name: string; phone?: string }): Promise<Cart> => {
     if (!currentBusiness || !currentBusiness.id) {

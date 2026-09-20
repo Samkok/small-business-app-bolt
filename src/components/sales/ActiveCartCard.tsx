@@ -5,6 +5,7 @@ import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
 import { ShoppingCart, User, Clock, DollarSign, Trash2, UserCheck } from 'lucide-react-native';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { WebOrderBadge } from '@/src/components/sales/WebOrderBadge';
 
 interface ActiveCartCardProps {
   cart: {
@@ -16,6 +17,8 @@ interface ActiveCartCardProps {
     status: 'active' | 'completed' | 'abandoned';
     total_amount: number;
     created_at: string;
+    source?: 'app' | 'web';
+    order_ref?: string;
     items: Array<{
       quantity: number;
       product_name: string;
@@ -86,6 +89,12 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
           </View>
         </View>
         
+        {cart.source === 'web' && (
+          <View style={styles.webBadgeRow}>
+            <WebOrderBadge orderRef={cart.order_ref} />
+          </View>
+        )}
+
         {cart.created_by_name && (
           <View style={styles.creatorSection}>
             <UserCheck size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
@@ -137,6 +146,9 @@ export const ActiveCartCard = React.memo(function ActiveCartCard({ cart, onPress
 });
 
 const styles = StyleSheet.create({
+  webBadgeRow: {
+    marginBottom: 10,
+  },
   card: {
     padding: 16,
     marginBottom: 12,
