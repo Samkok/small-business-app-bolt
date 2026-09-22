@@ -32,7 +32,8 @@ export default function DebugSubscriptionScreen() {
     refreshTierInfo,
     refreshCustomerInfo,
     showPaywall,
-    isIAPAvailable
+    isIAPAvailable,
+    subscriptionSource,
   } = useSubscription();
   const [processing, setProcessing] = useState(false);
   const iapDiagnostics = iapService.getDiagnosticInfo();
@@ -260,6 +261,14 @@ export default function DebugSubscriptionScreen() {
             </Text>
             <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
               {subscriptionStatus.subscriptionStatus}
+            </Text>
+          </View>
+          <View style={styles.stateItem}>
+            <Text style={[styles.stateLabel, isDark && styles.stateLabelDark]}>
+              Plan Source:
+            </Text>
+            <Text style={[styles.stateValue, isDark && styles.stateValueDark]}>
+              {subscriptionSource === 'revenuecat' ? 'RevenueCat SDK' : 'database mirror'}
             </Text>
           </View>
           <View style={styles.stateItem}>
