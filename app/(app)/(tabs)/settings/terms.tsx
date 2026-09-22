@@ -54,10 +54,10 @@ export default function TermsAndConditionsScreen() {
           Terms and Conditions
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: January 13, 2026
+          Last Updated: September 21, 2026
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.3.0
+          Version 1.4.0
         </Text>
       </View>
 
@@ -499,7 +499,34 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
       </Section>
 
-      <Section title="21. Acknowledgment">
+      <Section title="21. Online Menu and Web Orders">
+        <Paragraph>
+          21.1. What It Is: The Online Menu lets you publish a public web page showing your products and lets your customers send you order requests, which arrive in the Application as active carts. It is a communication tool only. BizManage is not the seller, a marketplace operator, a payment service, a delivery service, or an agent of you or of your customer.
+        </Paragraph>
+        <Paragraph>
+          21.2. No Payments Are Handled: The Online Menu and the Application do not take, hold, transfer or process any payment between you and your customers. Every payment, including cash, bank transfer, KHQR and cash on delivery, is made directly between you and your customer, outside BizManage. A sale marked PAID or COD in the Application is only your own record; it is not confirmation from us that any money was received.
+        </Paragraph>
+        <Paragraph>
+          21.3. The Sale Is Between You and Your Customer: A web order is a request. Any sale that follows is an agreement between you and your customer alone. You are solely responsible for your products, descriptions, photos, prices, stock, quality, safety and legality, for delivery, refunds, returns, warranties and taxes, and for complying with the laws that apply to your business.
+        </Paragraph>
+        <Paragraph>
+          21.4. No Responsibility for Transactions, Fraud or Disputes: Because BizManage is not a party to any sale and does not handle any payment, to the fullest extent permitted by law we are not responsible or liable for any transaction or attempted transaction between you and a customer. This includes, without limitation: fake or prank orders, false names, phone numbers or addresses, non-payment, fake payment receipts or screenshots, impersonation, scams, chargebacks, goods lost or damaged in delivery, lost revenue, and any other loss or dispute between you and a customer. Any such dispute must be settled directly between you and your customer.
+        </Paragraph>
+        <Paragraph>
+          21.5. No Verification of Customers: We do not verify the identity of people who send web orders and do not guarantee that any order is genuine. Before handing over goods, confirm the order with the customer and check that the money has arrived in your own bank account or wallet. Do not rely on a screenshot. Tools such as order limits and "Block this number" reduce abuse but do not remove this risk.
+        </Paragraph>
+        <Paragraph>
+          21.6. Customer Information: Names, phone numbers, addresses and notes that customers send with a web order are given to you so that you can confirm and deliver that order. You are responsible for using and protecting that information lawfully and only for that purpose.
+        </Paragraph>
+        <Paragraph>
+          21.7. Your Content and Conduct: You must not use the Online Menu to offer anything illegal, unsafe, counterfeit or misleading, or to deceive customers. We may hide, suspend or remove a menu, an order or a phone number that appears fraudulent, abusive or illegal, without notice. We have no duty to monitor menus or orders.
+        </Paragraph>
+        <Paragraph>
+          21.8. Availability: The Online Menu is provided free of charge and as is. A menu is public only while the business is active under its owner's plan and the owner has switched it on. It may be unavailable at times, and web orders do not reserve stock. Section 10 (Limitation of Liability) applies to the Online Menu.
+        </Paragraph>
+      </Section>
+
+      <Section title="22. Acknowledgment">
         <Paragraph>
           By using BizManage, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
         </Paragraph>
