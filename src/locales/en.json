@@ -886,6 +886,7 @@
     "unblockMessage": "{{phone}} will be able to order from your online menu again.",
     "numberBlocked": "Number blocked",
     "manageBlocked": "Manage",
+    "disclaimer": "BizManage only passes orders to you. It takes no payment and is not part of any sale, so payments, delivery, fraud and disputes are between you and your customer. Always check the money has arrived before handing over goods. See Terms and Conditions, section 21.",
     "errors": {
       "slugFormat": "Use 3 to 40 lowercase letters, numbers or hyphens, with no hyphen at the start or end.",
       "slugReserved": "This link name is reserved. Please choose another.",

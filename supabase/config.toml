@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.menu-order]
 verify_jwt = false
+
+[functions.sync-subscription]
+verify_jwt = true

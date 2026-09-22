@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { Platform } from 'react-native';
-import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, SubscriptionTier, BusinessDisableReason } from '@/src/services/subscriptionService';
+import { AppState, Platform } from 'react-native';
+import { subscriptionService, SubscriptionStatus, SalesCountData, FREE_TIER_LIMIT, TierInfo, BusinessDisableReason, FullSubscriptionState } from '@/src/services/subscriptionService';
+import { deriveEntitlement, toSubscriptionStatus, toTierInfo, mirrorDisagrees, entitlementFingerprint, DerivedEntitlement, DbSubscriptionSnapshot } from '@/src/services/entitlementState';
 import { supabase } from '@/src/config/supabase';
 import { useAuth } from './AuthContext';
 import { UnauthorizedUpgradeModal } from '@/src/components/subscription/UnauthorizedUpgradeModal';
@@ -75,6 +76,8 @@ interface SubscriptionContextType {
   offerings: any | null;
   customerInfo: any | null;
   hasError: boolean;
+  /** where the plan shown to the user comes from: the RevenueCat SDK, or the database mirror when the SDK cannot answer */
+  subscriptionSource: 'revenuecat' | 'database';
   retryInitialization: () => Promise<void>;
 
   purchaseSubscription: (productId: string) => Promise<boolean>;
@@ -102,7 +105,10 @@ interface SubscriptionProviderProps {
   children: ReactNode;
 }
 
-type RevenueCatTier = 'free' | 'pro' | 'pro_plus' | 'max';
+// Re-verify one RevenueCat state against the mirror at most this often
+const MIRROR_SYNC_WINDOW_MS = 60 * 1000;
+// Ask the SDK for fresh customer info on foreground at most this often (it answers from cache when fresh)
+const FOREGROUND_CHECK_MS = 60 * 1000;
 
 export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ children }) => {
   const { user, currentBusiness } = useAuth();
@@ -141,6 +147,27 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
   const isFirstLoadRef = useRef(true);
+  const currentBusinessIdRef = useRef<string | null>(null);
+  useEffect(() => { currentBusinessIdRef.current = currentBusiness?.id ?? null; }, [currentBusiness?.id]);
+
+  // RevenueCat is the source of truth for the signed-in user's own plan. rcStateRef holds
+  // the plan derived from the SDK's customer info (cached on the device, so reading it is
+  // free). While it is null (web, Expo Go, or the SDK has not answered yet) the database
+  // mirror drives the same state. dbSnapshotRef remembers what the mirror last said so the
+  // two can be compared; a disagreement triggers one server-side re-verification.
+  const rcStateRef = useRef<DerivedEntitlement | null>(null);
+  const dbSnapshotRef = useRef<DbSubscriptionSnapshot | null>(null);
+  const mirrorSyncRef = useRef<{ inFlight: Promise<boolean> | null; lastFingerprint: string | null; lastAt: number; disabled: boolean }>({ inFlight: null, lastFingerprint: null, lastAt: 0, disabled: false });
+  const lastForegroundCheckRef = useRef(0);
+  const [subscriptionSource, setSubscriptionSource] = useState<'revenuecat' | 'database'>('database');
+  const applyFullStateRef = useRef<(state: FullSubscriptionState) => void>(() => {});
+
+  useEffect(() => {
+    rcStateRef.current = null;
+    dbSnapshotRef.current = null;
+    mirrorSyncRef.current = { inFlight: null, lastFingerprint: null, lastAt: 0, disabled: false };
+    setSubscriptionSource('database');
+  }, [user?.id]);
 
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const businessCountChannelRef = useRef<RealtimeChannel | null>(null);
@@ -152,6 +179,103 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsMap = useRef<Record<string, number>>({});
   const maxReconnectAttempts = 5;
+
+  /**
+   * When the plan from RevenueCat and the mirror disagree, ask the server to re-verify with
+   * RevenueCat's API and correct the mirror. Never on the normal path: it runs only on a
+   * disagreement (or after a purchase), once per distinct RevenueCat state per window, and
+   * never twice at once. Resolves true when the mirror was changed.
+   */
+  const reconcileMirror = useCallback(async (force = false): Promise<boolean> => {
+    const rc = rcStateRef.current;
+    const sync = mirrorSyncRef.current;
+    const userId = user?.id;
+    if (!userId || !rc || sync.disabled) return false;
+    if (!force && !mirrorDisagrees(rc, dbSnapshotRef.current)) return false;
+    if (sync.inFlight) return sync.inFlight;
+
+    const fingerprint = entitlementFingerprint(rc);
+    if (!force && sync.lastFingerprint === fingerprint && Date.now() - sync.lastAt < MIRROR_SYNC_WINDOW_MS) return false;
+    sync.lastFingerprint = fingerprint;
+    sync.lastAt = Date.now();
+
+    const run = (async () => {
+      try {
+        console.log('[RevenueCatSubscriptionContext] Mirror disagrees with RevenueCat, asking the server to re-verify');
+        const outcome = await subscriptionService.syncMirrorWithRevenueCat();
+        if (!outcome.ok) {
+          if (outcome.reason === 'not_configured') {
+            sync.disabled = true;
+            console.warn('[RevenueCatSubscriptionContext] sync-subscription is not configured; the mirror will only follow the webhook');
+          }
+          return false;
+        }
+        const result = outcome.result;
+        if (result.tier) {
+          dbSnapshotRef.current = { tier: result.tier, expirationDate: result.expirationDate ?? null, productId: result.productId ?? null };
+        }
+        if (result.changed) {
+          console.log('[RevenueCatSubscriptionContext] Mirror corrected:', result.status, result.tier);
+          const full = await subscriptionService.getFullSubscriptionState(userId, currentBusinessIdRef.current);
+          applyFullStateRef.current(full);
+        }
+        return !!result.changed;
+      } catch (error) {
+        console.warn('[RevenueCatSubscriptionContext] Mirror re-verification failed:', error);
+        return false;
+      } finally {
+        sync.inFlight = null;
+      }
+    })();
+    sync.inFlight = run;
+    return run;
+  }, [user?.id]);
+
+  /** Makes the plan in RevenueCat's customer info the plan the app runs on. */
+  const applyEntitlement = useCallback((info: any | null) => {
+    // null means the SDK could not answer (no cache yet and offline): keep what we have
+    if (!info || !user?.id) return;
+    const derived = deriveEntitlement(info);
+    rcStateRef.current = derived;
+    setCustomerInfo(info);
+    setSubscriptionStatus(toSubscriptionStatus(derived, info?.originalAppUserId || user.id));
+    setIsSubscribed(derived.isActive);
+    setTierInfo(toTierInfo(derived));
+    setSubscriptionSource('revenuecat');
+    void reconcileMirror();
+  }, [user?.id, reconcileMirror]);
+
+  /**
+   * Records what the database mirror says. The mirror only drives the plan shown to the
+   * user while RevenueCat has not answered (web, Expo Go, first milliseconds of a launch).
+   */
+  const noteDbSubscription = useCallback((snapshot: DbSubscriptionSnapshot, status?: SubscriptionStatus, tier?: TierInfo) => {
+    dbSnapshotRef.current = { ...(dbSnapshotRef.current ?? {}), ...snapshot };
+    if (!rcStateRef.current) {
+      if (status) {
+        setSubscriptionStatus(status);
+        setIsSubscribed(status.isSubscribed);
+      }
+      if (tier) setTierInfo(tier);
+    }
+    void reconcileMirror();
+  }, [reconcileMirror]);
+
+  /** Applies a get_full_subscription_state answer: plan via the mirror rule, business-level data always. */
+  const applyFullState = useCallback((fullState: FullSubscriptionState) => {
+    noteDbSubscription(
+      { tier: fullState.tierInfo.tier, expirationDate: fullState.tierInfo.expirationDate ?? null, productId: fullState.subscriptionStatus.productId ?? null },
+      fullState.subscriptionStatus,
+      fullState.tierInfo,
+    );
+    setOwnedBusinessCount(fullState.ownedBusinessCount);
+    if (fullState.salesCountData) setSalesCountData(fullState.salesCountData);
+    if (fullState.canAccessFeature !== null && fullState.canAccessFeature !== undefined) {
+      setCanAccessFeature(fullState.canAccessFeature);
+      setBusinessDisableReason(fullState.businessDisableReason);
+    }
+  }, [noteDbSubscription]);
+  useEffect(() => { applyFullStateRef.current = applyFullState; }, [applyFullState]);
 
   const initializeRevenueCat = useCallback(async () => {
     console.log("[RevenueCatSubscriptionContext] Initializing subscription system");
@@ -176,6 +300,13 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     try {
       console.log('[RevenueCatSubscriptionContext] Configuring RevenueCat with user ID:', user?.id);
       await revenueCatService.configure(user?.id);
+
+      // The plan first: it comes from the SDK's on-device cache, so the app knows the
+      // user's tier right away without waiting for the store or the network. The SDK
+      // refreshes it in the background and reports changes through the listener.
+      applyEntitlement(await revenueCatService.getCustomerInfo());
+      setIsInitialized(true);
+      setIsLoading(false);
 
       if (user?.id) {
         console.log('[RevenueCatSubscriptionContext] Setting user attributes');
@@ -203,166 +334,54 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         setProducts(formattedProducts);
       }
 
-      const info = await revenueCatService.getCustomerInfo();
-      setCustomerInfo(info);
-
-      setIsInitialized(true);
       console.log('[RevenueCatSubscriptionContext] RevenueCat initialized successfully');
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error initializing RevenueCat:', error);
-      setIsInitialized(true);
     } finally {
+      setIsInitialized(true);
       setIsLoading(false);
     }
-  }, [user?.id, user?.email]);
+  }, [user?.id, user?.email, applyEntitlement]);
 
+  /** Re-reads the plan from the SDK (cache when fresh, network otherwise) and applies it. */
   const refreshCustomerInfo = useCallback(async () => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id) return;
 
     try {
-      const info = await revenueCatService.getCustomerInfo();
-      setCustomerInfo(info);
-
-      const tier = await revenueCatService.getCurrentTier();
-      const maxBusinesses = await revenueCatService.getMaxBusinesses();
-
-      const hasActiveSubscription = tier !== 'free';
-      setIsSubscribed(hasActiveSubscription);
-
-      setTierInfo({
-        tier: tier as SubscriptionTier,
-        maxOwnedBusinesses: maxBusinesses,
-        subscriptionStatus: hasActiveSubscription ? 'active' : 'trial',
-        expirationDate: null
-      });
-
-      await syncWithSupabase(info, tier);
+      applyEntitlement(await revenueCatService.getCustomerInfo());
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error refreshing customer info:', error);
     }
-  }, [user?.id]);
-
-  const lastSyncTimeRef = useRef<number>(0);
-  const syncCooldownMs = 5000;
-  const isSyncingRef = useRef(false);
-
-  const syncWithSupabase = async (info: any, tier: RevenueCatTier) => {
-    if (!user?.id) return;
-
-    const now = Date.now();
-    const timeSinceLastSync = now - lastSyncTimeRef.current;
-
-    if (timeSinceLastSync < syncCooldownMs) {
-      console.log(`[RevenueCatSubscriptionContext] Skipping sync - cooldown active (${timeSinceLastSync}ms since last sync)`);
-      return;
-    }
-
-    if (isSyncingRef.current) {
-      console.log('[RevenueCatSubscriptionContext] Skipping sync - sync already in progress');
-      return;
-    }
-
-    isSyncingRef.current = true;
-
-    try {
-      const { data: existingSubscription } = await supabase
-        .from('user_subscriptions')
-        .select('subscription_status, subscription_expiration_date, tier, subscription_product_id, last_webhook_update, updated_by, max_owned_businesses, sync_version')
-        .eq('user_id', user.id)
-        .maybeSingle() as { data: {
-          subscription_status: string;
-          subscription_expiration_date: string | null;
-          tier: string;
-          subscription_product_id: string | null;
-          last_webhook_update: string | null;
-          updated_by: string | null;
-          max_owned_businesses: number | null;
-          sync_version: number | null;
-        } | null };
-
-      if (existingSubscription?.last_webhook_update) {
-        const webhookUpdateTime = new Date(existingSubscription.last_webhook_update).getTime();
-        const timeSinceWebhookUpdate = now - webhookUpdateTime;
-
-        if (timeSinceWebhookUpdate < 300000) {
-          console.log('[RevenueCatSubscriptionContext] Skipping sync - webhook updated recently (' + timeSinceWebhookUpdate + 'ms ago)');
-          lastSyncTimeRef.current = now;
-          return;
-        }
-      }
-
-      const existingIsActive = existingSubscription?.subscription_status === 'active';
-      const existingNotExpired = existingSubscription?.subscription_expiration_date
-        ? new Date(existingSubscription.subscription_expiration_date) > new Date()
-        : true;
-      const hasValidExistingSubscription = existingIsActive && existingNotExpired;
-
-      if (tier === 'free' && hasValidExistingSubscription) {
-        console.log('[RevenueCatSubscriptionContext] Protecting existing active subscription - skipping sync');
-        lastSyncTimeRef.current = now;
-        return;
-      }
-
-      const existingIsCancelledOrExpired = existingSubscription?.subscription_status === 'cancelled' ||
-                                           existingSubscription?.subscription_status === 'expired' ||
-                                           existingSubscription?.subscription_status === 'trial';
-
-      const hasActiveEntitlements = info?.entitlements?.active &&
-                                    Object.keys(info.entitlements.active).length > 0;
-
-      if (existingIsCancelledOrExpired && tier === 'free' && existingSubscription?.updated_by === 'webhook') {
-        console.log('[RevenueCatSubscriptionContext] CRITICAL: Webhook set status to cancelled/expired/trial. Client shows tier=free. Respecting webhook data to prevent downgrade loop.');
-        lastSyncTimeRef.current = now;
-        return;
-      }
-
-      if (existingIsCancelledOrExpired && !hasActiveEntitlements) {
-        console.log('[RevenueCatSubscriptionContext] Protecting cancelled/expired status - no active entitlements in RevenueCat');
-        lastSyncTimeRef.current = now;
-        return;
-      }
-
-      const activeEntitlement = hasActiveEntitlements ? Object.values(info.entitlements.active)[0] as any : null;
-      const expirationDate = activeEntitlement?.expirationDate;
-      const newProductId = activeEntitlement?.productIdentifier || null;
-
-      const maxBusinesses = isRevenueCatAvailable ? await revenueCatService.getMaxBusinesses() : null;
-      const revenueCatAppUserId = info?.originalAppUserId || user.id;
-
-      // Subscription state is now managed exclusively by the server-side webhook.
-      // The client only reads the subscription status from the DB; it does not write it.
-      // This prevents self-grant exploits (E1). The revenuecat-webhook edge function
-      // is the sole writer of user_subscriptions.
-      lastSyncTimeRef.current = now;
-    } catch (error) {
-      console.error('[RevenueCatSubscriptionContext] Error syncing with Supabase:', error);
-    } finally {
-      isSyncingRef.current = false;
-    }
-  };
+  }, [user?.id, applyEntitlement]);
 
   const refreshSubscriptionStatus = useCallback(async (forceRefresh = false) => {
     if (!user?.id) return;
 
     try {
       const shouldForceRefresh = forceRefresh || isFirstLoadRef.current;
-      const status = await subscriptionService.getSubscriptionStatus(user.id, shouldForceRefresh);
+      // Ask RevenueCat too, so a manual refresh picks up a plan change straight away
+      const [status] = await Promise.all([
+        subscriptionService.getSubscriptionStatus(user.id, shouldForceRefresh),
+        refreshCustomerInfo(),
+      ]);
       const isExpired = subscriptionService.isSubscriptionExpired(status);
       const supabaseSubscribed = status.isSubscribed && !isExpired;
 
-      setSubscriptionStatus({
-        ...status,
-        isSubscribed: supabaseSubscribed,
-        subscriptionStatus: supabaseSubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
-      });
-      setIsSubscribed(supabaseSubscribed);
+      noteDbSubscription(
+        { expirationDate: status.expirationDate ?? null, productId: status.productId ?? null },
+        {
+          ...status,
+          isSubscribed: supabaseSubscribed,
+          subscriptionStatus: supabaseSubscribed ? 'active' : (isExpired ? 'expired' : status.subscriptionStatus)
+        },
+      );
       setHasError(false);
     } catch (error) {
       console.error('Error refreshing subscription status:', error);
       setHasError(true);
       throw error;
     }
-  }, [user?.id]);
+  }, [user?.id, refreshCustomerInfo, noteDbSubscription]);
 
   const refreshSalesCount = useCallback(async () => {
     if (!user?.id || !currentBusiness?.id) return;
@@ -386,7 +405,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         subscriptionService.getTierInfo(user.id),
         subscriptionService.getOwnedBusinessCount(user.id)
       ]);
-      setTierInfo(tierData);
+      noteDbSubscription({ tier: tierData.tier, expirationDate: tierData.expirationDate }, undefined, tierData);
       setOwnedBusinessCount(ownedCount);
       setHasError(false);
     } catch (error) {
@@ -394,7 +413,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setHasError(true);
       throw error;
     }
-  }, [user?.id]);
+  }, [user?.id, noteDbSubscription]);
 
   const loadDowngradeData = useCallback(async () => {
     if (!user?.id) return;
@@ -490,7 +509,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         setReadOnlyBusinessIds(readOnlyIds);
         setMustChooseBusinesses(true);
 
-        setTierInfo(tierData);
+        noteDbSubscription({ tier: tierData.tier, expirationDate: tierData.expirationDate }, undefined, tierData);
         setOwnedBusinessCount(ownedCount);
       } else {
         console.log('[RevenueCatSubscriptionContext] No action needed, clearing modal state');
@@ -504,7 +523,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setOwnedBusinesses([]);
       setReadOnlyBusinessIds([]);
     }
-  }, [user?.id]);
+  }, [user?.id, noteDbSubscription]);
 
   const checkFeatureAccess = useCallback(async (forceRefresh = false) => {
     if (!user?.id || !currentBusiness?.id) {
@@ -535,31 +554,14 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setIsLoading(true);
 
       const currentInfo = await revenueCatService.getCustomerInfo();
-      const activeProductIds = Object.values(currentInfo.entitlements.active)
+      const activeProductIds = Object.values(currentInfo?.entitlements?.active ?? {})
         .map((entitlement: any) => entitlement.productIdentifier);
 
       if (activeProductIds.includes(productId)) {
         console.log('[RevenueCatSubscriptionContext] User already has this subscription');
-
-        const fullState = await subscriptionService.getFullSubscriptionState(
-          user.id,
-          currentBusiness?.id
-        );
-
-        setSubscriptionStatus(fullState.subscriptionStatus);
-        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-        setTierInfo(fullState.tierInfo);
-        setOwnedBusinessCount(fullState.ownedBusinessCount);
-
-        if (fullState.salesCountData) {
-          setSalesCountData(fullState.salesCountData);
-        }
-
-        if (fullState.canAccessFeature !== null) {
-          setCanAccessFeature(fullState.canAccessFeature);
-          setBusinessDisableReason(fullState.businessDisableReason);
-        }
-
+        applyEntitlement(currentInfo);
+        await reconcileMirror(true);
+        applyFullState(await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id));
         return true;
       }
 
@@ -578,46 +580,27 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         return false;
       }
 
-      setCustomerInfo(newCustomerInfo);
+      // The store's answer is the truth: the user is on the new plan right now
+      applyEntitlement(newCustomerInfo);
 
-      // The webhook may not have written to the DB yet, so retry with delays
-      let fullState = await subscriptionService.getFullSubscriptionState(
-        user.id,
-        currentBusiness?.id
-      );
+      // Bring the mirror up to date so server-side checks (sales limit, business limit)
+      // follow immediately; the webhook will land later and write the same thing
+      const mirrorCorrected = await reconcileMirror(true);
 
-      if (!fullState.subscriptionStatus.isSubscribed) {
-        // Wait for webhook to process
+      let fullState = await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id);
+
+      if (!mirrorCorrected && !fullState.subscriptionStatus.isSubscribed) {
+        // Server-side verification was not available: give the webhook a moment
         await new Promise(resolve => setTimeout(resolve, 2000));
-        fullState = await subscriptionService.getFullSubscriptionState(
-          user.id,
-          currentBusiness?.id
-        );
+        fullState = await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id);
       }
 
-      if (!fullState.subscriptionStatus.isSubscribed) {
-        // Webhook may still be processing -- retry once more after a longer delay
+      if (!mirrorCorrected && !fullState.subscriptionStatus.isSubscribed) {
         await new Promise(resolve => setTimeout(resolve, 3000));
-        fullState = await subscriptionService.getFullSubscriptionState(
-          user.id,
-          currentBusiness?.id
-        );
+        fullState = await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id);
       }
 
-      setSubscriptionStatus(fullState.subscriptionStatus);
-      setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-      setTierInfo(fullState.tierInfo);
-      setOwnedBusinessCount(fullState.ownedBusinessCount);
-
-      if (fullState.salesCountData) {
-        setSalesCountData(fullState.salesCountData);
-      }
-
-      if (fullState.canAccessFeature !== null) {
-        setCanAccessFeature(fullState.canAccessFeature);
-        setBusinessDisableReason(fullState.businessDisableReason);
-      }
-
+      applyFullState(fullState);
       return true;
     } catch (error: any) {
       console.error('[RevenueCatSubscriptionContext] Error purchasing subscription:', error);
@@ -626,26 +609,9 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           error?.message?.toLowerCase().includes('already purchased') ||
           error?.message?.toLowerCase().includes('already own')) {
         console.log('[RevenueCatSubscriptionContext] Product already owned, returning success');
-
-        const fullState = await subscriptionService.getFullSubscriptionState(
-          user.id,
-          currentBusiness?.id
-        );
-
-        setSubscriptionStatus(fullState.subscriptionStatus);
-        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-        setTierInfo(fullState.tierInfo);
-        setOwnedBusinessCount(fullState.ownedBusinessCount);
-
-        if (fullState.salesCountData) {
-          setSalesCountData(fullState.salesCountData);
-        }
-
-        if (fullState.canAccessFeature !== null) {
-          setCanAccessFeature(fullState.canAccessFeature);
-          setBusinessDisableReason(fullState.businessDisableReason);
-        }
-
+        await refreshCustomerInfo();
+        await reconcileMirror(true);
+        applyFullState(await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id));
         return true;
       }
 
@@ -653,7 +619,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } finally {
       setIsLoading(false);
     }
-  }, [offerings, user?.id, currentBusiness?.id]);
+  }, [offerings, user?.id, currentBusiness?.id, applyEntitlement, reconcileMirror, applyFullState, refreshCustomerInfo]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable) {
@@ -665,30 +631,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       setIsLoading(true);
 
       const restoredInfo = await revenueCatService.restorePurchases();
-      setCustomerInfo(restoredInfo);
+      applyEntitlement(restoredInfo);
 
-      const hasActiveEntitlements = Object.keys(restoredInfo.entitlements.active).length > 0;
-
-      if (hasActiveEntitlements) {
-        const fullState = await subscriptionService.getFullSubscriptionState(
-          user.id,
-          currentBusiness?.id
-        );
-
-        setSubscriptionStatus(fullState.subscriptionStatus);
-        setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-        setTierInfo(fullState.tierInfo);
-        setOwnedBusinessCount(fullState.ownedBusinessCount);
-
-        if (fullState.salesCountData) {
-          setSalesCountData(fullState.salesCountData);
-        }
-
-        if (fullState.canAccessFeature !== null) {
-          setCanAccessFeature(fullState.canAccessFeature);
-          setBusinessDisableReason(fullState.businessDisableReason);
-        }
-
+      if (deriveEntitlement(restoredInfo).isActive) {
+        await reconcileMirror(true);
+        applyFullState(await subscriptionService.getFullSubscriptionState(user.id, currentBusiness?.id));
         return true;
       }
 
@@ -699,7 +646,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, currentBusiness?.id]);
+  }, [user?.id, currentBusiness?.id, applyEntitlement, reconcileMirror, applyFullState]);
 
   const showPaywall = useCallback(async () => {
     if (!currentBusiness) return;
@@ -977,51 +924,21 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
           }
 
           try {
-            const updatedBy = payload.new?.updated_by;
-            console.log('[RevenueCatSubscriptionContext] Update source:', updatedBy);
-
-            if (updatedBy === 'webhook') {
-              console.log('[RevenueCatSubscriptionContext] Webhook update - skipping refreshCustomerInfo to prevent sync loop');
-            } else if (isRevenueCatAvailable) {
-              console.log('[RevenueCatSubscriptionContext] Non-webhook update - calling refreshCustomerInfo');
-              try {
-                await refreshCustomerInfo();
-              } catch (refreshError) {
-                console.error('[RevenueCatSubscriptionContext] Error refreshing customer info:', refreshError);
-              }
-            }
+            // The mirror changed (webhook or rc_sync). The plan itself still comes from
+            // RevenueCat; this refresh picks up the business-level consequences.
+            console.log('[RevenueCatSubscriptionContext] Update source:', payload.new?.updated_by);
 
             const fullState = await subscriptionService.getFullSubscriptionState(
               user.id,
-              currentBusiness?.id || null
+              currentBusinessIdRef.current
             );
-
-            if (fullState?.subscriptionStatus) {
-              setSubscriptionStatus(fullState.subscriptionStatus);
-              setIsSubscribed(fullState.subscriptionStatus.isSubscribed || false);
-            }
-
-            if (fullState?.tierInfo) {
-              setTierInfo(fullState.tierInfo);
-            }
-
-            if (fullState?.ownedBusinessCount !== undefined) {
-              setOwnedBusinessCount(fullState.ownedBusinessCount);
-            }
-
-            if (fullState?.salesCountData) {
-              setSalesCountData(fullState.salesCountData);
-            } else {
+            applyFullState(fullState);
+            if (!fullState.salesCountData) {
               setSalesCountData({
                 salesCount: 0,
                 remainingSales: FREE_TIER_LIMIT,
                 isAtLimit: false,
               });
-            }
-
-            if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
-              setCanAccessFeature(fullState.canAccessFeature);
-              setBusinessDisableReason(fullState.businessDisableReason);
             }
           } catch (error) {
             console.error('[RevenueCatSubscriptionContext] Error processing subscription change:', error);
@@ -1046,7 +963,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       });
 
     realtimeChannelRef.current = channel;
-  }, [user?.id, currentBusiness?.id, refreshCustomerInfo, handleReconnect]);
+  }, [user?.id, applyFullState, handleReconnect]);
 
   const setupCustomerInfoListener = useCallback(() => {
     if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id || !revenueCatService) return;
@@ -1059,33 +976,18 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
 
     try {
       if (revenueCatService.addCustomerInfoUpdateListener) {
+        // The SDK calls this whenever the plan changes: after a purchase, a renewal, a
+        // cancellation taking effect, or its own background refresh. This is how the app
+        // follows RevenueCat without polling.
         const remove = revenueCatService.addCustomerInfoUpdateListener(async (info: any) => {
-          setCustomerInfo(info);
+          const before = rcStateRef.current ? entitlementFingerprint(rcStateRef.current) : null;
+          applyEntitlement(info);
+          const after = rcStateRef.current ? entitlementFingerprint(rcStateRef.current) : null;
+          if (before === after) return;
 
-          const hasActiveEntitlements = info?.entitlements?.active
-            ? Object.keys(info.entitlements.active).length > 0
-            : false;
-
+          // The plan changed: refresh the business-level consequences from the server
           try {
-            const fullState = await subscriptionService.getFullSubscriptionState(
-              user.id,
-              currentBusiness?.id || null
-            );
-
-            if (fullState?.subscriptionStatus) {
-              setSubscriptionStatus(fullState.subscriptionStatus);
-              setIsSubscribed(fullState.subscriptionStatus.isSubscribed);
-            }
-            if (fullState?.tierInfo) {
-              setTierInfo(fullState.tierInfo);
-            }
-            if (fullState?.canAccessFeature !== null && fullState?.canAccessFeature !== undefined) {
-              setCanAccessFeature(fullState.canAccessFeature);
-              setBusinessDisableReason(fullState.businessDisableReason);
-            }
-            if (fullState?.salesCountData) {
-              setSalesCountData(fullState.salesCountData);
-            }
+            applyFullState(await subscriptionService.getFullSubscriptionState(user.id, currentBusinessIdRef.current));
           } catch (error) {
             console.error('[RevenueCatSubscriptionContext] Error refreshing state from listener:', error);
           }
@@ -1095,7 +997,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     } catch (error) {
       console.error('[RevenueCatSubscriptionContext] Error setting up customer info listener:', error);
     }
-  }, [user?.id, currentBusiness?.id, refreshCustomerInfo]);
+  }, [user?.id, applyEntitlement, applyFullState]);
 
   useEffect(() => {
     if (user?.id) {
@@ -1111,6 +1013,21 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
       }
     };
   }, [user?.id, initializeRevenueCat, setupCustomerInfoListener]);
+
+  // On return to the foreground, re-read the plan. The SDK answers from cache when it is
+  // fresh and only goes to the network when it is stale, so this costs nothing in the
+  // common case and catches a renewal or expiry that happened while the app was away.
+  useEffect(() => {
+    if (Platform.OS === 'web' || !isRevenueCatAvailable || !user?.id) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const now = Date.now();
+      if (now - lastForegroundCheckRef.current < FOREGROUND_CHECK_MS) return;
+      lastForegroundCheckRef.current = now;
+      void refreshCustomerInfo();
+    });
+    return () => sub.remove();
+  }, [user?.id, refreshCustomerInfo]);
 
   useEffect(() => {
     if (user?.id) {
@@ -1305,6 +1222,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     offerings,
     customerInfo,
     hasError,
+    subscriptionSource,
     retryInitialization,
     purchaseSubscription,
     restorePurchases,

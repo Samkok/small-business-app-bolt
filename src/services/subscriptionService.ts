@@ -44,6 +44,19 @@ export interface TierInfo {
 
 export type BusinessDisableReason = 'subscription' | 'owner_disabled' | null;
 
+/** Answer from the sync-subscription function after it verified with RevenueCat's API. */
+export interface MirrorSyncResult {
+  changed: boolean;
+  throttled?: boolean;
+  status?: 'active' | 'expired' | 'none';
+  tier?: SubscriptionTier;
+  expirationDate?: string | null;
+  productId?: string | null;
+  validatedAt?: string;
+}
+
+export type MirrorSyncFailure = 'not_configured' | 'unauthorized' | 'rate_limited' | 'unavailable';
+
 export interface FullSubscriptionState {
   subscriptionStatus: SubscriptionStatus;
   tierInfo: TierInfo;
@@ -604,6 +617,33 @@ export const subscriptionService = {
     } catch (error) {
       console.error('Error getting business owner subscription tier:', error);
       return null;
+    }
+  },
+
+  /**
+   * Asks the server to re-verify the caller's plan with RevenueCat and correct the
+   * user_subscriptions mirror. Called only when the plan read from the RevenueCat SDK
+   * disagrees with the mirror, never on the normal path. Returns the failure kind
+   * instead of throwing so callers can back off without alarming the user.
+   */
+  async syncMirrorWithRevenueCat(): Promise<{ ok: true; result: MirrorSyncResult } | { ok: false; reason: MirrorSyncFailure }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-subscription', { method: 'POST' });
+      if (error) {
+        const status: number | undefined = (error as any)?.context?.status;
+        let body: any = null;
+        try { body = await (error as any)?.context?.json?.(); } catch { /* not JSON */ }
+        const code: string | undefined = body?.error;
+        if (status === 503 || code === 'not_configured' || code === 'revenuecat_key_rejected') return { ok: false, reason: 'not_configured' };
+        if (status === 401) return { ok: false, reason: 'unauthorized' };
+        if (status === 429) return { ok: false, reason: 'rate_limited' };
+        console.warn('[SubscriptionService] mirror sync failed:', status, code ?? error.message);
+        return { ok: false, reason: 'unavailable' };
+      }
+      return { ok: true, result: (data ?? { changed: false }) as MirrorSyncResult };
+    } catch (error) {
+      console.warn('[SubscriptionService] mirror sync unreachable:', error instanceof Error ? error.message : error);
+      return { ok: false, reason: 'unavailable' };
     }
   },
 

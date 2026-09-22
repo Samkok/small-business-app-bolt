@@ -163,19 +163,6 @@ class RevenueCatService {
 
       this.configured = true;
       console.log('[RevenueCat] SDK configured successfully');
-
-      try {
-        console.log('[RevenueCat] Fetching initial customer info...');
-        const customerInfo = await Purchases.getCustomerInfo();
-        console.log('[RevenueCat] Customer info:', {
-          activeEntitlements: Object.keys(customerInfo.entitlements.active),
-          activeSubscriptions: customerInfo.activeSubscriptions,
-          originalAppUserId: customerInfo.originalAppUserId,
-        });
-      } catch (infoError) {
-        console.log('[RevenueCat] Could not fetch initial customer info:', infoError);
-        console.log('[RevenueCat] This is normal for new users or unconfigured products');
-      }
     } catch (error) {
       console.error('[RevenueCat] Configuration error:', error);
       this.configured = false;
@@ -279,17 +266,22 @@ class RevenueCatService {
     }
   }
 
-  async getCustomerInfo(): Promise<any> {
+  /**
+   * The SDK answers from its on-device cache when it can and refreshes in the background,
+   * so this is cheap. Returns null when it cannot answer (no cache yet and no network), so
+   * callers keep the plan they already have instead of treating the user as free.
+   */
+  async getCustomerInfo(): Promise<any | null> {
     if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       return emptyCustomerInfo;
     }
 
     try {
       const customerInfo = await Purchases.getCustomerInfo();
-      return customerInfo;
+      return customerInfo ?? null;
     } catch (error) {
-      console.error('[RevenueCat] Error fetching customer info:', error);
-      return emptyCustomerInfo;
+      console.warn('[RevenueCat] Could not read customer info:', error instanceof Error ? error.message : error);
+      return null;
     }
   }
 
@@ -308,7 +300,7 @@ class RevenueCatService {
       if (PURCHASES_ERROR_CODE && error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
         console.log('[RevenueCat] Purchase cancelled by user');
         const customerInfo = await this.getCustomerInfo();
-        return { customerInfo, cancelled: true };
+        return { customerInfo: customerInfo ?? emptyCustomerInfo, cancelled: true };
       }
 
       console.error('[RevenueCat] Purchase error:', error);
@@ -338,6 +330,7 @@ class RevenueCatService {
     try {
       const customerInfo = await this.getCustomerInfo();
       const entitlements: RevenueCatEntitlement[] = [];
+      if (!customerInfo) return entitlements;
 
       Object.entries(customerInfo.entitlements.active).forEach(([id, entitlement]: [string, any]) => {
         entitlements.push({
@@ -360,7 +353,7 @@ class RevenueCatService {
 
     try {
       const customerInfo = await this.getCustomerInfo();
-      const hasEntitlement = customerInfo.entitlements.active[entitlementId]?.isActive === true;
+      const hasEntitlement = customerInfo?.entitlements?.active?.[entitlementId]?.isActive === true;
       console.log(`[RevenueCat] Entitlement ${entitlementId}:`, hasEntitlement);
       return hasEntitlement;
     } catch (error) {
@@ -374,7 +367,7 @@ class RevenueCatService {
 
     try {
       const customerInfo = await this.getCustomerInfo();
-      const activeEntitlements = customerInfo.entitlements.active;
+      const activeEntitlements = customerInfo?.entitlements?.active ?? {};
 
       if (activeEntitlements[ENTITLEMENT_IDS.MAX]?.isActive) {
         return 'max';

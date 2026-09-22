@@ -303,7 +303,9 @@ export default function OnlineMenuScreen() {
           </Card>
           </View>
 
-          <Text style={[styles.footnote, { color: colors.subtext }]}>{t('onlineMenu.howItWorks')}</Text>
+          <Text style={[styles.footnote, { color: colors.subtext, marginBottom: 10 }]}>{t('onlineMenu.howItWorks')}</Text>
+          {/* Terms, section 21: BizManage is not a party to sales made through the menu */}
+          <Text style={[styles.footnote, { color: colors.subtext }]}>{t('onlineMenu.disclaimer')}</Text>
         </ScrollView>
       )}
     </KeyboardAvoidingView>
