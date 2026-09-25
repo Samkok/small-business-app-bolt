@@ -1,5 +1,6 @@
 import { ReceiptModel } from './receipt';
 import { RECEIPT_BRAND_LABEL, RECEIPT_BRAND_LOGO_DATA_URI } from './receiptBrand';
+import { code128Svg } from './barcode128';
 
 /**
  * HTML for the PDF and the system print dialog. A dumb renderer: every number
@@ -28,16 +29,28 @@ export function estimateReceiptHeightPt(model: ReceiptModel): number {
   const lineRows = model.lines.reduce((sum, l) => sum + 34 + (l.discountAmount > 0 ? 15 : 0) + (l.name.length > 34 ? 14 : 0), 0);
   const refundRows = model.refund ? 70 + model.refund.items.length * 16 : 0;
   const header = 150 + (model.business.logoUrl ? 70 : 0) + [model.business.phone, model.business.address, model.business.pageName].filter(Boolean).length * 14;
-  const footer = 70 + (model.notes ? 40 : 0) + (model.footer ? 34 : 0) + (model.stamp ? 40 : 0) + 34; // + the Powered By line
-  return Math.ceil(header + model.meta.length * 16 + lineRows + 150 + refundRows + footer);
+  const payment = model.business.paymentNote || model.business.paymentQrUrl ? 40 + (model.business.paymentQrUrl ? 130 : 0) + (model.business.paymentNote ? model.business.paymentNote.split('\n').length * 14 : 0) : 0;
+  const footer = 70 + (model.notes ? 40 : 0) + (model.footer ? 34 : 0) + (model.stamp ? 40 : 0) + (model.secondaryTotal ? 16 : 0) + (model.barcodeValue ? 70 : 0) + 34; // + the Powered By line
+  return Math.ceil(header + model.meta.length * 16 + lineRows + 150 + refundRows + payment + footer);
 }
 
 export function renderReceiptHtml(
   model: ReceiptModel,
   formatAmount: (amount: number) => string,
-  options: { logoDataUri?: string | null } = {}
+  options: { logoDataUri?: string | null; formatAmountIn?: (amount: number, currencyId: string) => string } = {}
 ): string {
   const money = (x: number) => esc(formatAmount(x));
+  const secondary = model.secondaryTotal && options.formatAmountIn
+    ? `<div class="savings">= ${esc(options.formatAmountIn(model.secondaryTotal.amount, model.secondaryTotal.currencyId))}</div>`
+    : '';
+  const payTo = model.business.paymentNote || model.business.paymentQrUrl
+    ? `<div class="rule"></div><div class="section-title center">Pay to</div>
+      ${model.business.paymentQrUrl ? `<div class="center"><img class="payqr" src="${esc(model.business.paymentQrUrl)}" onerror="this.style.display='none'" /></div>` : ''}
+      ${model.business.paymentNote ? `<div class="paynote">${esc(model.business.paymentNote)}</div>` : ''}`
+    : '';
+  const barcode = model.barcodeValue
+    ? `<div class="barcode">${code128Svg(model.barcodeValue, { module: 1.5, height: 36 })}<div class="barcode-text">${esc(model.barcodeValue)}</div></div>`
+    : '';
   const logo = options.logoDataUri || model.business.logoUrl;
   const contact = [model.business.phone, model.business.address, model.business.pageName].filter(Boolean) as string[];
 
@@ -107,6 +120,11 @@ export function renderReceiptHtml(
   .powered img { width: 13pt; height: 13pt; border-radius: 3pt; }
   .stamp { position: absolute; top: 120pt; left: 0; right: 0; text-align: center; font-size: 46px; font-weight: 900; letter-spacing: 4px; color: rgba(220, 38, 38, 0.22); transform: rotate(-18deg); }
   .stamp.provisional { font-size: 30px; color: rgba(217, 119, 6, 0.25); }
+  .payqr { width: 120pt; height: 120pt; object-fit: contain; margin: 4pt 0; }
+  .paynote { text-align: center; color: #374151; font-size: 11px; white-space: pre-wrap; }
+  .barcode { text-align: center; margin-top: 12pt; }
+  .barcode svg { max-width: 100%; height: auto; }
+  .barcode-text { font-size: 10px; letter-spacing: 2px; color: #374151; margin-top: 2pt; }
 </style>
 </head>
 <body>
@@ -128,12 +146,15 @@ export function renderReceiptHtml(
     ${model.adjustment !== 0 ? row('Adjustment', `${model.adjustment < 0 ? '-' : ''}${money(Math.abs(model.adjustment))}`) : ''}
     ${deliveryRow}
     ${row(esc(model.totalLabel), money(model.total), 'total')}
+    ${secondary}
     ${model.totalSavings > 0 ? `<div class="savings">You saved ${money(model.totalSavings)}</div>` : ''}
     ${refund}
+    ${payTo}
     ${model.stamp === 'VOID' ? `<div class="rule"></div><div class="center section-title">This sale was voided</div>` : ''}
     ${model.stamp === 'PROVISIONAL' ? `<div class="rule"></div><div class="center contact">Made offline. The receipt number is assigned once the sale syncs.</div>` : ''}
     ${model.notes ? `<div class="rule"></div><div class="notes">Note: ${esc(model.notes)}</div>` : ''}
     ${model.footer ? `<div class="rule"></div><div class="footer">${esc(model.footer)}</div>` : ''}
+    ${barcode}
     <div class="powered"><img src="${RECEIPT_BRAND_LOGO_DATA_URI}" alt="" /><span>${esc(RECEIPT_BRAND_LABEL)}</span></div>
   </div>
 </body>

@@ -199,7 +199,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       } else if (notification.type === 'expense_added') {
         navigationTarget = '/(app)/(tabs)/expenses';
       } else if (notification.type === 'web_order_received') {
-        navigationTarget = await webOrderService.notificationTarget(data?.cart_id);
+        navigationTarget = await webOrderService.notificationTarget(data?.cart_id, data?.kind);
       }
 
       setTimeout(async () => {

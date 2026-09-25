@@ -129,7 +129,7 @@ export const subscriptionService = {
         const { data, error } = await supabase
           .rpc('get_user_total_sales_count', {
             p_user_id: userId,
-            p_business_id: businessId || null
+            p_business_id: businessId || undefined
           });
 
         if (error) throw error;
@@ -363,9 +363,9 @@ export const subscriptionService = {
         const status: SubscriptionStatus = {
           isSubscribed: statusData.is_subscribed,
           subscriptionStatus: statusData.subscription_status as any,
-          productId: statusData.product_id,
-          expirationDate: statusData.expiration_date,
-          revenueCatAppUserId: statusData.revenuecat_app_user_id,
+          productId: statusData.product_id ?? undefined,
+          expirationDate: statusData.expiration_date ?? undefined,
+          revenueCatAppUserId: statusData.revenuecat_app_user_id ?? undefined,
           willRenew: statusData.will_renew
         };
 
@@ -653,7 +653,7 @@ export const subscriptionService = {
         const { data, error } = await supabase
           .rpc('get_full_subscription_state', {
             p_user_id: userId,
-            p_business_id: businessId || null
+            p_business_id: businessId || undefined
           });
 
         if (error) throw error;
@@ -686,28 +686,30 @@ export const subscriptionService = {
           ? await this.getBusinessDisableReason(businessId)
           : null;
 
+        // the RPC returns jsonb; its shape is documented in get_full_subscription_state
+        const state: any = data;
         return {
           subscriptionStatus: {
-            isSubscribed: data.subscriptionStatus.isSubscribed,
-            subscriptionStatus: data.subscriptionStatus.subscriptionStatus,
-            productId: data.subscriptionStatus.subscriptionProductId,
-            expirationDate: data.subscriptionStatus.subscriptionExpirationDate,
+            isSubscribed: state.subscriptionStatus.isSubscribed,
+            subscriptionStatus: state.subscriptionStatus.subscriptionStatus,
+            productId: state.subscriptionStatus.subscriptionProductId,
+            expirationDate: state.subscriptionStatus.subscriptionExpirationDate,
           },
           tierInfo: {
-            tier: data.tierInfo.tier,
-            maxOwnedBusinesses: data.tierInfo.maxOwnedBusinesses,
-            subscriptionStatus: data.tierInfo.subscriptionStatus,
-            expirationDate: data.tierInfo.expirationDate
+            tier: state.tierInfo.tier,
+            maxOwnedBusinesses: state.tierInfo.maxOwnedBusinesses,
+            subscriptionStatus: state.tierInfo.subscriptionStatus,
+            expirationDate: state.tierInfo.expirationDate
           },
-          ownedBusinessCount: data.ownedBusinessCount,
-          activeBusinessCount: data.activeBusinessCount ?? data.ownedBusinessCount,
-          salesCountData: data.salesCountData ? {
-            salesCount: data.salesCountData.salesCount,
-            remainingSales: data.salesCountData.remainingSales,
-            isAtLimit: data.salesCountData.isAtLimit,
-            totalSalesAllBusinesses: data.salesCountData.totalSalesAllBusinesses
+          ownedBusinessCount: state.ownedBusinessCount,
+          activeBusinessCount: state.activeBusinessCount ?? state.ownedBusinessCount,
+          salesCountData: state.salesCountData ? {
+            salesCount: state.salesCountData.salesCount,
+            remainingSales: state.salesCountData.remainingSales,
+            isAtLimit: state.salesCountData.isAtLimit,
+            totalSalesAllBusinesses: state.salesCountData.totalSalesAllBusinesses
           } : null,
-          canAccessFeature: data.canAccessFeature,
+          canAccessFeature: state.canAccessFeature,
           businessDisableReason: disableReason
         };
       }, 'get full subscription state');

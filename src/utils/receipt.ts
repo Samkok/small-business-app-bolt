@@ -35,6 +35,17 @@ export interface ReceiptBusiness {
   address?: string | null;
   pageName?: string | null;
   footer?: string | null;
+  /** bank / account details printed under "Pay to" */
+  paymentNote?: string | null;
+  /** payment QR image (KHQR, bank app) printed under "Pay to" */
+  paymentQrUrl?: string | null;
+}
+
+/** The receipt total shown a second time in another currency, e.g. a USD sale in riel. */
+export interface ReceiptSecondaryCurrency {
+  currencyId: string;
+  /** units of this currency per 1 USD (currencies.exchange_rate_to_usd) */
+  rateToUsd: number;
 }
 
 export interface ReceiptLineInput {
@@ -86,6 +97,10 @@ export interface ReceiptInput {
   recordedCustomerTotal?: number | null;
   returnedItems?: ReceiptReturnedItem[];
   currencyId?: string | null;
+  /** units of the receipt currency per 1 USD, as saved on the sale (sales.exchange_rate_at_sale) */
+  exchangeRateAtSale?: number | null;
+  /** when set, the total is also printed in this currency at the saved rate */
+  secondaryCurrency?: ReceiptSecondaryCurrency | null;
 }
 
 export interface ReceiptLine {
@@ -136,6 +151,10 @@ export interface ReceiptModel {
   notes: string | null;
   footer: string | null;
   currencyId: string | null;
+  /** the total in a second currency at the rate saved on the sale; null when there is none */
+  secondaryTotal: { amount: number; currencyId: string } | null;
+  /** value encoded in the receipt barcode (the receipt number label); null for unnumbered or provisional receipts */
+  barcodeValue: string | null;
 }
 
 const n = (v: unknown): number => {
@@ -241,6 +260,15 @@ export function buildReceiptModel(input: ReceiptInput): ReceiptModel {
 
   const date = input.date instanceof Date ? input.date : new Date(input.date);
 
+  // The same total in the other currency, at the rate the sale was made at (a riel sale in
+  // dollars, a dollar sale in riel). Skipped when either rate is unknown.
+  let secondaryTotal: { amount: number; currencyId: string } | null = null;
+  const secondary = input.secondaryCurrency;
+  const saleRate = n(input.exchangeRateAtSale);
+  if (secondary && secondary.currencyId !== (input.currencyId ?? null) && saleRate > 0 && n(secondary.rateToUsd) > 0) {
+    secondaryTotal = { amount: round2((total / saleRate) * n(secondary.rateToUsd)), currencyId: secondary.currencyId };
+  }
+
   return {
     business: {
       name: clean(input.business?.name) || 'Receipt',
@@ -271,6 +299,8 @@ export function buildReceiptModel(input: ReceiptInput): ReceiptModel {
     notes: clean(input.notes),
     footer: clean(input.business?.footer),
     currencyId: input.currencyId ?? null,
+    secondaryTotal,
+    barcodeValue: !input.provisional && n(input.receiptNumber) > 0 ? receiptNumberLabel(input.receiptNumber, input.saleId) : null,
   };
 }
 
@@ -348,6 +378,8 @@ export function receiptInputFromSale(sale: any, business: any): ReceiptInput {
       address: business?.receipt_address ?? null,
       pageName: business?.receipt_page_name ?? null,
       footer: business?.receipt_footer ?? null,
+      paymentNote: business?.receipt_payment_note ?? null,
+      paymentQrUrl: business?.receipt_payment_qr_url ?? null,
     },
     receiptNumber: sale?.receipt_number ?? null,
     saleId: sale?.id ?? null,
@@ -369,5 +401,20 @@ export function receiptInputFromSale(sale: any, business: any): ReceiptInput {
     recordedCustomerTotal: sale?.total_amount !== null && sale?.total_amount !== undefined ? n(sale.total_amount) + deliveryCost : null,
     returnedItems,
     currencyId: sale?.currency_id ?? null,
+    exchangeRateAtSale: sale?.exchange_rate_at_sale ?? null,
   };
+}
+
+/**
+ * The currency to print the total in a second time: the business default when the sale is
+ * in another currency, otherwise the first other currency the business keeps. Null when
+ * the business has one currency.
+ */
+export function secondaryCurrencyFor(
+  saleCurrencyId: string | null | undefined,
+  currencies: { id: string; is_default: boolean; exchange_rate_to_usd: number }[]
+): ReceiptSecondaryCurrency | null {
+  if (!saleCurrencyId || currencies.length < 2) return null;
+  const other = currencies.find(c => c.is_default && c.id !== saleCurrencyId) ?? currencies.find(c => c.id !== saleCurrencyId);
+  return other && n(other.exchange_rate_to_usd) > 0 ? { currencyId: other.id, rateToUsd: n(other.exchange_rate_to_usd) } : null;
 }

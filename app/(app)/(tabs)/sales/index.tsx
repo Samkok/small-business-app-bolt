@@ -56,6 +56,8 @@ import { errorHandler } from '@/src/utils/errorHandler';
 import { useBusinessMismatchDetector } from '@/src/hooks/useBusinessMismatchDetector';
 import { FREE_TIER_LIMIT, subscriptionService } from '@/src/services/subscriptionService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ScanBarcodeButton } from '@/src/components/inventory/ScanBarcodeButton';
+import { parseReceiptNumber } from '@/src/utils/barcode128';
 import { supabase } from '@/src/config/supabase';
 
 const SALES_PER_PAGE = 10;
@@ -962,15 +964,51 @@ export default function SalesScreen() {
     return result;
   }, []);
 
+  // A receipt's barcode carries its number (R-000412): scanning it opens that sale.
+  // Any other code is searched for as typed.
+  const handleReceiptScan = useCallback(async (scanned: string) => {
+    const receiptNumber = parseReceiptNumber(scanned);
+    if (receiptNumber && currentBusiness?.id) {
+      try {
+        const saleId = await salesService.getSaleIdByReceiptNumber(currentBusiness.id, receiptNumber);
+        if (saleId) {
+          router.push(`/(app)/(tabs)/sales/details/${saleId}` as any);
+          return;
+        }
+        Alert.alert(t('common.error'), `No receipt ${scanned.trim()} in this business.`);
+        return;
+      } catch (error) {
+        console.error('Receipt lookup failed:', error);
+      }
+    }
+    setSearchQuery(scanned.trim());
+  }, [currentBusiness?.id, router, t]);
+
   // Days the user has folded away. The day's totals stay visible; only its sales are hidden.
+  // Remembered per business across restarts; a wrong or missing entry just means "all open".
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const collapsedDatesKey = currentBusiness?.id ? `sales_collapsed_dates_${currentBusiness.id}` : null;
+  useEffect(() => {
+    let cancelled = false;
+    setCollapsedDates(new Set());
+    if (!collapsedDatesKey) return;
+    AsyncStorage.getItem(collapsedDatesKey)
+      .then(raw => {
+        if (cancelled || !raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setCollapsedDates(new Set(parsed.filter((d): d is string => typeof d === 'string')));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [collapsedDatesKey]);
   const toggleDateCollapsed = useCallback((date: string) => {
     setCollapsedDates(prev => {
       const next = new Set(prev);
       if (next.has(date)) next.delete(date); else next.add(date);
+      if (collapsedDatesKey) AsyncStorage.setItem(collapsedDatesKey, JSON.stringify([...next])).catch(() => {});
       return next;
     });
-  }, []);
+  }, [collapsedDatesKey]);
 
   const groupedSalesList = useMemo(() => buildGroupedSalesList(filteredSales), [buildGroupedSalesList, filteredSales]);
   // A search must be able to show its matches, so folding is ignored while searching
@@ -1407,6 +1445,7 @@ export default function SalesScreen() {
                   <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                 </TouchableOpacity>
               )}
+              <ScanBarcodeButton onScanned={handleReceiptScan} backgroundColor="transparent" borderColor="transparent" size={32} />
             </View>
           </View>
           

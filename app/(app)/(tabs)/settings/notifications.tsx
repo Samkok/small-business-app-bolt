@@ -210,7 +210,7 @@ export default function NotificationsScreen() {
       } else if (notification.type === 'expense_added') {
         router.push('/(app)/(tabs)/expenses');
       } else if (notification.type === 'web_order_received') {
-        router.push((await webOrderService.notificationTarget(data?.cart_id)) as any);
+        router.push((await webOrderService.notificationTarget(data?.cart_id, data?.kind)) as any);
       }
     } finally {
       // Clear loading state

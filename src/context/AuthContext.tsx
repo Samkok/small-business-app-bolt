@@ -9,6 +9,8 @@ import React, {
 } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
+import { TERMS_VERSION } from '@/src/config/terms';
+import { PUSH_TOKEN_STORAGE_KEY } from '@/src/services/pushNotifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -596,7 +598,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      // The sign-up form requires agreeing to the terms: record which version, so the app
+      // can ask again after the terms change. The profile trigger reads it from the metadata.
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName, terms_version: TERMS_VERSION } },
+      });
       if (error) {
         if (isNetworkError(error)) return { error: { ...error, isNetworkError: true } };
         return { error };
@@ -607,7 +615,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error: profileError } = await supabase
           .from('user_profiles')
           .upsert(
-            { user_id: data.user.id, email, full_name: fullName },
+            { user_id: data.user.id, email, full_name: fullName, terms_accepted_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() } as any,
             { onConflict: 'user_id' }
           );
         if (profileError) return { error: profileError };
@@ -624,6 +632,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signedOutDueToInactivityRef.current = false;
     setIsExplicitSignOut(true);
     isExplicitSignOutRef.current = true;
+
+    // Forget this device before the session goes, so the next account on this phone does
+    // not receive this user's notifications (and vice versa)
+    try {
+      const token = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+      if (token) {
+        await supabase.rpc('unregister_push_token', { p_token: token });
+        await AsyncStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
+      }
+    } catch {}
 
     await clearAuthStorage();
 

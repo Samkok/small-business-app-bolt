@@ -3,7 +3,9 @@ import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { notificationService } from '../services/notifications';
-import { pushNotificationService } from '../services/pushNotifications';
+import { pushNotificationService, describeDevice } from '../services/pushNotifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PUSH_TOKEN_STORAGE_KEY } from '@/src/services/pushNotifications';
 import { BadgeSync } from '../utils/badgeSync';
 import { Database } from '../types/database';
 import { useAuth } from './AuthContext';
@@ -332,10 +334,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         if (pushToken && auth.userProfile?.user_id) {
           try {
-            const { error } = await supabase
-              .from('user_profiles')
-              .update({ expo_push_token: pushToken })
-              .eq('user_id', auth.userProfile.user_id);
+            // One row per device (user_push_tokens), so every phone the user is signed in on
+            // gets notified. The RPC also keeps user_profiles.expo_push_token for older builds
+            // and moves the token away from any account previously signed in on this phone.
+            const device = describeDevice();
+            const { error } = await supabase.rpc('register_push_token', {
+              p_token: pushToken,
+              p_platform: device.platform,
+              p_device_name: device.deviceName ?? undefined,
+              p_app_version: device.appVersion ?? undefined,
+            });
+            if (!error) AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, pushToken).catch(() => {});
 
             if (error) {
               // Check if it's an auth error - these are expected during session transitions
@@ -427,7 +436,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         } else if (data.type === 'expense_added') {
           navigationTarget = '/(app)/(tabs)/expenses';
         } else if (data.type === 'web_order_received') {
-          navigationTarget = await webOrderService.notificationTarget(data.cart_id as string);
+          navigationTarget = await webOrderService.notificationTarget(data.cart_id as string, data.kind as string);
         }
 
         await handleNotificationWithBusinessSwitch(mockNotification, navigationTarget);
