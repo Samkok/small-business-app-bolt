@@ -21,7 +21,9 @@ export const webOrderService = {
    *  - the sale, once the shop has checked it out
    *  - Active Carts with a short explanation, when the cart was deleted or expired
    */
-  async notificationTarget(cartId: string | null | undefined): Promise<string> {
+  async notificationTarget(cartId: string | null | undefined, kind?: string | null): Promise<string> {
+    // The daily "unusual number of online orders" alert is about no order in particular
+    if (kind === 'spike') return ACTIVE_CARTS_ROUTE;
     if (cartId) {
       try {
         const { data: cart } = await supabase.from('carts').select('id, status').eq('id', cartId).maybeSingle();

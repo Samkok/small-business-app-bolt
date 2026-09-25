@@ -8,6 +8,18 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Where the request really came from, read only from headers the platform's edge writes and
+// the caller cannot set. Used for the per-IP order limit and the bot check; null just skips the
+// per-IP limit (the per-phone and per-shop limits still apply).
+function clientIp(req: Request): string | null {
+  // Probed on 2026-09-25: every request reaches the function through Cloudflare, which sets
+  // cf-connecting-ip to the real client address, rewrites x-forwarded-for (its last hop is
+  // an internal AWS proxy) and rejects a caller-supplied cf-connecting-ip. x-forwarded-for is
+  // therefore never used: falling back to it would put every customer on the proxy's address.
+  const direct = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-real-ip");
+  return direct && direct.trim() ? direct.trim() : null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -28,7 +40,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Extract IP and user agent from request
-    const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+    const ipAddress = clientIp(req);
     const userAgent = req.headers.get("user-agent") || null;
 
     // Validate referral code exists and is active
