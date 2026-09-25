@@ -18,6 +18,9 @@ import { X, User, Percent, Truck, Search, Check, UserPlus } from 'lucide-react-n
 import { Button } from '@/src/components/ui/Button';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { DeliveryPayerSelector } from './DeliveryPayerSelector';
+import { DeliveryPayer, readDelivery } from '@/src/utils/deliveryPayer';
+import { useCurrencyContext } from '@/src/context/CurrencyContext';
 
 interface SaleEditModalProps {
   visible: boolean;
@@ -29,6 +32,8 @@ interface SaleEditModalProps {
     discountType?: 'percentage' | 'fixed' | null;
     discountValue?: number | null;
     deliveryCost?: number | null;
+    /** who pays the delivery amount: 'shop' (deducted, free for the customer) or 'customer' (added to the receipt) */
+    deliveryPayer?: DeliveryPayer;
     paymentStatus?: 'paid' | 'cod' | null;
   }) => Promise<void>;
   onCancel: () => void;
@@ -63,8 +68,10 @@ export default function SaleEditModal({
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed' | null>(null);
   const [discountValue, setDiscountValue] = useState('');
 
-  // Delivery
+  // Delivery: the amount, and who pays it (see src/utils/deliveryPayer.ts)
   const [deliveryCost, setDeliveryCost] = useState('');
+  const [deliveryPayer, setDeliveryPayer] = useState<DeliveryPayer>('shop');
+  const { getSymbol } = useCurrencyContext();
 
   // PAID or COD
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
@@ -82,7 +89,9 @@ export default function SaleEditModal({
       setCustomerSearch(sale.customers?.name || '');
       setDiscountType(saleDetails?.cart_discount_type || null);
       setDiscountValue(saleDetails?.cart_discount_value != null ? String(saleDetails.cart_discount_value) : '');
-      setDeliveryCost(saleDetails?.delivery_cost != null && saleDetails.delivery_cost > 0 ? String(saleDetails.delivery_cost) : '');
+      const saved = readDelivery(saleDetails?.delivery_cost ?? sale?.delivery_cost, sale?.carts?.delivery_charge);
+      setDeliveryCost(saved.amount > 0 ? String(saved.amount) : '');
+      setDeliveryPayer(saved.payer);
       setPaymentStatus(isPaymentStatus(sale.payment_status) ? sale.payment_status : null);
       setErrors({});
       setShowCustomerList(false);
@@ -174,6 +183,7 @@ export default function SaleEditModal({
         discountType: discountType && parsedDiscount != null ? discountType : null,
         discountValue: discountType && parsedDiscount != null ? parsedDiscount : null,
         deliveryCost: parsedDelivery,
+        deliveryPayer,
         // Left out when never chosen, so an older sale without a status is not changed by accident
         ...(paymentStatus ? { paymentStatus } : {}),
       });
@@ -380,10 +390,11 @@ export default function SaleEditModal({
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Truck size={16} color="#ea580c" />
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Delivery Cost (deducted)</Text>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('delivery.title')}</Text>
               </View>
-              <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor }]}>
-                <Text style={[styles.inputPrefix, { color: labelColor }]}>$</Text>
+              <DeliveryPayerSelector value={deliveryPayer} onChange={setDeliveryPayer} disabled={saving} />
+              <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor, marginTop: 10 }]}>
+                <Text style={[styles.inputPrefix, { color: labelColor }]}>{getSymbol(sale?.currency_id ?? undefined)}</Text>
                 <TextInput
                   style={[styles.input, { color: textColor }]}
                   placeholder="0.00"
@@ -397,7 +408,9 @@ export default function SaleEditModal({
                 <Text style={styles.errorText}>{errors.deliveryCost}</Text>
               )}
               <Text style={[styles.hint, { color: labelColor }]}>
-                Delivery cost is subtracted from the sale total.
+                {deliveryPayer === 'customer'
+                  ? 'Added to the receipt on top of the items; nothing is deducted from the shop.'
+                  : 'Delivery is free for the customer; the cost is deducted from the shop.'}
               </Text>
             </View>
 

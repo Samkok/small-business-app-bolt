@@ -3,6 +3,7 @@ import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
+import { TermsUpdatePrompt } from '@/src/components/TermsUpdatePrompt';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from '@/src/locales';
@@ -90,13 +91,17 @@ export default function AppLayout() {
 
   console.log('AppLayout: Rendering stack layout');
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="business-onboarding" />
-      <Stack.Screen name="business-selection" />
-      <Stack.Screen name="top-customers" />
-      <Stack.Screen name="top-products" />
-      <Stack.Screen name="customer-orders/[customerId]" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="business-onboarding" />
+        <Stack.Screen name="business-selection" />
+        <Stack.Screen name="top-customers" />
+        <Stack.Screen name="top-products" />
+        <Stack.Screen name="customer-orders/[customerId]" />
+      </Stack>
+      {/* Asks once to accept a newer version of the terms (src/config/terms.ts) */}
+      <TermsUpdatePrompt />
+    </>
   );
 }

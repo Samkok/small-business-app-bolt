@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
+import { code128Bars } from '@/src/utils/barcode128';
 import { ReceiptModel } from '@/src/utils/receipt';
 import { formatReceiptDate } from '@/src/utils/receiptHtml';
 import { RECEIPT_BRAND_LABEL, RECEIPT_BRAND_LOGO_DATA_URI } from '@/src/utils/receiptBrand';
@@ -7,6 +9,8 @@ import { RECEIPT_BRAND_LABEL, RECEIPT_BRAND_LOGO_DATA_URI } from '@/src/utils/re
 interface ReceiptViewProps {
   model: ReceiptModel;
   formatAmount: (amount: number) => string;
+  /** formats the second-currency total; without it that line is not shown */
+  formatAmountIn?: (amount: number, currencyId: string) => string;
 }
 
 export const RECEIPT_VIEW_WIDTH = 340;
@@ -17,7 +21,7 @@ export const RECEIPT_VIEW_WIDTH = 340;
  * theme. A dumb renderer of ReceiptModel, the same model the PDF is built from,
  * so the two cannot disagree on any amount.
  */
-export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
+export function ReceiptView({ model, formatAmount, formatAmountIn }: ReceiptViewProps) {
   const contact = [model.business.phone, model.business.address, model.business.pageName].filter(Boolean) as string[];
   // A charged delivery fee is added below the goods, so show what the goods came to first
   const showSubtotal = model.itemDiscountTotal > 0 || model.orderDiscountAmount > 0 || model.delivery.kind === 'charged';
@@ -79,6 +83,9 @@ export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
         />
       )}
       <Row label={model.totalLabel} value={formatAmount(model.total)} labelStyle={styles.total} valueStyle={styles.total} />
+      {model.secondaryTotal && formatAmountIn && (
+        <Text style={styles.savings}>= {formatAmountIn(model.secondaryTotal.amount, model.secondaryTotal.currencyId)}</Text>
+      )}
       {model.totalSavings > 0 && <Text style={styles.savings}>You saved {formatAmount(model.totalSavings)}</Text>}
 
       {model.refund && (
@@ -91,6 +98,15 @@ export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
           {model.refund.deductions > 0 && <Row label="Deduction kept" value={`-${formatAmount(model.refund.deductions)}`} indent />}
           <Row label="Refunded" value={`-${formatAmount(model.refund.refunded)}`} />
           <Row label="Net paid" value={formatAmount(model.refund.netPaid)} labelStyle={styles.total} valueStyle={styles.total} />
+        </>
+      )}
+
+      {(model.business.paymentNote || model.business.paymentQrUrl) && (
+        <>
+          <Rule />
+          <Text style={[styles.sectionTitle, styles.centerText]}>Pay to</Text>
+          {model.business.paymentQrUrl ? <Image source={{ uri: model.business.paymentQrUrl }} style={styles.payQr} resizeMode="contain" /> : null}
+          {model.business.paymentNote ? <Text style={styles.payNote}>{model.business.paymentNote}</Text> : null}
         </>
       )}
 
@@ -119,6 +135,8 @@ export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
         </>
       )}
 
+      {model.barcodeValue && <ReceiptBarcode value={model.barcodeValue} />}
+
       <View style={styles.powered}>
         <Image source={{ uri: RECEIPT_BRAND_LOGO_DATA_URI }} style={styles.poweredLogo} />
         <Text style={styles.poweredText}>{RECEIPT_BRAND_LABEL}</Text>
@@ -129,6 +147,24 @@ export function ReceiptView({ model, formatAmount }: ReceiptViewProps) {
 
 function Rule() {
   return <View style={styles.rule} />;
+}
+
+/** Code 128 barcode of the receipt number, so a scan in Sales History opens this sale. */
+function ReceiptBarcode({ value }: { value: string }) {
+  const { bars, totalWidth } = code128Bars(value);
+  if (bars.length === 0) return null;
+  const module = Math.min(2, (RECEIPT_VIEW_WIDTH - 36) / totalWidth);
+  const height = 44;
+  return (
+    <View style={styles.barcode}>
+      <Svg width={totalWidth * module} height={height}>
+        {bars.map((b, i) => (
+          <Rect key={i} x={b.x * module} y={0} width={b.width * module} height={height} fill={INK} />
+        ))}
+      </Svg>
+      <Text style={styles.barcodeText}>{value}</Text>
+    </View>
+  );
 }
 
 function Row({
@@ -187,4 +223,8 @@ const styles = StyleSheet.create({
   stampWrap: { position: 'absolute', top: 130, left: 0, right: 0, alignItems: 'center', zIndex: 1 },
   stamp: { fontSize: 52, fontWeight: '900', letterSpacing: 4, color: 'rgba(220, 38, 38, 0.2)', transform: [{ rotate: '-18deg' }] },
   stampProvisional: { fontSize: 32, color: 'rgba(217, 119, 6, 0.25)' },
+  payQr: { width: 150, height: 150, alignSelf: 'center', marginVertical: 6 },
+  payNote: { fontSize: 12, color: '#374151', textAlign: 'center' },
+  barcode: { alignItems: 'center', marginTop: 14 },
+  barcodeText: { fontSize: 11, letterSpacing: 2, color: '#374151', marginTop: 3 },
 });

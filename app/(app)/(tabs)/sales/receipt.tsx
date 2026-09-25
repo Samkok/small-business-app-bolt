@@ -12,7 +12,7 @@ import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { ReceiptView } from '@/src/components/sales/ReceiptView';
 import { salesService } from '@/src/services/sales';
-import { buildReceiptModel, receiptInputFromSale, ReceiptModel } from '@/src/utils/receipt';
+import { buildReceiptModel, receiptInputFromSale, secondaryCurrencyFor, ReceiptModel } from '@/src/utils/receipt';
 import { renderReceiptHtml, estimateReceiptHeightPt, RECEIPT_WIDTH_PT } from '@/src/utils/receiptHtml';
 import { receiptDraftStore } from '@/src/utils/receiptDraft';
 
@@ -30,7 +30,7 @@ export default function ReceiptScreen() {
   const isDraft = params.draft === '1';
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
-  const { formatPrice } = useCurrencyContext();
+  const { formatPrice, currencies } = useCurrencyContext();
 
   const [model, setModel] = useState<ReceiptModel | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +57,11 @@ export default function ReceiptScreen() {
       } else if (saleId) {
         const sale = await salesService.getSale(saleId);
         if (!sale) throw new Error('Sale not found');
-        setModel(buildReceiptModel(receiptInputFromSale(sale, currentBusiness)));
+        setModel(buildReceiptModel({
+          ...receiptInputFromSale(sale, currentBusiness),
+          // the total once more in the other currency, at the rate saved on the sale
+          secondaryCurrency: secondaryCurrencyFor((sale as any)?.currency_id, currencies),
+        }));
       } else {
         throw new Error('No sale selected');
       }
@@ -67,7 +71,7 @@ export default function ReceiptScreen() {
     } finally {
       setLoading(false);
     }
-  }, [saleId, isDraft, currentBusiness]);
+  }, [saleId, isDraft, currentBusiness, currencies]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -95,7 +99,7 @@ export default function ReceiptScreen() {
     }
   };
 
-  const buildHtml = async () => renderReceiptHtml(model!, formatAmount, { logoDataUri: await logoDataUri() });
+  const buildHtml = async () => renderReceiptHtml(model!, formatAmount, { logoDataUri: await logoDataUri(), formatAmountIn: formatPrice });
 
   const share = async (uri: string, mimeType: string, uti: string, title: string) => {
     if (await Sharing.isAvailableAsync()) {
@@ -194,7 +198,7 @@ export default function ReceiptScreen() {
             )}
             <View style={styles.paperShadow}>
               <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
-                <ReceiptView model={model} formatAmount={formatAmount} />
+                <ReceiptView model={model} formatAmount={formatAmount} formatAmountIn={formatPrice} />
               </ViewShot>
             </View>
           </ScrollView>

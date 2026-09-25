@@ -20,6 +20,18 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/** Where the app remembers the token it registered, so sign-out can forget this device. */
+export const PUSH_TOKEN_STORAGE_KEY = 'expoPushToken';
+
+/** What the token row records about this device, for the notification settings and support. */
+export function describeDevice(): { platform: string; deviceName: string | null; appVersion: string | null } {
+  return {
+    platform: Platform.OS,
+    deviceName: [Device.manufacturer, Device.modelName].filter(Boolean).join(' ') || null,
+    appVersion: Constants.expoConfig?.version ?? null,
+  };
+}
+
 export const pushNotificationService = {
   async registerForPushNotifications(): Promise<string | null> {
     if (!Device.isDevice) {

@@ -2,12 +2,17 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
+const TOKEN_RE = /^(ExponentPushToken|ExpoPushToken|PushToken)\[[^\]]+\]$/;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Push-Secret",
 };
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -33,28 +38,19 @@ Deno.serve(async (req) => {
         { p_secret: pushSecret }
       );
       if (secretError || secretOk !== true) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
     } else {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Missing authorization header" }, 401);
       }
 
       const token = authHeader.replace("Bearer ", "");
       const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
       if (authError || !user) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
       callerUserId = user.id;
     }
@@ -62,10 +58,7 @@ Deno.serve(async (req) => {
     const { targetUserId, title, body, data, sound = "default", badge, priority = "default" } = await req.json();
 
     if (!targetUserId) {
-      return new Response(
-        JSON.stringify({ error: "targetUserId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ error: "targetUserId is required" }, 400);
     }
 
     // Authorization for user callers: must share at least one business with the target user.
@@ -77,79 +70,78 @@ Deno.serve(async (req) => {
       );
 
       if (sharedError || !hasShared) {
-        return new Response(
-          JSON.stringify({ error: "Not authorized to notify this user" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Not authorized to notify this user" }, 403);
       }
     }
 
-    // Resolve push token server-side from target user profile
-    let expoPushToken: string | null = null;
+    // Every device the user is signed in on (user_push_tokens), plus the legacy single token on
+    // the profile for accounts that have not opened a build that registers per device yet.
+    const [{ data: deviceRows }, { data: profile }] = await Promise.all([
+      supabase.from("user_push_tokens").select("token").eq("user_id", targetUserId),
+      supabase.from("user_profiles").select("expo_push_token").eq("user_id", targetUserId).maybeSingle(),
+    ]);
 
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("expo_push_token")
-      .eq("user_id", targetUserId)
-      .maybeSingle();
+    const tokens = new Set<string>();
+    for (const row of deviceRows ?? []) if (row?.token && TOKEN_RE.test(row.token)) tokens.add(row.token);
+    if (profile?.expo_push_token && TOKEN_RE.test(profile.expo_push_token)) tokens.add(profile.expo_push_token);
 
-    expoPushToken = profile?.expo_push_token || null;
-
-    if (!expoPushToken) {
-      return new Response(
-        JSON.stringify({ error: "Target user has no push token registered" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (tokens.size === 0) {
+      return json({ error: "Target user has no push token registered" }, 400);
     }
 
-    const validToken = /(ExponentPushToken\[|ExpoPushToken\[|PushToken\[)/.test(expoPushToken);
-    if (!validToken) {
-      return new Response(
-        JSON.stringify({ error: "Invalid push token format for target user" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const message: Record<string, unknown> = {
-      to: expoPushToken,
-      sound,
-      title,
-      body,
-      data: data || {},
-      priority,
-      // Android channels created by the app: 'default', 'high', 'low'
-      channelId: priority === "high" ? "high" : "default",
-    };
-    if (badge !== undefined) message.badge = badge;
+    const messages = [...tokens].map((to) => {
+      const message: Record<string, unknown> = {
+        to,
+        sound,
+        title,
+        body,
+        data: data || {},
+        priority,
+        // Android channels created by the app: 'default', 'high', 'low'
+        channelId: priority === "high" ? "high" : "default",
+      };
+      if (badge !== undefined) message.badge = badge;
+      return message;
+    });
 
     const response = await fetch(EXPO_PUSH_ENDPOINT, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([message]),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(messages),
     });
 
     const result = await response.json();
+    // Expo answers { data: [ticket, ...] } in the order the messages were sent
+    const tickets: any[] = Array.isArray(result?.data) ? result.data : [result?.data].filter(Boolean);
 
-    // Expo answers { data: [ticket] } for an array of messages
-    const ticket = Array.isArray(result?.data) ? result.data[0] : result?.data;
-    if (!response.ok || ticket?.status === "error") {
-      return new Response(
-        JSON.stringify({ error: "Failed to send push notification", details: result }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    let delivered = 0;
+    const dead: string[] = [];
+    const failures: unknown[] = [];
+    messages.forEach((m, i) => {
+      const ticket = tickets[i];
+      if (ticket?.status === "ok") {
+        delivered += 1;
+      } else {
+        failures.push({ to: m.to, ticket });
+        // The app was uninstalled or its token replaced: stop sending to this device
+        if (ticket?.details?.error === "DeviceNotRegistered") dead.push(m.to as string);
+      }
+    });
+
+    if (dead.length > 0) {
+      await Promise.all([
+        supabase.from("user_push_tokens").delete().in("token", dead),
+        supabase.from("user_profiles").update({ expo_push_token: null }).eq("user_id", targetUserId).in("expo_push_token", dead),
+      ]);
+      console.log(`[send-push-notification] removed ${dead.length} unregistered device(s) for ${targetUserId}`);
     }
 
-    return new Response(
-      JSON.stringify({ success: true, data: result }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (!response.ok || delivered === 0) {
+      return json({ error: "Failed to send push notification", details: result }, 400);
+    }
+
+    return json({ success: true, delivered, devices: tokens.size, failures, data: result });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: "Internal server error", message: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: "Internal server error", message: error instanceof Error ? error.message : String(error) }, 500);
   }
 });

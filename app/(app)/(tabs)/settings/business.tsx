@@ -28,6 +28,11 @@ export default function BusinessSettingsScreen() {
   const [receiptAddress, setReceiptAddress] = useState('');
   const [receiptPageName, setReceiptPageName] = useState('');
   const [receiptFooter, setReceiptFooter] = useState('');
+  // Payment details printed on the receipt under "Pay to"
+  const [receiptPaymentNote, setReceiptPaymentNote] = useState('');
+  const [paymentQrUrl, setPaymentQrUrl] = useState('');
+  const [paymentQrFile, setPaymentQrFile] = useState<any>(null);
+  const [paymentQrLoading, setPaymentQrLoading] = useState(false);
   const [imageFile, setImageFile] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,8 +51,21 @@ export default function BusinessSettingsScreen() {
       setReceiptAddress((currentBusiness as any).receipt_address || '');
       setReceiptPageName((currentBusiness as any).receipt_page_name || '');
       setReceiptFooter((currentBusiness as any).receipt_footer || '');
+      setReceiptPaymentNote((currentBusiness as any).receipt_payment_note || '');
+      setPaymentQrUrl((currentBusiness as any).receipt_payment_qr_url || '');
+      setPaymentQrFile(null);
     }
   }, [currentBusiness]);
+
+  const handlePaymentQrSelect = (file: any) => {
+    setPaymentQrFile(file);
+    setPaymentQrUrl(Platform.OS === 'web' ? URL.createObjectURL(file) : file.uri);
+  };
+
+  const handlePaymentQrRemove = () => {
+    setPaymentQrFile(null);
+    setPaymentQrUrl('');
+  };
 
   const handleImageSelect = (file: any) => {
     if (Platform.OS === 'web') {
@@ -108,9 +126,31 @@ export default function BusinessSettingsScreen() {
         }
       }
 
+      // Payment QR: same storage as the logo, its own column
+      const savedQrUrl: string = (currentBusiness as any).receipt_payment_qr_url || '';
+      let newPaymentQrUrl = savedQrUrl;
+      if (paymentQrFile) {
+        setPaymentQrLoading(true);
+        try {
+          const uploaded = await storageService.uploadBusinessImage(paymentQrFile, currentBusiness.id);
+          newPaymentQrUrl = uploaded.url;
+          if (savedQrUrl) storageService.deleteBusinessImage(savedQrUrl).catch(() => {});
+        } catch (qrError) {
+          console.error('Error uploading payment QR:', qrError);
+          Alert.alert('Warning', 'Business updated but the payment QR upload failed');
+        } finally {
+          setPaymentQrLoading(false);
+        }
+      } else if (paymentQrUrl === '' && savedQrUrl) {
+        newPaymentQrUrl = '';
+        storageService.deleteBusinessImage(savedQrUrl).catch(() => {});
+      }
+
       const { error } = await updateBusiness(currentBusiness.id, {
         business_name: businessName.trim(),
         business_image_url: newImageUrl,
+        receipt_payment_note: receiptPaymentNote.trim() || null,
+        receipt_payment_qr_url: newPaymentQrUrl || null,
         receipt_phone: receiptPhone.trim() || null,
         receipt_address: receiptAddress.trim() || null,
         receipt_page_name: receiptPageName.trim() || null,
@@ -239,6 +279,26 @@ export default function BusinessSettingsScreen() {
             value={receiptFooter}
             onChangeText={setReceiptFooter}
             placeholder="e.g. Thank you! Returns within 7 days."
+            multiline
+          />
+
+          <Text style={[styles.receiptTitle, { color: isDark ? '#f9fafb' : '#111827', marginTop: 16 }]}>Payment details</Text>
+          <Text style={[styles.receiptHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            Printed under "Pay to" on every receipt, so a customer can pay by scanning or by transfer. Leave empty to print nothing.
+          </Text>
+          <ImageUpload
+            value={paymentQrUrl}
+            onImageSelect={handlePaymentQrSelect}
+            onImageRemove={handlePaymentQrRemove}
+            loading={paymentQrLoading}
+            placeholder="Upload your payment QR (KHQR, bank app)"
+            label="Payment QR"
+          />
+          <Input
+            label="Bank or account details"
+            value={receiptPaymentNote}
+            onChangeText={setReceiptPaymentNote}
+            placeholder={'e.g. ABA 000 123 456\nAccount name: Sok Dara'}
             multiline
           />
         </Card>

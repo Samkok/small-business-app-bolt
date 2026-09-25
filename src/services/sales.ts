@@ -1,4 +1,5 @@
 import { calculateReturnRefund, getSaleRefunds, getSaleGrossRevenue, getSaleDeliveryCost } from '../utils/saleMoney';
+import { DeliveryPayer, deliveryColumns } from '@/src/utils/deliveryPayer';
 import { resolveReportCurrency, saleFactor, scaleSale } from '../utils/reportCurrency';
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
@@ -215,6 +216,18 @@ export const salesService = {
 
     if (error) throw error;
     return data || [];
+  },
+
+  /** The sale behind a scanned receipt barcode (receipt numbers are per business). */
+  async getSaleIdByReceiptNumber(businessId: string, receiptNumber: number): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('receipt_number', receiptNumber)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id ?? null;
   },
 
   async getSalesByProduct(
@@ -473,6 +486,8 @@ export const salesService = {
       discountType?: 'percentage' | 'fixed' | null;
       discountValue?: number | null;
       deliveryCost?: number | null;
+      /** who pays deliveryCost; defaults to the shop (deducted) as before */
+      deliveryPayer?: DeliveryPayer;
       paymentStatus?: PaymentStatus | null;
     }
   ) {
@@ -494,10 +509,9 @@ export const salesService = {
     if (updates.discountType !== undefined) cartUpdates.discount_type = updates.discountType;
     if (updates.discountValue !== undefined) cartUpdates.discount_value = updates.discountValue;
     if (updates.deliveryCost !== undefined) {
-      cartUpdates.delivery_cost = updates.deliveryCost ?? 0;
-      // A cart has one payer (carts_delivery_one_payer): giving the sale a shop-paid fee
-      // makes it a free-delivery sale, so a fee charged to the customer is dropped.
-      if ((updates.deliveryCost ?? 0) > 0) cartUpdates.delivery_charge = 0;
+      // A cart has one payer (carts_delivery_one_payer): the amount lands on delivery_cost
+      // (shop pays, deducted) or delivery_charge (customer pays, receipt only), never both
+      Object.assign(cartUpdates, deliveryColumns(updates.deliveryPayer ?? 'shop', updates.deliveryCost ?? 0));
     }
 
     if (Object.keys(cartUpdates).length > 0) {
