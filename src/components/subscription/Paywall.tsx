@@ -343,7 +343,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
             <Text style={[
               styles.billingOptionText,
               isDark && styles.billingOptionTextDark,
-              billingPeriod === 'monthly' && styles.billingOptionTextSelected
+              billingPeriod === 'monthly' && styles.billingOptionTextSelected,
+              billingPeriod === 'monthly' && isDark && styles.billingOptionTextSelectedDark
             ]}>
               {t('subscription.monthly')}
             </Text>
@@ -351,7 +352,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               <Text style={[
                 styles.billingPrice,
                 isDark && styles.billingPriceDark,
-                billingPeriod === 'monthly' && styles.billingPriceSelected
+                billingPeriod === 'monthly' && styles.billingPriceSelected,
+                billingPeriod === 'monthly' && isDark && styles.billingPriceSelectedDark
               ]}>
                 {monthlyProduct.localizedPrice}
               </Text>
@@ -371,7 +373,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               <Text style={[
                 styles.billingOptionText,
                 isDark && styles.billingOptionTextDark,
-                billingPeriod === 'yearly' && styles.billingOptionTextSelected
+                billingPeriod === 'yearly' && styles.billingOptionTextSelected,
+                billingPeriod === 'yearly' && isDark && styles.billingOptionTextSelectedDark
               ]}>
                 {t('subscription.yearly')}
               </Text>
@@ -383,7 +386,8 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
               <Text style={[
                 styles.billingPrice,
                 isDark && styles.billingPriceDark,
-                billingPeriod === 'yearly' && styles.billingPriceSelected
+                billingPeriod === 'yearly' && styles.billingPriceSelected,
+                billingPeriod === 'yearly' && isDark && styles.billingPriceSelectedDark
               ]}>
                 {yearlyProduct.localizedPrice}
               </Text>
@@ -812,6 +816,10 @@ const styles = StyleSheet.create({
   billingOptionTextSelected: {
     color: '#1e40af',
   },
+  // the selected option is dark blue in dark mode, so its text must be light
+  billingOptionTextSelectedDark: {
+    color: '#bfdbfe',
+  },
   saveBadge: {
     backgroundColor: '#10b981',
     paddingHorizontal: 8,
@@ -833,6 +841,9 @@ const styles = StyleSheet.create({
   },
   billingPriceSelected: {
     color: '#1e40af',
+  },
+  billingPriceSelectedDark: {
+    color: '#ffffff',
   },
   featuresSection: {
     gap: 10,

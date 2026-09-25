@@ -46,6 +46,10 @@ export interface Cart {
   /** delivery fee the CUSTOMER pays; on the receipt only, never deducted. One of the two is 0. */
   delivery_charge?: number;
   notes?: string;
+  /** PAID or COD as chosen at checkout while the cart is still open (draft); null until chosen */
+  payment_status?: 'paid' | 'cod' | null;
+  /** payment method chosen at checkout while the cart is still open (draft) */
+  payment_method?: 'cash' | 'card' | 'transfer' | 'other' | null;
   /** 'web' = placed by a customer on the public online menu. Missing means 'app'. */
   source?: 'app' | 'web';
   /** Reference shown to the web customer, e.g. W-8E35E. Only on web carts. */
@@ -235,6 +239,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         delivery_cost: serverCart.delivery_cost,
         delivery_charge: Number((serverCart as any).delivery_charge) || 0,
         notes: serverCart.notes,
+        payment_status: ((serverCart as any).payment_status as 'paid' | 'cod' | null) ?? null,
+        payment_method: ((serverCart as any).payment_method as Cart['payment_method']) ?? null,
         source: (serverCart as any).source === 'web' ? 'web' : 'app',
         order_ref: (serverCart as any).order_ref || undefined,
         business_id: serverCart.business_id,
@@ -331,6 +337,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         delivery_cost: serverCart.delivery_cost,
         delivery_charge: Number((serverCart as any).delivery_charge) || 0,
         notes: serverCart.notes,
+        payment_status: null,
+        payment_method: null,
         business_id: serverCart.business_id,
         created_by: serverCart.created_by,
         created_at: serverCart.created_at,
@@ -386,8 +394,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         discount_value: updates.discount_value,
         delivery_cost: updates.delivery_cost,
         ...(updates.delivery_charge !== undefined ? { delivery_charge: updates.delivery_charge } : {}),
+        ...(updates.payment_status !== undefined ? { payment_status: updates.payment_status } : {}),
+        ...(updates.payment_method !== undefined ? { payment_method: updates.payment_method } : {}),
         notes: updates.notes
-      });
+      } as any);
 
       const updatedCart = carts.find(cart => cart.id === cartId);
       if (!updatedCart) {
