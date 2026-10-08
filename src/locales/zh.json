@@ -850,6 +850,7 @@
     }
   },
   "delivery": {
+    "title": "配送",
     "feeCurrency": "配送费币种",
     "convertedHint": "= 本订单中的 {{amount}}",
     "fee": "配送费",

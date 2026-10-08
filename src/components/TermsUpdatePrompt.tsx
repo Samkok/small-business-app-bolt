@@ -6,7 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Button } from '@/src/components/ui/Button';
 import { supabase } from '@/src/config/supabase';
-import { TERMS_VERSION, TERMS_UPDATED_ON, TERMS_CHANGE_SUMMARY } from '@/src/config/terms';
+import { TERMS_VERSION, TERMS_UPDATED_ON, TERMS_CHANGE_SUMMARY, PRIVACY_VERSION } from '@/src/config/terms';
 
 /**
  * Shown once after sign-in when the profile's accepted terms version is behind the version
@@ -45,9 +45,9 @@ export function TermsUpdatePrompt() {
     }
   };
 
-  const readTerms = () => {
+  const read = (route: '/settings/terms' | '/settings/privacy') => {
     setHidden(true);
-    router.push('/settings/terms');
+    router.push(route);
     // when the user comes back the prompt shows again until accepted
     setTimeout(() => setHidden(false), 1500);
   };
@@ -66,9 +66,9 @@ export function TermsUpdatePrompt() {
           <View style={styles.icon}>
             <FileText size={28} color="#2563eb" />
           </View>
-          <Text style={[styles.title, { color: colors.text }]}>Terms updated</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Terms and Privacy Policy updated</Text>
           <Text style={[styles.subtitle, { color: colors.subtext }]}>
-            Version {TERMS_VERSION}, {TERMS_UPDATED_ON}. Please review what changed and agree to continue.
+            Terms {TERMS_VERSION} and Privacy Policy {PRIVACY_VERSION}, {TERMS_UPDATED_ON}. Please review what changed and agree to continue.
           </Text>
           <View style={styles.list}>
             {TERMS_CHANGE_SUMMARY.map((line, i) => (
@@ -79,9 +79,14 @@ export function TermsUpdatePrompt() {
             ))}
           </View>
           <Button title="I agree" onPress={accept} loading={saving} disabled={saving} style={styles.agree} />
-          <TouchableOpacity onPress={readTerms} style={styles.readLink} accessibilityRole="link" disabled={saving}>
-            <Text style={styles.readText}>Read the full terms</Text>
-          </TouchableOpacity>
+          <View style={styles.links}>
+            <TouchableOpacity onPress={() => read('/settings/terms')} style={styles.readLink} accessibilityRole="link" disabled={saving}>
+              <Text style={styles.readText}>Read the terms</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => read('/settings/privacy')} style={styles.readLink} accessibilityRole="link" disabled={saving}>
+              <Text style={styles.readText}>Read the privacy policy</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -99,6 +104,7 @@ const styles = StyleSheet.create({
   dot: { fontSize: 14, lineHeight: 20 },
   line: { flex: 1, fontSize: 14, lineHeight: 20 },
   agree: { marginTop: 20 },
-  readLink: { alignSelf: 'center', paddingVertical: 12 },
+  links: { flexDirection: 'row', justifyContent: 'center', gap: 20 },
+  readLink: { paddingVertical: 12 },
   readText: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
 });

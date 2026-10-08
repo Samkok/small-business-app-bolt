@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { analytics } from '@/src/services/analytics';
 import {
   View,
   Text,
@@ -164,6 +165,8 @@ export default function BusinessOnboardingScreen() {
     setLoading(true);
     try {
       const { error, business } = await createBusiness(businessName.trim());
+
+      if (!error && business) analytics.track(analytics.events.businessCreated, { business_id: business.id, role: 'owner' });
 
       if (error) {
         if (error.message?.includes('BUSINESS_LIMIT_REACHED') || error.message?.includes('maximum number of businesses')) {

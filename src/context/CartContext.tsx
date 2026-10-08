@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { useNetwork } from './NetworkContext';
 import { supabase } from '../config/supabase';
+import { analytics } from '@/src/services/analytics';
 import { cartService } from '@/src/services/carts';
 import { unitService } from '../services/units';
 import { costPerSoldUnit } from '../utils/saleMargin';
@@ -668,6 +669,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       setCarts(prevCarts => prevCarts.filter(c => c.id !== cartId));
 
+      void analytics.saleCompleted(user.id, currentBusiness.id, false);
       return { success: true, saleId: sale.id };
     } catch (error: any) {
       console.error('Error completing sale:', error);
