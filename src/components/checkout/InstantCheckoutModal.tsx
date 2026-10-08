@@ -13,6 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { analytics } from '@/src/services/analytics';
 import { DeliveryPayerSelector } from '@/src/components/sales/DeliveryPayerSelector';
 import { DeliveryFeeInput } from '@/src/components/sales/DeliveryFeeInput';
 import { DeliveryPayer, readDelivery } from '@/src/utils/deliveryPayer';
@@ -429,6 +430,7 @@ export function InstantCheckoutModal() {
 
       if (result.success) {
         await refreshSalesCount();
+        void analytics.saleCompleted(user.id, currentBusiness.id, false);
 
         const customerName = session.customer_id !== guestCustomer.id
           ? session.customer_name || 'Customer'

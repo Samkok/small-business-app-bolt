@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { X, Check, Zap, Building2, Users, TrendingUp, Headphones, Crown } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { analytics } from '@/src/services/analytics';
 import { useSubscription } from '@/src/context/SubscriptionContext';
 import { Button } from '@/src/components/ui/Button';
 import { productIdMapper, type TierType, type BillingPeriod } from '@/src/utils/productIdMapper';
@@ -116,6 +117,7 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
 
   useEffect(() => {
     if (visible) {
+      analytics.track(analytics.events.paywallViewed);
       setIsSheetVisible(true);
       translateY.value = withSpring(MAX_TRANSLATE_Y, {
         damping: 50,

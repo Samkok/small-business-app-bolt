@@ -11,6 +11,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 import { TERMS_VERSION } from '@/src/config/terms';
 import { PUSH_TOKEN_STORAGE_KEY } from '@/src/services/pushNotifications';
+import { analytics } from '@/src/services/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -632,6 +633,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signedOutDueToInactivityRef.current = false;
     setIsExplicitSignOut(true);
     isExplicitSignOutRef.current = true;
+    analytics.reset();
 
     // Forget this device before the session goes, so the next account on this phone does
     // not receive this user's notifications (and vice versa)

@@ -2,7 +2,7 @@
   "expo": {
     "name": "BizManage",
     "slug": "business-manager-pro",
-    "version": "2.8.0",
+    "version": "2.9.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "businessmanager",
@@ -61,6 +61,12 @@
           "color": "#2563eb",
           "sounds": [],
           "mode": "production"
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "BizManage uses this to measure how well our own ads bring in new shops. It never shares your business or customer data."
         }
       ]
     ],

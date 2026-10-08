@@ -54,10 +54,10 @@ export default function TermsAndConditionsScreen() {
           Terms and Conditions
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: September 21, 2026
+          Last Updated: October 6, 2026
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.4.0
+          Version 1.5.0
         </Text>
       </View>
 
@@ -123,6 +123,9 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
         <Paragraph>
           4.6. Subscription Data: We collect and store subscription-related data including your subscription status (free tier, premium, trial, expired, cancelled), sales count per business for limit enforcement, and subscription purchase receipts. Payment processing is handled exclusively by Apple App Store or Google Play Store, and we do not store or have access to your payment card information. Subscription status information is cached locally on your device for performance optimization.
+        </Paragraph>
+        <Paragraph>
+          4.7. Usage Data and Advertising Measurement: the Application may record which screens and features you use, and reports a small fixed set of steps (such as account created, business created, first sale, subscription started) to our advertising partner so we can measure our own marketing. Your business records, your customers and your sales are never shared with advertising or analytics partners. The details, your choices and how to opt out are in sections 8 and 13 of the Privacy Policy, which forms part of these Terms.
         </Paragraph>
       </Section>
 
@@ -207,6 +210,15 @@ export default function TermsAndConditionsScreen() {
         </Paragraph>
         <Paragraph>
           8.3. No Payment Processing: The Application does not integrate with payment processors. All financial transactions occur outside the Application.
+        </Paragraph>
+        <Paragraph>
+          8.4. Subscriptions and Notifications: subscriptions are managed through RevenueCat and billed by the Apple App Store or Google Play; push notifications are delivered through Expo. Each receives only what it needs for that purpose, as listed in the Privacy Policy.
+        </Paragraph>
+        <Paragraph>
+          8.5. Analytics and Advertising Partners: we use Meta Platforms for advertising measurement, as described in section 13 of the Privacy Policy, and we may add a usage analytics provider later, which the Privacy Policy will name. These partners receive usage and funnel events only, never your business, customer or sales records. On iOS the Application asks your permission before any advertising identifier is used.
+        </Paragraph>
+        <Paragraph>
+          8.6. Online Menu Website: the public menu is hosted by Vercel and protected against automated abuse by Cloudflare. Their privacy policies apply to visitors of the menu website.
         </Paragraph>
       </Section>
 

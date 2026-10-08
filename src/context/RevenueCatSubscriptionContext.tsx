@@ -11,6 +11,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { businessService } from '@/src/services/business';
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { accessControl } from '@/src/utils/accessControl';
+import { analytics } from '@/src/services/analytics';
 
 let revenueCatService: any = null;
 let isRevenueCatAvailable = false;
@@ -574,6 +575,7 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
         return false;
       }
 
+      analytics.track(analytics.events.checkoutStarted, { product_id: productId });
       const { customerInfo: newCustomerInfo, cancelled } = await revenueCatService.purchasePackage(pkg);
 
       if (cancelled) {

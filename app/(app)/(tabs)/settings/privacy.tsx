@@ -44,16 +44,19 @@ export default function PrivacyPolicyScreen() {
           Privacy Policy
         </Text>
         <Text style={[styles.lastUpdated, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Last Updated: November 25, 2025
+          Last Updated: October 6, 2026
         </Text>
         <Text style={[styles.version, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-          Version 1.1.0
+          Version 2.0.0
         </Text>
       </View>
 
       <Section title="1. Introduction">
         <Paragraph>
-          BizManage ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile and web application.
+          BizManage ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and the online menu website that shops can offer their customers.
+        </Paragraph>
+        <Paragraph>
+          1.1. What changed in this version: we now describe the usage data the app collects to improve it, the advertising measurement we use to understand our own marketing, the complete list of service providers we work with, and how the online menu handles your customers' information. Sections 8, 13 and 7A are the ones to read if you are short on time.
         </Paragraph>
       </Section>
 
@@ -78,10 +81,19 @@ export default function PrivacyPolicyScreen() {
         <Paragraph>
           2.3. Technical Information:
         </Paragraph>
-        <BulletPoint>Device information and identifiers</BulletPoint>
-        <BulletPoint>IP address and location data</BulletPoint>
-        <BulletPoint>Usage patterns and analytics</BulletPoint>
+        <BulletPoint>Device model, operating system and version, app version and language</BulletPoint>
+        <BulletPoint>IP address, used for security and to limit abuse (we do not build a location profile from it)</BulletPoint>
         <BulletPoint>Session information and authentication tokens</BulletPoint>
+        <BulletPoint>Push notification token for the devices you sign in on, if you allow notifications</BulletPoint>
+        <Paragraph>
+          2.4. Usage Data: we may record which screens and features of the app you use, when and how often, for example that a sale was completed, a receipt was shared or a stock count was posted. At the date of this version we do not yet collect usage data; when we start, it will never include the content of your records: no product names, customer names, amounts or notes.
+        </Paragraph>
+        <Paragraph>
+          2.5. Advertising Identifiers: on iOS, the device advertising identifier only if you allow tracking when asked; on Android, the advertising ID unless you have turned it off in your device settings. See section 13.
+        </Paragraph>
+        <Paragraph>
+          2.6. Online Menu Orders: when a shop's customer places an order through the shop's online menu, we receive the name, phone number, delivery address and note the customer typed, the items ordered, and a keyed hash of the customer's IP address used only to limit abuse. This data belongs to the shop; see section 7A.
+        </Paragraph>
       </Section>
 
       <Section title="3. How We Collect Information">
@@ -89,7 +101,7 @@ export default function PrivacyPolicyScreen() {
           3.1. Direct Collection: Information you provide when creating an account, updating your profile, or using Application features.
         </Paragraph>
         <Paragraph>
-          3.2. Automated Collection: Technical data collected automatically through cookies, device sensors, and usage tracking.
+          3.2. Automated Collection: technical information, usage data and, where permitted, advertising identifiers are collected automatically by the app while you use it. On the online menu website, the hosting and bot-protection providers record standard web request data such as the IP address.
         </Paragraph>
         <Paragraph>
           3.3. Camera and File Access: Images captured or selected for products, business logos, and user avatars.
@@ -104,8 +116,11 @@ export default function PrivacyPolicyScreen() {
         <BulletPoint>Process your business transactions and operations</BulletPoint>
         <BulletPoint>Generate reports and analytics for your business (informational purposes only, not for compliance or official use)</BulletPoint>
         <BulletPoint>Authenticate users and maintain security</BulletPoint>
-        <BulletPoint>Improve Application features and user experience</BulletPoint>
+        <BulletPoint>Improve Application features and user experience, including by measuring which features are used and how often</BulletPoint>
+        <BulletPoint>Measure the results of our own advertising, for example how many people who saw an advertisement later installed the app, created a business or subscribed</BulletPoint>
+        <BulletPoint>Send the push notifications you have enabled, such as a new online order</BulletPoint>
         <BulletPoint>Communicate updates and important information</BulletPoint>
+        <BulletPoint>Detect and limit abuse of the app and the online menu</BulletPoint>
         <BulletPoint>Comply with legal obligations</BulletPoint>
       </Section>
 
@@ -163,18 +178,48 @@ export default function PrivacyPolicyScreen() {
         </Paragraph>
       </Section>
 
+      <Section title="7A. Online Menu and Your Customers' Data">
+        <Paragraph>
+          7A.1. The Shop Is Responsible: when you switch on the online menu, orders placed by your customers are collected on your behalf and stored with your business data. You decide what to do with them and you are responsible for handling your customers' information lawfully. BizManage processes that information only to show you the order, to run the menu and to limit abuse.
+        </Paragraph>
+        <Paragraph>
+          7A.2. What Is Collected from Your Customers: the name, phone number, delivery address and note they type, the items they order, and a keyed hash of their IP address. The menu website does not use cookies for advertising and carries no advertising or analytics tracker.
+        </Paragraph>
+        <Paragraph>
+          7A.3. Bot Protection: the order form may use a bot check provided by Cloudflare, which processes the visitor's IP address and browser details to tell people from automated scripts.
+        </Paragraph>
+        <Paragraph>
+          7A.4. Blocked Numbers: when you block a phone number, it is stored with your business so that further orders from it are refused. Only members of your business can see or remove it.
+        </Paragraph>
+        <Paragraph>
+          7A.5. Retention: online orders that are never completed are marked abandoned after 7 days and no longer appear in your active carts. Completed orders are kept as sales under section 10. Your customers may ask you to correct or delete their information, and deleting the sale or the business removes it.
+        </Paragraph>
+      </Section>
+
       <Section title="8. Data Sharing and Disclosure">
         <Paragraph>
           8.1. We DO NOT sell your personal or business data to third parties.
         </Paragraph>
         <Paragraph>
-          8.2. We may share information with:
+          8.2. Service Providers: we share only what each provider needs to do its job for us:
         </Paragraph>
-        <BulletPoint>Supabase (our infrastructure provider) for hosting and authentication</BulletPoint>
-        <BulletPoint>Team members within your authorized businesses</BulletPoint>
-        <BulletPoint>Legal authorities when required by law</BulletPoint>
+        <BulletPoint>Supabase: database, authentication, file storage and server functions. Holds your account and business data.</BulletPoint>
+        <BulletPoint>RevenueCat, Apple App Store and Google Play: subscriptions. Receive an app user ID and purchase receipts. We never see your payment card.</BulletPoint>
+        <BulletPoint>Expo: push notifications. Receives the device push token and the notification text.</BulletPoint>
+        <BulletPoint>Meta Platforms (Facebook): advertising measurement. Receives app installs, the funnel events listed in section 13.2, the advertising identifier only with your permission, and a hashed account identifier for subscription events. Never your business records.</BulletPoint>
+        <BulletPoint>A usage analytics provider, if we add one later (we do not use one at the date of this version). It would receive usage data, device details and your account and business identifiers, and we would name it here first.</BulletPoint>
+        <BulletPoint>Vercel and Cloudflare: hosting and bot protection for the online menu website. Process visitors' IP addresses and request data.</BulletPoint>
         <Paragraph>
-          8.3. Business Transfers: In case of merger, acquisition, or sale, your information may be transferred to the new entity.
+          8.3. What We Never Share: your sales, products, stock, customers, expenses, receipts and reports are never sent to advertising or analytics providers. They are used only to run the app for you.
+        </Paragraph>
+        <Paragraph>
+          8.4. Team Members: members of a business you belong to can see that business's data according to their role.
+        </Paragraph>
+        <Paragraph>
+          8.5. Legal Requirements: we may disclose information to authorities when required by law.
+        </Paragraph>
+        <Paragraph>
+          8.6. Business Transfers: in case of merger, acquisition, or sale, your information may be transferred to the new entity under this policy.
         </Paragraph>
       </Section>
 
@@ -230,6 +275,9 @@ export default function PrivacyPolicyScreen() {
         </Paragraph>
         <Paragraph>
           10.2. Business Deletion - Immediate Removal: When you delete a business, all associated data is immediately and permanently deleted from our active database systems. This includes all sales records, customer information, products, expenses, team member associations, notifications, and uploaded files. Deletion is executed using PostgreSQL CASCADE constraints ensuring complete automatic removal of all related data.
+        </Paragraph>
+        <Paragraph>
+          10.2A. Usage and Advertising Data: if usage events are collected, they are kept for up to 12 months, after which only aggregated statistics without identifiers remain. Advertising measurement events are held by Meta under its own data policy and are not linked back to your business records. Account deletion stops any further collection.
         </Paragraph>
         <Paragraph>
           10.3. Account Deletion - Complete Removal: When you delete your account, we permanently remove your user profile, authentication credentials, all owned businesses (and their complete data), your membership in other businesses, uploaded personal files, and application preferences. Your account cannot be recovered or reactivated after deletion.
@@ -313,24 +361,40 @@ export default function PrivacyPolicyScreen() {
         </Paragraph>
       </Section>
 
-      <Section title="13. Cookies and Tracking">
+      <Section title="13. Usage Analytics and Advertising Measurement">
         <Paragraph>
-          13.1. Essential Cookies: We use cookies for authentication, session management, and Application functionality.
+          13.1. Usage Analytics: to understand which parts of BizManage help and which do not, the app may record usage events: the screens you open and the features you use, with the time, your account and business identifiers, your role, your plan, the app version and the device type. We do not collect these yet; this section tells you what to expect when we do. Such events will never contain the content of your records. We will look at them per business and per role, never to assess an individual staff member, and business owners will never be shown analytics about individual team members.
         </Paragraph>
         <Paragraph>
-          13.2. Analytics: We may collect anonymous usage data to improve the Application.
+          13.2. Advertising Measurement: to know whether our own advertising works, the app reports a small, fixed set of steps to Meta Platforms: that the app was installed, that an account was created, that a business was created, that a business recorded its first sale, that the subscription screen was viewed, that a purchase was started, and that a trial or subscription began, with its price. These steps say nothing about what your business sells or to whom.
         </Paragraph>
         <Paragraph>
-          13.3. Local Storage: The Application stores preferences (theme, language) locally on your device.
+          13.3. Your Choice on iOS: the first time you use the app after this feature is introduced, iOS asks whether BizManage may track you across other apps and websites. If you choose not to allow it, the advertising identifier is never used; the steps above are still reported, without it. You can change your answer at any time in iOS Settings, Privacy & Security, Tracking.
+        </Paragraph>
+        <Paragraph>
+          13.4. Your Choice on Android: you can reset or delete your advertising ID in Android Settings, Privacy, Ads. Deleting it stops the identifier from being used.
+        </Paragraph>
+        <Paragraph>
+          13.5. No Effect on the App: refusing tracking or analytics changes nothing in how the app works for you.
+        </Paragraph>
+        <Paragraph>
+          13.6. Local Storage: the app stores preferences such as theme, language and recently used choices on your device only.
         </Paragraph>
       </Section>
 
       <Section title="14. Third-Party Services">
         <Paragraph>
-          14.1. Supabase: Our primary infrastructure provider. Review Supabase's privacy policy at https://supabase.com/privacy
+          14.1. Each provider processes data under its own privacy policy, in addition to ours:
         </Paragraph>
+        <BulletPoint>Supabase (infrastructure): https://supabase.com/privacy</BulletPoint>
+        <BulletPoint>RevenueCat (subscriptions): https://www.revenuecat.com/privacy</BulletPoint>
+        <BulletPoint>Apple App Store and Google Play (billing): their platform privacy policies</BulletPoint>
+        <BulletPoint>Expo (push notifications): https://expo.dev/privacy</BulletPoint>
+        <BulletPoint>Meta Platforms (advertising measurement): https://www.facebook.com/privacy/policy</BulletPoint>
+        <BulletPoint>Vercel (menu website hosting): https://vercel.com/legal/privacy-policy</BulletPoint>
+        <BulletPoint>Cloudflare (menu website bot protection): https://www.cloudflare.com/privacypolicy/</BulletPoint>
         <Paragraph>
-          14.2. Device Permissions: The Application requests camera and file access permissions solely for barcode scanning and image uploads.
+          14.2. Device Permissions: the Application requests camera and photo access solely for barcode scanning and image uploads, notification permission for the alerts you enable, and tracking permission on iOS solely for advertising measurement as described in section 13.
         </Paragraph>
       </Section>
 
@@ -359,7 +423,8 @@ export default function PrivacyPolicyScreen() {
         <Paragraph>
           For users in the European Union:
         </Paragraph>
-        <BulletPoint>Legal basis for processing: Consent, contract performance, legitimate interests</BulletPoint>
+        <BulletPoint>Legal basis for processing: contract performance for running the app, legitimate interests for security and usage analytics, and consent for advertising measurement using device identifiers</BulletPoint>
+        <BulletPoint>The providers in section 8 act as our processors, and transfers outside the EU rely on their standard contractual clauses</BulletPoint>
         <BulletPoint>Right to data portability in machine-readable format</BulletPoint>
         <BulletPoint>Right to object to automated decision-making</BulletPoint>
         <BulletPoint>Right to lodge complaints with supervisory authorities</BulletPoint>
@@ -374,7 +439,7 @@ export default function PrivacyPolicyScreen() {
         </Paragraph>
         <BulletPoint>Right to know what personal information is collected</BulletPoint>
         <BulletPoint>Right to delete personal information</BulletPoint>
-        <BulletPoint>Right to opt-out of sale (we do not sell data)</BulletPoint>
+        <BulletPoint>Right to opt-out of sale or sharing: we do not sell data. Advertising measurement may count as "sharing" under California law; you opt out by refusing tracking on iOS or deleting your advertising ID on Android (section 13)</BulletPoint>
         <BulletPoint>Right to non-discrimination for exercising privacy rights</BulletPoint>
         <Paragraph>
           18.1. Right to Delete Personal Information (CCPA Section 1798.105): All deletion requests are honored free of charge and completed immediately upon confirmation (well within the legally required 45-day maximum). You will not face discrimination for exercising your deletion rights. Exceptions apply only for legal compliance requirements, fraud prevention, and business necessity as defined by CCPA. The deletion scope is clearly communicated before confirmation, and all related data is permanently removed using CASCADE deletion.
@@ -383,7 +448,7 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="19. Changes to Privacy Policy">
         <Paragraph>
-          We may update this Privacy Policy periodically. We will notify you of significant changes through the Application or via email. Continued use after changes constitutes acceptance of the updated policy.
+          We may update this Privacy Policy periodically. For significant changes the app asks you to review and accept the new version before you continue, and we may also notify you by email. Continued use after changes constitutes acceptance of the updated policy.
         </Paragraph>
       </Section>
 

@@ -23,6 +23,7 @@ import { FormSuccessMessage } from '@/src/components/ui/FormSuccessMessage';
 import { Square, SquareCheck as CheckSquare } from 'lucide-react-native';
 import { useFormValidation } from '@/src/hooks/useFormValidation';
 import { signUpSchema, emailSchema, nameSchema, passwordSchema } from '@/src/lib/validation';
+import { analytics } from '@/src/services/analytics';
 import { FieldStatus } from '@/src/hooks/useFormValidation';
 
 export default function SignUpScreen() {
@@ -76,6 +77,7 @@ export default function SignUpScreen() {
       Alert.alert(t('common.error'), msg);
     } else {
       setSignUpSuccess(true);
+      analytics.track(analytics.events.signUpCompleted);
     }
   };
 

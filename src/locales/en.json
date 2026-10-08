@@ -899,6 +899,7 @@
     }
   },
   "delivery": {
+    "title": "Delivery",
     "feeCurrency": "Delivery fee currency",
     "convertedHint": "= {{amount}} on this order",
     "fee": "Delivery fee",

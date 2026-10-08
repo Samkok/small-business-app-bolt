@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendMetaConversion } from "./meta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -605,6 +606,17 @@ Deno.serve(async (req: Request) => {
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
         // Only award referral reward on paid purchases, not free trial starts
         const periodType = event.period_type || '';
+        // Ads measurement: the two conversions campaigns optimise for (no-op without the Meta secrets)
+        await sendMetaConversion({
+          event: periodType === 'TRIAL' ? 'StartTrial' : 'Subscribe',
+          userId,
+          eventId: event.id,
+          occurredAtMs: event.purchased_at_ms || event.event_timestamp_ms || Date.now(),
+          store: event.store,
+          productId: validatedProductId,
+          value: periodType === 'TRIAL' ? null : event.price ?? null,
+          currency: periodType === 'TRIAL' ? null : 'USD',
+        }, (level, message, data) => log(eventId, level, message, data));
         if (periodType !== 'TRIAL') {
           await processReferralReward(supabase, event, eventId, tier, validatedProductId);
         } else {
