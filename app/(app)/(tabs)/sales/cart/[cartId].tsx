@@ -106,7 +106,7 @@ export default function CartScreen() {
     completeSale,
     loading: cartsLoading
   } = useCart();
-  const { salesCountData, showPaywall, businessDisableReason } = useSubscription();
+  const { salesCountData, showPaywall, businessDisableReason, isSubscribed, reverifyPlan, refreshSalesCount } = useSubscription();
   const { isConnected } = useNetwork();
 
   // Get cart
@@ -723,9 +723,17 @@ export default function CartScreen() {
       };
       const customerNameNow = cart.customer_name || 'Customer';
 
-      const result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes, paymentStatus);
+      let result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes, paymentStatus);
+
+      // The server applied the free limit although the plan is paid: its mirror of the
+      // subscription is behind RevenueCat. Have it re-verified, then try once more.
+      if (!result.success && isSubscribed && (result.error?.includes('free limit') || result.error?.includes('upgrade'))) {
+        await reverifyPlan();
+        result = await completeSale(cartId as string, paymentMethod, saleDate.toISOString(), finalNotes, paymentStatus);
+      }
 
       if (result.success) {
+        void refreshSalesCount();
         const isOfflineSale = !!(result as any).offline;
         if (isOfflineSale) receiptDraftStore.set(receiptDraft);
         setCompletedSale({
@@ -745,7 +753,7 @@ export default function CartScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [currentBusiness, cartId, cart, businessDisableReason, localItemQuantities, paymentStatus, paymentMethod, saleDate, notes, savePendingChanges, getCartSummary, completeSale]);
+  }, [currentBusiness, cartId, cart, businessDisableReason, localItemQuantities, paymentStatus, paymentMethod, saleDate, notes, savePendingChanges, getCartSummary, completeSale, isSubscribed, reverifyPlan, refreshSalesCount]);
 
   // Keep the cart open with everything chosen so far, and go back to Active Carts
   const handleSaveDraft = useCallback(async () => {

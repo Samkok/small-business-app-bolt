@@ -33,6 +33,8 @@ export interface SalesCountData {
   remainingSales: number;
   isAtLimit: boolean;
   totalSalesAllBusinesses?: number;
+  /** the plan the limit follows (the business owner's), from the server */
+  limitTier?: SubscriptionTier | null;
 }
 
 export interface TierInfo {
@@ -308,17 +310,8 @@ export const subscriptionService = {
    */
   async getSalesCountData(userId: string, businessId: string): Promise<SalesCountData> {
     const state = await this.getFullSubscriptionState(userId, businessId);
-    const data = state.salesCountData;
-    if (!data) {
-      return { salesCount: 0, remainingSales: 0, isAtLimit: true, totalSalesAllBusinesses: 0 };
-    }
-    return {
-      salesCount: data.salesCount ?? 0,
-      // the server sends null on paid plans, which have no limit
-      remainingSales: data.remainingSales ?? 999999,
-      isAtLimit: !!data.isAtLimit,
-      totalSalesAllBusinesses: data.totalSalesAllBusinesses ?? 0,
-    };
+    if (!state.salesCountData) throw new Error('No sales count for this business');
+    return state.salesCountData;
   },
 
   async getSubscriptionStatus(userId: string, forceRefresh = false, showErrorAlert = false): Promise<SubscriptionStatus> {
@@ -647,6 +640,12 @@ export const subscriptionService = {
     }
   },
 
+  /**
+   * One server read for everything the subscription screens and the sales buttons need.
+   * Throws on failure: callers keep the state they already have rather than falling
+   * back to a "blocked" default, which used to switch the checkout button off on any
+   * network blip.
+   */
   async getFullSubscriptionState(userId: string, businessId?: string | null, showErrorAlert = false): Promise<FullSubscriptionState> {
     try {
       return await retryWithBackoff(async () => {
@@ -657,30 +656,7 @@ export const subscriptionService = {
           });
 
         if (error) throw error;
-
-        if (!data) {
-          return {
-            subscriptionStatus: {
-              isSubscribed: false,
-              subscriptionStatus: 'trial',
-            },
-            tierInfo: {
-              tier: 'free',
-              maxOwnedBusinesses: null,
-              subscriptionStatus: 'trial',
-              expirationDate: null
-            },
-            ownedBusinessCount: 0,
-            activeBusinessCount: 0,
-            salesCountData: businessId ? {
-              salesCount: 0,
-              remainingSales: 0,
-              isAtLimit: true
-            } : null,
-            canAccessFeature: businessId ? false : null,
-            businessDisableReason: null
-          };
-        }
+        if (!data) throw new Error('get_full_subscription_state returned nothing');
 
         const disableReason: BusinessDisableReason = businessId
           ? await this.getBusinessDisableReason(businessId)
@@ -704,10 +680,13 @@ export const subscriptionService = {
           ownedBusinessCount: state.ownedBusinessCount,
           activeBusinessCount: state.activeBusinessCount ?? state.ownedBusinessCount,
           salesCountData: state.salesCountData ? {
-            salesCount: state.salesCountData.salesCount,
-            remainingSales: state.salesCountData.remainingSales,
-            isAtLimit: state.salesCountData.isAtLimit,
-            totalSalesAllBusinesses: state.salesCountData.totalSalesAllBusinesses
+            salesCount: state.salesCountData.salesCount ?? 0,
+            // null on paid plans, which have no limit
+            remainingSales: state.salesCountData.remainingSales ?? 999999,
+            isAtLimit: !!state.salesCountData.isAtLimit,
+            totalSalesAllBusinesses: state.salesCountData.totalSalesAllBusinesses ?? 0,
+            // the plan the limit follows: the business owner's, not necessarily the caller's
+            limitTier: state.salesCountData.limitTier ?? null,
           } : null,
           canAccessFeature: state.canAccessFeature,
           businessDisableReason: disableReason
@@ -715,33 +694,11 @@ export const subscriptionService = {
       }, 'get full subscription state');
     } catch (error) {
       console.error('Error getting full subscription state:', error);
-
       if (isNetworkError(error) && showErrorAlert) {
         showNetworkErrorAlert('load subscription information');
       }
-
-      return {
-        subscriptionStatus: {
-          isSubscribed: false,
-          subscriptionStatus: 'trial',
-        },
-        tierInfo: {
-          tier: 'free',
-          maxOwnedBusinesses: null,
-          subscriptionStatus: 'trial',
-          expirationDate: null
-        },
-        ownedBusinessCount: 0,
-        activeBusinessCount: 0,
-        salesCountData: businessId ? {
-          salesCount: 0,
-          remainingSales: 0,
-          isAtLimit: true,
-          totalSalesAllBusinesses: 0
-        } : null,
-        canAccessFeature: false,
-        businessDisableReason: null
-      };
+      throw error;
     }
-  }
+  },
+
 };
