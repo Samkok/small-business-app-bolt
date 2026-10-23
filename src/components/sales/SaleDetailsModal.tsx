@@ -24,6 +24,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { X, ArrowLeft } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
+import type { SaleEditInput } from '@/src/services/sales';
 import SaleDetailsContent from './SaleDetailsContent';
 
 interface SaleDetailsModalProps {
@@ -272,16 +273,10 @@ export default function SaleDetailsModal({ visible, saleId, onClose }: SaleDetai
     setShowEditModal(true);
   };
 
-  const handleEditSaleConfirm = async (updates: {
-    customerId?: string | null;
-    discountType?: 'percentage' | 'fixed' | null;
-    discountValue?: number | null;
-    deliveryCost?: number | null;
-    paymentStatus?: 'paid' | 'cod' | null;
-  }) => {
+  const handleEditSaleConfirm = async (updates: SaleEditInput) => {
     if (!sale) return;
     try {
-      await salesService.updateSaleRecord(sale.id, updates);
+      await salesService.editSale(sale.id, updates);
       setShowEditModal(false);
       Alert.alert('Success', 'Sale updated successfully');
       await loadSaleDetails();

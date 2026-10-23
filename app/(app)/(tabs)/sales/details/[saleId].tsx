@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { ArrowLeft } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
+import type { SaleEditInput } from '@/src/services/sales';
 import { useAuth } from '@/src/context/AuthContext';
 import SaleDetailsContent from '@/src/components/sales/SaleDetailsContent';
 
@@ -121,16 +122,10 @@ export default function SaleDetailsScreen() {
     setShowEditModal(true);
   };
 
-  const handleEditSaleConfirm = async (updates: {
-    customerId?: string | null;
-    discountType?: 'percentage' | 'fixed' | null;
-    discountValue?: number | null;
-    deliveryCost?: number | null;
-    paymentStatus?: 'paid' | 'cod' | null;
-  }) => {
+  const handleEditSaleConfirm = async (updates: SaleEditInput) => {
     if (!sale) return;
     try {
-      await salesService.updateSaleRecord(sale.id, updates);
+      await salesService.editSale(sale.id, updates);
       setShowEditModal(false);
       Alert.alert(t('common.success'), 'Sale updated successfully');
       await loadSaleDetails();

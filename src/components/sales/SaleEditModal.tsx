@@ -14,7 +14,10 @@ import {
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { X, User, Percent, Truck, Search, Check, UserPlus } from 'lucide-react-native';
+import { X, User, Percent, Truck, Search, Check, UserPlus, Plus, Minus, Trash2, Package } from 'lucide-react-native';
+import { productService } from '@/src/services/products';
+import { unitService, Unit, ProductUnit } from '@/src/services/units';
+import type { SaleEditInput, SaleEditLine } from '@/src/services/sales';
 import { Button } from '@/src/components/ui/Button';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
@@ -27,16 +30,17 @@ interface SaleEditModalProps {
   sale: any;
   saleDetails: any;
   businessId: string;
-  onConfirm: (updates: {
-    customerId?: string | null;
-    discountType?: 'percentage' | 'fixed' | null;
-    discountValue?: number | null;
-    deliveryCost?: number | null;
-    /** who pays the delivery amount: 'shop' (deducted, free for the customer) or 'customer' (added to the receipt) */
-    deliveryPayer?: DeliveryPayer;
-    paymentStatus?: 'paid' | 'cod' | null;
-  }) => Promise<void>;
+  /** The complete edit: every line the sale should have, plus the header fields */
+  onConfirm: (updates: SaleEditInput) => Promise<void>;
   onCancel: () => void;
+}
+
+/** A line as edited on screen; the extra fields are for display only */
+interface EditLine extends SaleEditLine {
+  key: string;
+  productName: string;
+  unitName: string | null;
+  currentStock: number | null;
 }
 
 export default function SaleEditModal({
@@ -80,6 +84,17 @@ export default function SaleEditModal({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Items: the lines the sale will have after saving. Existing lines keep their id; a line
+  // added here has none. Stock and totals are settled by the server when saving.
+  const [lines, setLines] = useState<EditLine[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const debouncedProductSearch = useDebounce(productSearch, 300);
+  const [productResults, setProductResults] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [showProductList, setShowProductList] = useState(false);
+  const [unitChoice, setUnitChoice] = useState<{ product: any; units: Unit[]; prices: ProductUnit[] } | null>(null);
+  const [reason, setReason] = useState('');
+
   const debouncedSearch = useDebounce(customerSearch, 300);
 
   // Initialise fields from sale data when modal opens
@@ -95,8 +110,106 @@ export default function SaleEditModal({
       setPaymentStatus(isPaymentStatus(sale.payment_status) ? sale.payment_status : null);
       setErrors({});
       setShowCustomerList(false);
+      setLines((sale.carts?.cart_items ?? []).map((ci: any): EditLine => ({
+        key: ci.id,
+        id: ci.id,
+        productId: ci.product_id,
+        productName: ci.products?.name ?? '',
+        quantity: Number(ci.quantity) || 1,
+        unitId: ci.unit_id ?? null,
+        unitName: ci.units?.name ?? null,
+        unitPrice: Number(ci.unit_price) || 0,
+        itemDiscountType: ci.item_discount_type ?? null,
+        itemDiscountValue: ci.item_discount_value ?? null,
+        itemDiscountScope: ci.item_discount_scope ?? null,
+        currentStock: ci.products?.current_stock ?? null,
+      })));
+      setProductSearch('');
+      setProductResults([]);
+      setShowProductList(false);
+      setUnitChoice(null);
+      setReason('');
     }
   }, [visible, sale, saleDetails]);
+
+  // Search products to add
+  useEffect(() => {
+    if (!visible || !businessId) return;
+    if (!debouncedProductSearch.trim()) {
+      setProductResults([]);
+      setShowProductList(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingProducts(true);
+      try {
+        const results = await productService.searchProducts(businessId, debouncedProductSearch, 10);
+        if (!cancelled) {
+          setProductResults(results || []);
+          setShowProductList(true);
+        }
+      } catch {
+        if (!cancelled) setProductResults([]);
+      } finally {
+        if (!cancelled) setLoadingProducts(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [debouncedProductSearch, visible, businessId]);
+
+  const addLine = useCallback((product: any, unit: Unit | null, price: number) => {
+    setLines(prev => {
+      const same = prev.find(l => l.productId === product.id && (l.unitId ?? null) === (unit?.id ?? null));
+      if (same) return prev.map(l => (l === same ? { ...l, quantity: l.quantity + 1 } : l));
+      return [...prev, {
+        key: `new-${product.id}-${unit?.id ?? 'base'}-${Date.now()}`,
+        id: null,
+        productId: product.id,
+        productName: product.name,
+        quantity: 1,
+        unitId: unit?.id ?? null,
+        unitName: unit?.name ?? null,
+        unitPrice: price,
+        itemDiscountType: null,
+        itemDiscountValue: null,
+        itemDiscountScope: null,
+        currentStock: product.current_stock ?? null,
+      }];
+    });
+    setErrors(e => { const { items, ...rest } = e; return rest; });
+    setProductSearch('');
+    setProductResults([]);
+    setShowProductList(false);
+    setUnitChoice(null);
+  }, []);
+
+  const handlePickProduct = useCallback(async (product: any) => {
+    if (product.unit_group_id) {
+      try {
+        const [units, prices] = await Promise.all([
+          unitService.getUnits(product.unit_group_id),
+          unitService.getProductUnits(product.id),
+        ]);
+        if (units.length > 0) {
+          setUnitChoice({ product, units, prices });
+          setShowProductList(false);
+          return;
+        }
+      } catch {
+        // fall through: sell in the base unit
+      }
+    }
+    addLine(product, null, Number(product.price) || 0);
+  }, [addLine]);
+
+  const changeQty = useCallback((key: string, delta: number) => {
+    setLines(prev => prev.map(l => (l.key === key ? { ...l, quantity: Math.max(1, l.quantity + delta) } : l)));
+  }, []);
+
+  const removeLine = useCallback((key: string) => {
+    setLines(prev => prev.filter(l => l.key !== key));
+  }, []);
 
   // Search customers
   useEffect(() => {
@@ -173,12 +286,18 @@ export default function SaleEditModal({
   };
 
   const handleSave = async () => {
+    if (lines.length === 0) {
+      setErrors(e => ({ ...e, items: t('saleEdit.atLeastOne') }));
+      return;
+    }
     if (!validate()) return;
     setSaving(true);
     try {
       const parsedDiscount = discountValue.trim() ? parseFloat(discountValue) : null;
       const parsedDelivery = deliveryCost.trim() ? parseFloat(deliveryCost) : 0;
       await onConfirm({
+        items: lines.map(({ key, productName, unitName, currentStock, ...line }) => line),
+        reason: reason.trim() || null,
         customerId: selectedCustomer?.id ?? null,
         discountType: discountType && parsedDiscount != null ? discountType : null,
         discountValue: discountType && parsedDiscount != null ? parsedDiscount : null,
@@ -336,6 +455,115 @@ export default function SaleEditModal({
               )}
             </View>
 
+            {/* Items */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Package size={16} color="#7c3aed" />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('saleEdit.items')} ({lines.length})</Text>
+              </View>
+              {lines.map((line) => (
+                <View key={line.key} style={[styles.lineRow, { borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.lineName, { color: textColor }]} numberOfLines={1}>
+                      {line.productName}{line.unitName ? ` · ${line.unitName}` : ''}
+                    </Text>
+                    <Text style={[styles.lineMeta, { color: labelColor }]}>
+                      {getSymbol(sale?.currency_id ?? undefined)}{line.unitPrice.toFixed(2)}
+                      {line.currentStock != null ? ` · ${t('saleEdit.inStock')}: ${line.currentStock}` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.qtyRow}>
+                    <TouchableOpacity
+                      style={[styles.qtyBtn, { borderColor }]}
+                      onPress={() => changeQty(line.key, -1)}
+                      disabled={saving || line.quantity <= 1}
+                    >
+                      <Minus size={14} color={line.quantity <= 1 ? borderColor : textColor} />
+                    </TouchableOpacity>
+                    <Text style={[styles.qtyText, { color: textColor }]}>{line.quantity}</Text>
+                    <TouchableOpacity style={[styles.qtyBtn, { borderColor }]} onPress={() => changeQty(line.key, 1)} disabled={saving}>
+                      <Plus size={14} color={textColor} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removeBtn}
+                      onPress={() => removeLine(line.key)}
+                      disabled={saving}
+                      accessibilityLabel={t('saleEdit.remove')}
+                    >
+                      <Trash2 size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+              {errors.items && <Text style={styles.errorText}>{errors.items}</Text>}
+
+              <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor, marginTop: 8 }]}>
+                <Search size={16} color={labelColor} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, { color: textColor }]}
+                  placeholder={t('saleEdit.searchProduct')}
+                  placeholderTextColor={labelColor}
+                  value={productSearch}
+                  onChangeText={(v) => { setProductSearch(v); setUnitChoice(null); }}
+                />
+                {loadingProducts && <ActivityIndicator size="small" color="#2563eb" />}
+              </View>
+              {showProductList && productResults.length > 0 && (
+                <View style={[styles.dropdown, { backgroundColor: bg, borderColor }]}>
+                  {productResults.map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[styles.dropdownItem, { borderBottomColor: borderColor }]}
+                      onPress={() => handlePickProduct(p)}
+                    >
+                      <Text style={[styles.dropdownName, { color: textColor }]}>{p.name}</Text>
+                      <Text style={[styles.dropdownSub, { color: labelColor }]}>
+                        {getSymbol(p.currency_id ?? undefined)}{Number(p.price ?? 0).toFixed(2)} · {t('saleEdit.inStock')}: {p.current_stock ?? 0}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {showProductList && productResults.length === 0 && !loadingProducts && debouncedProductSearch.trim().length > 0 && (
+                <View style={[styles.noResultsRow, { borderColor }]}>
+                  <Text style={[styles.noResultsText, { color: labelColor }]}>{t('saleEdit.noProducts')}</Text>
+                </View>
+              )}
+              {unitChoice && (
+                <View style={[styles.createForm, { backgroundColor: inputBg, borderColor }]}>
+                  <View style={styles.createFormHeader}>
+                    <Text style={[styles.createFormTitle, { color: textColor }]}>{t('saleEdit.chooseUnit')}: {unitChoice.product.name}</Text>
+                    <TouchableOpacity onPress={() => setUnitChoice(null)}>
+                      <X size={16} color={labelColor} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.platformRow}>
+                    <TouchableOpacity
+                      style={[styles.platformChip, { backgroundColor: bg, borderColor }]}
+                      onPress={() => addLine(unitChoice.product, null, Number(unitChoice.product.price) || 0)}
+                    >
+                      <Text style={[styles.platformChipText, { color: labelColor }]}>
+                        {t('saleEdit.basePrice')} {Number(unitChoice.product.price ?? 0).toFixed(2)}
+                      </Text>
+                    </TouchableOpacity>
+                    {unitChoice.units.map((u) => {
+                      const price = Number(unitChoice.prices.find(pr => pr.unit_id === u.id)?.price ?? unitChoice.product.price ?? 0);
+                      return (
+                        <TouchableOpacity
+                          key={u.id}
+                          style={[styles.platformChip, { backgroundColor: bg, borderColor }]}
+                          onPress={() => addLine(unitChoice.product, u, price)}
+                        >
+                          <Text style={[styles.platformChipText, { color: labelColor }]}>{u.name} {price.toFixed(2)}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+              <Text style={[styles.hint, { color: labelColor }]}>{t('saleEdit.stockNotice')}</Text>
+            </View>
+
             {/* Discount */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -425,6 +653,21 @@ export default function SaleEditModal({
                   This sale was made before PAID / COD existed. Choose one to record it.
                 </Text>
               )}
+            </View>
+
+            {/* Reason, kept with the edit history */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>{t('saleEdit.reason')}</Text>
+              <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor, marginTop: 8 }]}>
+                <TextInput
+                  style={[styles.input, { color: textColor }]}
+                  placeholder={t('saleEdit.reasonPlaceholder')}
+                  placeholderTextColor={labelColor}
+                  value={reason}
+                  onChangeText={setReason}
+                  maxLength={200}
+                />
+              </View>
             </View>
 
             {/* Recalculation notice */}
@@ -668,6 +911,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
+  lineName: { fontSize: 14, fontWeight: '600' },
+  lineMeta: { fontSize: 12, marginTop: 2 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  qtyBtn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  qtyText: { minWidth: 26, textAlign: 'center', fontSize: 15, fontWeight: '600' },
+  removeBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
   footer: {
     flexDirection: 'row',
     paddingHorizontal: 20,

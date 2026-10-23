@@ -13,7 +13,9 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { SkeletonLoader, SkeletonCard } from '@/src/components/ui/SkeletonLoader';
-import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck, Pencil, ChevronRight } from 'lucide-react-native';
+import { User, Calendar, CreditCard, DollarSign, ShoppingCart, Percent, FileText, TriangleAlert as AlertTriangle, UserCheck, Pencil, ChevronRight, History } from 'lucide-react-native';
+import type { SaleEditInput } from '@/src/services/sales';
+import { describeSaleEditChange, sortSaleEdits } from '@/src/utils/saleEditHistory';
 import ReturnSaleForm from './ReturnSaleForm';
 import VoidSaleModal from './VoidSaleModal';
 import SaleEditModal from './SaleEditModal';
@@ -45,13 +47,7 @@ interface SaleDetailsContentProps {
   onEditSale: () => void;
   /** Opens the receipt screen for this sale. The button is hidden when not provided. */
   onViewReceipt?: () => void;
-  onEditSaleConfirm: (updates: {
-    customerId?: string | null;
-    discountType?: 'percentage' | 'fixed' | null;
-    discountValue?: number | null;
-    deliveryCost?: number | null;
-    paymentStatus?: 'paid' | 'cod' | null;
-  }) => Promise<void>;
+  onEditSaleConfirm: (updates: SaleEditInput) => Promise<void>;
   onCancelEdit: () => void;
   onClose?: () => void;
   userProfile?: any;
@@ -600,6 +596,45 @@ export default function SaleDetailsContent({
           </View>
         </Card>
 
+        {/* Edit history: every change made to this sale after it was completed */}
+        {sale.sale_edits?.length > 0 && (
+          <Card style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <History size={20} color="#7c3aed" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {t('saleEdit.history.title')} ({sale.sale_edits.length})
+              </Text>
+            </View>
+            {sortSaleEdits<any>(sale.sale_edits).map((edit: any) => (
+              <View key={edit.id} style={styles.actionItem}>
+                <View style={styles.actionHeader}>
+                  <Text style={[styles.actionType, { color: '#7c3aed' }]}>
+                    {edit.edited_by_name
+                      ? `${t('saleEdit.history.editedBy')} ${getUserDisplayName(edit.edited_by_name, null)}`
+                      : t('saleEdit.history.title')}
+                  </Text>
+                  <Text style={[styles.actionDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    {formatDate(edit.edited_at)}
+                  </Text>
+                </View>
+                {edit.reason ? (
+                  <Text style={[styles.actionReason, { color: isDark ? '#f9fafb' : '#111827' }]}>{edit.reason}</Text>
+                ) : null}
+                {(edit.changes ?? []).map((change: any, index: number) => {
+                  const text = describeSaleEditChange(change, { fmt, t });
+                  return (
+                    <View key={index} style={styles.editChangeRow}>
+                      <Text style={[styles.editChangeTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>{text.title}</Text>
+                      <Text style={[styles.editChangeDetail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>{text.detail}</Text>
+                      {text.stock ? <Text style={[styles.editChangeStock, { color: '#7c3aed' }]}>{text.stock}</Text> : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </Card>
+        )}
+
         {/* Additional Information */}
         {(sale.notes || sale.sale_actions?.length > 0) && (
           <Card style={styles.section}>
@@ -983,6 +1018,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  editChangeRow: { marginTop: 8, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: '#7c3aed40' },
+  editChangeTitle: { fontSize: 13, fontWeight: '600' },
+  editChangeDetail: { fontSize: 13, marginTop: 2 },
+  editChangeStock: { fontSize: 12, marginTop: 2 },
   notesText: {
     fontSize: 14,
     lineHeight: 20,

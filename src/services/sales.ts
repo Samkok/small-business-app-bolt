@@ -10,6 +10,51 @@ import { subscriptionService } from './subscriptionService';
 import { unitService } from './units';
 import { isPaymentStatus, PaymentStatus } from '../utils/paymentStatus';
 
+/** One line of a sale after an edit. `id` is the existing cart_item id; a line without it is new. */
+export interface SaleEditLine {
+  id?: string | null;
+  productId: string;
+  quantity: number;
+  unitId?: string | null;
+  unitPrice: number;
+  itemDiscountType?: 'percentage' | 'fixed' | null;
+  itemDiscountValue?: number | null;
+  itemDiscountScope?: 'per_unit' | 'total' | null;
+}
+
+/** Header fields are changed only when present (undefined = leave as is; null = clear). */
+export interface SaleEditInput {
+  items: SaleEditLine[];
+  customerId?: string | null;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number | null;
+  deliveryCost?: number | null;
+  deliveryPayer?: DeliveryPayer;
+  paymentStatus?: PaymentStatus | null;
+  reason?: string | null;
+}
+
+export interface SaleEditChange {
+  type: 'added' | 'removed' | 'changed' | 'field';
+  product_id?: string;
+  product_name?: string;
+  unit_name?: string | null;
+  field?: string;
+  before?: any;
+  after?: any;
+  stock_delta?: number;
+  stock_before?: number;
+  stock_after?: number;
+}
+
+export interface SaleEditResult {
+  changed: boolean;
+  edit_id?: string;
+  changes?: SaleEditChange[];
+  total_amount?: number;
+}
+
+
 type Sale = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
 type SaleAction = Database['public']['Tables']['sale_actions']['Row'];
@@ -408,6 +453,7 @@ export const salesService = {
           )
         ),
         sale_actions(*),
+        sale_edits(*),
         returned_amount:sale_actions(amount).eq(action_type, 'return')
       `)
       .eq('id', saleId)
@@ -477,6 +523,41 @@ export const salesService = {
 
     if (error) throw error;
     return data;
+  },
+
+  /**
+   * Edits a completed sale in one transaction (edit_sale_atomic): the full list of lines
+   * the sale should have, plus any header fields to change. Stock moves with the lines and
+   * the before/after is recorded in sale_edits, which the sale detail shows.
+   */
+  async editSale(saleId: string, input: SaleEditInput): Promise<SaleEditResult> {
+    if (!saleId) throw new Error('saleId is required');
+    if (!input.items.length) throw new Error('A sale needs at least one item');
+    const { data, error } = await supabase.rpc('edit_sale_atomic', {
+      p_sale_id: saleId,
+      p_items: input.items.map(line => ({
+        id: line.id ?? null,
+        product_id: line.productId,
+        quantity: line.quantity,
+        unit_id: line.unitId ?? null,
+        unit_price: line.unitPrice,
+        item_discount_type: line.itemDiscountType ?? null,
+        item_discount_value: line.itemDiscountValue ?? null,
+        item_discount_scope: line.itemDiscountScope ?? null,
+      })),
+      p_set_customer: input.customerId !== undefined,
+      p_customer_id: input.customerId ?? null,
+      p_set_discount: input.discountType !== undefined,
+      p_discount_type: input.discountType ?? null,
+      p_discount_value: input.discountValue ?? null,
+      p_delivery_amount: input.deliveryCost ?? null,
+      p_delivery_payer: input.deliveryPayer ?? null,
+      p_set_payment_status: input.paymentStatus !== undefined,
+      p_payment_status: input.paymentStatus ?? null,
+      p_reason: input.reason ?? null,
+    } as any);
+    if (error) throw error;
+    return (data ?? { changed: false }) as SaleEditResult;
   },
 
   async updateSaleRecord(
