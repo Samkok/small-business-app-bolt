@@ -23,7 +23,9 @@
       },
       "privacyManifests": {
         "NSPrivacyTracking": true,
-        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyTrackingDomains": [
+          "ep1.facebook.com"
+        ],
         "NSPrivacyCollectedDataTypes": [
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
