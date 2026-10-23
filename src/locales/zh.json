@@ -757,17 +757,17 @@
   },
   "referral": {
     "shareTitle": "加入 BizManage",
-    "shareMessage": "\ud83d\udcca 我用 BizManage 管理我的店铺\u2014\u2014销售、库存和真实利润都在一个应用里。用我的邀请码 {{code}} 免费开始，我们俩都能获得一个月免费 Pro。{{link}}",
-    "shareMessageShort": "了解你的真实利润。我用 BizManage 管理店铺\u2014\u2014销售、库存和支出都在一个地方。用我的邀请码 {{code}} 免费开始。{{link}}"
+    "shareMessage": "📊 我用 BizManage 管理我的店铺——销售、库存和真实利润都在一个应用里。用我的邀请码 {{code}} 免费开始，我们俩都能获得一个月免费 Pro。{{link}}",
+    "shareMessageShort": "了解你的真实利润。我用 BizManage 管理店铺——销售、库存和支出都在一个地方。用我的邀请码 {{code}} 免费开始。{{link}}"
   },
   "profitCard": {
     "profitLabel": "利润",
     "revenueLabel": "营业额",
     "salesLabel": "销售",
     "vsLastMonth": "与上月相比",
-    "profitableBadge": "盈利月份 \u2705",
+    "profitableBadge": "盈利月份 ✅",
     "madeWith": "由 BizManage 制作",
-    "tryFree": "免费试用 \u2014 邀请码 {{code}}",
+    "tryFree": "免费试用 — 邀请码 {{code}}",
     "shareMonth": "分享你的月度成绩",
     "showAmounts": "显示金额",
     "growthOnly": "仅显示增长",
@@ -863,5 +863,37 @@
     "shopPaysRow": "配送（店铺支付）",
     "customerPaysRow": "配送费（顾客支付）",
     "customerTotal": "顾客应付总额"
+  },
+  "saleEdit": {
+    "items": "商品",
+    "addProduct": "添加商品",
+    "searchProduct": "按名称或条码搜索商品...",
+    "noProducts": "未找到商品",
+    "chooseUnit": "选择单位",
+    "basePrice": "基础价格",
+    "remove": "移除",
+    "reason": "修改原因（可选）",
+    "reasonPlaceholder": "例如：客户更改了订单",
+    "atLeastOne": "销售至少需要一件商品",
+    "stockNotice": "添加、移除或修改的每件商品都会调整库存，总额会重新计算。",
+    "inStock": "库存",
+    "history": {
+      "title": "修改记录",
+      "editedBy": "修改人",
+      "added": "已添加",
+      "removed": "已移除",
+      "changed": "已修改",
+      "stock": "库存",
+      "none": "无",
+      "fields": {
+        "customer_name": "客户",
+        "sale_discount_type": "折扣类型",
+        "sale_discount_value": "折扣",
+        "delivery_cost": "配送费（店铺承担）",
+        "delivery_charge": "配送费（客户承担）",
+        "payment_status": "付款状态",
+        "total_amount": "总额"
+      }
+    }
   }
 }

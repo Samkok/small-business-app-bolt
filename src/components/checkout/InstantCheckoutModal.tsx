@@ -75,7 +75,7 @@ export function InstantCheckoutModal() {
 
   const { t } = useTranslation();
   const router = useRouter();
-  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, refreshSalesCount } = useSubscription();
+  const { salesCountData, canAccessFeature, businessDisableReason, showPaywall, refreshSalesCount, isSubscribed, reverifyPlan } = useSubscription();
   const [completing, setCompleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showProductSelector, setShowProductSelector] = useState(false);
@@ -421,12 +421,24 @@ export function InstantCheckoutModal() {
         return;
       }
 
-      const result = await instantCheckoutService.completeInstantCheckout({
+      let result = await instantCheckoutService.completeInstantCheckout({
         session,
         businessId: currentBusiness.id,
         userId: user.id,
         guestCustomerId: guestCustomer.id,
       });
+
+      // The server applied the free limit although the plan is paid: its mirror of the
+      // subscription is behind RevenueCat. Have it re-verified, then try once more.
+      if (!result.success && result.error === 'SUBSCRIPTION_LIMIT_REACHED' && isSubscribed) {
+        await reverifyPlan();
+        result = await instantCheckoutService.completeInstantCheckout({
+          session,
+          businessId: currentBusiness.id,
+          userId: user.id,
+          guestCustomerId: guestCustomer.id,
+        });
+      }
 
       if (result.success) {
         await refreshSalesCount();

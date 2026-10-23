@@ -86,7 +86,7 @@ GestureHandlerRootView > ErrorBoundary > ThemeProvider > LanguageProvider > Netw
 | Context | Hook | Owns |
 |---|---|---|
 | `AuthContext` (866 lines) | `useAuth` | session, `userProfile`, `userBusinesses`, `currentBusiness`, `currentUserRole` ('admin'/'staff'), signIn/Up/Out, switchBusiness, createBusiness, password flows, inactivity sign-out. Shape in `authTypes.ts`. |
-| `RevenueCatSubscriptionContext` (1,350 lines) | `useSubscription` | tier, `salesCountData`, `canAccessFeature`, `readOnlyBusinessIds`, `mustChooseBusinesses`, paywall visibility, purchase/restore. 5 realtime channels. `SubscriptionContext.tsx` is just a re-export alias. |
+| `RevenueCatSubscriptionContext` (~700 lines, rewritten 2026-10-22) | `useSubscription` | Two inputs, one rule: the plan from the RevenueCat SDK (`rcEntitlement`) and ONE server read `get_full_subscription_state` (`serverState`, shared while in flight, a failure keeps the last answer). `isSubscribed`/`tierInfo`/`salesCountData`/`canAccessFeature` are DERIVED (`salesAccess` in `entitlementState.ts`, tested): a paid owner is never blocked by the free limit while the mirror lags (and `reconcileMirror` is forced), a read-only/owner-disabled business blocks everyone, staff follow the server (owner's plan). 5 realtime channels, all re-joined and the state re-read on return to the foreground. `reverifyPlan()` is used by the cart and Quick Checkout to retry a sale the server refused for the limit while the plan is paid. `SubscriptionContext.tsx` is just a re-export alias. |
 | `CartContext` (678) | `useCart` | multi-cart CRUD, `completeSale()` → salesService or offline queue |
 | `InstantCheckoutContext` (551) | `useInstantCheckout` | quick-sale widget session, separate from carts |
 | `NotificationContext` (620) | `useNotifications` | in-app notifications list, unread count, realtime, push token registration |
@@ -107,6 +107,8 @@ Route guards: `app/(app)/_layout.tsx` redirects to `business-onboarding` when th
 **Sale (cart checkout)**: `sales/product-selection` → `CartContext.addItemToCart` → `sales/cart/[cartId]` (1,460 lines, discounts per item + per sale) → `sales/checkout/[cartId]` → `CartContext.completeSale` → `salesService.completeSale` → RPC `complete_sale_atomic` (single transaction: sale + items + stock + sales count). Offline: payload goes to `lib/offlineSaleQueue` (AsyncStorage), `PendingSalesSyncModal` replays when back online.
 
 **Instant checkout**: `components/checkout/InstantCheckoutModal` (1,411 lines) → `instantCheckoutService.completeInstantCheckout` → same `salesService.completeSale`.
+
+**Edit Sale (2026-10-19).** `components/sales/SaleEditModal` edits a completed sale's lines (add a product with its unit, change quantity, remove), customer, cart discount, delivery and PAID/COD, with an optional reason. Save goes through `salesService.editSale` → `edit_sale_atomic` (migration `20261019032510_sale_edit_history`): one transaction that locks the sale, cart and products, applies the line changes to `cart_items` (new lines snapshot `cost_per_unit` like `addItemToCart`), moves `products.current_stock` by the base-unit delta in both directions (`sale_edit_apply_stock`, refuses to go below zero, writes `product_history`), recomputes the sale totals from `cart_details_with_discounts`, and stores a `sale_edits` row with full before/after snapshots (`sale_edit_snapshot`) and a readable `changes` list. A line cannot change product or unit: remove and add instead. "No customer" resolves to the business's guest customer (carts.customer_id is not null). A no-op edit records nothing. `SaleDetailsContent` shows the "Edit history" card from `sales.sale_edits` using `utils/saleEditHistory.ts` (pure, tested). Void and return still read the current `cart_items`, so they restore the edited quantities. The old `updateSaleRecord` remains for callers that only touch header fields.
 
 **Void / return / refund**: `components/sales/VoidSaleModal`, `ReturnSaleForm` → `salesService.voidSale / returnItems / performSaleAction` → `sale_actions` table; triggers update `returned_amount`; `calculate_cogs` subtracts returns.
 
@@ -202,7 +204,7 @@ Cross-cutting: `lib/network.retryWithBackoff` + `isNetworkError`, `lib/api-respo
 
 ### Tables used by the client (27) and where they are defined
 
-Created in `supabase/migrations/`: `audit_logs cart_items carts credit_ledger customers expense_categories expenses import_costs inventory_imports notification_preferences notifications processed_webhook_events product_insight_settings products profiles rate_limit_records reconciliation_log referral_codes referral_events referral_fraud_flags referral_reward_rules sale_actions sales security_events user_business_roles user_credit_balances user_profiles user_sales_count_history user_sales_counts user_subscriptions webhook_errors`
+Created in `supabase/migrations/`: `audit_logs cart_items carts credit_ledger customers expense_categories expenses import_costs inventory_imports notification_preferences notifications processed_webhook_events product_insight_settings products profiles rate_limit_records reconciliation_log referral_codes referral_events referral_fraud_flags referral_reward_rules sale_actions sale_edits sales security_events user_business_roles user_credit_balances user_profiles user_sales_count_history user_sales_counts user_subscriptions webhook_errors`
 
 **Migration history is out of sync with the repo (verified against the live project `tevtbyffttmbttekhejk` on 2026-09-15).** The live database has 196 applied migrations; the repo has 192 files. They differ in both directions:
 
@@ -252,7 +254,7 @@ Deploy: `supabase functions deploy <name>`. `config.toml` has an empty project i
 
 ## 8. Hotspots and heavy files
 
-Largest screens/components (lines): `inventory/index` 2,158 · `sales/index` 2,051 · `reports/index` 1,473 · `sales/cart/[cartId]` 1,460 · `InstantCheckoutModal` 1,411 · `RevenueCatSubscriptionContext` 1,350 · `ProductForm` 1,090 · `ImportStockForm` 1,082 · `EditBatchForm` 1,074 · `SaleDetailsContent` 1,024 · `product-details` 1,015.
+Largest screens/components (lines): `inventory/index` 2,158 · `sales/index` 2,051 · `reports/index` 1,473 · `sales/cart/[cartId]` 1,460 · `InstantCheckoutModal` 1,411 · `ProductForm` 1,090 · `ImportStockForm` 1,082 · `EditBatchForm` 1,074 · `SaleDetailsContent` 1,024 · `product-details` 1,015.
 
 Most-changed in the last 200 commits: `sales/index` 16 · `inventory/index` 14 · `reports/sales-history` 13 · `AuthContext` 11 · `ImportStockForm` 10 · `EditBatchForm` 10 · `cart/[cartId]` 10 · dashboard 10.
 

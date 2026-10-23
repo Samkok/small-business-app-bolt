@@ -1,4 +1,4 @@
-import type { SubscriptionStatus, SubscriptionTier, TierInfo } from '@/src/services/subscriptionService';
+import type { BusinessDisableReason, SubscriptionStatus, SubscriptionTier, TierInfo } from '@/src/services/subscriptionService';
 
 /**
  * Turns RevenueCat's CustomerInfo into the plan the app runs on.
@@ -162,4 +162,51 @@ export function mirrorDisagrees(rc: DerivedEntitlement, db: DbSubscriptionSnapsh
 /** Identifies one RevenueCat state, so the app re-verifies each distinct state at most once per window. */
 export function entitlementFingerprint(d: DerivedEntitlement): string {
   return [d.tier, d.isActive ? 1 : 0, d.productId ?? '', d.expirationDate ?? '', d.willRenew ? 1 : 0].join('|');
+}
+
+/** What the server last said about selling in the current business. */
+export interface ServerSalesView {
+  /** the owner's plan as the mirror sees it (get_full_subscription_state.isSubscribed for the owner) */
+  planActive: boolean;
+  /** the free-plan limit is used up for this business */
+  isAtLimit: boolean;
+  /** the business itself is blocked: read-only after a downgrade, or disabled by its owner */
+  disableReason: BusinessDisableReason;
+}
+
+export interface SalesAccessInput {
+  /** the signed-in user's own plan from RevenueCat; null while the SDK has not answered */
+  rcActive: boolean | null;
+  /** the sales limit follows the OWNER's plan, so RevenueCat's answer only counts for the owner */
+  isOwner: boolean;
+  server: ServerSalesView | null;
+}
+
+export interface SalesAccess {
+  /** may the user start or complete a sale in this business right now */
+  canSell: boolean;
+  /** the plan that governs this business is a paid one */
+  planActive: boolean;
+  /** RevenueCat says paid but the server still applies the free limit: the mirror lags */
+  mirrorStale: boolean;
+}
+
+/**
+ * The one rule every sales screen uses for its checkout button. RevenueCat's answer
+ * wins for the owner: a paid plan is never blocked by the free limit even while the
+ * database mirror is behind. A business the server has marked read-only or disabled is
+ * blocked for everyone. Before the server has answered, nothing is blocked.
+ */
+export function salesAccess(input: SalesAccessInput): SalesAccess {
+  const { rcActive, isOwner, server } = input;
+  if (server?.disableReason) {
+    return { canSell: false, planActive: server.planActive, mirrorStale: false };
+  }
+  if (isOwner && rcActive !== null) {
+    if (rcActive) {
+      return { canSell: true, planActive: true, mirrorStale: !!server && (server.isAtLimit || !server.planActive) };
+    }
+    return { canSell: !(server?.isAtLimit ?? false), planActive: false, mirrorStale: false };
+  }
+  return { canSell: !(server?.isAtLimit ?? false), planActive: server?.planActive ?? false, mirrorStale: false };
 }

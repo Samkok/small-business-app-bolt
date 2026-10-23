@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.3"
   }
   public: {
     Tables: {
@@ -1447,6 +1447,67 @@ export type Database = {
           },
         ]
       }
+      sale_edits: {
+        Row: {
+          after: Json
+          before: Json
+          business_id: string
+          changes: Json
+          edited_at: string
+          edited_by: string | null
+          edited_by_name: string | null
+          id: string
+          reason: string | null
+          sale_id: string
+        }
+        Insert: {
+          after: Json
+          before: Json
+          business_id: string
+          changes?: Json
+          edited_at?: string
+          edited_by?: string | null
+          edited_by_name?: string | null
+          id?: string
+          reason?: string | null
+          sale_id: string
+        }
+        Update: {
+          after?: Json
+          before?: Json
+          business_id?: string
+          changes?: Json
+          edited_at?: string
+          edited_by?: string | null
+          edited_by_name?: string | null
+          id?: string
+          reason?: string | null
+          sale_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_edits_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_edits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_edits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales_with_discount_details"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           business_id: string
@@ -2689,6 +2750,23 @@ export type Database = {
         Args: { p_adjustment_id: string }
         Returns: Json
       }
+      edit_sale_atomic: {
+        Args: {
+          p_customer_id?: string
+          p_delivery_amount?: number
+          p_delivery_payer?: string
+          p_discount_type?: string
+          p_discount_value?: number
+          p_items: Json
+          p_payment_status?: string
+          p_reason?: string
+          p_sale_id: string
+          p_set_customer?: boolean
+          p_set_discount?: boolean
+          p_set_payment_status?: boolean
+        }
+        Returns: Json
+      }
       effective_plan: {
         Args: { p_user_id: string }
         Returns: {
@@ -2920,6 +2998,17 @@ export type Database = {
       }
       require_service_caller: { Args: never; Returns: undefined }
       run_scheduled_reconciliation: { Args: never; Returns: undefined }
+      sale_edit_apply_stock: {
+        Args: {
+          p_business_id: string
+          p_caller: string
+          p_product_id: string
+          p_sold_delta: number
+        }
+        Returns: Json
+      }
+      sale_edit_snapshot: { Args: { p_sale_id: string }; Returns: Json }
+      sale_edit_unit_factor: { Args: { p_unit_id: string }; Returns: number }
       set_all_businesses_active: {
         Args: { p_user_id: string }
         Returns: undefined
