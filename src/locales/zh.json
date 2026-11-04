@@ -882,7 +882,8 @@
       "receipt": "已进货",
       "receipt_reversal": "进货已删除",
       "manual_correction": "手动更正",
-      "revaluation": "已进货（成本由本次进货设定）"
+      "revaluation": "已进货（成本由本次进货设定）",
+      "legacy_write": "由旧版本应用写入"
     }
   },
   "saleEdit": {

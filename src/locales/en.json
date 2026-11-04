@@ -900,7 +900,8 @@
       "receipt": "Received",
       "receipt_reversal": "Import removed",
       "manual_correction": "Corrected by hand",
-      "revaluation": "Received (cost set from this receipt)"
+      "revaluation": "Received (cost set from this receipt)",
+      "legacy_write": "Written by an older app version"
     }
   },
   "saleEdit": {

@@ -130,3 +130,40 @@ Precision: store 4 decimals, round only when displaying in the product's currenc
 - Two cashiers receiving the same product at once → row lock serialises them.
 - Price typo at creation → manual correction with a visible before/after; past sales unchanged.
 - Stock typo at creation → existing stock adjustment flow (already snapshots cost).
+
+## 6. Compatibility with builds before 2.11, and the follow-up
+
+Builds older than 2.11 write `products.cost_per_unit` directly during batch arrival and recompute
+it on batch delete. The app has no forced-update mechanism, so refusing those writes would block
+stock arrivals for every user who has not updated. Migration `20261104120000_cost_ledger_legacy_writes`
+(applied live 2026-11-04 as version `20261104160818`; file name and live version differ, do not re-apply) therefore puts the guard in **compatibility mode**: a direct write is
+allowed and recorded as a `legacy_write` event (before/after cost and stock, who wrote it). The new
+build never takes that path, so every `legacy_write` row is a user still on an old build.
+
+Check, every week or two:
+
+```sql
+select count(*) from product_cost_events
+ where event_type = 'legacy_write' and created_at > now() - interval '14 days';
+```
+
+When it returns 0, restore the strict guard with this migration (not written to the migrations
+folder yet, so nothing unapplied sits there):
+
+```sql
+create or replace function public.guard_product_cost_write()
+returns trigger language plpgsql set search_path = public, pg_catalog as $$
+begin
+  if new.cost_per_unit is distinct from old.cost_per_unit
+     and coalesce(current_setting('app.cost_event', true), '') <> '1' then
+    raise exception 'cost_per_unit is managed by the cost ledger; call apply_product_cost_event'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.guard_product_cost_write() from public, anon, authenticated;
+```
+
+Keep `legacy_write` in the event type check so the historic rows stay valid.
+

@@ -13,6 +13,7 @@ import { supabase } from '../config/supabase';
  *   manual_correction  owner/admin types a new cost with a reason; stock unchanged
  *   opening            written by a trigger when the product is created
  *   revaluation        a receipt that set the cost because none was known (cost was 0)
+ *   legacy_write       recorded by the guard trigger when an app build older than 2.11 wrote the cost directly
  *
  * Sales, returns, stock adjustments and counts never move the average; they snapshot it.
  */
@@ -22,7 +23,9 @@ export type ProductCostEventType =
   | 'receipt'
   | 'receipt_reversal'
   | 'manual_correction'
-  | 'revaluation';
+  | 'revaluation'
+  /** a direct write by an app build from before the ledger (compatibility mode, see migration 20261104120000) */
+  | 'legacy_write';
 
 export type ProductCostSource = 'product' | 'inventory_batch' | 'inventory_import';
 
