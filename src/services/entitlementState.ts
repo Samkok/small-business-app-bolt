@@ -210,3 +210,15 @@ export function salesAccess(input: SalesAccessInput): SalesAccess {
   }
   return { canSell: !(server?.isAtLimit ?? false), planActive: server?.planActive ?? false, mirrorStale: false };
 }
+
+/**
+ * True when the plan RevenueCat's SDK reports and the plan the server applies differ in a
+ * way that changes what the owner may do. Resolved in two steps by the context: first the
+ * SDK cache is dropped and RevenueCat asked again (sandbox plans expire in minutes and the
+ * cache is trusted for five); if RevenueCat confirms the SDK, the server's mirror is behind
+ * and is re-verified.
+ */
+export function planDisagrees(rc: DerivedEntitlement, server: { planActive: boolean; tier: SubscriptionTier }): boolean {
+  if (rc.isActive !== server.planActive) return true;
+  return rc.isActive && rc.tier !== server.tier;
+}

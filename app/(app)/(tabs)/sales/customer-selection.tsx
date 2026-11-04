@@ -38,7 +38,7 @@ export default function CustomerSelectionScreen() {
   const { isDark } = useTheme();
   const { currentBusiness } = useAuth();
   const { createCart } = useCart();
-  const { salesCountData, canAccessFeature, showPaywall } = useSubscription();
+  const { salesCountData, canAccessFeature, showPaywall, isLoading: subscriptionLoading } = useSubscription();
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -90,6 +90,8 @@ export default function CustomerSelectionScreen() {
 
   const handleCustomerSelect = useCallback(async (customer: any) => {
     if (!currentBusiness?.id) return;
+    // The plan and this business's limit are still being read: do not decide on stale state
+    if (subscriptionLoading) return;
 
     if (salesCountData.isAtLimit && !canAccessFeature) {
       setShowUpgradePrompt(true);
@@ -113,7 +115,7 @@ export default function CustomerSelectionScreen() {
     } finally {
       setCreatingCart(false);
     }
-  }, [currentBusiness?.id, createCart, router, salesCountData.isAtLimit, canAccessFeature]);
+  }, [currentBusiness?.id, createCart, router, salesCountData.isAtLimit, canAccessFeature, subscriptionLoading]);
 
   const handleCustomerSave = useCallback(async (savedCustomer?: any) => {
     setShowCustomerForm(false);
@@ -129,11 +131,11 @@ export default function CustomerSelectionScreen() {
     showPaywall();
   }, [showPaywall]);
 
-  const renderCustomerItem = useCallback(({ item }) => (
+  const renderCustomerItem = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.customerCard, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
       onPress={() => handleCustomerSelect(item)}
-      disabled={creatingCart}
+      disabled={creatingCart || subscriptionLoading}
     >
       <View style={styles.customerInfo}>
         <View style={[styles.avatar, { backgroundColor: '#2563eb' }]}>
@@ -163,7 +165,7 @@ export default function CustomerSelectionScreen() {
         </Text>
       </View>
     </TouchableOpacity>
-  ), [isDark, handleCustomerSelect, creatingCart]);
+  ), [isDark, handleCustomerSelect, creatingCart, subscriptionLoading]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>

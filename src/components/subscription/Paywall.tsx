@@ -55,7 +55,9 @@ interface TierConfig {
 export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = true }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { products, purchaseSubscription, restorePurchases, isLoading } = useSubscription();
+  const { products, purchaseSubscription, restorePurchases, isPurchasing } = useSubscription();
+  // the context's own purchase flag covers a purchase started elsewhere; this screen's covers its button
+  const isLoading = isPurchasing;
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -222,16 +224,16 @@ export const Paywall: React.FC<PaywallProps> = ({ visible, onClose, canClose = t
       setPurchasing(false);
 
       if (success) {
-        Alert.alert(
-          t('subscription.alerts.purchaseSuccessTitle'),
-          t('subscription.alerts.purchaseSuccessMessage'),
-          [
-            {
-              text: t('common.done'),
-              onPress: onClose
-            }
-          ]
-        );
+        // The store has confirmed: close at once so the app shows the new plan, and thank
+        // the user without holding the paywall open behind an alert
+        onClose();
+        setTimeout(() => {
+          Alert.alert(
+            t('subscription.alerts.purchaseSuccessTitle'),
+            t('subscription.alerts.purchaseSuccessMessage'),
+            [{ text: t('common.done') }]
+          );
+        }, 350);
       } else {
         Alert.alert(
           t('subscription.alerts.purchaseFailedTitle'),

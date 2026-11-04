@@ -285,6 +285,22 @@ class RevenueCatService {
     }
   }
 
+  /**
+   * Drops the SDK's cached customer info so the next getCustomerInfo() goes to RevenueCat.
+   * Used when the server reports a plan change the cache may not have seen yet (sandbox
+   * subscriptions expire in minutes; the cache is considered fresh for five).
+   */
+  async invalidateCustomerInfoCache(): Promise<void> {
+    if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) return;
+    try {
+      if (typeof Purchases.invalidateCustomerInfoCache === 'function') {
+        await Purchases.invalidateCustomerInfoCache();
+      }
+    } catch (error) {
+      console.warn('[RevenueCat] Could not invalidate customer info cache:', error instanceof Error ? error.message : error);
+    }
+  }
+
   async purchasePackage(pkg: any): Promise<{ customerInfo: any; cancelled: boolean }> {
     if (Platform.OS === 'web' || !isNativeModuleAvailable || !Purchases) {
       throw new Error('Purchases not available - native module not loaded');
