@@ -882,6 +882,27 @@
     "customerPaysRow": "Delivery fee (customer pays)",
     "customerTotal": "Customer pays in total"
   },
+  "costLedger": {
+    "title": "Cost history",
+    "empty": "No cost events yet. Stock arrivals and manual corrections appear here.",
+    "noCost": "No cost set",
+    "noCostHint": "Profit reports count this product at zero cost until a cost is set or stock arrives.",
+    "reasonLabel": "Reason for the cost change",
+    "reasonPlaceholder": "e.g. typed the wrong cost when creating the product",
+    "reasonRequired": "Enter a reason for changing the cost",
+    "pastSalesNote": "Past sales keep the cost they were sold at. Only new sales use the new cost.",
+    "ownerOnly": "Only the owner or an admin can change the cost.",
+    "costNotChanged": "Cost not changed",
+    "stock": "Stock",
+    "missingCostLines": "{{count}} sold lines in this period have no cost recorded, so the gross profit is overstated. Set a cost on those products or receive stock with a cost.",
+    "types": {
+      "opening": "Opening",
+      "receipt": "Received",
+      "receipt_reversal": "Import removed",
+      "manual_correction": "Corrected by hand",
+      "revaluation": "Received (cost set from this receipt)"
+    }
+  },
   "saleEdit": {
     "items": "Items",
     "addProduct": "Add product",

@@ -47,6 +47,7 @@ export default function ReportsScreen() {
   const [activityStart, setActivityStart] = useState<Date | null>(null);
   const [inventorySpendData, setInventorySpendData] = useState<any>(null);
   const [feesData, setFeesData] = useState<any>(null);
+  const [missingCostLines, setMissingCostLines] = useState(0);
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [showCustomDateRangePicker, setShowCustomDateRangePicker] = useState(false);
@@ -181,6 +182,11 @@ export default function ReportsScreen() {
       // Courier fees absorbed and discounts given (not recorded as expenses anywhere else)
       const fees = await reportsService.getFeesAndDiscounts(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setFeesData(fees);
+
+      // Sold lines with no cost at all: shown under COGS so the margin is not read as real
+      reportsService.countSalesLinesMissingCost(currentBusiness.id, startDate, endDate)
+        .then(setMissingCostLines)
+        .catch(() => setMissingCostLines(0));
     } catch (error) {
       console.error('Error loading report data:', error);
       if (Platform.OS !== 'web') {
@@ -913,6 +919,11 @@ export default function ReportsScreen() {
                 {fmt(totalCOGS)}
               </Text>
             </View>
+            {missingCostLines > 0 && (
+              <Text style={[styles.costWarning, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                {t('costLedger.missingCostLines', { count: missingCostLines })}
+              </Text>
+            )}
             
             <View style={[styles.incomeRow, styles.subtotalRow]}>
               <Text style={[styles.subtotalLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -1675,6 +1686,12 @@ const styles = StyleSheet.create({
   incomeValue: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  costWarning: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: -4,
+    marginBottom: 8,
   },
   subtotalRow: {
     marginTop: 8,

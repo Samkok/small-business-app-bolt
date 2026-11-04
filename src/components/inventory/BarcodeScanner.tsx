@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { useTheme } from '@/src/context/ThemeContext';
-import { X, Barcode } from 'lucide-react-native';
+import { X, Barcode, Flashlight, FlashlightOff } from 'lucide-react-native';
 
 interface BarcodeScannerProps {
   onBarcodeScan: (barcode: string) => void;
@@ -12,6 +12,12 @@ interface BarcodeScannerProps {
 export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  // Torch for dim shops: the camera stays on, only the light toggles
+  const [torch, setTorch] = useState(false);
+  const { width } = useWindowDimensions();
+  // A barcode is wide and short: frame the camera the same way so the whole code fits
+  const frameWidth = Math.min(width - 48, 360);
+  const frameHeight = Math.round(frameWidth * 0.42);
   const lockRef = useRef(false);
   const lastRef = useRef<{ data: string; at: number } | null>(null);
   const onScanRef = useRef(onBarcodeScan);
@@ -93,15 +99,25 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         <Text style={[styles.title, { color: '#ffffff' }]}>
           Scan Barcode
         </Text>
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <X size={24} color="#ffffff" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.headerButton, torch && styles.headerButtonOn]}
+            onPress={() => setTorch(t => !t)}
+            accessibilityLabel={torch ? 'Turn flashlight off' : 'Turn flashlight on'}
+          >
+            {torch ? <Flashlight size={22} color="#111827" /> : <FlashlightOff size={22} color="#ffffff" />}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <X size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.cameraContainer}>
         {/* CameraView without children */}
         <CameraView
           style={styles.camera}
+          enableTorch={torch}
           onBarcodeScanned={handleBarCodeScanned}
           barcodeScannerSettings={{
             barcodeTypes: ['qr', 'pdf417', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
@@ -110,15 +126,16 @@ export default function BarcodeScanner({ onBarcodeScan, onClose }: BarcodeScanne
         
         {/* Overlay as a sibling to CameraView, not a child */}
         <View style={styles.overlay}>
-          <View style={styles.scanArea}>
+          <View style={[styles.scanArea, { width: frameWidth, height: frameHeight }]}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
+            <View style={styles.scanLine} />
           </View>
           
           <Text style={styles.instruction}>
-            Position the barcode within the frame
+            Line the barcode up inside the frame{torch ? '' : '. Dark shop? Tap the flashlight.'}
           </Text>
           
           {scanned && (
@@ -158,6 +175,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  headerButtonOn: {
+    backgroundColor: '#fbbf24',
+  },
   closeButton: {
     padding: 8,
   },
@@ -196,12 +229,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scanArea: {
-    width: 250,
-    height: 250,
     position: 'relative',
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: 'transparent',
+    justifyContent: 'center',
+  },
+  scanLine: {
+    height: 2,
+    marginHorizontal: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.85)',
   },
   corner: {
     position: 'absolute',

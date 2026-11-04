@@ -315,21 +315,6 @@ export const productService = {
     return data;
   },
 
-  async updateCostPerUnit(productId: string, newCostPerUnit: number) {
-    const { data, error } = await supabase
-      .from('products')
-      .update({ 
-        cost_per_unit: newCostPerUnit,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
   async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
     if (!businessId) {
       console.warn('productService.searchProducts called without businessId');
@@ -386,72 +371,6 @@ export const productService = {
     );
     
     return Promise.all(promises);
-  },
-
-  async getProductCostHistory(productId: string) {
-    const { data, error } = await supabase
-      .from('inventory_imports')
-      .select(`
-        id,
-        quantity,
-        base_unit_cost_per_item,
-        final_unit_cost_per_item,
-        total_cost_for_item,
-        created_at
-      `)
-      .eq('product_id', productId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data;
-  },
-
-  async recalculateProductCost(productId: string) {
-    const { data: currentProduct } = await supabase
-      .from('products')
-      .select('cost_per_unit, business_id')
-      .eq('id', productId)
-      .single();
-
-    const oldCost = currentProduct?.cost_per_unit || 0;
-
-    const { data: imports, error: importsError } = await supabase
-      .from('inventory_imports')
-      .select('quantity, final_unit_cost_per_item, imported_by, unit_id, units(conversion_factor_to_base)')
-      .eq('product_id', productId)
-      .eq('status', 'completed')
-      .order('created_at');
-
-    if (importsError) throw importsError;
-
-    let totalBaseQuantity = 0;
-    let totalCost = 0;
-
-    imports.forEach(imp => {
-      const conversionFactor = (imp as any).units?.conversion_factor_to_base || 1;
-      const baseQty = imp.quantity * conversionFactor;
-      totalBaseQuantity += baseQty;
-      totalCost += imp.quantity * imp.final_unit_cost_per_item;
-    });
-
-    const costPerUnit = totalBaseQuantity > 0 ? totalCost / totalBaseQuantity : 0;
-    const roundedCost = Math.round(costPerUnit * 100) / 100;
-
-    await this.updateCostPerUnit(productId, roundedCost);
-
-    if (roundedCost !== oldCost && currentProduct) {
-      const lastImport = imports[imports.length - 1];
-      await supabase.from('product_history').insert({
-        product_id: productId,
-        changed_by_user_id: lastImport?.imported_by || null,
-        business_id: currentProduct.business_id,
-        field_name: 'cost_per_unit',
-        old_value: oldCost.toString(),
-        new_value: roundedCost.toString(),
-      });
-    }
-
-    return roundedCost;
   },
 
   async getArchivedProducts(businessId: string, limit?: number, offset?: number) {

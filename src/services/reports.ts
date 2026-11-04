@@ -1050,6 +1050,21 @@ export const reportsService = {
   },
 
   /** Month of the business's first sale or expense, for listing statement periods. Null when there is no activity. */
+  /**
+   * Sold lines in the period with no cost at all (no snapshot and the product has no cost).
+   * Shown next to COGS so a missing cost is never read as 100% margin.
+   */
+  async countSalesLinesMissingCost(businessId: string, startDate: Date, endDate: Date): Promise<number> {
+    if (!businessId) return 0;
+    const { data, error } = await supabase.rpc('count_sales_lines_missing_cost', {
+      p_business_id: businessId,
+      p_start: startDate.toISOString(),
+      p_end: endDate.toISOString(),
+    } as any);
+    if (error) throw error;
+    return Number(data) || 0;
+  },
+
   async getActivityStart(businessId: string): Promise<Date | null> {
     if (!businessId) return null;
     const [sale, expense] = await Promise.all([

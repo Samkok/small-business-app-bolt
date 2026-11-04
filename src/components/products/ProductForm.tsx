@@ -16,9 +16,11 @@ import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { ImageUpload } from '@/src/components/ui/ImageUpload';
-import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers, Plus, Pencil, RefreshCw } from 'lucide-react-native';
+import { X, Package, DollarSign, FileText, ChartBar as BarChart3, Barcode, ChevronDown, Layers, Plus, Pencil, RefreshCw, RotateCcw } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { stockAdjustmentService } from '@/src/services/stockAdjustments';
+import { productCostService } from '@/src/services/productCost';
+import { useTranslation } from '@/src/locales';
 import { storageService } from '@/src/services/storage';
 import BarcodeScanner from '@/src/components/inventory/BarcodeScanner';
 import { useCurrency } from '@/src/hooks/useCurrency';
@@ -33,9 +35,30 @@ interface ProductFormProps {
   onCancel: () => void;
 }
 
-export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
+/** Whole numbers only: stock counts. */
+const digitsOnly = (value: string) => value.replace(/[^\d]/g, '');
+/** Digits and one decimal point: prices and costs. */
+const decimalOnly = (value: string) => {
+  const cleaned = value.replace(/[^\d.]/g, '');
+  const dot = cleaned.indexOf('.');
+  return dot === -1 ? cleaned : cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, '');
+};
+
+export default function ProductForm({ product: productProp, onSave, onCancel }: ProductFormProps) {
+  // A product found by scanning its barcode while adding: the form then edits it instead.
+  // Reset drops it and starts a new product again.
+  const [loadedProduct, setLoadedProduct] = useState<any>(null);
+  const product = loadedProduct ?? productProp;
+  // bumped by Reset so the populate effects run again for the original product
+  const [resetTick, setResetTick] = useState(0);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  // cost of one base unit, entered when the product is first created (0 when left empty)
+  const [cost, setCost] = useState('');
+  // Required when an existing product's cost is changed by hand (recorded in the cost ledger)
+  const [costReason, setCostReason] = useState('');
+  const costValueTyped = Math.max(0, parseFloat(cost) || 0);
+  const costChanged = !!product && Math.abs(costValueTyped - (Number(product.cost_per_unit) || 0)) > 0.00005;
   const [description, setDescription] = useState('');
   const [barcode, setBarcode] = useState('');
   const [currentStock, setCurrentStock] = useState('');
@@ -68,7 +91,8 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [showUnitGroupEditor, setShowUnitGroupEditor] = useState(false);
 
   const { isDark } = useTheme();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, isStaff } = useAuth();
+  const { t } = useTranslation();
   const { currencies, defaultCurrency, formatPrice, refreshCurrencies } = useCurrency(currentBusiness?.id);
   const isMultiUnit = Boolean(selectedUnitGroupId) && units.length > 0;
 
@@ -86,15 +110,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     if (product) {
       setName(product.name || '');
       setPrice(product.price?.toString() || '');
+      setCost(product.cost_per_unit != null ? String(Number(product.cost_per_unit)) : '');
+      setCostReason('');
       setDescription(product.description || '');
       setBarcode(product.barcode || '');
+      setBarcodeError('');
       setCurrentStock(product.current_stock?.toString() || '0');
       setMinStockLevel(product.min_stock_level?.toString() || '0');
+      setImageFile(null);
       setImageUrl(product.image_url || '');
       setSelectedCurrencyId(product.currency_id || undefined);
       setSelectedUnitGroupId(product.unit_group_id || undefined);
     }
-  }, [product]);
+  }, [product, resetTick]);
 
   // Load unit groups when business changes
   useEffect(() => {
@@ -122,6 +150,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   // Load existing product-unit rows (name, barcode, price) when editing a product
   useEffect(() => {
     if (!product?.id) return;
+    void resetTick;
     unitService.getProductUnits(product.id).then((rows) => {
       const priceMap: Record<string, string> = {};
       const nameMap: Record<string, string> = {};
@@ -137,22 +166,26 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }).catch(console.error);
   }, [product?.id]);
 
-  // When editing a multi-unit product, initialise per-unit stock from the product's
-  // base-unit current_stock / min_stock_level, converted to each unit's own quantity.
+  // When editing a multi-unit product, break the product's base-unit current_stock down
+  // into the units' own quantities: as many of the largest unit as fit, then the next,
+  // and the base unit takes the remainder. Saving adds them back up (quantity × factor), so
+  // the breakdown must sum to the stored stock: 144 pieces with a box of 12 seeds as
+  // 12 boxes + 0 pieces, never 12 boxes + 144 pieces.
   useEffect(() => {
     if (!product?.id || units.length === 0) return;
     const baseStock = product.current_stock ?? 0;
     const baseMin = product.min_stock_level ?? 0;
     const stockMap: Record<string, string> = {};
     const minMap: Record<string, string> = {};
-    units.forEach((unit) => {
+    const byFactorDesc = [...units].sort((a, b) => (b.conversion_factor_to_base || 1) - (a.conversion_factor_to_base || 1));
+    let remaining = baseStock;
+    byFactorDesc.forEach((unit) => {
       const factor = unit.conversion_factor_to_base || 1;
-      stockMap[unit.id] = factor > 1
-        ? Math.floor(baseStock / factor).toString()
-        : baseStock.toString();
-      minMap[unit.id] = factor > 1
-        ? Math.floor(baseMin / factor).toString()
-        : baseMin.toString();
+      const qty = unit.is_base_unit ? remaining : Math.floor(remaining / factor);
+      stockMap[unit.id] = qty.toString();
+      remaining -= qty * factor;
+      // the minimum is kept in base units and only edited on the base unit
+      minMap[unit.id] = unit.is_base_unit ? baseMin.toString() : '0';
     });
     setUnitStock(stockMap);
     setUnitMinStock(minMap);
@@ -262,18 +295,103 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   };
 
-  const handleBarcodeScanned = (scannedBarcode: string) => {
-    if (scanningUnitId) {
-      const unitId = scanningUnitId;
+  /**
+   * Who already uses this barcode in the business, if anyone: the product that carries it
+   * or the product whose unit variant carries it. null when it is free.
+   */
+  const findBarcodeOwner = async (code: string): Promise<any | null> => {
+    if (!currentBusiness?.id || !code.trim()) return null;
+    try {
+      return await productService.searchByBarcode(code.trim(), currentBusiness.id);
+    } catch (error) {
+      console.warn('Barcode lookup failed:', error);
+      return null;
+    }
+  };
+
+  const handleBarcodeScanned = async (scannedBarcode: string) => {
+    const unitId = scanningUnitId;
+    setScanningUnitId(null);
+    setShowBarcodeScanner(false);
+
+    const owner = await findBarcodeOwner(scannedBarcode);
+
+    // Adding a new product and the code is already in the catalogue: switch to editing
+    // that product, with all its details loaded, instead of creating a duplicate.
+    if (owner && !product) {
+      setLoadedProduct(owner);
+      Alert.alert(
+        'Existing product',
+        `"${owner.name}" already uses this barcode. Its details are loaded and saving will update it. Tap Reset to start a new product instead.`
+      );
+      return;
+    }
+
+    // Editing one product and the code belongs to another: refuse, so two products never share a barcode
+    if (owner && product && owner.id !== product.id) {
+      const message = `"${owner.name}" already uses this barcode`;
+      if (unitId) setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: message }));
+      else setBarcodeError(message);
+      Alert.alert('Barcode in use', `${message}. Scan a different code or edit that product instead.`);
+      return;
+    }
+
+    if (unitId) {
       setUnitBarcodes(prev => ({ ...prev, [unitId]: scannedBarcode }));
       validateUnitBarcode(unitId, scannedBarcode);
-      setScanningUnitId(null);
     } else {
       setBarcode(scannedBarcode);
       setBarcodeError('');
       validateBarcode(scannedBarcode);
     }
-    setShowBarcodeScanner(false);
+  };
+
+  /** A typed barcode is checked when the field is left, so the clash shows before saving. */
+  const checkTypedBarcode = async (code: string, unitId?: string) => {
+    const owner = await findBarcodeOwner(code);
+    if (!owner || (product && owner.id === product.id)) return;
+    const message = `"${owner.name}" already uses this barcode`;
+    if (unitId) setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: message }));
+    else setBarcodeError(message);
+  };
+
+  /** Empties every field and goes back to adding a new product; when the form was opened on a product, restores that product. */
+  const resetForm = () => {
+    Alert.alert(
+      'Reset form',
+      productProp ? 'Discard your changes and reload the original product?' : 'Clear every field and start a new product?',
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            setLoadedProduct(null);
+            setName('');
+            setPrice('');
+            setCost('');
+            setCostReason('');
+            setDescription('');
+            setBarcode('');
+            setBarcodeError('');
+            setCurrentStock('');
+            setMinStockLevel('');
+            setImageFile(null);
+            setImageUrl('');
+            setSelectedCurrencyId(undefined);
+            setSelectedUnitGroupId(undefined);
+            setUnitPrices({});
+            setUnitVariantNames({});
+            setUnitBarcodes({});
+            setUnitBarcodeErrors({});
+            setUnitNameErrors({});
+            setUnitStock({});
+            setUnitMinStock({});
+            setResetTick(t => t + 1);
+          },
+        },
+      ]
+    );
   };
 
   const handleSave = async () => {
@@ -384,9 +502,17 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         productBarcode = (unitBarcodes[baseUnit.id] || '').trim();
       }
 
+      const costValue = Math.max(0, parseFloat(cost) || 0);
+      if (product && costChanged && !costReason.trim()) {
+        Alert.alert(t('costLedger.costNotChanged'), t('costLedger.reasonRequired'));
+        setLoading(false);
+        return;
+      }
       const productData = {
         name: name.trim(),
         price: priceValue,
+        // cost is set here only when the product is first created; later it follows stock imports
+        ...(product ? {} : { cost_per_unit: costValue }),
         description: description.trim() || undefined,
         barcode: productBarcode,
         current_stock: stockValue,
@@ -418,6 +544,18 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             Alert.alert(
               'Stock not changed',
               `The product was saved, but the stock change was not: ${adjustError?.message || 'only the owner or an admin can adjust stock.'}`
+            );
+          }
+        }
+        if (costChanged) {
+          // A hand correction goes through the cost ledger with its reason; past sales keep their cost.
+          try {
+            const event = await productCostService.correct(product.id, costValue, costReason.trim());
+            savedProduct = { ...(savedProduct as any), cost_per_unit: event.cost_after };
+          } catch (costError: any) {
+            Alert.alert(
+              t('costLedger.costNotChanged'),
+              `The product was saved, but the cost was not: ${costError?.message || t('costLedger.ownerOnly')}`
             );
           }
         }
@@ -466,10 +604,28 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
         <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
           {product ? 'Edit Product' : 'Add Product'}
         </Text>
-        <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
-          <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.resetButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+            onPress={resetForm}
+            disabled={loading}
+            accessibilityLabel="Reset form"
+          >
+            <RotateCcw size={16} color={isDark ? '#f9fafb' : '#374151'} />
+            <Text style={[styles.resetButtonText, { color: isDark ? '#f9fafb' : '#374151' }]}>Reset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
+            <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          </TouchableOpacity>
+        </View>
       </View>
+      {loadedProduct && (
+        <View style={[styles.loadedBanner, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff', borderColor: isDark ? '#2563eb' : '#bfdbfe' }]}>
+          <Text style={[styles.loadedBannerText, { color: isDark ? '#bfdbfe' : '#1d4ed8' }]}>
+            This barcode belongs to "{loadedProduct.name}". You are editing that product; Reset starts a new one.
+          </Text>
+        </View>
+      )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.form}>
@@ -507,7 +663,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   label="Barcode"
                   value={barcode}
                   onChangeText={handleBarcodeChange}
-                  onBlur={() => validateBarcode(barcode)}
+                  onBlur={() => { if (validateBarcode(barcode)) void checkTypedBarcode(barcode); }}
                   placeholder="Scan or enter barcode"
                   required
                 />
@@ -594,8 +750,31 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               <Input
                 label="Price"
                 value={price}
-                onChangeText={setPrice}
+                onChangeText={(v: string) => setPrice(decimalOnly(v))}
                 placeholder="0.00"
+                keyboardType="decimal-pad"
+                required
+              />
+            )}
+            {(!product || !isStaff) && (
+              <Input
+                label={isMultiUnit ? 'Cost per base unit' : 'Cost per unit'}
+                value={cost}
+                onChangeText={(v: string) => setCost(decimalOnly(v))}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                hint={product
+                  ? 'Moving average of what one unit cost you. Stock arrivals update it; change it here only to correct a mistake.'
+                  : 'What one unit costs you. Used for profit reports; 0 when left empty. Stock imports update it later.'}
+              />
+            )}
+            {product && !isStaff && costChanged && (
+              <Input
+                label={t('costLedger.reasonLabel')}
+                value={costReason}
+                onChangeText={setCostReason}
+                placeholder={t('costLedger.reasonPlaceholder')}
+                hint={t('costLedger.pastSalesNote')}
                 required
               />
             )}
@@ -615,67 +794,30 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             </View>
 
             {isMultiUnit ? (
-              <>
-                <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280', marginBottom: 12 }]}>
-                  Enter stock in each unit's own quantity. All quantities are converted to base units internally.{product ? ' Changes to stock are recorded as a count correction.' : ''}
+              <View style={[styles.unitStockCard, { backgroundColor: isDark ? '#1f2937' : '#f8fafc', borderColor: isDark ? '#374151' : '#e2e8f0' }]}>
+                <Text style={[styles.unitStockLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  Total stock: {units.reduce((sum, u) => sum + ((parseInt(unitStock[u.id] || '0') || 0) * (u.conversion_factor_to_base || 1)), 0)} base units
                 </Text>
-                {units.map((unit) => {
-                  const isBase = unit.is_base_unit;
-                  const label = (unitVariantNames[unit.id] || unit.name).trim();
-                  return (
-                    <View key={unit.id} style={[styles.unitStockCard, { backgroundColor: isDark ? '#1f2937' : '#f8fafc', borderColor: isDark ? '#374151' : '#e2e8f0' }]}>
-                      <Text style={[styles.unitStockLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                        {label}{isBase ? '  (base unit)' : ''}
-                      </Text>
-                      {!isBase && (
-                        <Text style={[styles.unitStockHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                          1 {label} = {unit.conversion_factor_to_base} base units
-                        </Text>
-                      )}
-                      <View style={styles.unitStockRow}>
-                        <View style={styles.unitStockField}>
-                          <Input
-                            label={`Current stock (${label})`}
-                            value={unitStock[unit.id] || ''}
-                            onChangeText={(val: string) =>
-                              setUnitStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
-                            }
-                            placeholder="0"
-                            keyboardType="number-pad"
-                          />
-                        </View>
-                        {isBase && (
-                          <View style={styles.unitStockField}>
-                            <Input
-                              label="Min stock (base)"
-                              value={unitMinStock[unit.id] || ''}
-                              onChangeText={(val: string) =>
-                                setUnitMinStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
-                              }
-                              placeholder="0"
-                              keyboardType="number-pad"
-                            />
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </>
+                <Text style={[styles.unitStockHint, { color: isDark ? '#9ca3af' : '#6b7280', marginBottom: 0 }]}>
+                  Enter the quantity of each unit in the Units section below; they add up here.{product ? ' Changes to stock are recorded as a count correction.' : ''}
+                </Text>
+              </View>
             ) : (
               <>
                 <Input
                   label="Current Stock"
                   value={currentStock}
-                  onChangeText={setCurrentStock}
+                  onChangeText={(v: string) => setCurrentStock(digitsOnly(v))}
                   placeholder="0"
+                  keyboardType="number-pad"
                   hint={product ? 'Changes are recorded as a count correction' : undefined}
                 />
                 <Input
                   label="Minimum Stock Level"
                   value={minStockLevel}
-                  onChangeText={setMinStockLevel}
+                  onChangeText={(v: string) => setMinStockLevel(digitsOnly(v))}
                   placeholder="0"
+                  keyboardType="number-pad"
                 />
               </>
             )}
@@ -754,49 +896,77 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                         <Input
                           label="Price"
                           value={unitPrices[unit.id] || ''}
-                          onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: val }))}
+                          onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: decimalOnly(val) }))}
                           placeholder="0.00"
                           keyboardType="decimal-pad"
                         />
                       </View>
                       <View style={styles.unitCardField}>
                         <Input
-                          label="Barcode"
-                          value={unitBarcodes[unit.id] || ''}
-                          onChangeText={(val: string) => {
-                            setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }));
-                            validateUnitBarcode(unit.id, val);
-                          }}
-                          onBlur={() => validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')}
-                          placeholder="Scan or enter"
-                          required
+                          label={`Quantity (${(unitVariantNames[unit.id] || unit.name).trim()})`}
+                          value={unitStock[unit.id] || ''}
+                          onChangeText={(val: string) =>
+                            setUnitStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
+                          }
+                          placeholder="0"
+                          keyboardType="number-pad"
                         />
-                        {unitBarcodeErrors[unit.id] ? (
-                          <Text style={styles.barcodeErrorText}>{unitBarcodeErrors[unit.id]}</Text>
-                        ) : null}
-                        <View style={styles.barcodeActions}>
-                          <TouchableOpacity
-                            style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }]}
-                            onPress={() => {
-                              setScanningUnitId(unit.id);
-                              setShowBarcodeScanner(true);
-                            }}
-                          >
-                            <Barcode size={18} color="#2563eb" />
-                            <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>Scan</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff', marginTop: 4 }, generatingFor === unit.id && { opacity: 0.6 }]}
-                            onPress={() => handleGenerateBarcode(unit.id)}
-                            disabled={generatingFor !== null}
-                          >
-                            <RefreshCw size={18} color="#2563eb" />
-                            <Text style={[styles.scanButtonText, { color: '#2563eb' }]}>
-                              {generatingFor === unit.id ? 'Generating…' : 'Generate'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
                       </View>
+                    </View>
+                    {/* Live arithmetic as the user types */}
+                    <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280', marginTop: -8 }]}>
+                      {unit.is_base_unit
+                        ? `Total stock: ${units.reduce((sum, u) => sum + ((parseInt(unitStock[u.id] || '0') || 0) * (u.conversion_factor_to_base || 1)), 0)} ${(unitVariantNames[unit.id] || unit.name).trim()} (${units.filter(u => !u.is_base_unit).map(u => `${parseInt(unitStock[u.id] || '0') || 0} ${(unitVariantNames[u.id] || u.name).trim()}`).concat([`${parseInt(unitStock[unit.id] || '0') || 0} loose`]).join(' + ')})`
+                        : `${parseInt(unitStock[unit.id] || '0') || 0} × ${unit.conversion_factor_to_base} = ${(parseInt(unitStock[unit.id] || '0') || 0) * (unit.conversion_factor_to_base || 1)} base units`}
+                    </Text>
+                    {unit.is_base_unit && (
+                      <Input
+                        label="Minimum stock (base units)"
+                        value={unitMinStock[unit.id] || ''}
+                        onChangeText={(val: string) =>
+                          setUnitMinStock(prev => ({ ...prev, [unit.id]: val.replace(/[^\d]/g, '') }))
+                        }
+                        placeholder="0"
+                        keyboardType="number-pad"
+                      />
+                    )}
+
+                    <Input
+                      label="Barcode"
+                      value={unitBarcodes[unit.id] || ''}
+                      onChangeText={(val: string) => {
+                        setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }));
+                        validateUnitBarcode(unit.id, val);
+                      }}
+                      onBlur={() => { if (validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) void checkTypedBarcode(unitBarcodes[unit.id] || '', unit.id); }}
+                      placeholder="Scan or enter"
+                      required
+                    />
+                    {unitBarcodeErrors[unit.id] ? (
+                      <Text style={styles.barcodeErrorText}>{unitBarcodeErrors[unit.id]}</Text>
+                    ) : null}
+                    {/* Full-width row so the two buttons never squeeze or wrap */}
+                    <View style={styles.barcodeActions}>
+                      <TouchableOpacity
+                        style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff' }]}
+                        onPress={() => {
+                          setScanningUnitId(unit.id);
+                          setShowBarcodeScanner(true);
+                        }}
+                      >
+                        <Barcode size={18} color="#2563eb" />
+                        <Text style={[styles.scanButtonText, { color: '#2563eb' }]} numberOfLines={1}>Scan</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.scanButton, styles.barcodeActionButton, { backgroundColor: isDark ? '#374151' : '#eff6ff' }, generatingFor === unit.id && { opacity: 0.6 }]}
+                        onPress={() => handleGenerateBarcode(unit.id)}
+                        disabled={generatingFor !== null}
+                      >
+                        <RefreshCw size={18} color="#2563eb" />
+                        <Text style={[styles.scanButtonText, { color: '#2563eb' }]} numberOfLines={1}>
+                          {generatingFor === unit.id ? 'Generating…' : 'Generate'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -988,6 +1158,34 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  resetButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadedBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  loadedBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   closeButton: {
     padding: 8,
   },
@@ -1165,6 +1363,7 @@ const styles = StyleSheet.create({
   },
   unitCardFields: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: 10,
   },
   unitCardField: {

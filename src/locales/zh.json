@@ -864,6 +864,27 @@
     "customerPaysRow": "配送费（顾客支付）",
     "customerTotal": "顾客应付总额"
   },
+  "costLedger": {
+    "title": "成本历史",
+    "empty": "暂无成本记录。进货和手动更正会显示在这里。",
+    "noCost": "未设置成本",
+    "noCostHint": "在设置成本或进货之前，利润报表按零成本计算此商品。",
+    "reasonLabel": "成本变更原因",
+    "reasonPlaceholder": "例如：创建商品时输错了成本",
+    "reasonRequired": "请输入变更成本的原因",
+    "pastSalesNote": "过去的销售保留当时的成本，只有新的销售使用新成本。",
+    "ownerOnly": "只有店主或管理员可以更改成本。",
+    "costNotChanged": "成本未更改",
+    "stock": "库存",
+    "missingCostLines": "本期有 {{count}} 条销售明细没有记录成本，毛利被高估。请为这些商品设置成本，或带成本进货。",
+    "types": {
+      "opening": "期初",
+      "receipt": "已进货",
+      "receipt_reversal": "进货已删除",
+      "manual_correction": "手动更正",
+      "revaluation": "已进货（成本由本次进货设定）"
+    }
+  },
   "saleEdit": {
     "items": "商品",
     "addProduct": "添加商品",

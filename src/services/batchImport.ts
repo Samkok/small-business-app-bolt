@@ -1,6 +1,6 @@
 import { supabase } from '../config/supabase';
+import { productCostService, importLineToBaseUnits } from './productCost';
 import { Database } from '../types/database';
-import { productService } from './products';
 
 type InventoryBatchUpdate = Database['public']['Tables']['inventory_batches']['Update'];
 
@@ -258,51 +258,16 @@ export const batchImportService = {
 
       if (updateImportError) throw updateImportError;
 
+      // Stock and cost move through the cost ledger: one event per line, landed cost per base unit.
+      const { baseQty, costPerBaseUnit } = importLineToBaseUnits(
+        importItem.quantity,
+        recalculated.final_unit_cost_per_item,
+        importItem.conversion_factor,
+      );
       try {
-        const factor = importItem.conversion_factor ?? 1;
-        const addedBaseQty = importItem.quantity * factor;
-
-        const { data: product, error: productError } = await supabase
-          .from('products')
-          .select('current_stock, cost_per_unit')
-          .eq('id', importItem.product_id)
-          .single();
-
-        if (productError) throw productError;
-
-        const newStock = (product.current_stock || 0) + addedBaseQty;
-
-        // Weighted average cost per base unit
-        const currentTotalValue = (product.current_stock || 0) * (product.cost_per_unit || 0);
-        // final_unit_cost_per_item is per imported unit; cost per base unit = per imported unit / factor
-        const costPerBaseUnit = recalculated.final_unit_cost_per_item / factor;
-        const importTotalValue = addedBaseQty * costPerBaseUnit;
-        const newTotalQuantity = newStock;
-        const newCostPerUnit = newTotalQuantity > 0
-          ? (currentTotalValue + importTotalValue) / newTotalQuantity
-          : 0;
-
-        const { error: updateProductError } = await supabase
-          .from('products')
-          .update({
-            current_stock: newStock,
-            cost_per_unit: newCostPerUnit,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', importItem.product_id);
-
-        if (updateProductError) throw updateProductError;
-
-        // Also update cost_per_unit on product_unit_prices for this specific variant
-        if (importItem.unit_id) {
-          await supabase
-            .from('product_unit_prices')
-            .update({ cost_per_unit: recalculated.final_unit_cost_per_item })
-            .eq('product_id', importItem.product_id)
-            .eq('unit_id', importItem.unit_id);
-        }
+        await productCostService.receive(importItem.product_id, baseQty, costPerBaseUnit, 'inventory_batch', batchId);
       } catch (error) {
-        console.error(`Error updating product ${importItem.product_id}:`, error);
+        console.error(`Error receiving stock for product ${importItem.product_id}:`, error);
         throw error;
       }
     }
@@ -402,6 +367,7 @@ export const batchImportService = {
         inventory_imports(
           product_id,
           quantity,
+          final_unit_cost_per_item,
           unit_id
         )
       `)
@@ -429,32 +395,17 @@ export const batchImportService = {
         (units || []).forEach((u: any) => conversionMap.set(u.id, Number(u.conversion_factor_to_base)));
       }
 
+      // Take the units back out at the cost they came in with. The ledger keeps the average
+      // when the goods were already sold instead of resetting it to zero.
       for (const importItem of batch.inventory_imports as any[]) {
-        try {
-          const factor = importItem.unit_id ? (conversionMap.get(importItem.unit_id) ?? 1) : 1;
-          const removedBaseQty = importItem.quantity * factor;
-
-          const { data: product, error: productError } = await supabase
-            .from('products')
-            .select('current_stock')
-            .eq('id', importItem.product_id)
-            .single();
-
-          if (productError) throw productError;
-
-          const newStock = Math.max(0, (product.current_stock || 0) - removedBaseQty);
-
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-            .eq('id', importItem.product_id);
-
-          if (updateError) throw updateError;
-
-          await productService.recalculateProductCost(importItem.product_id);
-        } catch (error) {
-          console.error(`Error reversing stock for product ${importItem.product_id}:`, error);
-        }
+        const factor = importItem.unit_id ? (conversionMap.get(importItem.unit_id) ?? 1) : 1;
+        const { baseQty, costPerBaseUnit } = importLineToBaseUnits(
+          importItem.quantity,
+          importItem.final_unit_cost_per_item,
+          factor,
+        );
+        if (baseQty <= 0) continue;
+        await productCostService.reverseReceipt(importItem.product_id, baseQty, costPerBaseUnit, 'inventory_batch', batchId);
       }
     }
 
