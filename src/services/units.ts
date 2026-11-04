@@ -29,7 +29,6 @@ export interface ProductUnit {
   name: string | null;
   barcode: string | null;
   price: number;
-  cost_per_unit: number | null;
   currency_id: string | null;
   created_at: string;
   updated_at: string;
@@ -279,7 +278,6 @@ export const unitService = {
         name: row.name,
         barcode: row.barcode,
         price: row.price,
-        cost_per_unit: row.cost_per_unit,
         currency_id: row.currency_id,
         created_at: row.created_at,
         updated_at: row.updated_at,

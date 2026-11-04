@@ -839,6 +839,78 @@ export type Database = {
         }
         Relationships: []
       }
+      product_cost_events: {
+        Row: {
+          business_id: string
+          cost_after: number
+          cost_before: number
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          event_type: string
+          id: string
+          product_id: string
+          qty_delta: number
+          reason: string | null
+          source_id: string | null
+          source_type: string | null
+          stock_after: number
+          stock_before: number
+          unit_cost_in: number | null
+        }
+        Insert: {
+          business_id: string
+          cost_after: number
+          cost_before: number
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          event_type: string
+          id?: string
+          product_id: string
+          qty_delta?: number
+          reason?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          stock_after: number
+          stock_before: number
+          unit_cost_in?: number | null
+        }
+        Update: {
+          business_id?: string
+          cost_after?: number
+          cost_before?: number
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          event_type?: string
+          id?: string
+          product_id?: string
+          qty_delta?: number
+          reason?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          stock_after?: number
+          stock_before?: number
+          unit_cost_in?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_cost_events_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_cost_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_history: {
         Row: {
           business_id: string
@@ -957,7 +1029,6 @@ export type Database = {
         Row: {
           barcode: string | null
           business_id: string
-          cost_per_unit: number | null
           created_at: string | null
           currency_id: string | null
           id: string
@@ -970,7 +1041,6 @@ export type Database = {
         Insert: {
           barcode?: string | null
           business_id: string
-          cost_per_unit?: number | null
           created_at?: string | null
           currency_id?: string | null
           id?: string
@@ -983,7 +1053,6 @@ export type Database = {
         Update: {
           barcode?: string | null
           business_id?: string
-          cost_per_unit?: number | null
           created_at?: string | null
           currency_id?: string | null
           id?: string
@@ -2566,6 +2635,39 @@ export type Database = {
       }
     }
     Functions: {
+      apply_product_cost_event: {
+        Args: {
+          p_event_type: string
+          p_product_id: string
+          p_qty?: number
+          p_reason?: string
+          p_source_id?: string
+          p_source_type?: string
+          p_unit_cost?: number
+        }
+        Returns: {
+          business_id: string
+          cost_after: number
+          cost_before: number
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          event_type: string
+          id: string
+          product_id: string
+          qty_delta: number
+          reason: string | null
+          source_id: string | null
+          source_type: string | null
+          stock_after: number
+          stock_before: number
+          unit_cost_in: number | null
+        }
+      }
+      count_sales_lines_missing_cost: {
+        Args: { p_business_id: string; p_end: string; p_start: string }
+        Returns: number
+      }
       activate_all_businesses_and_populate_selection: {
         Args: { p_user_id: string }
         Returns: undefined

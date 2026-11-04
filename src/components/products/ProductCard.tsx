@@ -7,6 +7,7 @@ import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { useRouter } from 'expo-router';
 import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
+import { useTranslation } from '@/src/locales';
 import type { Unit } from '@/src/services/units';
 
 interface ProductCardProps {
@@ -19,6 +20,7 @@ interface ProductCardProps {
     barcode?: string;
     current_stock: number;
     min_stock_level: number;
+    cost_per_unit?: number | null;
     is_archived?: boolean;
     archived_at?: string;
     archived_by?: string;
@@ -41,9 +43,12 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
   const router = useRouter();
   const { addProduct, openModal } = useInstantCheckout();
   const { formatPrice } = useCurrencyContext();
+  const { t } = useTranslation();
 
   const isLowStock = product.current_stock <= product.min_stock_level;
   const isOutOfStock = product.current_stock === 0;
+  // Stock on the shelf with no cost means profit reports count it at zero cost.
+  const hasNoCost = !isArchived && product.current_stock > 0 && !(Number(product.cost_per_unit) > 0);
 
   const getStockStatus = () => {
     if (isOutOfStock) return { color: '#dc2626', label: 'Out of Stock' };
@@ -193,6 +198,13 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             <Text style={[styles.barcode, { color: isDark ? '#9ca3af' : '#9ca3af' }]}>
               {product.barcode}
             </Text>
+          )}
+
+          {hasNoCost && (
+            <View style={[styles.noCostBadge, { backgroundColor: isDark ? '#422006' : '#fef3c7', borderColor: isDark ? '#a16207' : '#fcd34d' }]}>
+              <AlertTriangle size={12} color={isDark ? '#fbbf24' : '#b45309'} />
+              <Text style={[styles.noCostText, { color: isDark ? '#fbbf24' : '#b45309' }]}>{t('costLedger.noCost')}</Text>
+            </View>
           )}
 
           {isArchived && product.archived_at && (
@@ -357,6 +369,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     marginBottom: 8,
+  },
+  noCostBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  noCostText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   unitsToggle: {
     flexDirection: 'row',

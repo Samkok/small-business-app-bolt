@@ -21,6 +21,7 @@ import { BarcodeView } from '@/src/components/products/BarcodeView';
 import { ArrowLeft, Package, DollarSign, TrendingUp, ChartBar as BarChart3, History, ShoppingCart, Calendar, Info, Trash2, Archive, SlidersHorizontal, PackageMinus } from 'lucide-react-native';
 import StockAdjustmentModal from '@/src/components/inventory/StockAdjustmentModal';
 import { stockAdjustmentService, StockAdjustment, reasonLabel } from '@/src/services/stockAdjustments';
+import { productCostService, ProductCostEvent } from '@/src/services/productCost';
 import { productService } from '@/src/services/products';
 import { inventoryService } from '@/src/services/inventory';
 import { reportsService } from '@/src/services/reports';
@@ -42,6 +43,8 @@ export default function ProductDetailsScreen() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitPrices, setUnitPrices] = useState<ProductUnit[]>([]);
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  // Every change of the moving average cost (arrivals, reversals, hand corrections)
+  const [costEvents, setCostEvents] = useState<ProductCostEvent[]>([]);
   // Tapping an adjustment opens it for correction or deletion (owner and admins)
   const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -100,6 +103,11 @@ export default function ProductDetailsScreen() {
         setAdjustments(await stockAdjustmentService.getForProduct(productId as string));
       } catch {
         setAdjustments([]);
+      }
+      try {
+        setCostEvents(await productCostService.getForProduct(productId as string));
+      } catch {
+        setCostEvents([]);
       }
       
       // Get financial summary for this product
@@ -611,6 +619,63 @@ export default function ProductDetailsScreen() {
           )}
         </Card>
 
+        {/* Cost history */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DollarSign size={20} color="#2563eb" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {t('costLedger.title')}
+            </Text>
+          </View>
+          {!(Number(product.cost_per_unit) > 0) && product.current_stock > 0 && (
+            <Text style={[styles.costNotice, { color: isDark ? '#fbbf24' : '#b45309', backgroundColor: isDark ? '#422006' : '#fef3c7' }]}>
+              {t('costLedger.noCostHint')}
+            </Text>
+          )}
+          {costEvents.length === 0 ? (
+            <Text style={[styles.emptyText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              {t('costLedger.empty')}
+            </Text>
+          ) : (
+            costEvents.map((e, index) => {
+              const typeLabel = t(`costLedger.types.${e.event_type}`);
+              const qtyText = e.qty_delta !== 0
+                ? `${e.qty_delta > 0 ? '+' : ''}${e.qty_delta}${e.unit_cost_in != null ? ` × ${formatCurrency(Number(e.unit_cost_in))}` : ''}`
+                : null;
+              return (
+                <View
+                  key={e.id}
+                  style={[styles.adjustmentRow, index < costEvents.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.adjustmentReason, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {typeLabel}{qtyText ? ` · ${qtyText}` : ''}
+                    </Text>
+                    <Text style={[styles.adjustmentMeta, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      {formatDate(e.created_at)}
+                      {e.stock_before !== e.stock_after ? ` · ${t('costLedger.stock')} ${e.stock_before} → ${e.stock_after}` : ''}
+                      {e.created_by_name ? ` · ${e.created_by_name}` : ''}
+                    </Text>
+                    {e.reason ? (
+                      <Text style={[styles.adjustmentNote, { color: isDark ? '#d1d5db' : '#4b5563' }]}>{e.reason}</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.adjustmentQty, { color: isDark ? '#f9fafb' : '#111827', fontSize: 14 }]}>
+                      {formatCurrency(Number(e.cost_after))}
+                    </Text>
+                    {Number(e.cost_before) !== Number(e.cost_after) ? (
+                      <Text style={[styles.adjustmentCost, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                        {formatCurrency(Number(e.cost_before))} →
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </Card>
+
         {/* Import History */}
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1018,6 +1083,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+  },
+  costNotice: {
+    fontSize: 12,
+    lineHeight: 16,
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   explanationText: {
     fontSize: 14,

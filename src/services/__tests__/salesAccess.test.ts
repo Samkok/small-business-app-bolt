@@ -1,6 +1,6 @@
 // Run with: npx tsx src/services/__tests__/salesAccess.test.ts
 import assert from 'node:assert/strict';
-import { salesAccess } from '../entitlementState';
+import { salesAccess, planDisagrees } from '../entitlementState';
 
 const free = { planActive: false, isAtLimit: false, disableReason: null } as const;
 const atLimit = { planActive: false, isAtLimit: true, disableReason: null } as const;
@@ -21,5 +21,14 @@ assert.deepEqual(salesAccess({ rcActive: null, isOwner: false, server: paidServe
 // Nothing known yet: do not block
 assert.equal(salesAccess({ rcActive: null, isOwner: true, server: null }).canSell, true);
 assert.equal(salesAccess({ rcActive: true, isOwner: true, server: null }).mirrorStale, false);
+
+// Plan disagreement between the SDK and the server
+const rcPro = { tier: 'pro', isActive: true, status: 'active', productId: 'p', expirationDate: null, willRenew: true, maxOwnedBusinesses: 1, isSandbox: true } as const;
+const rcFree = { ...rcPro, tier: 'free', isActive: false, status: 'expired' } as const;
+assert.equal(planDisagrees(rcPro, { planActive: true, tier: 'pro' }), false);
+assert.equal(planDisagrees(rcPro, { planActive: false, tier: 'free' }), true);   // SDK says paid, server says free
+assert.equal(planDisagrees(rcFree, { planActive: true, tier: 'pro' }), true);    // SDK says expired, server says paid
+assert.equal(planDisagrees(rcPro, { planActive: true, tier: 'max' }), true);     // both paid, different plan
+assert.equal(planDisagrees(rcFree, { planActive: false, tier: 'free' }), false);
 
 console.log('salesAccess: all assertions passed');

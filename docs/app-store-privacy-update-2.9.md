@@ -59,8 +59,10 @@ the 2.9 review (section 3 below). User Privacy Choices URL can stay empty.
 
 ## 2. Privacy manifest in the build (done)
 
-`app.json` → `ios.privacyManifests` now declares tracking = true and the seven data
-types above (minus the two the Meta SDK declares itself). Expo merges it with the
+`app.json` → `ios.privacyManifests` now declares tracking = true with the tracking domain
+`ep1.facebook.com` (Apple rejects tracking = true with no domain as ITMS-91064 "Invalid
+Binary"; build 93 hit this) and the seven data types above (minus the two the Meta SDK
+declares itself). Expo merges it with the
 required-reason API entries it generates. The Meta frameworks ship their own manifests
 (tracking domain `ep1.facebook.com`, Device ID, crash data) and Apple combines them into
 the app's privacy report. Verified by regenerating the iOS project. Ships with the next build.
