@@ -158,7 +158,8 @@ export default function ProductSelectionScreen() {
         const product = products.find(p => p.id === productId);
         if (!product) continue;
 
-        const existingItem = cart.items.find(item => item.product_id === productId);
+        const selectedUnitId = selectedUnits[productId] ?? null;
+        const existingItem = cart.items.find(item => item.product_id === productId && (item.unit_id ?? null) === selectedUnitId);
 
         if (quantity === 0 && existingItem) {
           removals.push(existingItem.id);

@@ -449,7 +449,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Cart not found after adding item');
       }
 
-      const addedItem = updatedCart.items.find(item => item.product_id === product.id);
+      const addedItem = updatedCart.items.find(item => item.product_id === product.id && (item.unit_id ?? null) === (product.unit_id ?? null));
       if (!addedItem) {
         throw new Error('Item not found after adding to cart');
       }

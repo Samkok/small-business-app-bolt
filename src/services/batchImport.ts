@@ -36,7 +36,7 @@ function baseQty(item: BatchImportItem): number {
 }
 
 export const batchImportService = {
-  calculateItemCosts(items: BatchImportItem[], costs: BatchImportCost[]) {
+  calculateItemCosts<T extends BatchImportItem>(items: T[], costs: BatchImportCost[]) {
     // Distribute additional costs proportionally to base-unit quantities so that
     // larger units (e.g. a Box of 24) absorb more overhead than a single Bottle.
     const totalBaseQty = items.reduce((sum, item) => sum + baseQty(item), 0);
@@ -173,6 +173,7 @@ export const batchImportService = {
       .select(`
         *,
         inventory_imports(
+          id,
           product_id,
           quantity,
           base_unit_cost_per_item,
@@ -205,7 +206,8 @@ export const batchImportService = {
       (units || []).forEach((u: any) => conversionMap.set(u.id, Number(u.conversion_factor_to_base)));
     }
 
-    const batchItems: BatchImportItem[] = (batch.inventory_imports as any[]).map((item: any) => ({
+    const batchItems: (BatchImportItem & { import_id: string })[] = (batch.inventory_imports as any[]).map((item: any) => ({
+      import_id: item.id,
       product_id: item.product_id,
       quantity: item.quantity,
       base_unit_cost_per_item: item.base_unit_cost_per_item,
@@ -222,56 +224,32 @@ export const batchImportService = {
 
     const itemsWithRecalculatedCosts = this.calculateItemCosts(batchItems, batchCosts);
 
-    const { data: updatedBatch, error: updateError } = await supabase
+    // One transaction on the server: each line matched by its own row id, stock and cost through
+    // the cost ledger, the batch marked completed last.
+    const lines = itemsWithRecalculatedCosts.map(item => {
+      const { baseQty, costPerBaseUnit } = importLineToBaseUnits(item.quantity, item.final_unit_cost_per_item, item.conversion_factor);
+      return {
+        import_id: item.import_id,
+        final_unit_cost_per_item: item.final_unit_cost_per_item,
+        total_cost_for_item: item.total_cost_for_item,
+        base_qty: baseQty,
+        cost_per_base_unit: costPerBaseUnit,
+      };
+    });
+
+    const { error: receiveError } = await supabase.rpc('receive_inventory_batch', {
+      p_batch_id: batchId,
+      p_lines: lines,
+      p_arrival_date: arrivalDate || new Date().toISOString(),
+    });
+    if (receiveError) throw receiveError;
+
+    const { data: updatedBatch, error: reloadError } = await supabase
       .from('inventory_batches')
-      .update({
-        status: 'completed',
-        arrival_date: arrivalDate || new Date().toISOString(),
-      })
-      .eq('id', batchId)
       .select()
+      .eq('id', batchId)
       .single();
-
-    if (updateError) throw updateError;
-
-    for (const importItem of batchItems) {
-      const recalculated = itemsWithRecalculatedCosts.find(
-        i => i.product_id === importItem.product_id && i.unit_id === importItem.unit_id,
-      );
-      if (!recalculated) {
-        console.error(
-          `Could not find recalculated costs for product ${importItem.product_id} unit ${importItem.unit_id}`,
-        );
-        continue;
-      }
-
-      const { error: updateImportError } = await supabase
-        .from('inventory_imports')
-        .update({
-          final_unit_cost_per_item: recalculated.final_unit_cost_per_item,
-          total_cost_for_item: recalculated.total_cost_for_item,
-          status: 'completed',
-          arrival_date: arrivalDate || new Date().toISOString(),
-        })
-        .eq('product_id', importItem.product_id)
-        .eq('batch_id', batchId);
-
-      if (updateImportError) throw updateImportError;
-
-      // Stock and cost move through the cost ledger: one event per line, landed cost per base unit.
-      const { baseQty, costPerBaseUnit } = importLineToBaseUnits(
-        importItem.quantity,
-        recalculated.final_unit_cost_per_item,
-        importItem.conversion_factor,
-      );
-      try {
-        await productCostService.receive(importItem.product_id, baseQty, costPerBaseUnit, 'inventory_batch', batchId);
-      } catch (error) {
-        console.error(`Error receiving stock for product ${importItem.product_id}:`, error);
-        throw error;
-      }
-    }
-
+    if (reloadError) throw reloadError;
     return updatedBatch;
   },
 
