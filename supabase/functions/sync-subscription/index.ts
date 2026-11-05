@@ -70,6 +70,18 @@ Deno.serve(async (req: Request) => {
   if (authError || !user) return json({ error: "unauthorized" }, 401);
   const userId = user.id;
 
+  // Throttle before touching the database or RevenueCat
+  const now = Date.now();
+  const last = lastCallByUser.get(userId) ?? 0;
+  if (now - last < MIN_INTERVAL_MS) {
+    return json({ changed: false, throttled: true });
+  }
+  lastCallByUser.set(userId, now);
+  // Forget stale entries so the map cannot grow without bound
+  if (lastCallByUser.size > 5000) {
+    for (const [k, t] of lastCallByUser) if (now - t > MIN_INTERVAL_MS) lastCallByUser.delete(k);
+  }
+
   const { data: current, error: readError } = await supabase
     .from("user_subscriptions")
     .select("subscription_status, tier, subscription_product_id, subscription_expiration_date, will_renew, in_grace_period, last_validated_at, revenuecat_app_user_id")
@@ -79,13 +91,6 @@ Deno.serve(async (req: Request) => {
     console.error("[sync-subscription] read failed", readError);
     return json({ error: "read_failed" }, 500);
   }
-
-  const now = Date.now();
-  const last = lastCallByUser.get(userId) ?? 0;
-  if (now - last < MIN_INTERVAL_MS) {
-    return json({ changed: false, throttled: true, mirror: current ?? null });
-  }
-  lastCallByUser.set(userId, now);
 
   // The app configures the SDK with the Supabase user id as the RevenueCat app user id.
   // RevenueCat resolves aliases itself, so the stored original id is only a fallback.

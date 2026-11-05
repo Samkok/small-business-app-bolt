@@ -76,16 +76,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Clean up profile images from storage
-    const { data: profileImages } = await supabaseAdmin.storage
-      .from("profile-images")
-      .list(userId);
-
-    if (profileImages && profileImages.length > 0) {
-      const paths = profileImages.map((f) => `${userId}/${f.name}`);
-      await supabaseAdmin.storage.from("profile-images").remove(paths).catch((err: any) => {
-        console.error("Non-critical: failed to clean profile images:", err);
-      });
+    // Profile image: the app stores it under profiles/<file>, so remove the exact object the
+    // profile row names instead of listing a prefix that is never written.
+    const { data: profileRow } = await supabaseAdmin
+      .from("user_profiles")
+      .select("avatar_url")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const avatarMatch = typeof profileRow?.avatar_url === "string"
+      ? profileRow.avatar_url.match(/\/profile-images\/([^?#]+)/)
+      : null;
+    const avatarPath = avatarMatch ? decodeURIComponent(avatarMatch[1]) : null;
+    if (avatarPath && /^profiles\/[A-Za-z0-9._-]+$/.test(avatarPath)) {
+      const { error: avatarErr } = await supabaseAdmin.storage.from("profile-images").remove([avatarPath]);
+      if (avatarErr) console.error("Non-critical: failed to clean profile image:", avatarErr);
     }
 
     // Clean up orphaned subscription/sales-count rows

@@ -173,43 +173,67 @@ Deno.serve(async (req: Request) => {
     // Delete storage files before deleting the business record
     console.log("[delete-business] Cleaning up storage files...");
     
-    // Get product IDs for this business to clean up product-images
+    // Product images: only plain object names under products/, and never an object that a
+    // product of another business still points at (image_url is member-writable, so a path
+    // in it is not proof that the object belongs to this business).
     const { data: products } = await supabaseAdmin
       .from("products")
       .select("id, image_url")
       .eq("business_id", businessId);
 
-    if (products && products.length > 0) {
-      const productImagePaths = products
-        .filter((p) => p.image_url && p.image_url.includes("product-images"))
-        .map((p) => {
-          const url = p.image_url;
-          const match = url.match(/product-images\/(.+)/);
-          return match ? match[1] : null;
-        })
-        .filter(Boolean) as string[];
-
-      if (productImagePaths.length > 0) {
-        const { error: storageErr } = await supabaseAdmin.storage
-          .from("product-images")
-          .remove(productImagePaths);
-        if (storageErr) console.error("[delete-business] Storage cleanup (product-images):", storageErr);
-        else console.log(`[delete-business] Removed ${productImagePaths.length} product images`);
-      }
+    const PRODUCT_PATH_RE = /^products\/[A-Za-z0-9._-]+$/;
+    const candidatePaths = new Set<string>();
+    for (const p of products ?? []) {
+      const match = typeof p.image_url === "string" ? p.image_url.match(/\/product-images\/([^?#]+)/) : null;
+      const path = match ? decodeURIComponent(match[1]) : null;
+      if (path && PRODUCT_PATH_RE.test(path)) candidatePaths.add(path);
     }
 
-    // Clean up business-images bucket (logos etc.)
-    const { data: businessImages } = await supabaseAdmin.storage
-      .from("business-images")
-      .list(businessId);
+    const productImagePaths: string[] = [];
+    for (const path of candidatePaths) {
+      const { data: otherRefs } = await supabaseAdmin
+        .from("products")
+        .select("id")
+        .neq("business_id", businessId)
+        .ilike("image_url", `%/product-images/${path}`)
+        .limit(1);
+      if (otherRefs && otherRefs.length > 0) {
+        console.warn(`[delete-business] Keeping ${path}: referenced by a product of another business`);
+        continue;
+      }
+      productImagePaths.push(path);
+    }
 
-    if (businessImages && businessImages.length > 0) {
-      const paths = businessImages.map((f) => `${businessId}/${f.name}`);
+    if (productImagePaths.length > 0) {
+      const { error: storageErr } = await supabaseAdmin.storage
+        .from("product-images")
+        .remove(productImagePaths);
+      if (storageErr) console.error("[delete-business] Storage cleanup (product-images):", storageErr);
+      else console.log(`[delete-business] Removed ${productImagePaths.length} product images`);
+    }
+
+    // Business images (logo, payment QR): the app stores them under businesses/<file>, so the
+    // exact objects named by the business row are removed, not a listing of a prefix.
+    const { data: bizRow } = await supabaseAdmin
+      .from("businesses")
+      .select("business_image_url, receipt_payment_qr_url")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    const BUSINESS_PATH_RE = /^businesses\/[A-Za-z0-9._-]+$/;
+    const bizPaths: string[] = [];
+    for (const url of [bizRow?.business_image_url, bizRow?.receipt_payment_qr_url]) {
+      const match = typeof url === "string" ? url.match(/\/business-images\/([^?#]+)/) : null;
+      const path = match ? decodeURIComponent(match[1]) : null;
+      if (path && BUSINESS_PATH_RE.test(path)) bizPaths.push(path);
+    }
+
+    if (bizPaths.length > 0) {
       const { error: bizStorageErr } = await supabaseAdmin.storage
         .from("business-images")
-        .remove(paths);
+        .remove(bizPaths);
       if (bizStorageErr) console.error("[delete-business] Storage cleanup (business-images):", bizStorageErr);
-      else console.log(`[delete-business] Removed ${paths.length} business images`);
+      else console.log(`[delete-business] Removed ${bizPaths.length} business images`);
     }
 
     // Delete the business (CASCADE will handle all related records automatically)

@@ -11,6 +11,10 @@ import { Session, User } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 import { TERMS_VERSION } from '@/src/config/terms';
 import { PUSH_TOKEN_STORAGE_KEY } from '@/src/services/pushNotifications';
+
+/** AsyncStorage key for the password-reset request this device made (email + expiry). */
+export const PENDING_RECOVERY_KEY = 'pendingPasswordRecovery';
+const PENDING_RECOVERY_TTL_MS = 60 * 60 * 1000;
 import { analytics } from '@/src/services/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
@@ -98,6 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Invalid token handler ────────────────────────────────────────────────────
   const handleInvalidToken = useCallback(async () => {
+    // Tell the server first (revokes the refresh token), then forget the local copy
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
     await clearAuthStorage();
     if (mounted.current) {
       setSession(null);
@@ -108,7 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setDataLoadingState('loaded');
     }
-    await supabase.auth.signOut({ scope: 'local' });
   }, []);
 
   // ── Session manager ─────────────────────────────────────────────────────────
@@ -487,47 +492,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Handle PKCE flow: ?code=AUTH_CODE
+      // Password recovery, PKCE only: ?code=AUTH_CODE. The code is exchanged only for a reset
+      // this app instance asked for (resetPassword stores a marker), only while nobody else is
+      // signed in, and only when the resulting session belongs to the address that asked.
+      // Tokens arriving in a URL (#access_token=...) are never accepted: any app or page could
+      // open such a link and swap the signed-in account for one of its choosing.
+      let code: string | null = null;
       try {
-        const urlObj = new URL(url);
-        const code = urlObj.searchParams.get('code');
-        if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (!error && data.session) {
-            if (mounted.current) {
-              setIsPasswordRecovery(true);
-              setSession(data.session);
-              setUser(data.session.user);
-            }
-          }
-          return;
-        }
+        code = new URL(url).searchParams.get('code');
       } catch (_) {
-        // URL parsing failed, try hash approach
+        return;
+      }
+      if (!code) return;
+
+      // The code can only be exchanged on the device that asked for the reset (the PKCE
+      // verifier is stored here and nowhere else). The marker written by resetPassword adds
+      // the e-mail binding when it is available; an expired or missing marker is discarded.
+      let pending: { email: string; expiresAt: number } | null = null;
+      try {
+        const raw = await AsyncStorage.getItem(PENDING_RECOVERY_KEY);
+        pending = raw ? JSON.parse(raw) : null;
+      } catch {}
+      if (pending && Date.now() > pending.expiresAt) {
+        pending = null;
+        await AsyncStorage.removeItem(PENDING_RECOVERY_KEY).catch(() => {});
       }
 
-      // Handle implicit flow: #access_token=...&refresh_token=...&type=recovery
-      const hashIndex = url.indexOf('#');
-      if (hashIndex === -1) return;
+      const { data: { session: existing } } = await supabase.auth.getSession();
+      if (existing?.user) {
+        // Someone is signed in on this device: never replace their session from a link
+        return;
+      }
 
-      const hash = url.substring(hashIndex + 1);
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const type = params.get('type');
-
-      if (accessToken && refreshToken && type === 'recovery') {
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (!error && data.session) {
-          if (mounted.current) {
-            setIsPasswordRecovery(true);
-            setSession(data.session);
-            setUser(data.session.user);
-          }
-        }
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      await AsyncStorage.removeItem(PENDING_RECOVERY_KEY).catch(() => {});
+      if (error || !data.session) return;
+      if (pending && (data.session.user.email || '').toLowerCase() !== pending.email.toLowerCase()) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        return;
+      }
+      if (mounted.current) {
+        setIsPasswordRecovery(true);
+        setSession(data.session);
+        setUser(data.session.user);
       }
     };
 
@@ -645,6 +652,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
 
+    // Server first: auth-js only revokes the session (POST /logout) while it can still read it
+    // from storage, so this must run before clearAuthStorage.
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {}
+    try {
+      const { revenueCatService } = require('../services/revenueCatService');
+      await revenueCatService.logOut();
+    } catch {}
+
     await clearAuthStorage();
 
     // "Remember me" is deliberately kept across sign-out: its whole purpose is to
@@ -658,10 +675,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { subscriptionService } = require('../services/subscriptionService');
       if (user?.id) await subscriptionService.clearSubscriptionCache(user.id);
-    } catch {}
-
-    try {
-      await supabase.auth.signOut({ scope: 'local' });
     } catch {}
 
     await clearAuthStorage();
@@ -789,6 +802,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (!error) {
+      // The deep-link handler only exchanges a recovery code while this marker exists
+      try {
+        await AsyncStorage.setItem(PENDING_RECOVERY_KEY, JSON.stringify({
+          email: email.trim().toLowerCase(),
+          expiresAt: Date.now() + PENDING_RECOVERY_TTL_MS,
+        }));
+      } catch {}
+    }
     return { error };
   }, []);
 

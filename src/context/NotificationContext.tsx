@@ -431,7 +431,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         if (data.type === 'low_stock' || data.type === 'low_stock_alert') {
           navigationTarget = '/(app)/(tabs)/inventory/low-stock';
-        } else if (data.type === 'role_assigned' || data.type === 'team_invite') {
+        } else if (data.type === 'team_invite') {
+          // Not a member yet: no business switch, just the screen where the invitation is answered
+          router.push('/(app)/business-selection' as any);
+          return;
+        } else if (data.type === 'role_assigned') {
           navigationTarget = '/(app)/(tabs)/';
         } else if (data.type === 'expense_added') {
           navigationTarget = '/(app)/(tabs)/expenses';

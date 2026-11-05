@@ -361,6 +361,57 @@ async function handleSubscriptionActivation(
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// After a TRANSFER the previous holder has no subscription any more: mirror that, put their
+// businesses in read-only like an EXPIRATION does, and tell them.
+async function expireTransferredSource(supabase: any, fromUserId: string, eventId: string) {
+  const { data: current } = await supabase
+    .from('user_subscriptions')
+    .select('tier, subscription_status')
+    .eq('user_id', fromUserId)
+    .maybeSingle();
+  if (!current || current.subscription_status !== 'active') {
+    log(eventId, 'INFO', `Transfer source ${fromUserId} has no active mirror row; nothing to expire`);
+    return;
+  }
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('user_subscriptions')
+    .update({
+      subscription_status: 'expired',
+      subscription_product_id: null,
+      tier: 'free',
+      max_owned_businesses: 1,
+      previous_tier: current.tier || 'free',
+      expiration_reason: 'UNKNOWN',
+      expiration_reason_at: now,
+      will_renew: false,
+      in_grace_period: false,
+      grace_period_ends_at: null,
+      updated_by: 'webhook',
+      last_webhook_update: now,
+      updated_at: now,
+    })
+    .eq('user_id', fromUserId);
+  if (error) {
+    log(eventId, 'ERROR', `Failed to expire transfer source ${fromUserId}`, { error });
+    return;
+  }
+  const { error: readOnlyError } = await supabase.rpc('set_all_businesses_read_only_on_expiration', { p_user_id: fromUserId });
+  if (readOnlyError) log(eventId, 'ERROR', `Failed to set transfer source businesses read-only`, { error: readOnlyError });
+  await supabase.from('notifications').insert({
+    user_id: fromUserId,
+    business_id: null,
+    type: 'subscription_warning',
+    title: 'Subscription Moved',
+    message: 'Your subscription was transferred to another account. Your businesses are now in read-only mode.',
+    read: false,
+    created_at: now,
+  });
+  log(eventId, 'SUCCESS', `Transfer source ${fromUserId} expired`);
+}
+
 // Shared handler for tier changes
 async function handleTierChange(
   supabase: any,
@@ -546,6 +597,20 @@ Deno.serve(async (req: Request) => {
     log(eventId, 'INFO', `User: ${userId}`);
     log(eventId, 'INFO', `Store: ${event.store || 'N/A'}`);
     log(eventId, 'INFO', `Environment: ${event.environment || 'N/A'}`);
+
+    // Sandbox (test-store) events never touch production entitlements. Testers who need the
+    // full flow are listed in RC_SANDBOX_ALLOWLIST (comma-separated app_user_ids).
+    if ((event.environment || '').toUpperCase() === 'SANDBOX') {
+      const allow = (Deno.env.get("RC_SANDBOX_ALLOWLIST") || '').split(',').map((v) => v.trim()).filter(Boolean);
+      if (!allow.includes(userId)) {
+        log(eventId, 'WARN', 'Sandbox event ignored (app_user_id not in RC_SANDBOX_ALLOWLIST)');
+        return new Response(
+          JSON.stringify({ received: true, ignored: 'sandbox' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      log(eventId, 'INFO', 'Sandbox event accepted for allow-listed tester');
+    }
 
     // Atomic idempotency claim - prevents duplicate processing even under concurrent delivery
     const { data: claimed, error: claimError } = await supabase
@@ -840,6 +905,12 @@ Deno.serve(async (req: Request) => {
         // The webhook is sent for the destination user (transferred_to)
         // The subscription should now belong to this user
         await handleSubscriptionActivation(supabase, event, eventId, tier, maxBusinesses, validatedProductId);
+
+        // The source accounts no longer hold the subscription: close them out like an expiration
+        for (const fromId of event.transferred_from ?? []) {
+          if (!UUID_RE.test(fromId) || fromId === userId) continue;
+          await expireTransferredSource(supabase, fromId, eventId);
+        }
         log(eventId, 'SUCCESS', 'Transfer processed - subscription moved to new user');
         break;
       }

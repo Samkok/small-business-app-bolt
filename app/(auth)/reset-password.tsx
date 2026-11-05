@@ -21,41 +21,21 @@ import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { Lock, CheckCircle } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 
+// Only the PKCE code is accepted. Tokens carried in a URL are never turned into a session:
+// a link from anywhere could otherwise sign this device into an account of its choosing.
 const createSessionFromUrl = async (url: string): Promise<boolean> => {
   if (!url) return false;
-
-  let params: Record<string, string> = {};
-
-  const hashIndex = url.indexOf('#');
-  if (hashIndex !== -1) {
-    const hash = url.substring(hashIndex + 1);
-    const hashParams = new URLSearchParams(hash);
-    hashParams.forEach((value, key) => { params[key] = value; });
-  }
-
+  let code: string | null = null;
   try {
-    const questionIndex = url.indexOf('?');
-    if (questionIndex !== -1) {
-      const queryString = url.substring(questionIndex + 1, hashIndex !== -1 ? hashIndex : undefined);
-      const queryParams = new URLSearchParams(queryString);
-      queryParams.forEach((value, key) => { params[key] = value; });
-    }
-  } catch (_) {}
-
-  if (params.code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-    return !error;
+    code = new URL(url).searchParams.get('code');
+  } catch (_) {
+    return false;
   }
-
-  if (params.access_token && params.refresh_token) {
-    const { error } = await supabase.auth.setSession({
-      access_token: params.access_token,
-      refresh_token: params.refresh_token,
-    });
-    return !error;
-  }
-
-  return false;
+  if (!code) return false;
+  const { data: { session: existing } } = await supabase.auth.getSession();
+  if (existing?.user) return false;
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  return !error;
 };
 
 function simplifyPasswordError(message: string): string {

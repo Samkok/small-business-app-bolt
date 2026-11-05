@@ -1,6 +1,17 @@
 import { supabase } from '../config/supabase';
 import { reportsService } from './reports';
 
+/**
+ * One CSV cell: always quoted, inner quotes doubled, and a leading = + - @ or control
+ * character neutralised with an apostrophe so a spreadsheet never treats customer-typed
+ * text (names, notes, phone numbers from online orders) as a formula.
+ */
+export function csvCell(value: unknown): string {
+  let s = value === null || value === undefined ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 export const exportService = {
   /**
    * Export sales data to CSV
@@ -144,13 +155,13 @@ export const exportService = {
         const deliveryCost = discountDetails?.delivery_cost != null ? Number(discountDetails.delivery_cost).toFixed(2) : '0.00';
         const finalTotal = sale.total_amount != null ? Number(sale.total_amount).toFixed(2) : '0.00';
         
-        // Escape any commas in text fields by wrapping in quotes
-        const escapedCustomer = customer.includes(',') ? `"${customer}"` : customer;
-        const escapedCreatedBy = createdBy.includes(',') ? `"${createdBy}"` : createdBy;
-        const escapedProducts = productsString.includes(',') ? `"${productsString}"` : productsString;
-        const escapedNotes = notes.includes(',') ? `"${notes}"` : notes;
-        // Always quote phone to preserve leading zeros in spreadsheet apps
-        const escapedPhone = customerPhone ? `"${customerPhone}"` : '';
+        // Customer-typed text goes through csvCell (quoted, formula-safe); the phone is always
+        // quoted so spreadsheets keep its leading zero.
+        const escapedCustomer = csvCell(customer);
+        const escapedCreatedBy = csvCell(createdBy);
+        const escapedProducts = csvCell(productsString);
+        const escapedNotes = csvCell(notes);
+        const escapedPhone = customerPhone ? csvCell(customerPhone) : '';
 
         // Add single row for this sale
         csv += `${saleId},${date},${escapedCustomer},${escapedPhone},${paymentMethod},${escapedCreatedBy},${escapedProducts},${totalItems},${originalSubtotal},${itemDiscounts},${cartDiscountType},${cartDiscountValue},${cartDiscountAmount},${deliveryCost},${finalTotal},${escapedNotes}\n`;
@@ -377,7 +388,7 @@ export const exportService = {
     let csv = 'ID,Name,Price,Description,Barcode,Current Stock,Min Stock Level,Cost Per Unit,Created At,Updated At\n';
 
     data.forEach(product => {
-      csv += `${product.id},"${product.name}",${product.price},"${product.description || ''}",${product.barcode || ''},${product.current_stock},${product.min_stock_level},${product.cost_per_unit || ''},${product.created_at},${product.updated_at}\n`;
+      csv += `${product.id},${csvCell(product.name)},${product.price},${csvCell(product.description || '')},${csvCell(product.barcode || '')},${product.current_stock},${product.min_stock_level},${product.cost_per_unit || ''},${product.created_at},${product.updated_at}\n`;
     });
 
     return csv;

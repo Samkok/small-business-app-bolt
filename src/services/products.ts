@@ -300,78 +300,12 @@ export const productService = {
   },
 
 
-  async updateStock(productId: string, newStock: number) {
-    const { data, error } = await supabase
-      .from('products')
-      .update({ 
-        current_stock: newStock,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
-    if (!businessId) {
-      console.warn('productService.searchProducts called without businessId');
-      return [];
-    }
-
-    const sanitizedQuery = sanitizeSearchQuery(query);
-
-    let dbQuery = supabase
-      .from('products')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('is_archived', false)
-      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
-      .order('name');
-
-    if (limit) {
-      dbQuery = dbQuery.limit(limit);
-    }
-
-    if (offset) {
-      dbQuery = dbQuery.range(offset, offset + (limit || 10) - 1);
-    }
-
-    const { data, error } = await dbQuery;
-    if (error) throw error;
-    return data;
-  },
-
-  async getProductsByCategory(businessId: string, category?: string) {
-    let query = supabase
-      .from('products')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('is_archived', false);
-
-    if (category) {
-      query = query.eq('category', category);
-    }
-
-    const { data, error } = await query.order('name');
-    if (error) throw error;
-    return data;
-  },
-
   async getProductsWithLowStock(businessId: string) {
     // Use the same approach as getLowStockProducts for consistency
     return this.getLowStockProducts(businessId);
   },
 
-  async bulkUpdateStock(updates: { productId: string; newStock: number }[]) {
-    const promises = updates.map(update => 
-      this.updateStock(update.productId, update.newStock)
-    );
-    
-    return Promise.all(promises);
-  },
+
 
   async getArchivedProducts(businessId: string, limit?: number, offset?: number) {
     let query = supabase

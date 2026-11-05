@@ -4,10 +4,8 @@ import { resolveReportCurrency, saleFactor, scaleSale } from '../utils/reportCur
 import { supabase } from '../config/supabase';
 import { Database } from '../types/database';
 import { cartService } from './carts';
-import { productService } from './products';
 import { businessAccessGuard } from '../utils/businessAccessGuard';
 import { subscriptionService } from './subscriptionService';
-import { unitService } from './units';
 import { isPaymentStatus, PaymentStatus } from '../utils/paymentStatus';
 
 /** One line of a sale after an edit. `id` is the existing cart_item id; a line without it is new. */
@@ -672,30 +670,15 @@ export const salesService = {
       options
     );
 
-    // Restore stock for all items in the sale
-    if (sale.carts?.cart_items) {
-      for (const item of sale.carts.cart_items) {
-        try {
-          // Get current product stock
-          const product = await productService.getProduct(item.product_id);
-
-          // Convert quantity to base units if needed
-          let baseQuantity = item.quantity;
-          if (item.unit_id) {
-            const conversionFactor = await unitService.getConversionFactor(item.unit_id);
-            baseQuantity = item.quantity * conversionFactor;
-          }
-
-          // Add the sold quantity back to stock
-          const newStock = product.current_stock + baseQuantity;
-
-          // Update the product stock
-          await productService.updateStock(item.product_id, newStock);
-        } catch (error) {
-          console.error(`Error restoring stock for product ${item.product_id}:`, error);
-          // Continue with other items even if one fails
-        }
-      }
+    // Restore stock for all items in the sale. The server converts to base units, binds every
+    // product to the sale's business and writes product_history; the client never touches
+    // products.current_stock directly.
+    if (sale.carts?.cart_items?.length) {
+      const { error: restoreError } = await supabase.rpc('restore_sale_stock', {
+        p_sale_id: saleId,
+        p_lines: sale.carts.cart_items.map((item: any) => ({ product_id: item.product_id, quantity: item.quantity })),
+      });
+      if (restoreError) throw restoreError;
     }
 
     // Perform the void action with adjustments
@@ -794,17 +777,12 @@ export const salesService = {
     });
     if (refund.items.length === 0) return null;
 
-    // Restore inventory with proper unit conversion (I4 fix)
-    for (const line of refund.items) {
-      const cartItem = sale.carts.cart_items.find(item => item.product_id === line.productId);
-      const product = await productService.getProduct(line.productId);
-      let baseQuantityToRestore = line.quantity;
-      if (cartItem?.unit_id) {
-        const conversionFactor = await unitService.getConversionFactor(cartItem.unit_id);
-        baseQuantityToRestore = line.quantity * conversionFactor;
-      }
-      await productService.updateStock(line.productId, product.current_stock + baseQuantityToRestore);
-    }
+    // Restore inventory on the server (unit conversion, business binding and history there)
+    const { error: restoreError } = await supabase.rpc('restore_sale_stock', {
+      p_sale_id: saleId,
+      p_lines: refund.items.map(line => ({ product_id: line.productId, quantity: line.quantity })),
+    });
+    if (restoreError) throw restoreError;
 
     return this.performSaleAction(
       saleId,
