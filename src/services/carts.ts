@@ -188,12 +188,14 @@ export const cartService = {
     item_discount_value?: number;
     item_discount_scope?: 'per_unit' | 'total';
   }) {
-    const { data: existingItem } = await supabase
+    // A line is a product in one unit: a Box and a Bottle of the same product are two lines
+    let existingQuery = supabase
       .from('cart_items')
       .select('*')
       .eq('cart_id', cartItem.cart_id)
-      .eq('product_id', cartItem.product_id)
-      .single();
+      .eq('product_id', cartItem.product_id);
+    existingQuery = cartItem.unit_id ? existingQuery.eq('unit_id', cartItem.unit_id) : existingQuery.is('unit_id', null);
+    const { data: existingItem } = await existingQuery.maybeSingle();
 
     if (existingItem) {
       const newQuantity = existingItem.quantity + cartItem.quantity;

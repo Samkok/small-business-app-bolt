@@ -670,18 +670,8 @@ export const salesService = {
       options
     );
 
-    // Restore stock for all items in the sale. The server converts to base units, binds every
-    // product to the sale's business and writes product_history; the client never touches
-    // products.current_stock directly.
-    if (sale.carts?.cart_items?.length) {
-      const { error: restoreError } = await supabase.rpc('restore_sale_stock', {
-        p_sale_id: saleId,
-        p_lines: sale.carts.cart_items.map((item: any) => ({ product_id: item.product_id, quantity: item.quantity })),
-      });
-      if (restoreError) throw restoreError;
-    }
-
-    // Perform the void action with adjustments
+    // Stock, the action row and the status move together on the server; a sale with returns
+    // cannot be voided (return the remaining items instead).
     return this.performSaleAction(
       saleId,
       'void',
@@ -777,13 +767,8 @@ export const salesService = {
     });
     if (refund.items.length === 0) return null;
 
-    // Restore inventory on the server (unit conversion, business binding and history there)
-    const { error: restoreError } = await supabase.rpc('restore_sale_stock', {
-      p_sale_id: saleId,
-      p_lines: refund.items.map(line => ({ product_id: line.productId, quantity: line.quantity })),
-    });
-    if (restoreError) throw restoreError;
-
+    // Quantities are capped on the server at sold minus already returned; stock, the action
+    // row and the status are written in one transaction (record_sale_action).
     return this.performSaleAction(
       saleId,
       'return',
@@ -820,52 +805,23 @@ export const salesService = {
   ) {
     if (!saleId || !reason || !performedBy) return null;
 
-    // Create sale action record with adjustments
-    const actionData: any = {
-      sale_id: saleId,
-      action_type: actionType,
-      reason,
-      performed_by: performedBy,
-      amount,
-      delivery_cost_included: adjustments?.deliveryCostIncluded ?? false,
-      delivery_cost_amount: adjustments?.deliveryCostAmount ?? 0,
-      loss_amount: adjustments?.lossAmount ?? 0,
-      loss_percentage: adjustments?.lossPercentage ?? 0,
-      loss_type: adjustments?.lossType,
-      adjusted_amount: adjustments?.adjustedAmount ?? amount,
-      items_metadata: adjustments?.itemsMetadata,
-    };
-
-    const { data: action, error: actionError } = await supabase
-      .from('sale_actions')
-      .insert(actionData)
-      .select()
-      .single();
-
-    if (actionError) throw actionError;
-
-    // Update sale status
-    let newStatus: string;
-    switch (actionType) {
-      case 'void':
-        newStatus = 'voided';
-        break;
-      case 'refund':
-        newStatus = 'refunded';
-        break;
-      case 'return':
-        newStatus = 'partially_returned';
-        break;
-    }
-
-    const { error: updateError } = await supabase
-      .from('sales')
-      .update({ status: newStatus })
-      .eq('id', saleId);
-
-    if (updateError) throw updateError;
-
-    return action;
+    // One transaction on the server: quantity caps, stock restore, sale_actions row, status.
+    // performed_by is taken from the session there, not from this argument.
+    const { data, error } = await supabase.rpc('record_sale_action', {
+      p_sale_id: saleId,
+      p_action_type: actionType,
+      p_reason: reason,
+      p_amount: amount ?? 0,
+      p_adjusted_amount: adjustments?.adjustedAmount ?? amount ?? 0,
+      p_delivery_cost_included: adjustments?.deliveryCostIncluded ?? false,
+      p_delivery_cost_amount: adjustments?.deliveryCostAmount ?? 0,
+      p_loss_amount: adjustments?.lossAmount ?? 0,
+      p_loss_percentage: adjustments?.lossPercentage ?? 0,
+      p_loss_type: adjustments?.lossType ?? null,
+      p_items: adjustments?.itemsMetadata ?? null,
+    });
+    if (error) throw error;
+    return data as { action_id: string; status: string; remaining: { product_id: string; remaining: number }[]; fully_returned: boolean };
   },
 
   async getSalesReport(businessId: string, startDate: string, endDate: string) {

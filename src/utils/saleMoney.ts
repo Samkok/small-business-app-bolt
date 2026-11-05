@@ -92,6 +92,35 @@ export function summarizeRevenue(sales: SaleLike[] | null | undefined): RevenueS
 // Refund calculation for returns
 // ---------------------------------------------------------------------------
 
+/** Units already returned per product, read from the sale's return actions. */
+export function getReturnedQuantities(sale: { sale_actions?: { action_type?: string | null; items_metadata?: any }[] | null } | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const action of sale?.sale_actions || []) {
+    if (action.action_type !== 'return' || !Array.isArray(action.items_metadata)) continue;
+    for (const line of action.items_metadata) {
+      const productId = line?.productId ?? line?.product_id;
+      const qty = Number(line?.quantity) || 0;
+      if (productId && qty > 0) out[productId] = (out[productId] || 0) + qty;
+    }
+  }
+  return out;
+}
+
+/** True when every sold unit has been returned. */
+export function isFullyReturned(sale: { carts?: { cart_items?: { product_id: string; quantity: number }[] | null } | null; sale_actions?: any[] | null } | null | undefined): boolean {
+  const items = sale?.carts?.cart_items || [];
+  if (items.length === 0) return false;
+  const returned = getReturnedQuantities(sale);
+  const sold: Record<string, number> = {};
+  for (const ci of items) sold[ci.product_id] = (sold[ci.product_id] || 0) + (ci.quantity || 0);
+  return Object.entries(sold).every(([productId, qty]) => (returned[productId] || 0) >= qty);
+}
+
+/** True when the sale has any return on record (a void is no longer allowed then). */
+export function hasReturns(sale: { sale_actions?: { action_type?: string | null }[] | null } | null | undefined): boolean {
+  return (sale?.sale_actions || []).some(a => a.action_type === 'return');
+}
+
 export interface ReturnRequestItem {
   productId: string;
   quantity: number;

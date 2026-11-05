@@ -23,6 +23,7 @@ import { getUserDisplayName } from '@/src/utils/userDisplayName';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { paymentStatusLabel } from '@/src/utils/paymentStatus';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
+import { hasReturns, isFullyReturned } from '@/src/utils/saleMoney';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -262,7 +263,7 @@ export default function SaleDetailsContent({
               )}
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
                 <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
-                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
+                  {isFullyReturned(sale) ? 'Fully returned' : sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
                 </Text>
               </View>
               {(sale.status === 'completed' || sale.status === 'partially_returned') && (
@@ -761,8 +762,8 @@ export default function SaleDetailsContent({
         </View>
       )}
 
-      {/* Actions */}
-      {(sale.status === 'completed' || sale.status === 'partially_returned') && (
+      {/* Actions: returns while something is left; void only before any return */}
+      {(sale.status === 'completed' || sale.status === 'partially_returned') && !isFullyReturned(sale) && (
         <View style={styles.footer}>
           <Button
             title={sale.status === 'completed' ? t('sales.returnItems') : t('sales.returnMoreItems')}
@@ -770,13 +771,15 @@ export default function SaleDetailsContent({
             onPress={onReturnItems}
             style={styles.footerButton}
           />
-          <Button
-            title={t('sales.voidSale')}
-            variant="danger"
-            onPress={onVoidSale}
-            loading={voidingInProgress}
-            style={styles.footerButton}
-          />
+          {!hasReturns(sale) && (
+            <Button
+              title={t('sales.voidSale')}
+              variant="danger"
+              onPress={onVoidSale}
+              loading={voidingInProgress}
+              style={styles.footerButton}
+            />
+          )}
         </View>
       )}
 

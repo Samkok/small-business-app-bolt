@@ -2684,6 +2684,18 @@ export type Database = {
         Args: { p_email: string; p_business_id: string }
         Returns: Json
       }
+      record_sale_action: {
+        Args: {
+          p_sale_id: string; p_action_type: string; p_reason: string; p_amount: number;
+          p_adjusted_amount?: number | null; p_delivery_cost_included?: boolean; p_delivery_cost_amount?: number;
+          p_loss_amount?: number; p_loss_percentage?: number; p_loss_type?: string | null; p_items?: Json | null
+        }
+        Returns: Json
+      }
+      receive_inventory_batch: {
+        Args: { p_batch_id: string; p_lines: Json; p_arrival_date?: string }
+        Returns: Json
+      }
       restore_sale_stock: {
         Args: { p_sale_id: string; p_lines: Json }
         Returns: Json

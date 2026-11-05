@@ -150,6 +150,9 @@ export const instantCheckoutService = {
           quantity: item.quantity,
           unit_price: item.unit_price,
           cost_per_unit: item.cost_per_unit || 0,
+          // The unit sold: complete_sale_atomic converts to base units with it. Without it a
+          // pack would decrement a single base unit.
+          unit_id: item.unit_id ?? null,
           item_discount_type: item.item_discount_type,
           item_discount_value: item.item_discount_value,
           item_discount_scope: item.item_discount_scope,
@@ -256,6 +259,9 @@ export const instantCheckoutService = {
           quantity: item.quantity,
           unit_price: item.unit_price,
           cost_per_unit: item.cost_per_unit || 0,
+          // The unit sold: complete_sale_atomic converts to base units with it. Without it a
+          // pack would decrement a single base unit.
+          unit_id: item.unit_id ?? null,
           item_discount_type: item.item_discount_type,
           item_discount_value: item.item_discount_value,
           item_discount_scope: item.item_discount_scope,

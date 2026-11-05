@@ -19,7 +19,7 @@ import Input from '@/src/components/ui/Input';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
-import { calculateReturnRefund } from '@/src/utils/saleMoney';
+import { calculateReturnRefund, getReturnedQuantities } from '@/src/utils/saleMoney';
 
 interface ReturnItem {
   productId: string;
@@ -53,14 +53,15 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
 
   useEffect(() => {
     if (sale?.carts?.cart_items) {
-      // Initialize return items from sale cart items
+      // Initialize return items from sale cart items; what was already returned cannot be returned again
+      const alreadyReturned = getReturnedQuantities(sale);
       const items: ReturnItem[] = sale.carts.cart_items.map((item: any) => ({
         productId: item.product_id,
         productName: item.products?.name || 'Unknown Product',
         originalQuantity: item.quantity,
         returnQuantity: 0,
         unitPrice: item.unit_price,
-        maxReturnQuantity: item.quantity,
+        maxReturnQuantity: Math.max(0, item.quantity - (alreadyReturned[item.product_id] || 0)),
         lossAmount: 0,
         lossPercentage: 0,
         lossType: 'none',
