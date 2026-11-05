@@ -505,14 +505,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (!code) return;
 
+      // The code can only be exchanged on the device that asked for the reset (the PKCE
+      // verifier is stored here and nowhere else). The marker written by resetPassword adds
+      // the e-mail binding when it is available; an expired or missing marker is discarded.
       let pending: { email: string; expiresAt: number } | null = null;
       try {
         const raw = await AsyncStorage.getItem(PENDING_RECOVERY_KEY);
         pending = raw ? JSON.parse(raw) : null;
       } catch {}
-      if (!pending || Date.now() > pending.expiresAt) {
+      if (pending && Date.now() > pending.expiresAt) {
+        pending = null;
         await AsyncStorage.removeItem(PENDING_RECOVERY_KEY).catch(() => {});
-        return;
       }
 
       const { data: { session: existing } } = await supabase.auth.getSession();
@@ -524,7 +527,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       await AsyncStorage.removeItem(PENDING_RECOVERY_KEY).catch(() => {});
       if (error || !data.session) return;
-      if ((data.session.user.email || '').toLowerCase() !== pending.email.toLowerCase()) {
+      if (pending && (data.session.user.email || '').toLowerCase() !== pending.email.toLowerCase()) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         return;
       }

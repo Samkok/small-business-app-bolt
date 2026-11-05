@@ -16,7 +16,7 @@ import { useTheme } from '@/src/context/ThemeContext';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { supabase } from '@/src/config/supabase';
+import { useAuth } from '@/src/context/AuthContext';
 import { ArrowLeft, Mail } from 'lucide-react-native';
 
 export default function ForgotPasswordScreen() {
@@ -26,6 +26,7 @@ export default function ForgotPasswordScreen() {
   const { isDark } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+  const { resetPassword } = useAuth();
 
   const handleResetPassword = async () => {
     if (!email) {
@@ -42,30 +43,9 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
-      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081';
-      const appScheme = process.env.EXPO_PUBLIC_APP_SCHEME || 'businessmanager';
-
-      let redirectTo: string;
-
-      if (Platform.OS === 'web') {
-        // For web, use the current origin or fallback to configured URL
-        if (typeof window !== 'undefined' && window.location?.origin) {
-          redirectTo = `${window.location.origin}/reset-password`;
-        } else {
-          redirectTo = `${appUrl}/reset-password`;
-        }
-      } else {
-        // For mobile (iOS/Android), use the app's deep link scheme
-        // This format works with Expo's deep linking: scheme://path
-        redirectTo = `${appScheme}://reset-password`;
-      }
-
-      console.log('Password reset redirect URL:', redirectTo);
-      console.log('Platform:', Platform.OS);
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo,
-      });
+      // AuthContext.resetPassword picks the redirect for the platform and records that this
+      // device asked for a reset, which the deep-link handler checks before it signs in.
+      const { error } = await resetPassword(email.trim());
 
       if (error) {
         console.error("Password reset error from Supabase:", error);
