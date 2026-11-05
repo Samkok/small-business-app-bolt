@@ -2664,6 +2664,30 @@ export type Database = {
           unit_cost_in: number | null
         }
       }
+      respond_to_business_invitation: {
+        Args: { p_invitation_id: string; p_accept: boolean }
+        Returns: Json
+      }
+      cancel_business_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: boolean
+      }
+      get_my_business_invitations: {
+        Args: Record<string, never>
+        Returns: { id: string; business_id: string; business_name: string | null; business_image_url: string | null; role: string; invited_by_name: string | null; created_at: string; expires_at: string }[]
+      }
+      get_business_pending_invitations: {
+        Args: { p_business_id: string }
+        Returns: { id: string; invitee_user_id: string; invitee_name: string | null; invitee_email: string | null; role: string; created_at: string; expires_at: string }[]
+      }
+      check_invitee: {
+        Args: { p_email: string; p_business_id: string }
+        Returns: Json
+      }
+      restore_sale_stock: {
+        Args: { p_sale_id: string; p_lines: Json }
+        Returns: Json
+      }
       count_sales_lines_missing_cost: {
         Args: { p_business_id: string; p_end: string; p_start: string }
         Returns: number

@@ -83,6 +83,8 @@ export function deriveMirror(subscriber: RcSubscriber | null | undefined, nowMs:
   for (const [id, ent] of Object.entries(entitlements)) {
     const tier = TIER_BY_ENTITLEMENT[id];
     if (!tier) continue;
+    // A sandbox (test) purchase never counts as a production plan
+    if (subscriptions[ent.product_identifier]?.is_sandbox) continue;
     everHadPlan = true;
 
     const expires = ms(ent.expires_date);

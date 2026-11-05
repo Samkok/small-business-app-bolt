@@ -14,7 +14,54 @@ export interface TeamMember {
   updated_at: string;
 }
 
+export interface PendingInvitation {
+  id: string;
+  invitee_user_id: string;
+  invitee_name: string | null;
+  invitee_email: string | null;
+  role: 'admin' | 'staff';
+  created_at: string;
+  expires_at: string;
+}
+
+export interface MyInvitation {
+  id: string;
+  business_id: string;
+  business_name: string | null;
+  business_image_url: string | null;
+  role: 'admin' | 'staff';
+  invited_by_name: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 export const teamMemberService = {
+  /** Open invitations an admin has sent for this business. */
+  async getPendingInvitations(businessId: string): Promise<PendingInvitation[]> {
+    const { data, error } = await supabase.rpc('get_business_pending_invitations', { p_business_id: businessId });
+    if (error) { console.error('Error loading pending invitations:', error); return []; }
+    return (data ?? []) as PendingInvitation[];
+  },
+
+  async cancelInvitation(invitationId: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('cancel_business_invitation', { p_invitation_id: invitationId });
+    if (error) throw error;
+    return !!data;
+  },
+
+  /** Invitations waiting for the signed-in user. */
+  async getMyInvitations(): Promise<MyInvitation[]> {
+    const { data, error } = await supabase.rpc('get_my_business_invitations');
+    if (error) { console.error('Error loading invitations:', error); return []; }
+    return (data ?? []) as MyInvitation[];
+  },
+
+  async respondToInvitation(invitationId: string, accept: boolean): Promise<{ status: string; business_id: string }> {
+    const { data, error } = await supabase.rpc('respond_to_business_invitation', { p_invitation_id: invitationId, p_accept: accept });
+    if (error) throw error;
+    return data as { status: string; business_id: string };
+  },
+
   /**
    * Get the current user's role in a specific business
    */
@@ -98,23 +145,22 @@ export const teamMemberService = {
   },
 
   /**
-   * Check if a user exists by email and if they're already a member
+   * Check whether an account exists for this email and whether it already belongs to the
+   * business. Answers only what the invite screen needs: no account id is returned.
    */
   async checkUserExists(
     email: string,
-    businessId?: string
+    businessId: string
   ): Promise<{
     exists: boolean;
-    userId?: string;
     userName?: string;
     isAlreadyMember?: boolean;
     currentRole?: 'admin' | 'staff';
   }> {
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
-      const { data: result, error: rpcError } = await supabase.rpc('check_user_exists_by_email', {
-        p_email: normalizedEmail
+      const { data: result, error: rpcError } = await supabase.rpc('check_invitee', {
+        p_email: email.trim().toLowerCase(),
+        p_business_id: businessId,
       });
 
       if (rpcError) {
@@ -122,36 +168,14 @@ export const teamMemberService = {
         return { exists: false };
       }
 
-      if (!result || !result.exists) {
-        return { exists: false };
-      }
-
-      const profile = { user_id: result.user_id, full_name: result.full_name };
-
-      // If businessId is provided, check if user is already a member
-      let isAlreadyMember = false;
-      let currentRole: 'admin' | 'staff' | undefined;
-
-      if (businessId) {
-        const { data: roleData } = await supabase
-          .from('user_business_roles')
-          .select('role')
-          .eq('user_id', profile.user_id)
-          .eq('business_id', businessId)
-          .maybeSingle();
-
-        if (roleData) {
-          isAlreadyMember = true;
-          currentRole = roleData.role as 'admin' | 'staff';
-        }
-      }
+      const r = (result ?? {}) as { exists?: boolean; full_name?: string | null; is_member?: boolean; role?: string | null };
+      if (!r.exists) return { exists: false };
 
       return {
         exists: true,
-        userId: profile.user_id,
-        userName: profile.full_name,
-        isAlreadyMember,
-        currentRole
+        userName: r.full_name ?? undefined,
+        isAlreadyMember: !!r.is_member,
+        currentRole: (r.role as 'admin' | 'staff' | null) ?? undefined,
       };
     } catch (error) {
       console.error('Error in checkUserExists:', error);
@@ -160,7 +184,8 @@ export const teamMemberService = {
   },
 
   /**
-   * Invite a user to join the business
+   * Invite a user to join the business. Creates a pending invitation; the person joins only
+   * when they accept it (business-selection screen or the notification).
    */
   async inviteUser(businessId: string, userEmail: string, role: 'admin' | 'staff'): Promise<boolean> {
     try {

@@ -2,6 +2,16 @@ import { ReceiptModel } from './receipt';
 import { RECEIPT_BRAND_LABEL, RECEIPT_BRAND_LOGO_DATA_URI } from './receiptBrand';
 import { code128Svg } from './barcode128';
 
+// Images in the printed receipt come only from this project's public storage or inline data;
+// a URL typed into business settings must never make the print view fetch another host.
+const STORAGE_PUBLIC_PREFIX = `${process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/`;
+function safeImageSrc(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('data:image/')) return url;
+  return STORAGE_PUBLIC_PREFIX.length > 30 && url.startsWith(STORAGE_PUBLIC_PREFIX) ? url : null;
+}
+
+
 /**
  * HTML for the PDF and the system print dialog. A dumb renderer: every number
  * comes from the ReceiptModel, nothing is calculated here. All text is escaped
@@ -45,13 +55,13 @@ export function renderReceiptHtml(
     : '';
   const payTo = model.business.paymentNote || model.business.paymentQrUrl
     ? `<div class="rule"></div><div class="section-title center">Pay to</div>
-      ${model.business.paymentQrUrl ? `<div class="center"><img class="payqr" src="${esc(model.business.paymentQrUrl)}" onerror="this.style.display='none'" /></div>` : ''}
+      ${safeImageSrc(model.business.paymentQrUrl) ? `<div class="center"><img class="payqr" src="${esc(safeImageSrc(model.business.paymentQrUrl)!)}" onerror="this.style.display='none'" /></div>` : ''}
       ${model.business.paymentNote ? `<div class="paynote">${esc(model.business.paymentNote)}</div>` : ''}`
     : '';
   const barcode = model.barcodeValue
     ? `<div class="barcode">${code128Svg(model.barcodeValue, { module: 1.5, height: 36 })}<div class="barcode-text">${esc(model.barcodeValue)}</div></div>`
     : '';
-  const logo = options.logoDataUri || model.business.logoUrl;
+  const logo = safeImageSrc(options.logoDataUri || model.business.logoUrl);
   const contact = [model.business.phone, model.business.address, model.business.pageName].filter(Boolean) as string[];
 
   const row = (label: string, value: string, cls = '') =>

@@ -39,7 +39,10 @@ function clientIp(req: Request): string | null {
   // cf-connecting-ip to the real client address, rewrites x-forwarded-for (its last hop is
   // an internal AWS proxy) and rejects a caller-supplied cf-connecting-ip. x-forwarded-for is
   // therefore never used: falling back to it would put every customer on the proxy's address.
-  const direct = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-real-ip");
+  // x-real-ip is not used either: a caller can set it, which would let them pick their own
+  // rate-limit key. Without cf-connecting-ip the order counts under the shared key 'unknown'
+  // inside create_web_order.
+  const direct = req.headers.get("cf-connecting-ip");
   return direct && direct.trim() ? direct.trim() : null;
 }
 
@@ -144,7 +147,10 @@ Deno.serve(async (req: Request) => {
     const ipAddress = clientIp(req);
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    // TODO(owner): set TURNSTILE_SECRET_KEY, then make this fail closed (403 when the secret is
+    // missing) so every order costs a solved challenge.
     const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY");
+    if (!turnstileSecret) console.warn("[menu-order] TURNSTILE_SECRET_KEY not set; orders accepted without a bot check");
     if (turnstileSecret) {
       const token = typeof body.turnstile_token === "string" ? body.turnstile_token : "";
       if (!token || !(await verifyTurnstile(turnstileSecret, token, ipAddress))) {

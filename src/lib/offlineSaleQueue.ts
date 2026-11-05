@@ -1,7 +1,54 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../config/supabase';
 
-const QUEUE_KEY = 'offline_sale_queue';
+// One queue per account: a sale queued by user A must never be shown to, failed by or
+// replayed as user B on the same device. Builds before 2.12 used a single shared key; its
+// entries are moved into the queue of the account that recorded them on first read.
+const LEGACY_QUEUE_KEY = 'offline_sale_queue';
+const queueKeyFor = (userId: string) => `offline_sale_queue:${userId}`;
+
+async function currentUserId(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readQueue(key: string): Promise<OfflineSalePayload[]> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+let legacyMigrated = false;
+async function migrateLegacyQueue(): Promise<void> {
+  if (legacyMigrated) return;
+  legacyMigrated = true;
+  const legacy = await readQueue(LEGACY_QUEUE_KEY);
+  if (legacy.length === 0) {
+    await AsyncStorage.removeItem(LEGACY_QUEUE_KEY).catch(() => {});
+    return;
+  }
+  const byUser = new Map<string, OfflineSalePayload[]>();
+  for (const sale of legacy) {
+    if (!sale?.createdBy) continue;
+    const list = byUser.get(sale.createdBy) ?? [];
+    list.push(sale);
+    byUser.set(sale.createdBy, list);
+  }
+  for (const [userId, sales] of byUser) {
+    const existing = await readQueue(queueKeyFor(userId));
+    const ids = new Set(existing.map(s => s.id));
+    await AsyncStorage.setItem(queueKeyFor(userId), JSON.stringify([...existing, ...sales.filter(s => !ids.has(s.id))]));
+  }
+  await AsyncStorage.removeItem(LEGACY_QUEUE_KEY).catch(() => {});
+}
 
 export interface OfflineSalePayload {
   id: string;
@@ -42,14 +89,18 @@ export interface OfflineSalePayload {
 }
 
 export const offlineSaleQueue = {
+  /** The signed-in account's queue; empty when nobody is signed in. */
   async getAll(): Promise<OfflineSalePayload[]> {
-    try {
-      const raw = await AsyncStorage.getItem(QUEUE_KEY);
-      if (!raw) return [];
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
+    const userId = await currentUserId();
+    if (!userId) return [];
+    await migrateLegacyQueue();
+    return readQueue(queueKeyFor(userId));
+  },
+
+  async save(queue: OfflineSalePayload[]): Promise<void> {
+    const userId = await currentUserId();
+    if (!userId) return;
+    await AsyncStorage.setItem(queueKeyFor(userId), JSON.stringify(queue));
   },
 
   async getByBusiness(businessId: string): Promise<OfflineSalePayload[]> {
@@ -71,7 +122,7 @@ export const offlineSaleQueue = {
     };
     const queue = await this.getAll();
     queue.push(entry);
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    await this.save(queue);
     return entry;
   },
 
@@ -81,18 +132,19 @@ export const offlineSaleQueue = {
     if (idx >= 0) {
       queue[idx].status = status;
       if (failureReason) queue[idx].failureReason = failureReason;
-      await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      await this.save(queue);
     }
   },
 
   async remove(id: string): Promise<void> {
     const queue = await this.getAll();
     const filtered = queue.filter(s => s.id !== id);
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+    await this.save(filtered);
   },
 
   async clear(): Promise<void> {
-    await AsyncStorage.removeItem(QUEUE_KEY);
+    const userId = await currentUserId();
+    if (userId) await AsyncStorage.removeItem(queueKeyFor(userId));
   },
 
   async getPendingSales(): Promise<OfflineSalePayload[]> {

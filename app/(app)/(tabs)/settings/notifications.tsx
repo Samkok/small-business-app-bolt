@@ -205,7 +205,9 @@ export default function NotificationsScreen() {
       // Navigate based on notification type
       if (notification.type === 'low_stock') {
         router.push('/(app)/(tabs)/inventory/low-stock');
-      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+      } else if (notification.type === 'team_invite') {
+        router.push('/(app)/business-selection' as any);
+      } else if (notification.type === 'role_assigned') {
         await handleRoleAssignedNotification(data);
       } else if (notification.type === 'expense_added') {
         router.push('/(app)/(tabs)/expenses');

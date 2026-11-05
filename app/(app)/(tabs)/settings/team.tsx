@@ -20,7 +20,7 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { SkeletonTeamMemberCard, SkeletonLoader, SkeletonCard, SkeletonList } from '@/src/components/ui/SkeletonLoader';
 import { ArrowLeft, Users, UserPlus, User, Mail, ChevronDown, X, Shield, ShieldAlert } from 'lucide-react-native';
-import { teamMemberService, TeamMember } from '@/src/services/teamMembers';
+import { teamMemberService, TeamMember, PendingInvitation } from '@/src/services/teamMembers';
 import { ActivityIndicator } from 'react-native';
 import { UserAlreadyRemovedModal } from '@/src/components/team/UserAlreadyRemovedModal';
 
@@ -37,6 +37,8 @@ export default function TeamScreen() {
   const [removingUser, setRemovingUser] = useState<string | null>(null);
   const [showAlreadyRemovedModal, setShowAlreadyRemovedModal] = useState(false);
   const [removedUserName, setRemovedUserName] = useState('');
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+  const [cancellingInvite, setCancellingInvite] = useState<string | null>(null);
   
   const router = useRouter();
   const { t } = useTranslation();
@@ -56,6 +58,35 @@ export default function TeamScreen() {
     // Role determination is now handled in loadTeamMembers
   };
 
+  const loadPendingInvitations = async (role: 'admin' | 'staff' | null) => {
+    if (!currentBusiness || role !== 'admin') { setPendingInvitations([]); return; }
+    setPendingInvitations(await teamMemberService.getPendingInvitations(currentBusiness.id));
+  };
+
+  const handleCancelInvitation = (invitation: PendingInvitation) => {
+    Alert.alert(
+      'Cancel Invitation',
+      `Withdraw the invitation for ${invitation.invitee_name || invitation.invitee_email || 'this user'}?`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Withdraw', style: 'destructive',
+          onPress: async () => {
+            setCancellingInvite(invitation.id);
+            try {
+              await teamMemberService.cancelInvitation(invitation.id);
+              setPendingInvitations(prev => prev.filter(i => i.id !== invitation.id));
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to cancel invitation');
+            } finally {
+              setCancellingInvite(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const loadTeamMembers = async () => {
     if (!currentBusiness || !user) return;
     
@@ -68,6 +99,8 @@ export default function TeamScreen() {
       // Get team members based on role
       const members = await teamMemberService.getTeamMembers(currentBusiness.id, user.id, userRole || 'staff');
       setTeamMembers(members);
+      // role was just determined above; refresh the open invitations for admins
+      loadPendingInvitations(userRole);
     } catch (error) {
       console.error('Error loading team members:', error);
       Alert.alert('Error', 'Failed to load team members');
@@ -124,8 +157,8 @@ export default function TeamScreen() {
       await teamMemberService.inviteUser(currentBusiness.id, inviteEmail.trim(), inviteRole);
 
       Alert.alert(
-        'Success',
-        `${userCheck.userName || inviteEmail.trim()} has been added to your business as ${inviteRole === 'admin' ? 'an Admin' : 'a Staff member'}.`
+        'Invitation Sent',
+        `${userCheck.userName || inviteEmail.trim()} has been invited as ${inviteRole === 'admin' ? 'an Admin' : 'a Staff member'}. They join once they accept the invitation in their app.`
       );
       setInviteEmail('');
       setInviteRole('staff');
@@ -407,6 +440,42 @@ export default function TeamScreen() {
         keyExtractor={(item) => item.user_id}
         style={styles.membersList}
         contentContainerStyle={styles.membersListContent}
+        ListHeaderComponent={pendingInvitations.length > 0 ? (
+          <View style={styles.invitesSection}>
+            <Text style={[styles.invitesTitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Pending invitations ({pendingInvitations.length})
+            </Text>
+            {pendingInvitations.map(invitation => (
+              <Card key={invitation.id} style={styles.memberCard}>
+                <View style={styles.memberInfo}>
+                  <View style={[styles.avatar, { backgroundColor: '#9ca3af' }]}>
+                    <Mail size={18} color="#ffffff" />
+                  </View>
+                  <View style={styles.memberDetails}>
+                    <Text style={[styles.memberName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                      {invitation.invitee_name || invitation.invitee_email || 'Invited user'}
+                    </Text>
+                    <Text style={[styles.memberEmail, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                      Invited as {invitation.role} · waiting for them to accept
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.memberActions}>
+                  {cancellingInvite === invitation.id ? (
+                    <ActivityIndicator size="small" color="#dc2626" />
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                      onPress={() => handleCancelInvitation(invitation)}
+                    >
+                      <X size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </Card>
+            ))}
+          </View>
+        ) : null}
         ListEmptyComponent={() => (
           <Card style={styles.emptyState}>
             <Users size={48} color={isDark ? '#6b7280' : '#9ca3af'} />
@@ -631,6 +700,17 @@ const styles = StyleSheet.create({
   membersListContent: {
     paddingHorizontal: 16,
     paddingBottom: 20,
+  },
+  invitesSection: {
+    marginBottom: 8,
+  },
+  invitesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   memberCard: {
     flexDirection: 'row',

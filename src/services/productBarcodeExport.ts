@@ -3,6 +3,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from '@/src/config/supabase';
 import { barcodeSvg } from '@/src/utils/barcode';
+import { csvCell } from './exportService';
 
 export interface ProductExportFields {
   name: boolean;
@@ -71,7 +72,7 @@ export function buildProductsCsv(rows: ExportRow[], fields: ProductExportFields)
   if (fields.price) headers.push('Price');
   if (fields.cost) headers.push('Cost');
   if (fields.qty) headers.push('Quantity');
-  const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const q = (s: string) => csvCell(s);
 
   let csv = headers.join(',') + '\n';
   for (const r of rows) {

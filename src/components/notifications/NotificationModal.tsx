@@ -30,6 +30,7 @@ import { Database } from '@/src/types/database';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
 import { webOrderService } from '@/src/services/webOrders';
+import { router } from 'expo-router';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -194,7 +195,12 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
       let navigationTarget = '/(app)/(tabs)/';
       if (notification.type === 'low_stock') {
         navigationTarget = '/(app)/(tabs)/inventory/low-stock';
-      } else if (notification.type === 'role_assigned' || notification.type === 'team_invite') {
+      } else if (notification.type === 'team_invite') {
+        // Not a member yet: open the screen where the invitation is answered, no business switch
+        onClose();
+        setTimeout(() => router.push('/(app)/business-selection' as any), 150);
+        return;
+      } else if (notification.type === 'role_assigned') {
         navigationTarget = '/(app)/(tabs)/';
       } else if (notification.type === 'expense_added') {
         navigationTarget = '/(app)/(tabs)/expenses';

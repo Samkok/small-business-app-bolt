@@ -25,6 +25,7 @@ import { useSubscription } from '@/src/context/SubscriptionContext';
 import { ManageBusinessSubscription } from '@/src/components/subscription/ManageBusinessSubscription';
 import { supabase } from '@/src/config/supabase';
 import { subscriptionService } from '@/src/services/subscriptionService';
+import { teamMemberService, MyInvitation } from '@/src/services/teamMembers';
 
 export default function BusinessSelectionScreen() {
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
@@ -34,6 +35,8 @@ export default function BusinessSelectionScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [businessesWithAccess, setBusinessesWithAccess] = useState<any[]>([]);
   const [loadingBusinesses, setLoadingBusinesses] = useState(true);
+  const [invitations, setInvitations] = useState<MyInvitation[]>([]);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
 
   const router = useRouter();
   const { t } = useTranslation();
@@ -74,6 +77,32 @@ export default function BusinessSelectionScreen() {
     fetchBusinessData();
   }, [user?.id, userBusinesses]);
 
+  const loadInvitations = async () => {
+    if (!user?.id) { setInvitations([]); return; }
+    setInvitations(await teamMemberService.getMyInvitations());
+  };
+
+  useEffect(() => {
+    loadInvitations();
+  }, [user?.id]);
+
+  const handleRespondToInvitation = async (invitation: MyInvitation, accept: boolean) => {
+    setRespondingTo(invitation.id);
+    try {
+      await teamMemberService.respondToInvitation(invitation.id, accept);
+      setInvitations(prev => prev.filter(i => i.id !== invitation.id));
+      if (accept) {
+        await refreshUserBusinesses();
+        Alert.alert('Welcome', `You are now a member of ${invitation.business_name || 'the business'}.`);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not respond to the invitation');
+      loadInvitations();
+    } finally {
+      setRespondingTo(null);
+    }
+  };
+
   const handleSelectBusiness = async (businessId: string) => {
     await switchBusiness(businessId);
     await subscription.refreshTierInfo();
@@ -87,7 +116,8 @@ export default function BusinessSelectionScreen() {
       await Promise.all([
         refreshUserBusinesses(),
         subscription.refreshTierInfo(),
-        subscription.refreshSubscriptionStatus()
+        subscription.refreshSubscriptionStatus(),
+        loadInvitations(),
       ]);
 
       if (user?.id && userBusinesses.length) {
@@ -369,6 +399,38 @@ export default function BusinessSelectionScreen() {
             colors={['#2563eb']}
           />
         }
+        ListHeaderComponent={invitations.length > 0 ? (
+          <View style={styles.invitesSection}>
+            <Text style={[styles.invitesTitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+              Invitations
+            </Text>
+            {invitations.map(invitation => (
+              <Card key={invitation.id} style={styles.inviteCard}>
+                <Text style={[styles.inviteBusiness, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  {invitation.business_name || 'A business'}
+                </Text>
+                <Text style={[styles.inviteText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  {invitation.invited_by_name || 'A business admin'} invited you to join as {invitation.role}.
+                </Text>
+                <View style={styles.inviteActions}>
+                  <Button
+                    title={respondingTo === invitation.id ? '...' : 'Accept'}
+                    onPress={() => handleRespondToInvitation(invitation, true)}
+                    disabled={respondingTo !== null}
+                    style={styles.inviteButton}
+                  />
+                  <TouchableOpacity
+                    style={[styles.declineButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                    onPress={() => handleRespondToInvitation(invitation, false)}
+                    disabled={respondingTo !== null}
+                  >
+                    <Text style={[styles.declineText, { color: isDark ? '#f9fafb' : '#111827' }]}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))}
+          </View>
+        ) : null}
         ListEmptyComponent={() => loadingBusinesses ? (
           <View style={styles.emptyState}>
             <LoadingSpinner />
@@ -549,6 +611,47 @@ const styles = StyleSheet.create({
   },
   businessListContent: {
     paddingHorizontal: 16,
+  },
+  invitesSection: {
+    marginBottom: 12,
+  },
+  invitesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inviteCard: {
+    padding: 16,
+    marginBottom: 8,
+  },
+  inviteBusiness: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  inviteText: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  inviteButton: {
+    flex: 1,
+  },
+  declineButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  declineText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   businessCard: {
     flexDirection: 'row',

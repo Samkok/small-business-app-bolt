@@ -24,54 +24,27 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Two kinds of caller:
-    //  1. The database trigger on `notifications` (send_push_notification_on_insert). It has no
-    //     user session, so it proves itself with X-Push-Secret, a value that only exists in the
-    //     database vault and is checked there by verify_push_trigger_secret (service role only).
-    //  2. A signed-in user (JWT), who may only notify people they share a business with.
+    // The only caller is the database trigger on `notifications` (send_push_notification_on_insert).
+    // It has no user session, so it proves itself with X-Push-Secret, a value that only exists in
+    // the database vault and is checked there by verify_push_trigger_secret (service role only).
+    // There is deliberately no user-JWT path: a signed-in user cannot push arbitrary content to
+    // another account; they create a notifications row and the trigger decides what is sent.
     const pushSecret = req.headers.get("X-Push-Secret");
-    let callerUserId: string | null = null;
-
-    if (pushSecret) {
-      const { data: secretOk, error: secretError } = await supabase.rpc(
-        "verify_push_trigger_secret",
-        { p_secret: pushSecret }
-      );
-      if (secretError || secretOk !== true) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-    } else {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader) {
-        return json({ error: "Missing authorization header" }, 401);
-      }
-
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-      if (authError || !user) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-      callerUserId = user.id;
+    if (!pushSecret) {
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const { data: secretOk, error: secretError } = await supabase.rpc(
+      "verify_push_trigger_secret",
+      { p_secret: pushSecret }
+    );
+    if (secretError || secretOk !== true) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
     const { targetUserId, title, body, data, sound = "default", badge, priority = "default" } = await req.json();
 
     if (!targetUserId) {
       return json({ error: "targetUserId is required" }, 400);
-    }
-
-    // Authorization for user callers: must share at least one business with the target user.
-    // The database trigger is already trusted and notifies whoever the notification row is for.
-    if (callerUserId) {
-      const { data: hasShared, error: sharedError } = await supabase.rpc(
-        "check_shared_business_membership",
-        { p_caller_id: callerUserId, p_target_id: targetUserId }
-      );
-
-      if (sharedError || !hasShared) {
-        return json({ error: "Not authorized to notify this user" }, 403);
-      }
     }
 
     // Every device the user is signed in on (user_push_tokens), plus the legacy single token on
@@ -116,13 +89,14 @@ Deno.serve(async (req) => {
 
     let delivered = 0;
     const dead: string[] = [];
-    const failures: unknown[] = [];
+    let failed = 0;
     messages.forEach((m, i) => {
       const ticket = tickets[i];
       if (ticket?.status === "ok") {
         delivered += 1;
       } else {
-        failures.push({ to: m.to, ticket });
+        failed += 1;
+        console.warn(`[send-push-notification] ticket error for ${targetUserId}: ${ticket?.details?.error ?? ticket?.message ?? "unknown"}`);
         // The app was uninstalled or its token replaced: stop sending to this device
         if (ticket?.details?.error === "DeviceNotRegistered") dead.push(m.to as string);
       }
@@ -137,10 +111,11 @@ Deno.serve(async (req) => {
     }
 
     if (!response.ok || delivered === 0) {
-      return json({ error: "Failed to send push notification", details: result }, 400);
+      return json({ error: "Failed to send push notification", failed }, 400);
     }
 
-    return json({ success: true, delivered, devices: tokens.size, failures, data: result });
+    // Counts only: device tokens never leave the server
+    return json({ success: true, delivered, devices: tokens.size, failed });
   } catch (error) {
     return json({ error: "Internal server error", message: error instanceof Error ? error.message : String(error) }, 500);
   }
