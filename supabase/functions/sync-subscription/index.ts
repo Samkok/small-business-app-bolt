@@ -10,7 +10,8 @@ import { deriveMirror, mirrorNeedsUpdate, type MirrorRow, type RcSubscriber } fr
  * writing its own events as before.
  *
  * Needs the REVENUECAT_SECRET_API_KEY secret (a v1 secret key, sk_...). Without it the
- * function answers 503 and the app simply keeps trusting the SDK.
+ * function answers 503 and the app simply keeps trusting the SDK. Sandbox purchases are
+ * ignored unless the user is in RC_SANDBOX_ALLOWLIST (shared with revenuecat-webhook).
  */
 
 const corsHeaders = {
@@ -100,7 +101,11 @@ Deno.serve(async (req: Request) => {
     return json({ error: rc.error }, rc.status);
   }
 
-  const next = deriveMirror(rc.subscriber, now);
+  // Sandbox purchases count only for testers listed in RC_SANDBOX_ALLOWLIST (comma-separated
+  // app_user_ids), the same rule as the webhook; otherwise this sync would undo what the
+  // webhook accepted for them.
+  const sandboxAllowlist = (Deno.env.get("RC_SANDBOX_ALLOWLIST") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const next = deriveMirror(rc.subscriber, now, { allowSandbox: sandboxAllowlist.includes(userId) });
   const nowIso = new Date(now).toISOString();
   const needsUpdate = mirrorNeedsUpdate((current as MirrorRow | null) ?? null, next);
 
