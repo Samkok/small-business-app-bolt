@@ -42,6 +42,8 @@ export default function ReportsScreen() {
   const [revenueData, setRevenueData] = useState<any>(null);
   const [expensesData, setExpensesData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
+  // The Income Summary card and the full statement share this one computation (write-offs included)
+  const [incomeStatement, setIncomeStatement] = useState<any>(null);
   const [expenseCategoriesData, setExpenseCategoriesData] = useState<any>(null);
   // First month with any sale or expense; the cash flow list runs from there to today.
   const [activityStart, setActivityStart] = useState<Date | null>(null);
@@ -170,6 +172,10 @@ export default function ReportsScreen() {
       // Load profit data
       const profitChartData = await reportsService.getProfitChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
       setProfitData(profitChartData);
+
+      // Income Summary: the same engine as the full statement, so the two never disagree
+      const statement = await reportsService.getIncomeStatement(currentBusiness.id, startDate.toISOString(), endDate.toISOString(), activeCurrencyId);
+      setIncomeStatement(statement);
       
       // Load expense categories data
       const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate, activeCurrencyId);
@@ -885,13 +891,17 @@ export default function ReportsScreen() {
     // Process labels to avoid crowding
     const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
-    // Calculate totals
-    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
-    const totalCOGS = profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
-    const totalOperatingExpenses = profitData.reduce((sum: number, item: any) => sum + (item.operatingExpenses ?? item.expenses), 0);
-    const totalDeliveryFees = profitData.reduce((sum: number, item: any) => sum + (item.deliveryFees ?? 0), 0);
+    // Totals come from the income statement (write-offs and found stock included), the same
+    // numbers the full statement prints; the chart buckets are only a fallback while it loads.
+    const totalRevenue = incomeStatement ? incomeStatement.revenue.total : profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
+    const totalCOGS = incomeStatement ? incomeStatement.cogs.total : profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
+    const writeOffs = incomeStatement?.inventory?.writeOffs ?? 0;
+    const writeOffUnits = incomeStatement?.inventory?.writeOffUnits ?? 0;
+    const foundStock = incomeStatement?.inventory?.found ?? 0;
+    const totalOperatingExpenses = incomeStatement ? incomeStatement.expenses.operating : profitData.reduce((sum: number, item: any) => sum + (item.operatingExpenses ?? item.expenses), 0);
+    const totalDeliveryFees = incomeStatement ? incomeStatement.expenses.deliveryFees : profitData.reduce((sum: number, item: any) => sum + (item.deliveryFees ?? 0), 0);
     const totalExpenses = totalOperatingExpenses + totalDeliveryFees;
-    const grossProfit = totalRevenue - totalCOGS;
+    const grossProfit = totalRevenue - totalCOGS - writeOffs + foundStock;
     const netProfit = grossProfit - totalExpenses;
 
     return (
@@ -923,6 +933,27 @@ export default function ReportsScreen() {
               <Text style={[styles.costWarning, { color: isDark ? '#fbbf24' : '#b45309' }]}>
                 {t('costLedger.missingCostLines', { count: missingCostLines })}
               </Text>
+            )}
+
+            {writeOffs > 0 && (
+              <View style={styles.incomeRow}>
+                <Text style={[styles.incomeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Inventory Write-offs ({writeOffUnits} units lost)
+                </Text>
+                <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
+                  {fmt(writeOffs)}
+                </Text>
+              </View>
+            )}
+            {foundStock > 0 && (
+              <View style={styles.incomeRow}>
+                <Text style={[styles.incomeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Less: Found Stock
+                </Text>
+                <Text style={[styles.incomeValue, { color: '#059669' }]}>
+                  -{fmt(foundStock)}
+                </Text>
+              </View>
             )}
             
             <View style={[styles.incomeRow, styles.subtotalRow]}>

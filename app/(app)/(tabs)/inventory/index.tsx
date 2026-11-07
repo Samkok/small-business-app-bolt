@@ -181,11 +181,15 @@ export default function InventoryScreen() {
     }
   }, [currentBusiness?.id]);
 
-  // Recount whenever the tab regains focus (after a sale, an import, or a visit to Product Insight)
+  // Refetch whenever the tab regains focus (after a sale, a stock count, an adjustment, an import
+  // or a cost change made on another screen); the mount effect covers the first focus.
+  const focusedOnceRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
       loadMustOrderCount();
-    }, [loadMustOrderCount])
+      if (focusedOnceRef.current) loadData(true);
+      focusedOnceRef.current = true;
+    }, [loadMustOrderCount, currentBusiness?.id])
   );
 
   const loadData = async (isRefresh = false) => {
@@ -421,6 +425,10 @@ export default function InventoryScreen() {
     setSelectedProduct(null);
     // Refresh the current page to show updated product
     loadProducts(0, true);
+    // A changed minimum or stock moves the low-stock badge
+    if (currentBusiness?.id) {
+      productService.getLowStockProducts(currentBusiness.id).then(p => setLowStockCount(p.length)).catch(() => {});
+    }
     // Update total count
     if (!selectedProduct) {
       setTotalProducts(prev => prev + 1);

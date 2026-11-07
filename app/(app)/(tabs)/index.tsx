@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   RefreshControl,
   Platform
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -38,6 +38,7 @@ interface DashboardStats {
   todayRevenue: number;
   monthlyRevenue: number;
   monthlyCOGS: number;
+  inventoryWriteOffs?: number;
   totalProfit: number;
   totalExpenses: number;
   netProfit: number;
@@ -91,9 +92,15 @@ export default function DashboardScreen() {
   // each sale with its exchange rate at sale), so nothing is converted again here.
   const displayAmount = useCallback((amount: number): number => amount, []);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [currentBusiness, selectedMonth, activeCurrencyId]);
+  // Reload every time the tab is focused (a sale, return, expense or stock adjustment made
+  // elsewhere changes these numbers); the first load shows the cached snapshot while it runs.
+  const hasLoadedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData(hasLoadedRef.current);
+      hasLoadedRef.current = true;
+    }, [currentBusiness?.id, selectedMonth, activeCurrencyId])
+  );
 
   useEffect(() => {
     if (wasOffline && isConnected && currentBusiness?.id) {
@@ -122,12 +129,11 @@ export default function DashboardScreen() {
 
     setError(null);
 
-    // Step 1: Try loading from cache first
-    const cachedStats = await dataCache.get<DashboardStats>(`dashboard_stats_${monthKey}`, businessId);
-    const cachedProducts = await dataCache.get<TopProduct[]>(`dashboard_top_products_${monthKey}`, businessId);
-    const cachedCustomers = await dataCache.get<TopCustomer[]>(`dashboard_top_customers_${monthKey}`, businessId);
-
+    // Step 1: the cached snapshot is only for the first paint; a refresh always goes to the server
+    const cachedStats = isRefresh ? null : await dataCache.get<DashboardStats>(`dashboard_stats_${monthKey}`, businessId);
     if (cachedStats) {
+      const cachedProducts = await dataCache.get<TopProduct[]>(`dashboard_top_products_${monthKey}`, businessId);
+      const cachedCustomers = await dataCache.get<TopCustomer[]>(`dashboard_top_customers_${monthKey}`, businessId);
       setStats(cachedStats.data);
       setTopProducts(cachedProducts?.data || []);
       setTopCustomers(cachedCustomers?.data || []);
@@ -136,54 +142,49 @@ export default function DashboardScreen() {
 
     // Step 2: If offline, stop here
     if (!isConnected) {
-      if (!cachedStats) {
-        setLoading(false);
-      }
+      setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error('Supabase configuration is missing. Please check your environment variables.');
-      }
-
       const year = selectedMonth.getFullYear();
       const month = selectedMonth.getMonth() + 1;
 
-      const [dashboardStats, products, customers] = await Promise.all([
+      // Each block stands on its own: a failing top-products query must not throw away fresh totals
+      const [statsResult, productsResult, customersResult] = await Promise.allSettled([
         reportsService.getDashboardStats(businessId, year, month, activeCurrencyId || undefined),
         reportsService.getTopProducts(businessId, 3, year, month, activeCurrencyId || undefined),
         reportsService.getTopCustomers(businessId, 3, year, month, activeCurrencyId || undefined)
       ]);
 
-      setStats(dashboardStats);
-      setTopProducts(products);
-      setTopCustomers(customers);
-      setError(null);
+      if (statsResult.status === 'fulfilled' && statsResult.value) {
+        setStats(statsResult.value);
+        setError(null);
+        await dataCache.set(`dashboard_stats_${monthKey}`, businessId, statsResult.value);
+      }
+      if (productsResult.status === 'fulfilled') {
+        setTopProducts(productsResult.value);
+        await dataCache.set(`dashboard_top_products_${monthKey}`, businessId, productsResult.value);
+      }
+      if (customersResult.status === 'fulfilled') {
+        setTopCustomers(customersResult.value);
+        await dataCache.set(`dashboard_top_customers_${monthKey}`, businessId, customersResult.value);
+      }
 
-      // Cache the fresh data
-      await dataCache.set(`dashboard_stats_${monthKey}`, businessId, dashboardStats);
-      await dataCache.set(`dashboard_top_products_${monthKey}`, businessId, products);
-      await dataCache.set(`dashboard_top_customers_${monthKey}`, businessId, customers);
+      const failure = [statsResult, productsResult, customersResult].find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+      if (failure) throw failure.reason;
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      if (!cachedStats) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
-        setError(errorMessage);
-
-        if (Platform.OS !== 'web') {
-          showNetworkAwareError(err, t('common.error'), errorMessage, isConnected);
-        }
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
+      // Say so even when a cached snapshot is on screen, so stale numbers are never mistaken for fresh ones
+      if (!stats && !cachedStats) setError(errorMessage);
+      if (Platform.OS !== 'web') {
+        showNetworkAwareError(err, t('common.error'), errorMessage, isConnected);
       }
     } finally {
-      if (isRefresh) {
-        setRefreshing(false);
-      } else {
-        setLoading(false);
-      }
+      setRefreshing(false);
+      setLoading(false);
     }
   };
 

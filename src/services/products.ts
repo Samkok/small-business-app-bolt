@@ -339,6 +339,35 @@ export const productService = {
     return count || 0;
   },
 
+  async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.searchProducts called without businessId');
+      return [];
+    }
+
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
+    let dbQuery = supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_archived', false)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
+      .order('name');
+
+    if (limit) {
+      dbQuery = dbQuery.limit(limit);
+    }
+
+    if (offset) {
+      dbQuery = dbQuery.range(offset, offset + (limit || 10) - 1);
+    }
+
+    const { data, error } = await dbQuery;
+    if (error) throw error;
+    return data;
+  },
+
   async searchArchivedProducts(businessId: string, query: string, limit?: number, offset?: number) {
     const sanitizedQuery = sanitizeSearchQuery(query);
 

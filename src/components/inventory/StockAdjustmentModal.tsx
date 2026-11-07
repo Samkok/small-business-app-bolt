@@ -321,7 +321,7 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
               </>
             ) : (
               <Button
-                title={posting ? 'Posting…' : effectiveDirection === 'out' ? `Remove ${baseQty || ''} units` : `Add ${baseQty || ''} units`}
+                title={posting ? 'Posting…' : `${effectiveDirection === 'out' ? 'Remove' : 'Add'} ${baseQty || ''} ${baseQty === 1 ? 'unit' : 'units'}`}
                 onPress={handlePost}
                 disabled={posting || baseQty <= 0 || belowZero}
                 loading={posting}

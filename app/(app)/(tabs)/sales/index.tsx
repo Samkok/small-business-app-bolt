@@ -14,7 +14,7 @@ import {
   Animated,
   Platform
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -407,6 +407,17 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
+  // Refetch when the tab regains focus: a return or void made on the details screen must show
+  // on the card (the mount effect covers the first focus)
+  const salesFocusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (salesFocusedOnceRef.current && currentBusiness?.id && activeTab === 'sales') loadData(true);
+      salesFocusedOnceRef.current = true;
+    }, [currentBusiness?.id, activeTab, loadData])
+  );
+
+
   const loadSalesData = useCallback(async (page: number = 0, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
 
@@ -640,7 +651,8 @@ export default function SalesScreen() {
         end.toISOString()
       );
       
-      const fileName = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
+      // Local calendar dates: toISOString() would shift a midnight start to the previous UTC day
+      const fileName = `sales_export_${format(start, 'yyyy-MM-dd')}_to_${format(end, 'yyyy-MM-dd')}.csv`;
       
       if (Platform.OS === 'web') {
         // Web platform - use browser download

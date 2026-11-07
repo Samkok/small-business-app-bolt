@@ -24,6 +24,7 @@ import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { paymentStatusLabel } from '@/src/utils/paymentStatus';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { hasReturns, isFullyReturned } from '@/src/utils/saleMoney';
+import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -110,18 +111,6 @@ export default function SaleDetailsContent({
     }
   };
 
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method) {
-      case 'cash':
-        return '💵';
-      case 'card':
-        return '💳';
-      case 'transfer':
-        return '🏦';
-      default:
-        return '💰';
-    }
-  };
 
   const SaleDetailsSkeleton = () => (
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -287,9 +276,9 @@ export default function SaleDetailsContent({
             </View>
 
             <View style={styles.saleInfoItem}>
-              <CreditCard size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <PaymentMethodIcon method={sale.payment_method} size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.saleInfoText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {getPaymentMethodIcon(sale.payment_method)} {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
+                {sale.payment_method.charAt(0).toUpperCase() + sale.payment_method.slice(1)}
               </Text>
             </View>
           </View>

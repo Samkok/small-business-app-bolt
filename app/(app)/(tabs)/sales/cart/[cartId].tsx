@@ -39,6 +39,7 @@ import { ReceiptInput } from '@/src/utils/receipt';
 import { receiptDraftStore } from '@/src/utils/receiptDraft';
 import { PaymentStatusSelector } from '@/src/components/sales/PaymentStatusSelector';
 import { PaymentStatus } from '@/src/utils/paymentStatus';
+import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
 
 type DiscountKind = 'percentage' | 'fixed';
 type DiscountScope = 'per_unit' | 'total';
@@ -408,10 +409,10 @@ export default function CartScreen() {
   }, [rememberDraft]);
 
   const paymentMethods = [
-    { value: 'cash', label: 'Cash', icon: '💵' },
-    { value: 'card', label: 'Card', icon: '💳' },
-    { value: 'transfer', label: 'Transfer', icon: '🏦' },
-    { value: 'other', label: 'Other', icon: '💰' },
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'transfer', label: 'Transfer' },
+    { value: 'other', label: 'Other' },
   ];
 
   // Delivery fee currency. Default: the currency of the products in the cart (when they all
@@ -1413,7 +1414,7 @@ export default function CartScreen() {
                 ]}
                 onPress={() => choosePaymentMethod(method.value as 'cash' | 'card' | 'transfer' | 'other')}
               >
-                <Text style={styles.paymentIcon}>{method.icon}</Text>
+                <PaymentMethodIcon method={method.value} size={20} color={paymentMethod === method.value ? '#ffffff' : (isDark ? '#f9fafb' : '#111827')} />
                 <Text style={[styles.paymentLabel, { color: paymentMethod === method.value ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
                   {method.label}
                 </Text>

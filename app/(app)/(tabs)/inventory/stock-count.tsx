@@ -172,8 +172,12 @@ export default function StockCountScreen() {
         items: review.items,
         notes: notes.trim() || undefined,
       });
+      // Show the posted quantities at once (the RPC returns totals only), then reload from the server
+      const posted = new Map(review.items.map(i => [i.productId, i.counted]));
+      setProducts((prev: any[]) => prev.map(p => posted.has(p.id) ? { ...p, current_stock: posted.get(p.id) } : p));
       setCounts({});
       setNotes('');
+      load();
       Alert.alert(
         'Stock count posted',
         `${result.adjusted} product${result.adjusted === 1 ? '' : 's'} adjusted, ${result.unchanged} unchanged.\n` +

@@ -123,7 +123,7 @@ export default function LowStockScreen() {
 
   const handleImportStock = (product: any) => {
     setSelectedProduct(product);
-    setShowImportForm(true);
+    setShowImportStockForm(true);
   };
 
   const handleImportComplete = () => {
