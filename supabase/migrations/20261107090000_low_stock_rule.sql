@@ -1,4 +1,4 @@
--- NOT YET APPLIED to the live project (apply through the Supabase MCP; the live version number will differ from this file name).
+-- Applied live on 2026-11-07 through the Supabase MCP (the live version number differs from this file name). Do not re-apply.
 -- Low stock: one rule, full rows.
 --   * The inventory badge, the dashboard counter, the Low Stock screen and Product Insight
 --     used two definitions of "low": the RPC compared with min_stock_level as stored (0 when
