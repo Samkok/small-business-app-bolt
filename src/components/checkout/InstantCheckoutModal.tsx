@@ -42,6 +42,7 @@ import BarcodeScanner from '../inventory/BarcodeScanner';
 import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 import { useCurrency } from '@/src/hooks/useCurrency';
 import { unitService, ProductUnit, Unit } from '@/src/services/units';
+import { saleEvents } from '@/src/lib/saleEvents';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -441,6 +442,7 @@ export function InstantCheckoutModal() {
       }
 
       if (result.success) {
+        saleEvents.emitRecorded();
         await refreshSalesCount();
         void analytics.saleCompleted(user.id, currentBusiness.id, false);
 

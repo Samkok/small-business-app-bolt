@@ -110,9 +110,10 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
             </View>
             
             <View style={styles.amountRow}>
-              <DollarSign size={18} color="#059669" />
+              <DollarSign size={18} color={sale.status === 'voided' ? '#9ca3af' : '#059669'} />
               <View style={styles.amountContainer}>
-                <Text style={[styles.amount, { color: '#059669' }]}>
+                {/* A voided sale brought in nothing: grey and struck through, never green */}
+                <Text style={[styles.amount, sale.status === 'voided' ? { color: '#9ca3af', textDecorationLine: 'line-through' } : { color: '#059669' }]}>
                   {fmtAmount(shownAmount)}
                 </Text>
                 {shownAmount !== sale.total_amount && (

@@ -22,11 +22,14 @@ import ProductForm from '@/src/components/products/ProductForm';
 import ImportStockForm from '@/src/components/inventory/ImportStockForm';
 import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
+import { productInsightService } from '@/src/services/productInsight';
 import { inventoryService } from '@/src/services/inventory';
 import { useTranslation } from '@/src/locales';
 
 export default function LowStockScreen() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  // The business's default minimum, used when a product's own minimum is unset or 0 (same rule as the server)
+  const [defaultLowLevel, setDefaultLowLevel] = useState(10);
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,7 +59,11 @@ export default function LowStockScreen() {
         setLoading(true);
       }
 
-      const data = await productService.getLowStockProducts(currentBusiness.id);
+      const [data, settings] = await Promise.all([
+        productService.getLowStockProducts(currentBusiness.id),
+        productInsightService.getSettings(currentBusiness.id).catch(() => null),
+      ]);
+      setDefaultLowLevel(settings?.default_low_stock_level || 10);
       setLowStockProducts(data);
     } catch (error) {
       console.error('Error loading low stock products:', error);
@@ -70,8 +77,11 @@ export default function LowStockScreen() {
     }
   };
 
+  // The level a product counts as low at: its own minimum, else the business default
+  const thresholdOf = (product: any) => (Number(product.min_stock_level) > 0 ? Number(product.min_stock_level) : defaultLowLevel);
+
   const getStockStatus = (product: any) => {
-    const stockRatio = product.current_stock / Math.max(product.min_stock_level, 1);
+    const stockRatio = product.current_stock / Math.max(thresholdOf(product), 1);
     if (product.current_stock === 0) return { status: 'out', color: '#dc2626', label: 'Out of Stock' };
     if (stockRatio <= 0.5) return { status: 'critical', color: '#ea580c', label: 'Critical' };
     return { status: 'low', color: '#f59e0b', label: t('inventory.lowStock') };
@@ -94,13 +104,11 @@ export default function LowStockScreen() {
   const getStockCounts = () => {
     const outOfStock = lowStockProducts.filter(p => p.current_stock === 0).length;
     const critical = lowStockProducts.filter(p => {
-      const ratio = p.current_stock / Math.max(p.min_stock_level, 1);
+      const ratio = p.current_stock / Math.max(thresholdOf(p), 1);
       return p.current_stock > 0 && ratio <= 0.5;
     }).length;
-    const low = lowStockProducts.filter(p => {
-      const ratio = p.current_stock / Math.max(p.min_stock_level, 1);
-      return ratio > 0.5 && ratio <= 1;
-    }).length;
+    // Everything else the server returned is low (the server already applied the threshold)
+    const low = lowStockProducts.length - outOfStock - critical;
 
     return { outOfStock, critical, low };
   };

@@ -59,6 +59,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScanBarcodeButton } from '@/src/components/inventory/ScanBarcodeButton';
 import { parseReceiptNumber } from '@/src/utils/barcode128';
 import { supabase } from '@/src/config/supabase';
+import { saleEvents } from '@/src/lib/saleEvents';
 
 const SALES_PER_PAGE = 10;
 const WARNING_BANNER_DISMISSED_KEY = 'warning_banner_dismissed_';
@@ -406,6 +407,11 @@ export default function SalesScreen() {
       setLoading(false);
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
+
+  // A sale recorded in the Quick Checkout sheet (a modal: this screen never loses focus)
+  useEffect(() => saleEvents.onRecorded(() => {
+    if (currentBusiness?.id) loadData(true);
+  }), [currentBusiness?.id, loadData]);
 
   // Refetch when the tab regains focus: a return or void made on the details screen must show
   // on the card (the mount effect covers the first focus)

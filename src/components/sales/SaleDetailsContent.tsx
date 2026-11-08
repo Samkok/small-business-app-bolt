@@ -283,7 +283,9 @@ export default function SaleDetailsContent({
             </View>
           </View>
 
-          {/* PAID or COD. Sales made before the field existed have none; Edit sets it. */}
+          {/* PAID or COD. Sales made before the field existed have none; Edit sets it.
+              A voided sale has nothing to collect, so it shows neither. */}
+          {sale.status !== 'voided' && (
           <View style={styles.saleInfoRow}>
             <View style={styles.saleInfoItem}>
               <View
@@ -306,6 +308,7 @@ export default function SaleDetailsContent({
               )}
             </View>
           </View>
+          )}
 
           {(sale.created_by_name || sale.carts?.created_by_name) && (
             <View style={styles.saleInfoRow}>
