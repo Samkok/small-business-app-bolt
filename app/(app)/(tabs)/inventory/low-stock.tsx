@@ -20,7 +20,7 @@ import { SkeletonProductCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ProductCard } from '@/src/components/products/ProductCard';
 import ProductForm from '@/src/components/products/ProductForm';
 import ImportStockForm from '@/src/components/inventory/ImportStockForm';
-import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Package, DollarSign, Plus, Trash2, RefreshCw, CreditCard as Edit, TrendingUp, TriangleAlert as AlertTriangle, Lightbulb } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
 import { productInsightService } from '@/src/services/productInsight';
 import { inventoryService } from '@/src/services/inventory';
@@ -422,9 +422,12 @@ export default function LowStockScreen() {
 
         {/* Stock Management Tips */}
         <Card style={styles.tipsCard}>
-          <Text style={[styles.tipsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            💡 Stock Management Tips
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Lightbulb size={18} color={isDark ? '#f9fafb' : '#111827'} />
+            <Text style={[styles.tipsTitle, { color: isDark ? '#f9fafb' : '#111827', marginBottom: 0 }]}>
+              Stock Management Tips
+            </Text>
+          </View>
           <View style={styles.tipsList}>
             <Text style={[styles.tipItem, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
               • Set appropriate minimum stock levels for each product

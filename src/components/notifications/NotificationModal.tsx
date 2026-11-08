@@ -25,7 +25,7 @@ import { useBusinessSwitch } from '@/src/context/BusinessSwitchContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { pushNotificationService } from '@/src/services/pushNotifications';
-import { X, Bell, CheckCheck, Trash2, Clock } from 'lucide-react-native';
+import { X, Bell, CheckCheck, Trash2, Clock, DollarSign, TriangleAlert, Package, Users, Receipt, ShoppingCart } from 'lucide-react-native';
 import { Database } from '@/src/types/database';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import BusinessSwitchLoadingModal from './BusinessSwitchLoadingModal';
@@ -243,24 +243,26 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   }, [deleteNotification]);
 
   const getNotificationIcon = useCallback((type: string) => {
+    const color = isDark ? '#d1d5db' : '#4b5563';
+    const size = 20;
     switch (type) {
       case 'sale_created':
-        return '💰';
+        return <DollarSign size={size} color={color} />;
       case 'sale_voided':
-        return '⚠️';
+        return <TriangleAlert size={size} color={color} />;
       case 'low_stock':
-        return '📦';
+        return <Package size={size} color={color} />;
       case 'team_invite':
       case 'role_assigned':
-        return '👥';
+        return <Users size={size} color={color} />;
       case 'expense_added':
-        return '💳';
+        return <Receipt size={size} color={color} />;
       case 'web_order_received':
-        return '🛒';
+        return <ShoppingCart size={size} color={color} />;
       default:
-        return '📢';
+        return <Bell size={size} color={color} />;
     }
-  }, []);
+  }, [isDark]);
 
   const formatTimeAgo = useCallback((dateString: string) => {
     const date = new Date(dateString);
@@ -304,7 +306,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
             {isLoading ? (
               <LoadingSpinner size="small" />
             ) : (
-              <Text style={styles.notificationIcon}>{getNotificationIcon(item.type)}</Text>
+              <View style={styles.notificationIcon}>{getNotificationIcon(item.type)}</View>
             )}
           </View>
         <View style={styles.notificationContent}>
@@ -546,7 +548,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   notificationIcon: {
-    fontSize: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notificationContent: {
     flex: 1,

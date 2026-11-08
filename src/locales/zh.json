@@ -243,7 +243,37 @@
     "originalTotal": "原始总计",
     "returnedAmount": "退货金额",
     "saleActions": "销售操作",
-    "returnMoreItems": "退货更多商品"
+    "returnMoreItems": "退货更多商品",
+    "returnFromSale": "从销售 #{{number}} 退货 · {{total}}",
+    "returnReasonLabel": "退货原因",
+    "returnReasons": {
+      "changedMind": "改变主意",
+      "damaged": "损坏",
+      "wrongItem": "商品错误",
+      "expired": "已过期",
+      "other": "其他"
+    },
+    "voidReasonLabel": "作废原因",
+    "voidReasons": {
+      "enteredByMistake": "误录入",
+      "customerCancelled": "客户取消",
+      "duplicateSale": "重复销售",
+      "wrongItems": "商品错误",
+      "other": "其他"
+    },
+    "chooseReasonHint": "请选择原因以继续",
+    "additionalNotesOptional": "附加备注（可选）",
+    "notePlaceholder": "其他详细信息",
+    "keepPartOfMoney": "保留部分款项",
+    "noLoss": "无损失",
+    "lossFixedAmount": "固定金额",
+    "lossPercentage": "百分比",
+    "lossAdjustmentOptional": "损失调整（可选）",
+    "lossAdjustmentHint": "请先设置退货数量",
+    "itemCount": "{{count}} 件",
+    "itemCount_plural": "{{count}} 件",
+    "returnProcessed": "退货已处理",
+    "returnProcessedMessage": "已退货 {{items}}。退款：{{amount}}"
   },
   "expenses": {
     "title": "支出",

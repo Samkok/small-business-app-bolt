@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Phone, MapPin, MessageCircle, ShoppingBag } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Phone, MapPin, MessageCircle, ShoppingBag, Facebook, Instagram, Send, Footprints, Music2, Smartphone, User } from 'lucide-react-native';
 
 interface CustomerCardProps {
   customer: {
@@ -23,23 +23,25 @@ export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit,
   const { isDark } = useTheme();
 
   const getPlatformIcon = (platform?: string) => {
+    const color = isDark ? '#9ca3af' : '#6b7280';
+    const size = 16;
     switch (platform) {
       case 'facebook':
-        return '📘';
+        return <Facebook size={size} color={color} />;
       case 'instagram':
-        return '📷';
+        return <Instagram size={size} color={color} />;
       case 'telegram':
-        return '✈️';
+        return <Send size={size} color={color} />;
       case 'walk_in':
-        return '🚶';
+        return <Footprints size={size} color={color} />;
       case 'tiktok':
-        return '🎵';
+        return <Music2 size={size} color={color} />;
       case 'wechat':
-        return '💬';
+        return <MessageCircle size={size} color={color} />;
       case 'line':
-        return '📱';
+        return <Smartphone size={size} color={color} />;
       default:
-        return '👤';
+        return <User size={size} color={color} />;
     }
   };
 
@@ -66,9 +68,9 @@ export const CustomerCard = React.memo(function CustomerCard({ customer, onEdit,
               {customer.name}
             </Text>
             {customer.platform && (
-              <Text style={styles.platformIcon}>
+              <View style={styles.platformIcon}>
                 {getPlatformIcon(customer.platform)}
-              </Text>
+              </View>
             )}
           </View>
           
@@ -170,8 +172,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   platformIcon: {
-    fontSize: 16,
     marginLeft: 8,
+    justifyContent: 'center',
   },
   contactRow: {
     flexDirection: 'row',

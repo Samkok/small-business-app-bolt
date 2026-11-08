@@ -146,7 +146,7 @@ export default function StockAdjustmentModal({ visible, product, units = [], onC
     if (stockWithoutOld < 0) {
       Alert.alert(
         'Cannot delete',
-        `This adjustment added ${editing.quantity} units and only ${product.current_stock} are left, so taking them back would leave less than zero.`
+        `This adjustment added ${editing.quantity} ${editing.quantity === 1 ? 'unit' : 'units'} and only ${product.current_stock} ${product.current_stock === 1 ? 'is' : 'are'} left, so taking ${editing.quantity === 1 ? 'it' : 'them'} back would leave less than zero.`
       );
       return;
     }

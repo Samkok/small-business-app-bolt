@@ -131,6 +131,22 @@ export const batchImportService = {
     return { batch, imports };
   },
 
+  /**
+   * Create a batch and receive it in one go (goods already on the shelf).
+   * The batch is created as pending first; if receiving then fails the batch stays pending and
+   * `received` is false with the error attached, so the caller can tell the user nothing was lost
+   * and the batch can still be marked arrived from Import History.
+   */
+  async createAndReceiveBatch(batchData: BatchImportData, arrivalDate?: string) {
+    const created = await this.createBatchImport(batchData);
+    try {
+      const batch = await this.markBatchAsArrived(created.batch.id, arrivalDate || batchData.purchase_date);
+      return { batch, imports: created.imports, received: true as const, receiveError: null };
+    } catch (receiveError) {
+      return { batch: created.batch, imports: created.imports, received: false as const, receiveError };
+    }
+  },
+
   async getBatchImports(businessId: string) {
     const { data, error } = await supabase
       .from('inventory_batches')

@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   FlatList,
+  Switch,
 } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -46,6 +47,16 @@ function itemKey(productId: string, unitId?: string): string {
   return unitId ? `${productId}::${unitId}` : productId;
 }
 
+// Starting "Cost / unit" for a line: the product's current cost per base unit scaled to the
+// import unit (cost × conversion factor). 0 when the product has no cost yet.
+function prefilledUnitCost(product: any, conversionFactor?: number | null): number {
+  const perBase = Number(product?.cost_per_unit);
+  if (!Number.isFinite(perBase) || perBase <= 0) return 0;
+  const factor = Number(conversionFactor);
+  const perImportUnit = perBase * (Number.isFinite(factor) && factor > 0 ? factor : 1);
+  return parseFloat(perImportUnit.toFixed(4));
+}
+
 export default function ImportStockForm({ onComplete, onCancel }: ImportStockFormProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
@@ -53,6 +64,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [additionalCosts, setAdditionalCosts] = useState<BatchImportCost[]>([]);
   const [notes, setNotes] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString());
+  // ON: the goods are already here, so the batch is created and received in one step.
+  const [receiveNow, setReceiveNow] = useState(true);
   const [loading, setLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(true);
   const [showProductSelector, setShowProductSelector] = useState(false);
@@ -161,7 +174,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
         updated[existing] = { ...updated[existing], quantity: updated[existing].quantity + 1 };
         return updated;
       }
-      return [...prev, { product_id: product.id, quantity: 1, base_unit_cost_per_item: 0 }];
+      return [
+        ...prev,
+        { product_id: product.id, quantity: 1, base_unit_cost_per_item: prefilledUnitCost(product) },
+      ];
     });
     setShowProductSelector(false);
   };
@@ -184,7 +200,10 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       {
         product_id: variantPickerProduct.id,
         quantity: 1,
-        base_unit_cost_per_item: 0,
+        base_unit_cost_per_item: prefilledUnitCost(
+          variantPickerProduct,
+          variantProductUnit.unit.conversion_factor_to_base,
+        ),
         unit_id: variantProductUnit.unit_id,
         unit_label: variantProductUnit.name || variantProductUnit.unit.name,
         conversion_factor: variantProductUnit.unit.conversion_factor_to_base,
@@ -305,17 +324,38 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       return;
     }
 
+    const batchData = {
+      business_id: currentBusiness.id,
+      imported_by: user.id,
+      purchase_date: purchaseDate,
+      notes: notes.trim() || undefined,
+      items: selectedItems,
+      costs: additionalCosts,
+    };
+
     setLoading(true);
     try {
-      await batchImportService.createBatchImport({
-        business_id: currentBusiness.id,
-        imported_by: user.id,
-        purchase_date: purchaseDate,
-        notes: notes.trim() || undefined,
-        items: selectedItems,
-        costs: additionalCosts,
-      });
-      Alert.alert('Success', 'Stock import created successfully');
+      if (receiveNow) {
+        const result = await batchImportService.createAndReceiveBatch(batchData, purchaseDate);
+        if (!result.received) {
+          console.error('Error receiving import:', result.receiveError);
+          Alert.alert(
+            'Saved as pending',
+            'The import was saved but the stock could not be received. Open Import History and mark the batch as arrived to add it to stock.',
+          );
+          onComplete();
+          return;
+        }
+        const productCount = new Set(selectedItems.map(i => i.product_id)).size;
+        const totalCost = Number(result.batch.total_batch_cost ?? totalBatchCost) || totalBatchCost;
+        Alert.alert(
+          'Stock received',
+          `${productCount} ${productCount === 1 ? 'product' : 'products'} added to stock. Total cost ${formatPrice(totalCost)}.`,
+        );
+      } else {
+        await batchImportService.createBatchImport(batchData);
+        Alert.alert('Success', 'Stock import created successfully');
+      }
       onComplete();
     } catch (error) {
       console.error('Error creating import:', error);
@@ -645,6 +685,18 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
               placeholder="Tap to set purchase date"
             />
           </TouchableOpacity>
+
+          <View style={[styles.receiveRow, { borderTopColor: isDark ? '#374151' : '#e5e7eb' }]}>
+            <View style={styles.receiveText}>
+              <Text style={[styles.receiveLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                Goods received now
+              </Text>
+              <Text style={[styles.receiveHint, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                Off: save as pending and mark arrived later.
+              </Text>
+            </View>
+            <Switch value={receiveNow} onValueChange={setReceiveNow} />
+          </View>
         </Card>
 
         {/* Selected Products */}
@@ -843,7 +895,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       <View style={styles.footer}>
         <Button title="Cancel" variant="outline" onPress={() => setShowDiscardModal(true)} style={styles.footerButton} />
         <Button
-          title="Create Import"
+          title={receiveNow ? 'Receive stock' : 'Create Import'}
           onPress={handleImport}
           loading={loading}
           style={styles.footerButton}
@@ -938,6 +990,15 @@ const styles = StyleSheet.create({
   },
   emptyProducts: { alignItems: 'center', padding: 20 },
   emptyText: { fontSize: 14, textAlign: 'center' },
+
+  // Receive-now switch
+  receiveRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 12, paddingTop: 12, borderTopWidth: 1, gap: 12,
+  },
+  receiveText: { flex: 1, gap: 2 },
+  receiveLabel: { fontSize: 14, fontWeight: '600' },
+  receiveHint: { fontSize: 12 },
 
   // Item row
   selectedItem: {

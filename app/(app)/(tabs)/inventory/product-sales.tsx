@@ -18,7 +18,7 @@ import { useSaleDetailsModal } from '@/src/context/SaleDetailsModalContext';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { Card } from '@/src/components/ui/Card';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart } from 'lucide-react-native';
+import { ArrowLeft, Receipt, Calendar, ChevronDown, Package, DollarSign, ShoppingCart, TriangleAlert } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { useTranslation } from '@/src/locales';
@@ -395,9 +395,10 @@ export default function ProductSalesScreen() {
             </View>
 
             {isPartiallyReturned && (
-              <View style={[styles.returnInfo, { borderColor: '#3b82f6', backgroundColor: '#3b82f620' }]}>
-                <Text style={{ color: '#3b82f6', fontSize: 12 }}>
-                  ⚠️ {returnedQty} unit(s) returned ({formatPrice(displayAmount(returnedRevenue), activeCurrencyId || undefined)})
+              <View style={[styles.returnInfo, { borderColor: '#3b82f6', backgroundColor: '#3b82f620', flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                <TriangleAlert size={12} color="#3b82f6" />
+                <Text style={{ color: '#3b82f6', fontSize: 12, flex: 1 }}>
+                  {returnedQty} {returnedQty === 1 ? 'unit' : 'units'} returned ({formatPrice(displayAmount(returnedRevenue), activeCurrencyId || undefined)})
                 </Text>
               </View>
             )}

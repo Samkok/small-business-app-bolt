@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save, PhoneOff, Calendar, WifiOff } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save, PhoneOff, Calendar, WifiOff, TriangleAlert } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
@@ -1254,6 +1254,7 @@ export default function CartScreen() {
                 itemDiscountScope={item.item_discount_scope}
                 initialQuantity={initialQuantity}
                 availableStock={availableStock}
+                unitName={(item as any).unit_name}
                 onQuantityChange={handleQuantityChange}
                 onShowDiscount={setShowDiscountModal}
                 onRemoveDiscount={handleRemoveItemDiscount}
@@ -1388,9 +1389,10 @@ export default function CartScreen() {
             </View>
           </TouchableOpacity>
           {saleDate.toDateString() !== new Date().toDateString() && (
-            <View style={styles.dateWarning}>
-              <Text style={[styles.dateWarningText, { color: '#d97706' }]}>
-                ⚠️ This sale will be recorded for {saleDate.toLocaleDateString()}
+            <View style={[styles.dateWarning, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+              <TriangleAlert size={14} color="#d97706" />
+              <Text style={[styles.dateWarningText, { color: '#d97706', flex: 1 }]}>
+                This sale will be recorded for {saleDate.toLocaleDateString()}
               </Text>
             </View>
           )}

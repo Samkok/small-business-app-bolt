@@ -17,6 +17,8 @@ interface CartItemProps {
   itemDiscountScope?: 'per_unit' | 'total';
   initialQuantity: number;
   availableStock: number;
+  /** unit this line is sold in (Box, Bottle); shown so a box is never mistaken for a single */
+  unitName?: string | null;
   onQuantityChange: (itemId: string, quantity: number) => void;
   onShowDiscount: (itemId: string) => void;
   onRemoveDiscount: (itemId: string) => void;
@@ -37,6 +39,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
   itemDiscountScope,
   initialQuantity,
   availableStock,
+  unitName,
   onQuantityChange,
   onShowDiscount,
   onRemoveDiscount,
@@ -163,7 +166,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
       <View style={styles.itemInfo}>
         <View style={styles.itemNameRow}>
           <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            {productName}
+            {productName}{unitName ? ` · ${unitName}` : ''}
           </Text>
           {hasQuantityChange && (
             <View style={styles.changedBadge}>
@@ -172,7 +175,7 @@ const CartItemComponent: React.FC<CartItemProps> = ({
           )}
         </View>
         <Text style={[styles.itemPrice, { color: '#059669' }]}>
-          {formatCurrency(unitPrice, currencySymbol)} each
+          {formatCurrency(unitPrice, currencySymbol)} {unitName ? `per ${unitName}` : 'each'}
         </Text>
         <View style={styles.stockRow}>
           {isLowStock && <AlertCircle size={12} color={stockWarningColor} />}

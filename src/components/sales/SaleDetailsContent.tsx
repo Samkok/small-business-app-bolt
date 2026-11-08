@@ -436,7 +436,7 @@ export default function SaleDetailsContent({
                     {item.products?.name}
                   </Text>
                   <Text style={[styles.itemPrice, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                    {fmt(item.unit_price)} × {item.quantity}
+                    {fmt(item.unit_price)} × {item.quantity}{item.units?.name ? ` ${item.units.name}` : ''}
                   </Text>
 
                   {item.item_discount_type && (

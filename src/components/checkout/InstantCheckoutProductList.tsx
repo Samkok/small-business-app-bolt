@@ -44,7 +44,7 @@ function QuantityInput({
     if (newQuantity > item.available_stock) {
       Alert.alert(
         'Insufficient Stock',
-        `Only ${item.available_stock} units available in stock. Quantity adjusted.`
+        `Only ${item.available_stock} ${item.available_stock === 1 ? 'unit' : 'units'} available in stock. Quantity adjusted.`
       );
       setInputValue(item.available_stock.toString());
       onUpdateQuantity(item.product_id, item.available_stock);

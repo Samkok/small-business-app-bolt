@@ -72,6 +72,7 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
   const getTotalQuantity = () => {
     return batch.inventory_imports.reduce((sum, item) => sum + item.quantity, 0);
   };
+  const totalQuantity = getTotalQuantity();
 
   const getProductNames = () => {
     const names = batch.inventory_imports.map(item => item.products?.name || 'Unknown Product');
@@ -111,7 +112,7 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
             <View style={styles.metaItem}>
               <Package size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.metaText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                {batch.inventory_imports.length} products, {getTotalQuantity()} units
+                {batch.inventory_imports.length} {batch.inventory_imports.length === 1 ? 'product' : 'products'}, {totalQuantity} {totalQuantity === 1 ? 'unit' : 'units'}
               </Text>
             </View>
           </View>
@@ -150,10 +151,11 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
 
             {batch.status === 'pending' && (
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
+                style={[styles.arriveButton, { backgroundColor: isDark ? '#064e3b' : '#ecfdf5' }]}
                 onPress={() => onMarkAsArrived(batch)}
               >
                 <CheckCircle size={16} color="#059669" />
+                <Text style={styles.arriveButtonText}>Mark arrived</Text>
               </TouchableOpacity>
             )}
             
@@ -270,6 +272,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // The only action a pending batch really needs, so it carries a word, not just an icon
+  arriveButton: {
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  arriveButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
   },
   statusContainer: {
     alignItems: 'center',

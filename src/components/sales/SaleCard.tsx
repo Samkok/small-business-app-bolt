@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
-import { Trash2, User, Calendar, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
+import { User, Calendar, DollarSign, ChevronRight, UserCheck } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
 import { getSaleNetProceeds, getSaleRefunds } from '@/src/utils/saleMoney';
 import { useRouter } from 'expo-router';
@@ -47,6 +48,7 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
   const { isDark } = useTheme();
   const router = useRouter();
   const { formatPrice } = useCurrencyContext();
+  const { t } = useTranslation();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -138,7 +140,7 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
                 onVoid(sale);
               }}
             >
-              <Trash2 size={16} color="#dc2626" />
+              <Text style={styles.voidText}>{t('sales.void')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -262,6 +264,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  voidText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#dc2626',
   },
   details: {
     marginBottom: 12,
