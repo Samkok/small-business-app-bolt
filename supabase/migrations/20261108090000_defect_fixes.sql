@@ -1,4 +1,4 @@
--- Defects found in the 2026-11-08 UX walkthrough (docs/ux-review).
+-- Applied live on 2026-11-09 by the owner from the Supabase SQL editor (no row in schema_migrations). Do not re-apply.
 --
 -- 1. check_business_selection_requirement wrote user_profiles.must_choose_businesses on every
 --    call, even when the value did not change. Since 20261105090000 set REPLICA IDENTITY
