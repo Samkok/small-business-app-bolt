@@ -20,6 +20,7 @@ import { customerService } from '@/src/services/customers';
 import { productService } from '@/src/services/products';
 import { cartService } from '@/src/services/carts';
 import { salesService } from '@/src/services/sales';
+import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
 
 interface SalesFormProps {
   onComplete: () => void;
@@ -40,10 +41,10 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
   const { profile } = useAuth();
 
   const paymentMethods = [
-    { value: 'cash', label: 'Cash', icon: '💵' },
-    { value: 'card', label: 'Card', icon: '💳' },
-    { value: 'transfer', label: 'Transfer', icon: '🏦' },
-    { value: 'other', label: 'Other', icon: '💰' },
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'transfer', label: 'Transfer' },
+    { value: 'other', label: 'Other' },
   ];
 
   useEffect(() => {
@@ -329,7 +330,7 @@ export default function SalesForm({ onComplete, onCancel }: SalesFormProps) {
                 ]}
                 onPress={() => setPaymentMethod(method.value)}
               >
-                <Text style={styles.paymentIcon}>{method.icon}</Text>
+                <PaymentMethodIcon method={method.value} size={20} color={paymentMethod === method.value ? '#ea580c' : (isDark ? '#f9fafb' : '#111827')} />
                 <Text style={[
                   styles.paymentButtonText,
                   { 

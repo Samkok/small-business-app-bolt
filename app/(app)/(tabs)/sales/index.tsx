@@ -14,7 +14,7 @@ import {
   Animated,
   Platform
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -59,6 +59,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScanBarcodeButton } from '@/src/components/inventory/ScanBarcodeButton';
 import { parseReceiptNumber } from '@/src/utils/barcode128';
 import { supabase } from '@/src/config/supabase';
+import { saleEvents } from '@/src/lib/saleEvents';
 
 const SALES_PER_PAGE = 10;
 const WARNING_BANNER_DISMISSED_KEY = 'warning_banner_dismissed_';
@@ -407,6 +408,22 @@ export default function SalesScreen() {
     }
   }, [currentBusiness?.id, activeTab, t, refreshCarts]);
 
+  // A sale recorded in the Quick Checkout sheet (a modal: this screen never loses focus)
+  useEffect(() => saleEvents.onRecorded(() => {
+    if (currentBusiness?.id) loadData(true);
+  }), [currentBusiness?.id, loadData]);
+
+  // Refetch when the tab regains focus: a return or void made on the details screen must show
+  // on the card (the mount effect covers the first focus)
+  const salesFocusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (salesFocusedOnceRef.current && currentBusiness?.id && activeTab === 'sales') loadData(true);
+      salesFocusedOnceRef.current = true;
+    }, [currentBusiness?.id, activeTab, loadData])
+  );
+
+
   const loadSalesData = useCallback(async (page: number = 0, refresh: boolean = false) => {
     if (!currentBusiness?.id) return;
 
@@ -608,13 +625,14 @@ export default function SalesScreen() {
     );
   }, [deleteCart]);
 
+  // One way to start a sale: the sheet. Saved drafts still open the cart screen from Active Carts.
   const handleNewSale = useCallback(() => {
     if (salesCountData.isAtLimit && !canAccessFeature) {
       setShowUpgradePrompt(true);
       return;
     }
-    router.push('/sales/customer-selection');
-  }, [router, salesCountData.isAtLimit, canAccessFeature]);
+    openInstantCheckoutModal();
+  }, [openInstantCheckoutModal, salesCountData.isAtLimit, canAccessFeature]);
 
   const handleCartPress = useCallback((cartId: string) => {
     router.push(`/sales/cart/${cartId}`);
@@ -640,7 +658,8 @@ export default function SalesScreen() {
         end.toISOString()
       );
       
-      const fileName = `sales_export_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv`;
+      // Local calendar dates: toISOString() would shift a midnight start to the previous UTC day
+      const fileName = `sales_export_${format(start, 'yyyy-MM-dd')}_to_${format(end, 'yyyy-MM-dd')}.csv`;
       
       if (Platform.OS === 'web') {
         // Web platform - use browser download
@@ -1254,18 +1273,11 @@ export default function SalesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
-              onPress={openInstantCheckoutModal}
-            >
-              <Zap size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
+              style={[styles.actionButton, { backgroundColor: '#2563eb' }]}
               onPress={handleNewSale}
             >
-              <Plus size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
+              <Zap size={18} color="#ffffff" />
+              <Text style={styles.headerActionText}>{t('sales.newSale')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1353,30 +1365,15 @@ export default function SalesScreen() {
                 style={[
                   styles.actionButton,
                   {
-                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
                     opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
                   }
                 ]}
-                onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : openInstantCheckoutModal}
-                disabled={salesCountData.isAtLimit || !canAccessFeature}
+                onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : handleNewSale}
+                disabled={salesCountData.isAtLimit || !canAccessFeature && businessDisableReason === 'owner_disabled'}
               >
                 <Zap size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  {
-                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
-                    marginLeft: 8,
-                    opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
-                  }
-                ]}
-                onPress={handleNewSale}
-                disabled={salesCountData.isAtLimit || !canAccessFeature}
-              >
-                <Plus size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
+                <Text style={styles.headerActionText}>{t('sales.newSale')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1426,201 +1423,206 @@ export default function SalesScreen() {
       ) : (
         // Sales History Tab
         <View style={styles.content}>
-          {/* Date Filter */}
-          {renderDateFilter()}
-          
-          {/* Search and Filter */}
-          <View style={styles.searchSection}>
-            <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-              <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              <TextInput
-                style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-                placeholder={t('sales.searchPlaceholder')}
-                placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                </TouchableOpacity>
-              )}
-              <ScanBarcodeButton onScanned={handleReceiptScan} backgroundColor="transparent" borderColor="transparent" size={32} />
-            </View>
-          </View>
-          
-          {/* Collapsible Header */}
-          <View style={styles.collapsibleHeader}>
-            <View style={styles.collapsibleTitle}>
-              <TrendingUp size={20} color={isDark ? '#f9fafb' : '#111827'} style={{ marginRight: 8 }} />
-              <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {t('sales.salesAnalytics')}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={toggleStatsCollapse} style={styles.collapseButton}>
-              {statsCollapsed ? (
-                <ChevronDown size={20} color={isDark ? '#f9fafb' : '#111827'} />
-              ) : (
-                <ChevronUp size={20} color={isDark ? '#f9fafb' : '#111827'} />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <Animated.View style={{
-            maxHeight: collapseAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 800] // Adjust this value based on your content height
-            }),
-            overflow: 'hidden',
-            opacity: collapseAnim
-          }}>
-            {/* Stats Cards */}
-            <View style={styles.statsGrid}>
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <DollarSign size={20} color="#2563eb" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatPrice(displayAmt(todayRevenue), activeCurrencyId || undefined)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('financials.todayRevenue')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <TrendingUp size={20} color="#059669" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatPrice(displayAmt(totalRevenue), activeCurrencyId || undefined)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('financials.totalRevenue')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <Receipt size={20} color="#8b5cf6" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: totalProfit >= 0 ? (isDark ? '#f9fafb' : '#111827') : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatPrice(displayAmt(totalProfit), activeCurrencyId || undefined)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('financials.totalProfit')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-
-              <Card style={styles.statsCard}>
-                <View style={styles.statsContent}>
-                  <ShoppingCart size={20} color="#ea580c" />
-                  <View style={styles.statsText}>
-                    <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatPrice(displayAmt(averageSale), activeCurrencyId || undefined)}
-                    </Text>
-                    <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      {t('financials.averageSale')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {statusFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedStatus === filter.value 
-                        ? '#2563eb' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => {
-                    setSelectedStatus(filter.value);
-                    setCurrentPage(0);
-                    setHasMoreSales(true);
-                  }}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedStatus === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {paymentMethodFilters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterButton,
-                    {
-                      backgroundColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#374151' : '#f3f4f6'),
-                      borderColor: selectedPaymentMethod === filter.value 
-                        ? '#059669' 
-                        : (isDark ? '#4b5563' : '#d1d5db'),
-                    }
-                  ]}
-                  onPress={() => {
-                    setSelectedPaymentMethod(filter.value);
-                    setCurrentPage(0);
-                    setHasMoreSales(true);
-                  }}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    { 
-                      color: selectedPaymentMethod === filter.value 
-                        ? '#ffffff' 
-                        : (isDark ? '#f9fafb' : '#374151') 
-                    }
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Animated.View>
-          
-          {/* Sales List */}
+          {/* The filters, search and analytics scroll with the list (header element, so the
+              search field keeps focus); pinned they left room for one sale card. */}
           <View style={styles.salesListContainer}>
-            {searchQuery ? (
-              <View style={styles.searchResultsHeader}>
-                <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {filteredSales.length === 0 
-                    ? `No sales found for "${searchQuery}"` 
-                    : `Found ${filteredSales.length} sale${filteredSales.length !== 1 ? 's' : ''}`}
-                </Text>
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Text style={styles.clearSearchText}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
             <FlatList
               data={visibleSalesList}
+              ListHeaderComponent={(
+                <View>
+                  {/* Date Filter */}
+                  {renderDateFilter()}
+          
+                  {/* Search and Filter */}
+                  <View style={styles.searchSection}>
+                    <View style={[styles.searchContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
+                      <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <TextInput
+                        style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
+                        placeholder={t('sales.searchPlaceholder')}
+                        placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                      />
+                      {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                          <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                        </TouchableOpacity>
+                      )}
+                      <ScanBarcodeButton onScanned={handleReceiptScan} backgroundColor="transparent" borderColor="transparent" size={32} />
+                    </View>
+                  </View>
+          
+                  {/* Collapsible Header */}
+                  <View style={styles.collapsibleHeader}>
+                    <View style={styles.collapsibleTitle}>
+                      <TrendingUp size={20} color={isDark ? '#f9fafb' : '#111827'} style={{ marginRight: 8 }} />
+                      <Text style={[styles.collapsibleTitleText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                        {t('sales.salesAnalytics')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={toggleStatsCollapse} style={styles.collapseButton}>
+                      {statsCollapsed ? (
+                        <ChevronDown size={20} color={isDark ? '#f9fafb' : '#111827'} />
+                      ) : (
+                        <ChevronUp size={20} color={isDark ? '#f9fafb' : '#111827'} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <Animated.View style={{
+                    maxHeight: collapseAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 800] // Adjust this value based on your content height
+                    }),
+                    overflow: 'hidden',
+                    opacity: collapseAnim
+                  }}>
+                    {/* Stats Cards */}
+                    <View style={styles.statsGrid}>
+                      <Card style={styles.statsCard}>
+                        <View style={styles.statsContent}>
+                          <DollarSign size={20} color="#2563eb" />
+                          <View style={styles.statsText}>
+                            <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                              {formatPrice(displayAmt(todayRevenue), activeCurrencyId || undefined)}
+                            </Text>
+                            <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              {t('financials.todayRevenue')}
+                            </Text>
+                          </View>
+                        </View>
+                      </Card>
+
+                      <Card style={styles.statsCard}>
+                        <View style={styles.statsContent}>
+                          <TrendingUp size={20} color="#059669" />
+                          <View style={styles.statsText}>
+                            <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                              {formatPrice(displayAmt(totalRevenue), activeCurrencyId || undefined)}
+                            </Text>
+                            <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              {t('financials.totalRevenue')}
+                            </Text>
+                          </View>
+                        </View>
+                      </Card>
+
+                      <Card style={styles.statsCard}>
+                        <View style={styles.statsContent}>
+                          <Receipt size={20} color="#8b5cf6" />
+                          <View style={styles.statsText}>
+                            <Text style={[styles.statsValue, { color: totalProfit >= 0 ? (isDark ? '#f9fafb' : '#111827') : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
+                              {formatPrice(displayAmt(totalProfit), activeCurrencyId || undefined)}
+                            </Text>
+                            <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              {t('financials.totalProfit')}
+                            </Text>
+                          </View>
+                        </View>
+                      </Card>
+
+                      <Card style={styles.statsCard}>
+                        <View style={styles.statsContent}>
+                          <ShoppingCart size={20} color="#ea580c" />
+                          <View style={styles.statsText}>
+                            <Text style={[styles.statsValue, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1} adjustsFontSizeToFit>
+                              {formatPrice(displayAmt(averageSale), activeCurrencyId || undefined)}
+                            </Text>
+                            <Text style={[styles.statsLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                              {t('financials.averageSale')}
+                            </Text>
+                          </View>
+                        </View>
+                      </Card>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+                      {statusFilters.map((filter) => (
+                        <TouchableOpacity
+                          key={filter.value}
+                          style={[
+                            styles.filterButton,
+                            {
+                              backgroundColor: selectedStatus === filter.value 
+                                ? '#2563eb' 
+                                : (isDark ? '#374151' : '#f3f4f6'),
+                              borderColor: selectedStatus === filter.value 
+                                ? '#2563eb' 
+                                : (isDark ? '#4b5563' : '#d1d5db'),
+                            }
+                          ]}
+                          onPress={() => {
+                            setSelectedStatus(filter.value);
+                            setCurrentPage(0);
+                            setHasMoreSales(true);
+                          }}
+                        >
+                          <Text style={[
+                            styles.filterButtonText,
+                            { 
+                              color: selectedStatus === filter.value 
+                                ? '#ffffff' 
+                                : (isDark ? '#f9fafb' : '#374151') 
+                            }
+                          ]}>
+                            {filter.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+                      {paymentMethodFilters.map((filter) => (
+                        <TouchableOpacity
+                          key={filter.value}
+                          style={[
+                            styles.filterButton,
+                            {
+                              backgroundColor: selectedPaymentMethod === filter.value 
+                                ? '#059669' 
+                                : (isDark ? '#374151' : '#f3f4f6'),
+                              borderColor: selectedPaymentMethod === filter.value 
+                                ? '#059669' 
+                                : (isDark ? '#4b5563' : '#d1d5db'),
+                            }
+                          ]}
+                          onPress={() => {
+                            setSelectedPaymentMethod(filter.value);
+                            setCurrentPage(0);
+                            setHasMoreSales(true);
+                          }}
+                        >
+                          <Text style={[
+                            styles.filterButtonText,
+                            { 
+                              color: selectedPaymentMethod === filter.value 
+                                ? '#ffffff' 
+                                : (isDark ? '#f9fafb' : '#374151') 
+                            }
+                          ]}>
+                            {filter.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </Animated.View>
+          
+                    {searchQuery ? (
+                      <View style={styles.searchResultsHeader}>
+                        <Text style={[styles.searchResultsText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                          {filteredSales.length === 0 
+                            ? `No sales found for "${searchQuery}"` 
+                            : `Found ${filteredSales.length} sale${filteredSales.length !== 1 ? 's' : ''}`}
+                        </Text>
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                          <Text style={styles.clearSearchText}>Clear</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+
+                </View>
+              )}
               renderItem={renderSaleItem}
               keyExtractor={(item, index) => item.type === 'header' ? `header-${item.date}` : `sale-${item.item.id}`}
               style={styles.salesList}

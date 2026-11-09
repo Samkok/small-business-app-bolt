@@ -243,7 +243,37 @@
     "originalTotal": "សរុបដើម",
     "returnedAmount": "ចំនួនទឹកប្រាក់បានប្រគល់វិញ",
     "saleActions": "សកម្មភាពការលក់",
-    "returnMoreItems": "ប្រគល់វិញបន្ថែម"
+    "returnMoreItems": "ប្រគល់វិញបន្ថែម",
+    "returnFromSale": "ប្រគល់វិញពីការលក់ #{{number}} · {{total}}",
+    "returnReasonLabel": "មូលហេតុនៃការប្រគល់វិញ",
+    "returnReasons": {
+      "changedMind": "ប្តូរចិត្ត",
+      "damaged": "ខូច",
+      "wrongItem": "ទំនិញខុស",
+      "expired": "ផុតកំណត់",
+      "other": "ផ្សេងទៀត"
+    },
+    "voidReasonLabel": "មូលហេតុនៃការលុបចោល",
+    "voidReasons": {
+      "enteredByMistake": "បញ្ចូលខុស",
+      "customerCancelled": "អតិថិជនបោះបង់",
+      "duplicateSale": "ការលក់ស្ទួន",
+      "wrongItems": "ទំនិញខុស",
+      "other": "ផ្សេងទៀត"
+    },
+    "chooseReasonHint": "ជ្រើសរើសមូលហេតុដើម្បីបន្ត",
+    "additionalNotesOptional": "កំណត់ចំណាំបន្ថែម (ស្រេចចិត្ត)",
+    "notePlaceholder": "ព័ត៌មានលម្អិតបន្ថែម",
+    "keepPartOfMoney": "រក្សាទុកប្រាក់មួយផ្នែក",
+    "noLoss": "គ្មានការខាតបង់",
+    "lossFixedAmount": "ចំនួនថេរ",
+    "lossPercentage": "ភាគរយ",
+    "lossAdjustmentOptional": "ការកែតម្រូវការខាតបង់ (ស្រេចចិត្ត)",
+    "lossAdjustmentHint": "កំណត់បរិមាណប្រគល់វិញជាមុនសិន",
+    "itemCount": "{{count}} មុខ",
+    "itemCount_plural": "{{count}} មុខ",
+    "returnProcessed": "បានប្រគល់វិញរួចរាល់",
+    "returnProcessedMessage": "បានប្រគល់វិញ {{items}}។ ប្រាក់សងវិញ៖ {{amount}}"
   },
   "expenses": {
     "title": "ការចំណាយ",

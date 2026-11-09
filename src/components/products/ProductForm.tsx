@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -134,7 +134,15 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
   // Load units when selectedUnitGroupId changes
   useEffect(() => {
     if (selectedUnitGroupId) {
-      unitService.getUnits(selectedUnitGroupId).then(setUnits).catch(console.error);
+      unitService.getUnits(selectedUnitGroupId).then((loaded) => {
+        setUnits(loaded);
+        // The variant label is the unit name unless the user wrote something else
+        setUnitVariantNames(prev => {
+          const next = { ...prev };
+          loaded.forEach(u => { if (!(next[u.id] || '').trim()) next[u.id] = u.name; });
+          return next;
+        });
+      }).catch(console.error);
     } else {
       setUnits([]);
       setUnitPrices({});
@@ -146,6 +154,26 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
       setUnitMinStock({});
     }
   }, [selectedUnitGroupId]);
+
+  // Multi-unit prices: the base unit sells at the product price above, and a pack starts at
+  // factor × that price. A pack price the user typed is kept; one that still equals the last
+  // suggestion follows the price when it changes.
+  const suggestedPackPrice = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (!isMultiUnit) return;
+    const p = parseFloat(price);
+    setUnitPrices(prev => {
+      const next = { ...prev };
+      units.forEach(u => {
+        if (u.is_base_unit) { next[u.id] = price; return; }
+        const suggested = p > 0 ? String(Math.round(p * (u.conversion_factor_to_base || 1) * 100) / 100) : '';
+        const previous = suggestedPackPrice.current[u.id];
+        if (!(next[u.id] || '').trim() || next[u.id] === previous) next[u.id] = suggested;
+        suggestedPackPrice.current[u.id] = suggested;
+      });
+      return next;
+    });
+  }, [price, units, isMultiUnit]);
 
   // Load existing product-unit rows (name, barcode, price) when editing a product
   useEffect(() => {
@@ -239,8 +267,9 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
   const validateUnitBarcode = (unitId: string, value: string): boolean => {
     const cleaned = value.trim();
     if (!cleaned) {
-      setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: 'Barcode is required' }));
-      return false;
+      // Optional: a missing variant barcode is generated when the product is saved
+      setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: '' }));
+      return true;
     }
     if (!/^[0-9A-Za-z\-]+$/.test(cleaned)) {
       setUnitBarcodeErrors(prev => ({ ...prev, [unitId]: 'Barcode may only contain letters, digits, and hyphens' }));
@@ -401,7 +430,7 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
       Alert.alert('Error', isMultiUnit ? 'Product family name is required' : 'Product name is required');
       return;
     }
-    if (!isMultiUnit && !price.trim()) {
+    if (!price.trim()) {
       Alert.alert('Error', 'Product price is required');
       return;
     }
@@ -414,7 +443,8 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
       }
     }
 
-    // Multi-unit mode: each unit needs its own variant label and barcode
+    // Multi-unit mode: each unit needs a label; a missing barcode is generated here
+    const effectiveUnitBarcodes: Record<string, string> = { ...unitBarcodes };
     if (isMultiUnit) {
       let allValid = true;
       for (const unit of units) {
@@ -422,10 +452,29 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
         if (!validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) allValid = false;
       }
       if (!allValid) {
-        Alert.alert('Error', 'Each unit variant needs a label and barcode');
+        Alert.alert('Error', 'Each unit variant needs a label, and barcodes may only contain letters, digits and hyphens');
         return;
       }
-      const barcodeList = units.map(u => (unitBarcodes[u.id] || '').trim().toUpperCase());
+      if (currentBusiness?.id) {
+        try {
+          for (const unit of units) {
+            if (!(effectiveUnitBarcodes[unit.id] || '').trim()) {
+              let code = await productService.generateBarcode(currentBusiness.id);
+              // the server only checks saved products, so avoid a clash inside this one
+              while (Object.values(effectiveUnitBarcodes).some(b => b.trim().toUpperCase() === code.toUpperCase())) {
+                code = await productService.generateBarcode(currentBusiness.id);
+              }
+              effectiveUnitBarcodes[unit.id] = code;
+            }
+          }
+          setUnitBarcodes(effectiveUnitBarcodes);
+        } catch (error) {
+          console.error('Error generating variant barcodes:', error);
+          Alert.alert('Error', 'Could not generate barcodes for the units. Check your connection and try again.');
+          return;
+        }
+      }
+      const barcodeList = units.map(u => (effectiveUnitBarcodes[u.id] || '').trim().toUpperCase());
       if (new Set(barcodeList).size !== barcodeList.length) {
         Alert.alert('Error', 'Each unit variant must have a unique barcode');
         return;
@@ -499,7 +548,7 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
       let productBarcode = barcode.trim();
       if (isMultiUnit) {
         const baseUnit = units.find(u => u.is_base_unit) || units[units.length - 1];
-        productBarcode = (unitBarcodes[baseUnit.id] || '').trim();
+        productBarcode = (effectiveUnitBarcodes[baseUnit.id] || '').trim();
       }
 
       const costValue = Math.max(0, parseFloat(cost) || 0);
@@ -568,8 +617,8 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
         const rows = units.map(unit => ({
           unit_id: unit.id,
           name: (unitVariantNames[unit.id] || '').trim() || unit.name,
-          barcode: (unitBarcodes[unit.id] || '').trim(),
-          price: parseFloat(unitPrices[unit.id] || '') || 0,
+          barcode: (effectiveUnitBarcodes[unit.id] || '').trim(),
+          price: unit.is_base_unit ? (parseFloat(price) || 0) : (parseFloat(unitPrices[unit.id] || '') || 0),
           currency_id: selectedCurrencyId || null,
         }));
         await unitService.setProductUnits(savedProduct.id, currentBusiness.id, rows);
@@ -746,16 +795,14 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
               </View>
             </View>
 
-            {!isMultiUnit && (
-              <Input
-                label="Price"
-                value={price}
-                onChangeText={(v: string) => setPrice(decimalOnly(v))}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
-                required
-              />
-            )}
+            <Input
+              label={isMultiUnit ? `Price per ${(units.find(u => u.is_base_unit)?.name || 'base unit')}` : 'Price'}
+              value={price}
+              onChangeText={(v: string) => setPrice(decimalOnly(v))}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              required
+            />
             {(!product || !isStaff) && (
               <Input
                 label={isMultiUnit ? 'Cost per base unit' : 'Cost per unit'}
@@ -768,6 +815,18 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
                   : 'What one unit costs you. Used for profit reports; 0 when left empty. Stock imports update it later.'}
               />
             )}
+            {(() => {
+              const pv = parseFloat(price); const cv = parseFloat(cost);
+              if (!(pv > 0) || !(cv > 0)) return null;
+              const margin = ((pv - cv) / pv) * 100;
+              const warn = cv > pv ? 'Cost is above the price: every sale loses money.'
+                : margin > 95 ? 'Margin above 95%: check that the cost is per unit, not per pack.' : null;
+              return (
+                <Text style={[styles.hintText, { color: warn ? '#b45309' : (isDark ? '#9ca3af' : '#6b7280'), marginTop: -8, marginBottom: 12 }]}>
+                  {warn ?? `Margin ${margin.toFixed(1)}% (${(pv - cv).toFixed(2)} per unit)`}
+                </Text>
+              );
+            })()}
             {product && !isStaff && costChanged && (
               <Input
                 label={t('costLedger.reasonLabel')}
@@ -780,7 +839,7 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
             )}
             {isMultiUnit && (
               <Text style={[styles.hintText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                Prices are set per variant below.
+                Pack prices below start at this price × the pack size; change any of them.
               </Text>
             )}
           </View>
@@ -893,13 +952,23 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
 
                     <View style={styles.unitCardFields}>
                       <View style={styles.unitCardField}>
-                        <Input
-                          label="Price"
-                          value={unitPrices[unit.id] || ''}
-                          onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: decimalOnly(val) }))}
-                          placeholder="0.00"
-                          keyboardType="decimal-pad"
-                        />
+                        {unit.is_base_unit ? (
+                          <Input
+                            label="Price"
+                            value={price}
+                            editable={false}
+                            hint="Same as the price above"
+                          />
+                        ) : (
+                          <Input
+                            label={`Price per ${(unitVariantNames[unit.id] || unit.name).trim()}`}
+                            value={unitPrices[unit.id] || ''}
+                            onChangeText={(val: string) => setUnitPrices(prev => ({ ...prev, [unit.id]: decimalOnly(val) }))}
+                            placeholder="0.00"
+                            keyboardType="decimal-pad"
+                            hint={parseFloat(price) > 0 ? `${unit.conversion_factor_to_base} × ${price}` : undefined}
+                          />
+                        )}
                       </View>
                       <View style={styles.unitCardField}>
                         <Input
@@ -932,7 +1001,7 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
                     )}
 
                     <Input
-                      label="Barcode"
+                      label="Barcode (optional, generated on save)"
                       value={unitBarcodes[unit.id] || ''}
                       onChangeText={(val: string) => {
                         setUnitBarcodes(prev => ({ ...prev, [unit.id]: val }));
@@ -940,7 +1009,6 @@ export default function ProductForm({ product: productProp, onSave, onCancel }: 
                       }}
                       onBlur={() => { if (validateUnitBarcode(unit.id, unitBarcodes[unit.id] || '')) void checkTypedBarcode(unitBarcodes[unit.id] || '', unit.id); }}
                       placeholder="Scan or enter"
-                      required
                     />
                     {unitBarcodeErrors[unit.id] ? (
                       <Text style={styles.barcodeErrorText}>{unitBarcodeErrors[unit.id]}</Text>

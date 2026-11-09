@@ -54,6 +54,20 @@ Deno.test("billing grace period keeps access until the grace end", () => {
   assertEquals(d.willRenew, false);
 });
 
+Deno.test("sandbox purchases are ignored unless the tester is allow-listed", () => {
+  const sub = {
+    entitlements: { bizmanage_pro_plus: { expires_date: future, product_identifier: "premium.pro_plus.year" } },
+    subscriptions: { "premium.pro_plus.year": { expires_date: future, store: "app_store", is_sandbox: true } },
+  };
+  const ignored = deriveMirror(sub, NOW);
+  assertEquals(ignored.status, "none");
+  assertEquals(ignored.tier, "free");
+  const allowed = deriveMirror(sub, NOW, { allowSandbox: true });
+  assertEquals(allowed.status, "active");
+  assertEquals(allowed.tier, "pro_plus");
+  assertEquals(allowed.expirationDate, future);
+});
+
 Deno.test("lapsed plan is expired, never subscribed is none", () => {
   const lapsed = deriveMirror({ entitlements: { bizmanage_pro: { expires_date: past, product_identifier: "p" } } }, NOW);
   assertEquals(lapsed.status, "expired");

@@ -126,7 +126,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
 
             <Text style={[styles.stockText, { color: stockStatus.color }]}>
               {hasVariants
-                ? `${product.current_stock} base units`
+                ? `${product.current_stock} base ${product.current_stock === 1 ? 'unit' : 'units'}`
                 : `${product.current_stock} in stock`}
             </Text>
           </View>
@@ -139,7 +139,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onEdit, on
             >
               <Layers size={14} color="#2563eb" />
               <Text style={[styles.unitsToggleText, { color: '#2563eb' }]}>
-                {showUnits ? 'Hide units' : `View ${units!.length} units`}
+                {showUnits ? 'Hide units' : `View ${units!.length} ${units!.length === 1 ? 'unit' : 'units'}`}
               </Text>
               {showUnits ? (
                 <ChevronUp size={14} color="#2563eb" />

@@ -185,18 +185,7 @@ export const productService = {
 
     const transactionCheck = await productTransactionService.checkProductTransactions(id);
 
-    if (product.image_url) {
-      const imagePath = storageService.getImagePath(product.image_url);
-      if (imagePath) {
-        try {
-          await storageService.deleteProductImage(imagePath);
-        } catch (error) {
-          console.warn('Failed to delete product image:', error);
-        }
-      }
-    }
-
-    if (transactionCheck.hasTransactions) {
+    const archive = async () => {
       const { error } = await supabase
         .from('products')
         .update({
@@ -206,26 +195,38 @@ export const productService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
-
       if (error) throw error;
+      return { type: 'archived' as const, transactionCheck };
+    };
 
-      return {
-        type: 'archived' as const,
-        transactionCheck
-      };
-    } else {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
+    // Anything with history is archived: sales, imports, stock adjustments or cost changes.
+    // The image stays, since an archived product can be restored.
+    if (transactionCheck.hasTransactions) return archive();
 
-      if (error) throw error;
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
 
-      return {
-        type: 'deleted' as const,
-        transactionCheck
-      };
+    if (error) {
+      // The server refuses a delete that would erase history (guard_product_delete); archive then
+      if (String(error.message || '').includes('PRODUCT_HAS_HISTORY')) return archive();
+      throw error;
     }
+
+    // Only a product that is really gone loses its image
+    if (product.image_url) {
+      const imagePath = storageService.getImagePath(product.image_url);
+      if (imagePath) {
+        try {
+          await storageService.deleteProductImage(imagePath);
+        } catch (err) {
+          console.warn('Failed to delete product image:', err);
+        }
+      }
+    }
+
+    return { type: 'deleted' as const, transactionCheck };
   },
 
   /**
@@ -337,6 +338,35 @@ export const productService = {
 
     if (error) throw error;
     return count || 0;
+  },
+
+  async searchProducts(businessId: string, query: string, limit?: number, offset?: number) {
+    if (!businessId) {
+      console.warn('productService.searchProducts called without businessId');
+      return [];
+    }
+
+    const sanitizedQuery = sanitizeSearchQuery(query);
+
+    let dbQuery = supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_archived', false)
+      .or(`name.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,barcode.ilike.%${sanitizedQuery}%`)
+      .order('name');
+
+    if (limit) {
+      dbQuery = dbQuery.limit(limit);
+    }
+
+    if (offset) {
+      dbQuery = dbQuery.range(offset, offset + (limit || 10) - 1);
+    }
+
+    const { data, error } = await dbQuery;
+    if (error) throw error;
+    return data;
   },
 
   async searchArchivedProducts(businessId: string, query: string, limit?: number, offset?: number) {

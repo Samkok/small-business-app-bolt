@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import Input from '@/src/components/ui/Input';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save, PhoneOff, Calendar, WifiOff } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Percent, DollarSign, MapPin, Truck, Trash2, Check, Save, PhoneOff, Calendar, WifiOff, TriangleAlert } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { CartItem } from '@/src/components/sales/CartItem';
 import { productService } from '@/src/services/products';
@@ -39,6 +39,252 @@ import { ReceiptInput } from '@/src/utils/receipt';
 import { receiptDraftStore } from '@/src/utils/receiptDraft';
 import { PaymentStatusSelector } from '@/src/components/sales/PaymentStatusSelector';
 import { PaymentStatus } from '@/src/utils/paymentStatus';
+import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
+
+type DiscountKind = 'percentage' | 'fixed';
+type DiscountScope = 'per_unit' | 'total';
+
+// Both dialogs live at module level on purpose: a component defined inside the screen gets a
+// new identity on every screen re-render, so React remounted it, wiped the typed value and
+// dismissed the keyboard as soon as it opened.
+function DiscountModal({ item, isDark, onApply, onCancel }: {
+  item: { item_discount_type?: DiscountKind | null; item_discount_value?: number | null; item_discount_scope?: DiscountScope | null } | undefined;
+  isDark: boolean;
+  onApply: (type: DiscountKind, value: number, scope: DiscountScope) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+
+  const [discountType, setDiscountType] = useState<DiscountKind>(
+    item?.item_discount_type || 'percentage'
+  );
+  const [discountValue, setDiscountValue] = useState(
+    item?.item_discount_value ? item.item_discount_value.toString() : ''
+  );
+  const [discountScope, setDiscountScope] = useState<DiscountScope>(
+    item?.item_discount_scope || 'total'
+  );
+
+  const handleApply = () => {
+    const value = parseFloat(discountValue);
+    if (isNaN(value) || value <= 0) {
+      Alert.alert('Error', 'Please enter a valid discount value');
+      return;
+    }
+    if (discountType === 'percentage' && value > 100) {
+      Alert.alert('Error', 'Percentage discount cannot exceed 100%');
+      return;
+    }
+    onApply(discountType, value, discountScope);
+  };
+
+  return (
+    <View style={styles.modalOverlay}>
+      <Card style={styles.discountModal}>
+        <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          Apply Discount
+        </Text>
+
+        <View style={styles.discountTypeButtons}>
+          <TouchableOpacity
+            style={[
+              styles.discountTypeButton,
+              {
+                backgroundColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={() => setDiscountType('percentage')}
+          >
+            <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.discountTypeText,
+              { color: discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Percentage
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.discountTypeButton,
+              {
+                backgroundColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={() => setDiscountType('fixed')}
+          >
+            <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.discountTypeText,
+              { color: discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Fixed Amount
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.discountScopeSection}>
+          <Text style={[styles.discountScopeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            {t('sales.discountScope')}
+          </Text>
+          <View style={styles.discountScopeButtons}>
+            <TouchableOpacity
+              style={[styles.discountScopeButton, {
+                backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+              }]}
+              onPress={() => setDiscountScope('per_unit')}
+            >
+              {discountScope === 'per_unit' && (
+                <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+              )}
+              <Text style={[styles.discountScopeButtonText, { color: discountScope === 'per_unit' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                {t('sales.perUnit')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.discountScopeButton, {
+                backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
+              }]}
+              onPress={() => setDiscountScope('total')}
+            >
+              {discountScope === 'total' && (
+                <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+              )}
+              <Text style={[styles.discountScopeButtonText, { color: discountScope === 'total' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
+                {t('sales.toTotal')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.discountScopeDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            {discountScope === 'per_unit' ? t('sales.perUnitDescription') : t('sales.toTotalDescription')}
+          </Text>
+        </View>
+
+        <Input
+          label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
+          value={discountValue}
+          onChangeText={setDiscountValue}
+          placeholder={discountType === 'percentage' ? '10' : '5.00'}
+          keyboardType="decimal-pad"
+        />
+
+        <View style={styles.modalActions}>
+          <Button
+            title="Cancel"
+            variant="outline"
+            onPress={onCancel}
+            style={styles.modalButton}
+          />
+          <Button
+            title="Apply"
+            onPress={handleApply}
+            style={styles.modalButton}
+          />
+        </View>
+      </Card>
+    </View>
+  );
+}
+
+function CartDiscountModal({ initialType, initialValue, isDark, onApply, onCancel }: {
+  initialType?: DiscountKind | null;
+  initialValue?: number | null;
+  isDark: boolean;
+  onApply: (type: DiscountKind, value: number) => void;
+  onCancel: () => void;
+}) {
+  const [discountType, setDiscountType] = useState<DiscountKind>(initialType || 'percentage');
+  const [discountValue, setDiscountValue] = useState(initialValue ? initialValue.toString() : '');
+
+  const handleApply = () => {
+    const value = parseFloat(discountValue);
+    if (isNaN(value) || value <= 0) {
+      Alert.alert('Error', 'Please enter a valid discount value');
+      return;
+    }
+    if (discountType === 'percentage' && value > 100) {
+      Alert.alert('Error', 'Percentage discount cannot exceed 100%');
+      return;
+    }
+    onApply(discountType, value);
+  };
+
+  return (
+    <View style={styles.modalOverlay}>
+      <Card style={styles.discountModal}>
+        <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+          Cart Discount
+        </Text>
+        
+        <View style={styles.discountTypeButtons}>
+          <TouchableOpacity
+            style={[
+              styles.discountTypeButton,
+              {
+                backgroundColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={() => setDiscountType('percentage')}
+          >
+            <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.discountTypeText,
+              { color: discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Percentage
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.discountTypeButton,
+              {
+                backgroundColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
+                borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+              }
+            ]}
+            onPress={() => setDiscountType('fixed')}
+          >
+            <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
+            <Text style={[
+              styles.discountTypeText,
+              { color: discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
+            ]}>
+              Fixed Amount
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <Input
+          label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
+          value={discountValue}
+          onChangeText={setDiscountValue}
+          placeholder={discountType === 'percentage' ? '10' : '5.00'}
+          keyboardType="decimal-pad"
+        />
+        
+        <View style={styles.modalActions}>
+          <Button
+            title="Cancel"
+            variant="outline"
+            onPress={onCancel}
+            style={styles.modalButton}
+          />
+          <Button
+            title="Apply"
+            onPress={handleApply}
+            style={styles.modalButton}
+          />
+        </View>
+      </Card>
+    </View>
+  );
+}
 
 export default function CartScreen() {
   const { t } = useTranslation();
@@ -163,10 +409,10 @@ export default function CartScreen() {
   }, [rememberDraft]);
 
   const paymentMethods = [
-    { value: 'cash', label: 'Cash', icon: '💵' },
-    { value: 'card', label: 'Card', icon: '💳' },
-    { value: 'transfer', label: 'Transfer', icon: '🏦' },
-    { value: 'other', label: 'Other', icon: '💰' },
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'transfer', label: 'Transfer' },
+    { value: 'other', label: 'Other' },
   ];
 
   // Delivery fee currency. Default: the currency of the products in the cart (when they all
@@ -833,265 +1079,6 @@ export default function CartScreen() {
     }
   }, [router, getPendingChanges, savePendingChanges]);
 
-  const DiscountModal = ({ itemId, onApply, onCancel }: {
-    itemId: string;
-    onApply: (type: 'percentage' | 'fixed', value: number, scope: 'per_unit' | 'total') => void;
-    onCancel: () => void;
-  }) => {
-    const item = cart?.items.find(i => i.id === itemId);
-
-    const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
-      item?.item_discount_type || 'percentage'
-    );
-    const [discountValue, setDiscountValue] = useState(
-      item?.item_discount_value ? item.item_discount_value.toString() : ''
-    );
-    const [discountScope, setDiscountScope] = useState<'per_unit' | 'total'>(
-      item?.item_discount_scope || 'total'
-    );
-
-    // Initialize state only once when modal opens
-    const itemIdRef = useRef(itemId);
-    const hasInitialized = useRef(false);
-
-    useEffect(() => {
-      // Reset when opening modal for a different item
-      if (itemIdRef.current !== itemId) {
-        itemIdRef.current = itemId;
-        hasInitialized.current = false;
-      }
-
-      // Initialize state once
-      if (!hasInitialized.current && item) {
-        hasInitialized.current = true;
-        setDiscountType(item.item_discount_type || 'percentage');
-        setDiscountValue(item.item_discount_value ? item.item_discount_value.toString() : '');
-        setDiscountScope(item.item_discount_scope || 'total');
-      }
-    }, [itemId, item]);
-
-    const handleApply = () => {
-      const value = parseFloat(discountValue);
-      if (isNaN(value) || value <= 0) {
-        Alert.alert('Error', 'Please enter a valid discount value');
-        return;
-      }
-      if (discountType === 'percentage' && value > 100) {
-        Alert.alert('Error', 'Percentage discount cannot exceed 100%');
-        return;
-      }
-      onApply(discountType, value, discountScope);
-    };
-
-    return (
-      <View style={styles.modalOverlay}>
-        <Card style={styles.discountModal}>
-          <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Apply Discount
-          </Text>
-
-          <View style={styles.discountTypeButtons}>
-            <TouchableOpacity
-              style={[
-                styles.discountTypeButton,
-                {
-                  backgroundColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-                }
-              ]}
-              onPress={() => setDiscountType('percentage')}
-            >
-              <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
-              <Text style={[
-                styles.discountTypeText,
-                { color: discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-              ]}>
-                Percentage
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.discountTypeButton,
-                {
-                  backgroundColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-                }
-              ]}
-              onPress={() => setDiscountType('fixed')}
-            >
-              <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
-              <Text style={[
-                styles.discountTypeText,
-                { color: discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-              ]}>
-                Fixed Amount
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.discountScopeSection}>
-            <Text style={[styles.discountScopeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-              {t('sales.discountScope')}
-            </Text>
-            <View style={styles.discountScopeButtons}>
-              <TouchableOpacity
-                style={[styles.discountScopeButton, {
-                  backgroundColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountScope === 'per_unit' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
-                }]}
-                onPress={() => setDiscountScope('per_unit')}
-              >
-                {discountScope === 'per_unit' && (
-                  <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                )}
-                <Text style={[styles.discountScopeButtonText, { color: discountScope === 'per_unit' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
-                  {t('sales.perUnit')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.discountScopeButton, {
-                  backgroundColor: discountScope === 'total' ? '#10b981' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountScope === 'total' ? '#10b981' : (isDark ? '#4b5563' : '#d1d5db'),
-                }]}
-                onPress={() => setDiscountScope('total')}
-              >
-                {discountScope === 'total' && (
-                  <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                )}
-                <Text style={[styles.discountScopeButtonText, { color: discountScope === 'total' ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
-                  {t('sales.toTotal')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.discountScopeDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-              {discountScope === 'per_unit' ? t('sales.perUnitDescription') : t('sales.toTotalDescription')}
-            </Text>
-          </View>
-
-          <Input
-            label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
-            value={discountValue}
-            onChangeText={setDiscountValue}
-            placeholder={discountType === 'percentage' ? '10' : '5.00'}
-            keyboardType="decimal-pad"
-          />
-
-          <View style={styles.modalActions}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              onPress={onCancel}
-              style={styles.modalButton}
-            />
-            <Button
-              title="Apply"
-              onPress={handleApply}
-              style={styles.modalButton}
-            />
-          </View>
-        </Card>
-      </View>
-    );
-  }
-
-  const CartDiscountModal = ({ onApply, onCancel }: {
-    onApply: (type: 'percentage' | 'fixed', value: number) => void;
-    onCancel: () => void;
-  }) => {
-    const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
-      cart?.discount_type || 'percentage'
-    );
-    const [discountValue, setDiscountValue] = useState(
-      cart?.discount_value ? cart.discount_value.toString() : ''
-    );
-
-    const handleApply = () => {
-      const value = parseFloat(discountValue);
-      if (isNaN(value) || value <= 0) {
-        Alert.alert('Error', 'Please enter a valid discount value');
-        return;
-      }
-      if (discountType === 'percentage' && value > 100) {
-        Alert.alert('Error', 'Percentage discount cannot exceed 100%');
-        return;
-      }
-      onApply(discountType, value);
-    };
-
-    return (
-      <View style={styles.modalOverlay}>
-        <Card style={styles.discountModal}>
-          <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Cart Discount
-          </Text>
-          
-          <View style={styles.discountTypeButtons}>
-            <TouchableOpacity
-              style={[
-                styles.discountTypeButton,
-                {
-                  backgroundColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountType === 'percentage' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-                }
-              ]}
-              onPress={() => setDiscountType('percentage')}
-            >
-              <Percent size={16} color={discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
-              <Text style={[
-                styles.discountTypeText,
-                { color: discountType === 'percentage' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-              ]}>
-                Percentage
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.discountTypeButton,
-                {
-                  backgroundColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#374151' : '#f3f4f6'),
-                  borderColor: discountType === 'fixed' ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
-                }
-              ]}
-              onPress={() => setDiscountType('fixed')}
-            >
-              <DollarSign size={16} color={discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151')} />
-              <Text style={[
-                styles.discountTypeText,
-                { color: discountType === 'fixed' ? '#ffffff' : (isDark ? '#f9fafb' : '#374151') }
-              ]}>
-                Fixed Amount
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          <Input
-            label={`Discount ${discountType === 'percentage' ? 'Percentage' : 'Amount'}`}
-            value={discountValue}
-            onChangeText={setDiscountValue}
-            placeholder={discountType === 'percentage' ? '10' : '5.00'}
-            keyboardType="decimal-pad"
-          />
-          
-          <View style={styles.modalActions}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              onPress={onCancel}
-              style={styles.modalButton}
-            />
-            <Button
-              title="Apply"
-              onPress={handleApply}
-              style={styles.modalButton}
-            />
-          </View>
-        </Card>
-      </View>
-    );
-  }
-
   // The sale just went through: the cart is gone by design, so show the prompt, not an error
   // (also while the sale is still being saved, so "Cart Not Found" never flashes in between)
   if ((completedSale || processing || leaving) && (!cart || !cartSummary)) {
@@ -1267,6 +1254,7 @@ export default function CartScreen() {
                 itemDiscountScope={item.item_discount_scope}
                 initialQuantity={initialQuantity}
                 availableStock={availableStock}
+                unitName={(item as any).unit_name}
                 onQuantityChange={handleQuantityChange}
                 onShowDiscount={setShowDiscountModal}
                 onRemoveDiscount={handleRemoveItemDiscount}
@@ -1401,9 +1389,10 @@ export default function CartScreen() {
             </View>
           </TouchableOpacity>
           {saleDate.toDateString() !== new Date().toDateString() && (
-            <View style={styles.dateWarning}>
-              <Text style={[styles.dateWarningText, { color: '#d97706' }]}>
-                ⚠️ This sale will be recorded for {saleDate.toLocaleDateString()}
+            <View style={[styles.dateWarning, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+              <TriangleAlert size={14} color="#d97706" />
+              <Text style={[styles.dateWarningText, { color: '#d97706', flex: 1 }]}>
+                This sale will be recorded for {saleDate.toLocaleDateString()}
               </Text>
             </View>
           )}
@@ -1427,7 +1416,7 @@ export default function CartScreen() {
                 ]}
                 onPress={() => choosePaymentMethod(method.value as 'cash' | 'card' | 'transfer' | 'other')}
               >
-                <Text style={styles.paymentIcon}>{method.icon}</Text>
+                <PaymentMethodIcon method={method.value} size={20} color={paymentMethod === method.value ? '#ffffff' : (isDark ? '#f9fafb' : '#111827')} />
                 <Text style={[styles.paymentLabel, { color: paymentMethod === method.value ? '#ffffff' : (isDark ? '#f9fafb' : '#111827') }]}>
                   {method.label}
                 </Text>
@@ -1621,7 +1610,9 @@ export default function CartScreen() {
       {/* Item Discount Modal */}
       {showDiscountModal && (
         <DiscountModal
-          itemId={showDiscountModal}
+          key={showDiscountModal}
+          item={cart?.items.find(i => i.id === showDiscountModal)}
+          isDark={isDark}
           onApply={(type, value, scope) => handleItemDiscount(showDiscountModal, type, value, scope)}
           onCancel={() => setShowDiscountModal(null)}
         />
@@ -1630,6 +1621,9 @@ export default function CartScreen() {
       {/* Cart Discount Modal */}
       {showCartDiscountModal && (
         <CartDiscountModal
+          initialType={cart?.discount_type}
+          initialValue={cart?.discount_value}
+          isDark={isDark}
           onApply={handleCartDiscount}
           onCancel={() => setShowCartDiscountModal(false)}
         />

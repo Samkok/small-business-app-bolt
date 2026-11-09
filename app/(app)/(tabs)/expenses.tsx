@@ -294,9 +294,10 @@ export default function ExpensesScreen() {
     const averageExpense = expenseCount > 0 ? totalExpenses / expenseCount : 0;
     
     // Today's expenses
-    const today = new Date().toISOString().split('T')[0];
-    const todayExpenses = filteredExpenses.filter(expense => 
-      expense.expense_date.split('T')[0] === today
+    // Compare local calendar days; the UTC date part is a day behind before 07:00 in UTC+7
+    const todayKey = new Date().toDateString();
+    const todayExpenses = filteredExpenses.filter(expense =>
+      new Date(expense.expense_date).toDateString() === todayKey
     );
     const todayTotal = todayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 

@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/src/context/AuthContext';
-import { ThemeProvider } from '@/src/context/ThemeContext';
+import { ThemeProvider, useTheme } from '@/src/context/ThemeContext';
 import { LanguageProvider } from '@/src/context/LanguageContext';
 import { CartProvider } from '@/src/context/CartContext';
 import { InstantCheckoutProvider } from '@/src/context/InstantCheckoutContext';
@@ -21,6 +21,13 @@ import { NetworkBanner } from '@/src/components/ui/NetworkBanner';
 import { PendingSalesSyncModal } from '@/src/components/sales/PendingSalesSyncModal';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import '@/src/locales';
+
+// The app keeps its own light/dark setting, so the status bar must follow it, not the phone:
+// with style="auto" the clock turned white on the light app whenever the phone was dark.
+function ThemedStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -59,7 +66,7 @@ export default function RootLayout() {
                             </Stack>
                             <NetworkBanner />
                             <PendingSalesSyncModal />
-                            <StatusBar style="auto" />
+                            <ThemedStatusBar />
                           </InstantCheckoutProvider>
                         </CartProvider>
                       </NotificationProvider>

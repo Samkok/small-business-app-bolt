@@ -181,11 +181,15 @@ export default function InventoryScreen() {
     }
   }, [currentBusiness?.id]);
 
-  // Recount whenever the tab regains focus (after a sale, an import, or a visit to Product Insight)
+  // Refetch whenever the tab regains focus (after a sale, a stock count, an adjustment, an import
+  // or a cost change made on another screen); the mount effect covers the first focus.
+  const focusedOnceRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
       loadMustOrderCount();
-    }, [loadMustOrderCount])
+      if (focusedOnceRef.current) loadData(true);
+      focusedOnceRef.current = true;
+    }, [loadMustOrderCount, currentBusiness?.id])
   );
 
   const loadData = async (isRefresh = false) => {
@@ -421,6 +425,10 @@ export default function InventoryScreen() {
     setSelectedProduct(null);
     // Refresh the current page to show updated product
     loadProducts(0, true);
+    // A changed minimum or stock moves the low-stock badge
+    if (currentBusiness?.id) {
+      productService.getLowStockProducts(currentBusiness.id).then(p => setLowStockCount(p.length)).catch(() => {});
+    }
     // Update total count
     if (!selectedProduct) {
       setTotalProducts(prev => prev + 1);
@@ -968,8 +976,11 @@ export default function InventoryScreen() {
       );
     }
 
-    return (
-      <View style={styles.tabContent}>
+    // Everything above the list scrolls with it (as a FlatList header element, not a
+    // component, so the search field keeps focus while typing). Pinned, the toggles,
+    // search, stat cards and tool banners left the list a strip about 200 points tall.
+    const listHeader = (
+      <View>
         <View style={styles.filterRow}>
           <TouchableOpacity
             style={[
@@ -1092,45 +1103,31 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.unitGroupsChip, { backgroundColor: isDark ? '#134e4a' : '#f0fdfa', borderColor: isDark ? '#0d9488' : '#99f6e4' }]}
-              onPress={() => router.push('/inventory/unit-groups')}
-              activeOpacity={0.7}
-            >
-              <Layers size={16} color="#0d9488" />
-              <Text style={[styles.unitGroupsChipText, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>
-                Unit Groups
-              </Text>
-              <Text style={[styles.unitGroupsChipSub, { color: isDark ? '#5eead4' : '#14b8a6' }]}>
-                Manage Box, Pack, Bottle &amp; more
-              </Text>
-              <Text style={[styles.unitGroupsChipArrow, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.stockToolsRow}>
+            {/* One row of tools instead of a banner plus two cards: the list starts higher */}
+            <View style={styles.toolsRow}>
               <TouchableOpacity
-                style={[styles.stockToolChip, { backgroundColor: isDark ? '#3b2f0b' : '#fffbeb', borderColor: isDark ? '#d97706' : '#fde68a' }]}
+                style={[styles.toolChip, { backgroundColor: isDark ? '#134e4a' : '#f0fdfa', borderColor: isDark ? '#0d9488' : '#99f6e4' }]}
+                onPress={() => router.push('/inventory/unit-groups')}
+                activeOpacity={0.7}
+              >
+                <Layers size={16} color="#0d9488" />
+                <Text style={[styles.toolChipText, { color: isDark ? '#2dd4bf' : '#0d9488' }]}>Unit Groups</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toolChip, { backgroundColor: isDark ? '#3b2f0b' : '#fffbeb', borderColor: isDark ? '#d97706' : '#fde68a' }]}
                 onPress={() => router.push('/inventory/stock-count')}
                 activeOpacity={0.7}
               >
                 <ClipboardList size={16} color="#d97706" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.unitGroupsChipText, { color: isDark ? '#fbbf24' : '#b45309' }]}>Stock Count</Text>
-                  <Text style={[styles.stockToolChipSub, { color: isDark ? '#fcd34d' : '#d97706' }]}>Count shelves, post differences</Text>
-                </View>
-                <Text style={[styles.unitGroupsChipArrow, { color: '#d97706' }]}>›</Text>
+                <Text style={[styles.toolChipText, { color: isDark ? '#fbbf24' : '#b45309' }]}>Stock Count</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.stockToolChip, { backgroundColor: isDark ? '#3f1d1d' : '#fef2f2', borderColor: isDark ? '#dc2626' : '#fecaca' }]}
+                style={[styles.toolChip, { backgroundColor: isDark ? '#3f1d1d' : '#fef2f2', borderColor: isDark ? '#dc2626' : '#fecaca' }]}
                 onPress={() => router.push('/inventory/stock-adjustments')}
                 activeOpacity={0.7}
               >
                 <PackageMinus size={16} color="#dc2626" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.unitGroupsChipText, { color: isDark ? '#f87171' : '#b91c1c' }]}>Adjustments</Text>
-                  <Text style={[styles.stockToolChipSub, { color: isDark ? '#fca5a5' : '#dc2626' }]}>Damaged, expired, lost</Text>
-                </View>
-                <Text style={[styles.unitGroupsChipArrow, { color: '#dc2626' }]}>›</Text>
+                <Text style={[styles.toolChipText, { color: isDark ? '#f87171' : '#b91c1c' }]}>Adjustments</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -1151,8 +1148,14 @@ export default function InventoryScreen() {
           </View>
         )}
 
+      </View>
+    );
+
+    return (
+      <View style={styles.tabContent}>
         <FlatList
           ref={flatListRef}
+          ListHeaderComponent={listHeader}
           data={showArchived ? filteredArchivedProducts : filteredProducts}
           renderItem={renderProductItem}
           keyExtractor={(item) => item.id}
@@ -1960,6 +1963,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '300',
   },
+  toolsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  toolChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  toolChipText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
   stockToolsRow: {
     flexDirection: 'row',
     gap: 10,
@@ -2025,7 +2048,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   productsList: {
-    paddingBottom: 80,
+    paddingBottom: 120, // the last card's buttons clear the two floating buttons
   },
   emptyContainer: {
     flexGrow: 1,

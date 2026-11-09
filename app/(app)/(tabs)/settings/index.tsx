@@ -44,6 +44,42 @@ import { useAccountDeletion } from '@/src/hooks/useAccountDeletion';
 import { businessService } from '@/src/services/business';
 import { accountService, AccountDeletePreview } from '@/src/services/account';
 
+// Module level on purpose: declared inside the screen it got a new identity on every
+// re-render (the notification and subscription contexts re-render often), so each row was
+// remounted mid-press and onPress never fired.
+function SettingItem({ icon, title, subtitle, onPress }: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+}) {
+  const { isDark } = useTheme();
+  return (
+  <TouchableOpacity onPress={onPress}>
+    <Card style={styles.settingItem}>
+      <View style={styles.settingContent}>
+        <View style={styles.settingLeft}>
+          <View style={[styles.iconContainer, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
+            {icon}
+          </View>
+          <View style={styles.settingText}>
+            <Text style={[styles.settingTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {title}
+            </Text>
+            {subtitle && (
+              <Text style={[styles.settingSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </View>
+        <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+      </View>
+    </Card>
+  </TouchableOpacity>
+  );
+}
+
 export default function SettingsScreen() {
   const { t } = useTranslation();
   const { isDark, theme, setTheme } = useTheme();
@@ -140,41 +176,6 @@ export default function SettingsScreen() {
       Alert.alert(t('common.error'), error.message || t('deleteAccount.errorMessage'));
     }
   };
-
-  const SettingItem = ({ 
-    icon, 
-    title, 
-    subtitle, 
-    onPress 
-  }: {
-    icon: React.ReactNode;
-    title: string;
-    subtitle?: string;
-    onPress: () => void;
-  }) => (
-    <TouchableOpacity onPress={onPress}>
-      <Card style={styles.settingItem}>
-        <View style={styles.settingContent}>
-          <View style={styles.settingLeft}>
-            <View style={[styles.iconContainer, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
-              {icon}
-            </View>
-            <View style={styles.settingText}>
-              <Text style={[styles.settingTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {title}
-              </Text>
-              {subtitle && (
-                <Text style={[styles.settingSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                  {subtitle}
-                </Text>
-              )}
-            </View>
-          </View>
-          <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-        </View>
-      </Card>
-    </TouchableOpacity>
-  );
 
   return (
     <ScrollView

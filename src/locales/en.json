@@ -250,7 +250,37 @@
     "originalTotal": "Original Total",
     "returnedAmount": "Returned Amount",
     "saleActions": "Sale Actions",
-    "returnMoreItems": "Return More Items"
+    "returnMoreItems": "Return More Items",
+    "returnFromSale": "Return from sale #{{number}} · {{total}}",
+    "returnReasonLabel": "Reason for return",
+    "returnReasons": {
+      "changedMind": "Changed mind",
+      "damaged": "Damaged",
+      "wrongItem": "Wrong item",
+      "expired": "Expired",
+      "other": "Other"
+    },
+    "voidReasonLabel": "Reason for voiding",
+    "voidReasons": {
+      "enteredByMistake": "Entered by mistake",
+      "customerCancelled": "Customer cancelled",
+      "duplicateSale": "Duplicate sale",
+      "wrongItems": "Wrong items",
+      "other": "Other"
+    },
+    "chooseReasonHint": "Choose a reason to continue",
+    "additionalNotesOptional": "Additional notes (optional)",
+    "notePlaceholder": "Any extra details",
+    "keepPartOfMoney": "Keep part of the money",
+    "noLoss": "No loss",
+    "lossFixedAmount": "Fixed amount",
+    "lossPercentage": "Percentage",
+    "lossAdjustmentOptional": "Loss adjustment (optional)",
+    "lossAdjustmentHint": "Set a return quantity first",
+    "itemCount": "{{count}} item",
+    "itemCount_plural": "{{count}} items",
+    "returnProcessed": "Return processed",
+    "returnProcessedMessage": "{{items}} returned. Refund: {{amount}}"
   },
   "expenses": {
     "title": "Expenses",

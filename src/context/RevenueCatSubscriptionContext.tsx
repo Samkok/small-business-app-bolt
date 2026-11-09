@@ -150,6 +150,10 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
   const [isTeamMemberUpgradeModalVisible, setIsTeamMemberUpgradeModalVisible] = useState(false);
   const [teamMemberOwnedBusinesses, setTeamMemberOwnedBusinesses] = useState<Array<{ id: string; business_name: string }>>([]);
   const [mustChooseBusinesses, setMustChooseBusinesses] = useState(false);
+  // Latest value for the realtime listener. Since user_profiles has REPLICA IDENTITY DEFAULT,
+  // an UPDATE payload carries no old values, so the listener compares with this instead.
+  const mustChooseRef = useRef(false);
+  useEffect(() => { mustChooseRef.current = mustChooseBusinesses; }, [mustChooseBusinesses]);
   const [ownedBusinesses, setOwnedBusinesses] = useState<any[]>([]);
   const [readOnlyBusinessIds, setReadOnlyBusinessIds] = useState<string[]>([]);
 
@@ -696,7 +700,11 @@ export const RevenueCatSubscriptionProvider: React.FC<SubscriptionProviderProps>
     userProfileChannelRef.current = supabase
       .channel(`user-profile-changes-${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_profiles', filter: `user_id=eq.${user.id}` }, (payload: any) => {
-        if (payload.new?.must_choose_businesses !== payload.old?.must_choose_businesses) void loadDowngradeData();
+        // Only a real change of the flag matters. payload.old has no column values here
+        // (replica identity default), and comparing with it made every profile write
+        // re-run the check, which wrote the profile again: an endless loop.
+        const next = payload.new?.must_choose_businesses;
+        if (typeof next === 'boolean' && next !== mustChooseRef.current) void loadDowngradeData();
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') reconnectAttemptsMap.current['user-profile'] = 0;

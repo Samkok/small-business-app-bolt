@@ -31,6 +31,8 @@ export interface CartItem {
   /** cost of ONE sold unit (box / pack variants already multiplied up); feeds the profit preview */
   cost_per_unit?: number;
   unit_id?: string | null;
+  /** name of the unit sold (Box, Bottle); null for a product without units */
+  unit_name?: string | null;
 }
 
 export interface Cart {
@@ -265,7 +267,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             (item as any).products?.cost_per_unit,
             (item as any).units?.conversion_factor_to_base
           ),
-          unit_id: (item as any).unit_id ?? null
+          unit_id: (item as any).unit_id ?? null,
+          unit_name: (item as any).units?.name ?? null
         })) || []
       }));
 

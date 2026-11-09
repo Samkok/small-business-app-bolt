@@ -118,73 +118,25 @@ export const reportsService = {
         .in('status', ['completed', 'partially_returned'])
         .gte('sale_date', todayStr)
         .lt('sale_date', tomorrowStr);
-      const { data: todayRaw } = await todaySalesQuery;
+      const { data: todayRaw, error: todayError } = await todaySalesQuery;
+      if (todayError) throw todayError;
       const todaySalesData = (todayRaw || []).map(sale => scaleSale(sale, saleFactor(rc, sale)));
       const todayRevenue = summarizeRevenue(todaySalesData).grossRevenue;
 
-      // Monthly revenue
-      let monthlySalesQuery = supabase
-        .from('sales')
-        .select(`
-          total_amount,
-          delivery_cost,
-          carts(delivery_cost),
-          status,
-          currency_id,
-          exchange_rate_at_sale,
-          sale_actions!left(amount, action_type, adjusted_amount)
-        `)
-        .eq('business_id', businessId)
-        .in('status', ['completed', 'partially_returned'])
-        .gte('sale_date', startOfMonthStr)
-        .lte('sale_date', endOfMonthStr);
-      const { data: monthlyRaw } = await monthlySalesQuery;
-      const monthlySalesData = (monthlyRaw || []).map(sale => scaleSale(sale, saleFactor(rc, sale)));
-
-      // Gross revenue = customer price (sale total + courier fee) net of refunds.
-      const monthlySummary = summarizeRevenue(monthlySalesData);
-      const monthlyRevenue = monthlySummary.grossRevenue;
-      const deliveryFees = monthlySummary.deliveryFees;
-
-      // Monthly COGS (Cost of Goods Sold) - based on actual sold items
-      const monthlyCOGS = await getConvertedCOGS(businessId, startOfMonthStr, endOfMonthStr, rc);
-
-      // Calculate Total Profit (Revenue - COGS)
-      const totalProfit = monthlyRevenue - monthlyCOGS;
-
-      // Monthly expenses
-      let expensesQuery = supabase
-        .from('expenses')
-        .select('amount, currency_id')
-        .eq('business_id', businessId)
-        .gte('expense_date', startOfMonthStr)
-        .lte('expense_date', endOfMonthStr);
-      const { data: monthlyExpenses } = await expensesQuery;
-
-      const operatingExpenses = (monthlyExpenses || []).reduce((sum, expense) => sum + Number(expense.amount) * expenseFactor(rc, expense), 0);
-      // Courier fees are a cost of the business, reported as an expense rather than netted from revenue.
-      const totalExpenses = operatingExpenses + deliveryFees;
-
-      // Get loss amounts from sale actions (treated as expenses)
-      let lossQuery = supabase
-        .from('sale_actions')
-        .select(`
-          loss_amount,
-          sales!inner(business_id, sale_date, currency_id)
-        `)
-        .eq('sales.business_id', businessId)
-        .gte('sales.sale_date', startOfMonthStr)
-        .lte('sales.sale_date', endOfMonthStr)
-        .not('loss_amount', 'is', null)
-        .gt('loss_amount', 0);
-      const { data: lossData } = await lossQuery;
-
-      // Deductions the business kept back from refunds. Revenue already subtracts only the
-      // refunded amount, so this money is still inside revenue and must not be expensed again.
-      const refundDeductionsRetained = (lossData || []).reduce((sum, action) => sum + Number(action.loss_amount || 0) * conversionFactor(rc, (action as any).sales?.currency_id), 0);
-
-      // Net Profit = Gross Profit - Operating Expenses - Delivery Fees
-      const netProfit = totalProfit - totalExpenses;
+      // The month's money comes from the same statement the Reports screen shows, so the
+      // dashboard, the Income tab and the full statement can never disagree (write-offs
+      // included) and a failed query raises instead of becoming a silent zero.
+      const statement = await this.getIncomeStatement(businessId, startOfMonthStr, endOfMonthStr, currencyId);
+      if (!statement) throw new Error('Income statement unavailable');
+      const monthlyRevenue = statement.revenue.total;
+      const monthlyCOGS = statement.cogs.total;
+      const inventoryWriteOffs = statement.inventory.writeOffs - statement.inventory.found;
+      const totalProfit = statement.grossProfit;
+      const operatingExpenses = statement.expenses.operating;
+      const deliveryFees = statement.expenses.deliveryFees;
+      const totalExpenses = statement.expenses.total;
+      const refundDeductionsRetained = statement.refundDeductionsRetained;
+      const netProfit = statement.netIncome;
 
       // Low stock count
       const lowStockProducts = await productService.getLowStockProducts(businessId);
@@ -222,6 +174,7 @@ export const reportsService = {
         todayRevenue,
         monthlyRevenue,
         monthlyCOGS,
+        inventoryWriteOffs,
         totalProfit,
         operatingExpenses,
         deliveryFees,
@@ -236,8 +189,9 @@ export const reportsService = {
         currencyId: rc.targetId
       };
     } catch (error) {
+      // Raise rather than return null: a null used to be cached and shown as zeros
       console.error('Error fetching dashboard stats:', error);
-      return null;
+      throw error;
     }
   },
 

@@ -38,6 +38,8 @@ const CADENCE: Record<AbcClass, string> = {
  * quantity so the counter is not tempted to confirm it. A/B/C tags come from
  * Product Insight so the most valuable products can be counted most often.
  */
+const pluralUnits = (n: number) => (n === 1 ? 'unit' : 'units');
+
 export default function StockCountScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
@@ -153,8 +155,8 @@ export default function StockCountScreen() {
     Alert.alert(
       'Post stock count?',
       `${review.counted} counted, ${review.changed} differ from the system.\n\n` +
-        `Short: ${review.unitsShort} units (${formatPrice(review.costLost)} written off)\n` +
-        `Over: ${review.unitsOver} units (${formatPrice(review.costFound)} found)\n\n` +
+        `Short: ${review.unitsShort} ${pluralUnits(review.unitsShort)} (${formatPrice(review.costLost)} written off)\n` +
+        `Over: ${review.unitsOver} ${pluralUnits(review.unitsOver)} (${formatPrice(review.costFound)} found)\n\n` +
         'Each difference is posted as a count correction and cannot be edited afterwards.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -172,13 +174,17 @@ export default function StockCountScreen() {
         items: review.items,
         notes: notes.trim() || undefined,
       });
+      // Show the posted quantities at once (the RPC returns totals only), then reload from the server
+      const posted = new Map(review.items.map(i => [i.productId, i.counted]));
+      setProducts((prev: any[]) => prev.map(p => posted.has(p.id) ? { ...p, current_stock: posted.get(p.id) } : p));
       setCounts({});
       setNotes('');
+      load();
       Alert.alert(
         'Stock count posted',
         `${result.adjusted} product${result.adjusted === 1 ? '' : 's'} adjusted, ${result.unchanged} unchanged.\n` +
-          `Written off: ${result.units_lost} units (${formatPrice(Number(result.cost_lost) || 0)})\n` +
-          `Found: ${result.units_found} units (${formatPrice(Number(result.cost_found) || 0)})`,
+          `Written off: ${result.units_lost} ${pluralUnits(result.units_lost)} (${formatPrice(Number(result.cost_lost) || 0)})\n` +
+          `Found: ${result.units_found} ${pluralUnits(result.units_found)} (${formatPrice(Number(result.cost_found) || 0)})`,
         [
           { text: 'View adjustments', onPress: () => router.push('/inventory/stock-adjustments') },
           { text: 'Done', onPress: () => load() },

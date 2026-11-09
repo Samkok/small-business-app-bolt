@@ -42,6 +42,8 @@ export default function ReportsScreen() {
   const [revenueData, setRevenueData] = useState<any>(null);
   const [expensesData, setExpensesData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
+  // The Income Summary card and the full statement share this one computation (write-offs included)
+  const [incomeStatement, setIncomeStatement] = useState<any>(null);
   const [expenseCategoriesData, setExpenseCategoriesData] = useState<any>(null);
   // First month with any sale or expense; the cash flow list runs from there to today.
   const [activityStart, setActivityStart] = useState<Date | null>(null);
@@ -158,35 +160,36 @@ export default function ReportsScreen() {
       const { startDate, endDate } = getDateRange();
 
       reportsService.getActivityStart(currentBusiness.id).then(setActivityStart).catch(() => setActivityStart(null));
-      
-      // Load revenue data
-      const revenueChartData = await reportsService.getRevenueChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setRevenueData(revenueChartData);
-      
-      // Load expenses data
-      const expensesChartData = await reportsService.getExpenseChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setExpensesData(expensesChartData);
-      
-      // Load profit data
-      const profitChartData = await reportsService.getProfitChart(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setProfitData(profitChartData);
-      
-      // Load expense categories data
-      const expenseCategoriesChartData = await reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setExpenseCategoriesData(expenseCategoriesChartData);
-
-      // Load inventory spend (what was paid for stock in the period)
-      const inventorySpend = await reportsService.getInventorySpend(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setInventorySpendData(inventorySpend);
-
-      // Courier fees absorbed and discounts given (not recorded as expenses anywhere else)
-      const fees = await reportsService.getFeesAndDiscounts(currentBusiness.id, startDate, endDate, activeCurrencyId);
-      setFeesData(fees);
 
       // Sold lines with no cost at all: shown under COGS so the margin is not read as real
       reportsService.countSalesLinesMissingCost(currentBusiness.id, startDate, endDate)
         .then(setMissingCostLines)
         .catch(() => setMissingCostLines(0));
+
+      // The required calls run together and each card fills in as its own call returns.
+      // Any failure is logged; the alert below is shown once, however many fail.
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
+      const load = <T,>(name: string, promise: Promise<T>, set: (value: T) => void) =>
+        promise.then(set).catch((error) => {
+          console.error(`Error loading report data (${name}):`, error);
+          throw error;
+        });
+      const results = await Promise.allSettled([
+        load('revenue', reportsService.getRevenueChart(currentBusiness.id, startDate, endDate, activeCurrencyId), setRevenueData),
+        load('expenses', reportsService.getExpenseChart(currentBusiness.id, startDate, endDate, activeCurrencyId), setExpensesData),
+        load('profit', reportsService.getProfitChart(currentBusiness.id, startDate, endDate, activeCurrencyId), setProfitData),
+        // Income Summary: the same engine as the full statement, so the two never disagree
+        load('income statement', reportsService.getIncomeStatement(currentBusiness.id, startIso, endIso, activeCurrencyId), setIncomeStatement),
+        load('expense categories', reportsService.getExpensesByCategory(currentBusiness.id, startDate, endDate, activeCurrencyId), setExpenseCategoriesData),
+        // Inventory spend (what was paid for stock in the period)
+        load('inventory spend', reportsService.getInventorySpend(currentBusiness.id, startDate, endDate, activeCurrencyId), setInventorySpendData),
+        // Courier fees absorbed and discounts given (not recorded as expenses anywhere else)
+        load('fees and discounts', reportsService.getFeesAndDiscounts(currentBusiness.id, startDate, endDate, activeCurrencyId), setFeesData),
+      ]);
+      if (results.some((result) => result.status === 'rejected')) {
+        throw new Error('One or more report queries failed');
+      }
     } catch (error) {
       console.error('Error loading report data:', error);
       if (Platform.OS !== 'web') {
@@ -293,6 +296,56 @@ export default function ReportsScreen() {
     
     const interval = Math.ceil(labels.length / maxVisibleLabels);
     return labels.map((label, index) => (index % interval === 0) ? label : '');
+  };
+
+  // Daily and weekly ranges (31 buckets or fewer) draw bars, so a day with no sales is an
+  // empty slot instead of a smoothed curve implying one. Longer ranges keep a straight line.
+  const renderTrendChart = (values: number[], labels: string[], color: string) => {
+    const chartWidth = screenWidth - 64;
+    const baseConfig = {
+      backgroundColor: isDark ? '#374151' : '#ffffff',
+      backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
+      backgroundGradientTo: isDark ? '#374151' : '#ffffff',
+      decimalPlaces: 0,
+      labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
+      style: { borderRadius: 16 },
+    };
+    const chartStyle = { marginVertical: 8, borderRadius: 16 };
+    if (values.length <= 31) {
+      // chart-kit draws every bar 32 * barPercentage wide, so scale it to the slot each bucket gets
+      const slotWidth = (chartWidth - 64) / Math.max(values.length, 1);
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+      return (
+        <BarChartKit
+          data={{ labels, datasets: [{ data: values }] }}
+          width={chartWidth}
+          height={220}
+          yAxisLabel=""
+          yAxisSuffix=""
+          fromZero
+          withInnerLines={false}
+          chartConfig={{
+            ...baseConfig,
+            color: (opacity = 1) => `rgba(${r}, ${g}, ${b}, ${opacity})`,
+            barPercentage: Math.min(0.6, (slotWidth * 0.7) / 32),
+          }}
+          style={chartStyle}
+        />
+      );
+    }
+    return (
+      <LineChart
+        data={{ labels, datasets: [{ data: values, color: () => color, strokeWidth: 2 }] }}
+        width={chartWidth}
+        height={220}
+        chartConfig={{
+          ...baseConfig,
+          color: (opacity = 1) => isDark ? `rgba(209, 213, 219, ${opacity})` : `rgba(107, 114, 128, ${opacity})`,
+          propsForDots: { r: '0', stroke: color },
+        }}
+        style={chartStyle}
+      />
+    );
   };
 
   const handleDateFilterChange = (filter: 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
@@ -456,41 +509,21 @@ export default function ReportsScreen() {
     const processedExpensesLabels = getProcessedLabels(expensesData.map((item: any) => item.label), 7);
     const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
-    // Prepare data for revenue chart
-    const revenueChartData = {
-      labels: processedRevenueLabels,
-      datasets: [
-        {
-          data: revenueData.map((item: any) => parseFloat(item.revenue)),
-          color: () => '#059669',
-          strokeWidth: 2
-        }
-      ]
-    };
+    const revenueValues = revenueData.map((item: any) => parseFloat(item.revenue));
+    const expensesValues = expensesData.map((item: any) => item.amount);
+    const profitValues = profitData.map((item: any) => item.netProfit);
+    const profitColor = profitData.some((item: any) => item.netProfit < 0) ? '#dc2626' : '#059669';
 
-    // Prepare data for expenses chart
-    const expensesChartData = {
-      labels: processedExpensesLabels,
-      datasets: [
-        {
-          data: expensesData.map((item: any) => item.amount),
-          color: () => '#dc2626',
-          strokeWidth: 2
-        }
-      ]
-    };
-
-    // Prepare data for profit chart
-    const profitChartData = {
-      labels: processedProfitLabels,
-      datasets: [
-        {
-          data: profitData.map((item: any) => item.netProfit),
-          color: (opacity = 1) => profitData.some((item: any) => item.netProfit < 0) ? '#dc2626' : '#059669',
-          strokeWidth: 2
-        }
-      ]
-    };
+    // Period totals come from the income statement, the same source as the Income tab; the
+    // chart buckets are only a fallback while it loads.
+    const totalRevenue = incomeStatement ? incomeStatement.revenue.total : revenueValues.reduce((sum: number, v: number) => sum + v, 0);
+    const totalExpenses = incomeStatement ? incomeStatement.expenses.total : expensesValues.reduce((sum: number, v: number) => sum + v, 0);
+    const netProfit = incomeStatement ? incomeStatement.netIncome : profitValues.reduce((sum: number, v: number) => sum + v, 0);
+    const totals = [
+      { label: 'Revenue', value: totalRevenue, color: '#059669' },
+      { label: 'Expenses', value: totalExpenses, color: '#dc2626' },
+      { label: 'Net profit', value: netProfit, color: netProfit >= 0 ? '#059669' : '#dc2626' },
+    ];
 
     // Prepare data for expense categories pie chart
     const expenseCategoriesPieData = expenseCategoriesData.slice(0, 5).map((item: any, index: number) => {
@@ -506,6 +539,20 @@ export default function ReportsScreen() {
 
     return (
       <View style={styles.tabContent}>
+        {/* Period totals */}
+        <Card style={styles.chartCard}>
+          <View style={styles.totalsRow}>
+            {totals.map((item) => (
+              <View key={item.label} style={styles.spendStat}>
+                <Text style={[styles.totalsValue, { color: item.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {fmt(item.value)}
+                </Text>
+                <Text style={[styles.spendStatLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+
         {/* Revenue Chart */}
         <Card style={styles.chartCard}>
           <View style={styles.chartHeader}>
@@ -518,31 +565,7 @@ export default function ReportsScreen() {
           </View>
           
           <View style={styles.chartContainer}>
-            <LineChart
-              data={revenueChartData}
-              width={screenWidth - 64}
-              height={220}
-              chartConfig={{
-                backgroundColor: isDark ? '#374151' : '#ffffff',
-                backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
-                backgroundGradientTo: isDark ? '#374151' : '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => isDark ? `rgba(209, 213, 219, ${opacity})` : `rgba(107, 114, 128, ${opacity})`,
-                labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "0",
-                  stroke: "#059669"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            {renderTrendChart(revenueValues, processedRevenueLabels, '#059669')}
           </View>
         </Card>
 
@@ -558,31 +581,7 @@ export default function ReportsScreen() {
           </View>
           
           <View style={styles.chartContainer}>
-            <LineChart
-              data={expensesChartData}
-              width={screenWidth - 64}
-              height={220}
-              chartConfig={{
-                backgroundColor: isDark ? '#374151' : '#ffffff',
-                backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
-                backgroundGradientTo: isDark ? '#374151' : '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => isDark ? `rgba(209, 213, 219, ${opacity})` : `rgba(107, 114, 128, ${opacity})`,
-                labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "0",
-                  stroke: "#dc2626"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            {renderTrendChart(expensesValues, processedExpensesLabels, '#dc2626')}
           </View>
         </Card>
 
@@ -598,31 +597,7 @@ export default function ReportsScreen() {
           </View>
           
           <View style={styles.chartContainer}>
-            <LineChart
-              data={profitChartData}
-              width={screenWidth - 64}
-              height={220}
-              chartConfig={{
-                backgroundColor: isDark ? '#374151' : '#ffffff',
-                backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
-                backgroundGradientTo: isDark ? '#374151' : '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => isDark ? `rgba(209, 213, 219, ${opacity})` : `rgba(107, 114, 128, ${opacity})`,
-                labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "0",
-                  stroke: profitData.some((item: any) => item.netProfit < 0) ? "#dc2626" : "#059669"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            {renderTrendChart(profitValues, processedProfitLabels, profitColor)}
           </View>
         </Card>
 
@@ -885,13 +860,17 @@ export default function ReportsScreen() {
     // Process labels to avoid crowding
     const processedProfitLabels = getProcessedLabels(profitData.map((item: any) => item.label), 7);
 
-    // Calculate totals
-    const totalRevenue = profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
-    const totalCOGS = profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
-    const totalOperatingExpenses = profitData.reduce((sum: number, item: any) => sum + (item.operatingExpenses ?? item.expenses), 0);
-    const totalDeliveryFees = profitData.reduce((sum: number, item: any) => sum + (item.deliveryFees ?? 0), 0);
+    // Totals come from the income statement (write-offs and found stock included), the same
+    // numbers the full statement prints; the chart buckets are only a fallback while it loads.
+    const totalRevenue = incomeStatement ? incomeStatement.revenue.total : profitData.reduce((sum: number, item: any) => sum + parseFloat(item.revenue), 0);
+    const totalCOGS = incomeStatement ? incomeStatement.cogs.total : profitData.reduce((sum: number, item: any) => sum + item.cogs, 0);
+    const writeOffs = incomeStatement?.inventory?.writeOffs ?? 0;
+    const writeOffUnits = incomeStatement?.inventory?.writeOffUnits ?? 0;
+    const foundStock = incomeStatement?.inventory?.found ?? 0;
+    const totalOperatingExpenses = incomeStatement ? incomeStatement.expenses.operating : profitData.reduce((sum: number, item: any) => sum + (item.operatingExpenses ?? item.expenses), 0);
+    const totalDeliveryFees = incomeStatement ? incomeStatement.expenses.deliveryFees : profitData.reduce((sum: number, item: any) => sum + (item.deliveryFees ?? 0), 0);
     const totalExpenses = totalOperatingExpenses + totalDeliveryFees;
-    const grossProfit = totalRevenue - totalCOGS;
+    const grossProfit = totalRevenue - totalCOGS - writeOffs + foundStock;
     const netProfit = grossProfit - totalExpenses;
 
     return (
@@ -923,6 +902,27 @@ export default function ReportsScreen() {
               <Text style={[styles.costWarning, { color: isDark ? '#fbbf24' : '#b45309' }]}>
                 {t('costLedger.missingCostLines', { count: missingCostLines })}
               </Text>
+            )}
+
+            {writeOffs > 0 && (
+              <View style={styles.incomeRow}>
+                <Text style={[styles.incomeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Inventory Write-offs ({writeOffUnits} units lost)
+                </Text>
+                <Text style={[styles.incomeValue, { color: '#dc2626' }]}>
+                  {fmt(writeOffs)}
+                </Text>
+              </View>
+            )}
+            {foundStock > 0 && (
+              <View style={styles.incomeRow}>
+                <Text style={[styles.incomeLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  Less: Found Stock
+                </Text>
+                <Text style={[styles.incomeValue, { color: '#059669' }]}>
+                  -{fmt(foundStock)}
+                </Text>
+              </View>
             )}
             
             <View style={[styles.incomeRow, styles.subtotalRow]}>
@@ -983,40 +983,7 @@ export default function ReportsScreen() {
           </View>
           
           <View style={styles.chartContainer}>
-            <LineChart
-              data={{
-                labels: processedProfitLabels,
-                datasets: [
-                  {
-                    data: profitData.map((item: any) => item.netProfit),
-                    color: () => netProfit >= 0 ? '#059669' : '#dc2626',
-                    strokeWidth: 2
-                  }
-                ]
-              }}
-              width={screenWidth - 64}
-              height={220}
-              chartConfig={{
-                backgroundColor: isDark ? '#374151' : '#ffffff',
-                backgroundGradientFrom: isDark ? '#374151' : '#ffffff',
-                backgroundGradientTo: isDark ? '#374151' : '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => isDark ? `rgba(209, 213, 219, ${opacity})` : `rgba(107, 114, 128, ${opacity})`,
-                labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "0",
-                  stroke: netProfit >= 0 ? "#059669" : "#dc2626"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            {renderTrendChart(profitData.map((item: any) => item.netProfit), processedProfitLabels, netProfit >= 0 ? '#059669' : '#dc2626')}
           </View>
         </Card>
 
@@ -1813,5 +1780,14 @@ const styles = StyleSheet.create({
   dateRangeButtonText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  totalsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  totalsValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 });

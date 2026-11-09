@@ -13,11 +13,10 @@ import {
 import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { useTranslation } from '@/src/locales';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
-import Input from '@/src/components/ui/Input';
-import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
-import { X, ShoppingCart, User, DollarSign, Minus, Plus, Info, Calendar, Receipt, Package, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
+import { X, ShoppingCart, DollarSign, Minus, Plus, Info, TriangleAlert as AlertTriangle, TrendingDown, Percent } from 'lucide-react-native';
 import { salesService } from '@/src/services/sales';
 import { calculateReturnRefund, getReturnedQuantities } from '@/src/utils/saleMoney';
 
@@ -39,17 +38,44 @@ interface ReturnSaleFormProps {
   onCancel: () => void;
 }
 
+type ReturnReasonKey = 'changedMind' | 'damaged' | 'wrongItem' | 'expired' | 'other';
+
+// The label is what gets stored in the return record (salesService takes a plain
+// string), so it stays in English whatever language the screen is shown in.
+const RETURN_REASONS: { key: ReturnReasonKey; label: string }[] = [
+  { key: 'changedMind', label: 'Changed mind' },
+  { key: 'damaged', label: 'Damaged' },
+  { key: 'wrongItem', label: 'Wrong item' },
+  { key: 'expired', label: 'Expired' },
+  { key: 'other', label: 'Other' },
+];
+
+const LOSS_TYPES: { key: ReturnItem['lossType']; i18n: string }[] = [
+  { key: 'none', i18n: 'sales.noLoss' },
+  { key: 'fixed', i18n: 'sales.lossFixedAmount' },
+  { key: 'percentage', i18n: 'sales.lossPercentage' },
+];
+
 export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSaleFormProps) {
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
-  const [reason, setReason] = useState('');
+  const [reasonKey, setReasonKey] = useState<ReturnReasonKey | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const [includeDeliveryCost, setIncludeDeliveryCost] = useState(false);
+  const [includeDeliveryCost] = useState(false);
 
   const { isDark } = useTheme();
+  const { t } = useTranslation();
   const { formatPrice } = useCurrencyContext();
   const fmt = (amount: number) => formatPrice(amount, sale?.currency_id);
   const { currentBusiness, userProfile } = useAuth();
+
+  const colors = {
+    text: isDark ? '#f9fafb' : '#111827',
+    subtext: isDark ? '#d1d5db' : '#6b7280',
+    muted: isDark ? '#9ca3af' : '#6b7280',
+    border: isDark ? '#374151' : '#e5e7eb',
+    input: isDark ? '#374151' : '#f3f4f6',
+  };
 
   useEffect(() => {
     if (sale?.carts?.cart_items) {
@@ -66,6 +92,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         lossPercentage: 0,
         lossType: 'none',
       }));
+      // A single-line sale almost always means "return that one thing": start at 1
+      if (items.length === 1 && items[0].maxReturnQuantity >= 1) {
+        items[0].returnQuantity = 1;
+      }
       setReturnItems(items);
     }
   }, [sale]);
@@ -74,6 +104,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
     setReturnItems(prev => prev.map(item => {
       if (item.productId === productId) {
         const newQuantity = Math.max(0, Math.min(quantity, item.maxReturnQuantity));
+        // Nothing to return means nothing to keep back; clear a stale deduction
+        if (newQuantity === 0) {
+          return { ...item, returnQuantity: 0, lossType: 'none', lossAmount: 0, lossPercentage: 0 };
+        }
         return { ...item, returnQuantity: newQuantity };
       }
       return item;
@@ -131,12 +165,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       return;
     }
 
-    if (!reason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for the return');
-      return;
-    }
+    // The button is disabled without a reason; this only guards a stale press
+    if (!reasonKey) return;
 
-    if (!currentBusiness?.id) {
+    if (!currentBusiness?.id || !userProfile) {
       Alert.alert('Error', 'No business found');
       return;
     }
@@ -153,6 +185,10 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       }
     }
 
+    const reasonLabel = RETURN_REASONS.find(r => r.key === reasonKey)?.label || 'Other';
+    const trimmedNotes = notes.trim();
+    const reason = trimmedNotes ? `${reasonLabel}: ${trimmedNotes}` : reasonLabel;
+
     setLoading(true);
     try {
       const returnData = itemsToReturn.map(item => ({
@@ -166,14 +202,17 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       await salesService.returnItems(
         sale.id,
         returnData,
-        reason.trim(),
+        reason,
         userProfile.user_id,
         { includeDeliveryCost }
       );
 
       Alert.alert(
-        'Return Processed',
-        `Successfully processed return for ${getTotalReturnItems()} items. Refund amount: ${fmt(calculateRefundAmount())}`,
+        t('sales.returnProcessed'),
+        t('sales.returnProcessedMessage', {
+          items: t('sales.itemCount', { count: getTotalReturnItems() }),
+          amount: fmt(calculateRefundAmount()),
+        }),
         [{ text: 'OK', onPress: onComplete }]
       );
     } catch (error) {
@@ -182,26 +221,9 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
     } finally {
       setLoading(false);
     }
-  }, [returnItems, reason, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount, includeDeliveryCost, userProfile]);
+  }, [returnItems, reasonKey, notes, currentBusiness?.id, sale.id, onComplete, getTotalReturnItems, calculateRefundAmount, includeDeliveryCost, userProfile, t]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return '#059669';
-      case 'voided':
-        return '#dc2626';
-      case 'refunded':
-        return '#ea580c';
-      case 'partially_returned':
-        return '#f59e0b';
-      default:
-        return '#6b7280';
-    }
-  };
+  const canSubmit = getTotalReturnItems() > 0 && reasonKey !== null;
 
   return (
     <KeyboardAvoidingView
@@ -210,95 +232,43 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: isDark ? '#f9fafb' : '#111827' }]}>
-          Return Items
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {t('sales.returnItems')}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.subtext }]} numberOfLines={1}>
+            {t('sales.returnFromSale', { number: sale.id.slice(-8), total: fmt(sale.total_amount) })}
+          </Text>
+        </View>
         <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
-          <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
+          <X size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Sale Information */}
-        <Card style={styles.saleInfoCard}>
-          <View style={styles.saleInfoHeader}>
-            <Receipt size={20} color="#2563eb" />
-            <Text style={[styles.saleInfoTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Sale Information
-            </Text>
-          </View>
-          
-          <View style={styles.saleInfoContent}>
-            <View style={styles.saleInfoRow}>
-              <Text style={[styles.saleInfoLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Sale ID:
-              </Text>
-              <Text style={[styles.saleInfoValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                #{sale.id.slice(-8)}
-              </Text>
-            </View>
-            
-            <View style={styles.saleInfoRow}>
-              <Text style={[styles.saleInfoLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Customer:
-              </Text>
-              <Text style={[styles.saleInfoValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {sale.customers?.name || 'Unknown Customer'}
-              </Text>
-            </View>
-            
-            <View style={styles.saleInfoRow}>
-              <Text style={[styles.saleInfoLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Sale Date:
-              </Text>
-              <Text style={[styles.saleInfoValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                {formatDate(sale.sale_date)}
-              </Text>
-            </View>
-            
-            <View style={styles.saleInfoRow}>
-              <Text style={[styles.saleInfoLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Status:
-              </Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
-                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.saleInfoRow}>
-              <Text style={[styles.saleInfoLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                Total Amount:
-              </Text>
-              <Text style={[styles.saleInfoValue, { color: '#059669' }]}>
-                {fmt(sale.total_amount)}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
         {/* Return Items Selection */}
         <Card style={styles.itemsCard}>
           <View style={styles.itemsHeader}>
             <ShoppingCart size={20} color="#8b5cf6" />
-            <Text style={[styles.itemsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            <Text style={[styles.itemsTitle, { color: colors.text }]}>
               Select Items to Return
             </Text>
           </View>
           
-          <Text style={[styles.itemsSubtitle, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+          <Text style={[styles.itemsSubtitle, { color: colors.subtext }]}>
             Choose the quantity of each item you want to return
           </Text>
           
-          {returnItems.map((item) => (
+          {returnItems.map((item) => {
+            const selected = item.returnQuantity > 0;
+            return (
             <View key={item.productId} style={styles.returnItem}>
               <View style={styles.itemRow}>
                 <View style={styles.itemInfo}>
-                  <Text style={[styles.itemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                  <Text style={[styles.itemName, { color: colors.text }]}>
                     {item.productName}
                   </Text>
-                  <Text style={[styles.itemDetails, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                  <Text style={[styles.itemDetails, { color: colors.subtext }]}>
                     Original: {item.originalQuantity} × {fmt(item.unitPrice)}
                   </Text>
                   <Text style={[styles.itemSubtotal, { color: '#059669' }]}>
@@ -307,7 +277,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                 </View>
 
                 <View style={styles.returnControls}>
-                <Text style={[styles.returnLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                <Text style={[styles.returnLabel, { color: colors.subtext }]}>
                   Return Qty:
                 </Text>
                 <View style={styles.quantityControls}>
@@ -315,21 +285,21 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                     style={[
                       styles.quantityButton,
                       { 
-                        backgroundColor: item.returnQuantity > 0 ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
-                        opacity: item.returnQuantity === 0 ? 0.5 : 1
+                        backgroundColor: selected ? '#dc2626' : (isDark ? '#4b5563' : '#e5e7eb'),
+                        opacity: selected ? 1 : 0.5
                       }
                     ]}
                     onPress={() => handleQuantityChange(item.productId, -1)}
-                    disabled={item.returnQuantity === 0}
+                    disabled={!selected}
                   >
-                    <Minus size={16} color={item.returnQuantity > 0 ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} />
+                    <Minus size={16} color={selected ? '#ffffff' : colors.muted} />
                   </TouchableOpacity>
                   
                   <TextInput
                     style={[styles.quantityInput, { 
                       backgroundColor: isDark ? '#374151' : '#f9fafb',
                       borderColor: isDark ? '#4b5563' : '#d1d5db',
-                      color: isDark ? '#f9fafb' : '#111827'
+                      color: colors.text
                     }]}
                     value={item.returnQuantity.toString()}
                     onChangeText={(value) => {
@@ -355,148 +325,133 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
                   </TouchableOpacity>
                 </View>
                 
-                {item.returnQuantity > 0 && (
-                  <Text style={[styles.returnAmount, { color: '#dc2626' }]}>
-                    Refund: {fmt(item.returnQuantity * item.unitPrice)}
-                  </Text>
-                )}
+                {/* Fixed height so the row does not jump when the refund line appears */}
+                <Text style={[styles.returnAmount, { color: '#dc2626' }]}>
+                  {selected ? `Refund: ${fmt(item.returnQuantity * item.unitPrice)}` : ' '}
+                </Text>
                 </View>
               </View>
 
-              {/* Loss Adjustment Section - Only show when item is selected for return */}
-              {item.returnQuantity > 0 && (
-                <View style={[styles.lossAdjustmentSection, {
-                  backgroundColor: isDark ? '#1f2937' : '#fef3c7',
-                  borderColor: isDark ? '#374151' : '#fbbf24'
-                }]}>
-                  <View style={styles.lossHeader}>
-                    <TrendingDown size={16} color="#dc2626" />
-                    <Text style={[styles.lossTitle, { color: isDark ? '#fbbf24' : '#92400e' }]}>
-                      Loss Adjustment (Optional)
+              {/* Loss adjustment: always rendered so the layout holds; greyed until a quantity is set */}
+              <View
+                style={[styles.lossAdjustmentSection, {
+                  backgroundColor: selected ? (isDark ? '#1f2937' : '#fef3c7') : (isDark ? '#1f2937' : '#f3f4f6'),
+                  borderColor: selected ? (isDark ? '#374151' : '#fbbf24') : colors.border,
+                  opacity: selected ? 1 : 0.55,
+                }]}
+                pointerEvents={selected ? 'auto' : 'none'}
+              >
+                <View style={styles.lossHeader}>
+                  <TrendingDown size={16} color={selected ? '#dc2626' : colors.muted} />
+                  <Text style={[styles.lossTitle, { color: selected ? (isDark ? '#fbbf24' : '#92400e') : colors.muted }]}>
+                    {t('sales.lossAdjustmentOptional')}
+                  </Text>
+                </View>
+
+                <View style={styles.chipRow}>
+                  {LOSS_TYPES.map(opt => {
+                    const active = item.lossType === opt.key;
+                    return (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[styles.chipSmall, {
+                          backgroundColor: active ? '#2563eb' : (isDark ? '#374151' : '#ffffff'),
+                          borderColor: active ? '#2563eb' : (isDark ? '#4b5563' : '#d1d5db'),
+                        }]}
+                        onPress={() => updateItemLoss(item.productId, opt.key)}
+                        disabled={!selected}
+                      >
+                        <Text style={[styles.chipSmallText, { color: active ? '#ffffff' : colors.text }]}>{t(opt.i18n)}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {!selected && (
+                  <Text style={[styles.lossHint, { color: colors.muted }]}>{t('sales.lossAdjustmentHint')}</Text>
+                )}
+
+                {item.lossType === 'fixed' && (
+                  <View style={[styles.lossInputContainer, {
+                    backgroundColor: isDark ? '#374151' : '#ffffff',
+                    borderColor: isDark ? '#4b5563' : '#d1d5db'
+                  }]}>
+                    <DollarSign size={14} color={colors.muted} />
+                    <TextInput
+                      style={[styles.lossInput, { color: colors.text }]}
+                      placeholder="Loss amount"
+                      placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                      value={item.lossAmount > 0 ? item.lossAmount.toString() : ''}
+                      onChangeText={(value) => {
+                        const amount = parseFloat(value) || 0;
+                        updateItemLoss(item.productId, 'fixed', amount);
+                      }}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                )}
+
+                {item.lossType === 'percentage' && (
+                  <View style={[styles.lossInputContainer, {
+                    backgroundColor: isDark ? '#374151' : '#ffffff',
+                    borderColor: isDark ? '#4b5563' : '#d1d5db'
+                  }]}>
+                    <Percent size={14} color={colors.muted} />
+                    <TextInput
+                      style={[styles.lossInput, { color: colors.text }]}
+                      placeholder="Loss percentage (0-100)"
+                      placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                      value={item.lossPercentage > 0 ? item.lossPercentage.toString() : ''}
+                      onChangeText={(value) => {
+                        const percentage = parseFloat(value) || 0;
+                        updateItemLoss(item.productId, 'percentage', percentage);
+                      }}
+                      keyboardType="decimal-pad"
+                    />
+                    <Text style={[styles.percentSymbol, { color: colors.muted }]}>
+                      %
                     </Text>
                   </View>
+                )}
 
-                  <View style={styles.lossRadioGroup}>
-                    <TouchableOpacity
-                      style={styles.lossRadioOption}
-                      onPress={() => updateItemLoss(item.productId, 'none')}
-                    >
-                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
-                        {item.lossType === 'none' && <View style={styles.lossRadioInner} />}
-                      </View>
-                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                        No loss
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.lossRadioOption}
-                      onPress={() => updateItemLoss(item.productId, 'fixed')}
-                    >
-                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
-                        {item.lossType === 'fixed' && <View style={styles.lossRadioInner} />}
-                      </View>
-                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                        Fixed amount
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.lossRadioOption}
-                      onPress={() => updateItemLoss(item.productId, 'percentage')}
-                    >
-                      <View style={[styles.lossRadio, { borderColor: isDark ? '#6b7280' : '#d1d5db' }]}>
-                        {item.lossType === 'percentage' && <View style={styles.lossRadioInner} />}
-                      </View>
-                      <Text style={[styles.lossRadioLabel, { color: isDark ? '#d1d5db' : '#374151' }]}>
-                        Percentage
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {item.lossType === 'fixed' && (
-                    <View style={styles.lossInputContainer}>
-                      <DollarSign size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                      <TextInput
-                        style={[styles.lossInput, {
-                          color: isDark ? '#f9fafb' : '#111827',
-                          backgroundColor: isDark ? '#374151' : '#ffffff',
-                          borderColor: isDark ? '#4b5563' : '#d1d5db'
-                        }]}
-                        placeholder="Loss amount"
-                        placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                        value={item.lossAmount > 0 ? item.lossAmount.toString() : ''}
-                        onChangeText={(value) => {
-                          const amount = parseFloat(value) || 0;
-                          updateItemLoss(item.productId, 'fixed', amount);
-                        }}
-                        keyboardType="decimal-pad"
-                      />
-                    </View>
-                  )}
-
-                  {item.lossType === 'percentage' && (
-                    <View style={styles.lossInputContainer}>
-                      <Percent size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                      <TextInput
-                        style={[styles.lossInput, {
-                          color: isDark ? '#f9fafb' : '#111827',
-                          backgroundColor: isDark ? '#374151' : '#ffffff',
-                          borderColor: isDark ? '#4b5563' : '#d1d5db'
-                        }]}
-                        placeholder="Loss percentage (0-100)"
-                        placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                        value={item.lossPercentage > 0 ? item.lossPercentage.toString() : ''}
-                        onChangeText={(value) => {
-                          const percentage = parseFloat(value) || 0;
-                          updateItemLoss(item.productId, 'percentage', percentage);
-                        }}
-                        keyboardType="decimal-pad"
-                      />
-                      <Text style={[styles.percentSymbol, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                        %
-                      </Text>
-                    </View>
-                  )}
-
-                  {item.lossType !== 'none' && (
-                    <View style={styles.lossCalculation}>
-                      <Text style={[styles.lossCalculationText, { color: isDark ? '#f87171' : '#dc2626' }]}>
-                        Loss: -${(
+                {item.lossType !== 'none' && (
+                  <View style={styles.lossCalculation}>
+                    <Text style={[styles.lossCalculationText, { color: isDark ? '#f87171' : '#dc2626' }]}>
+                      Loss: -{fmt(
+                        item.lossType === 'fixed'
+                          ? item.lossAmount
+                          : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
+                      )}
+                    </Text>
+                    <Text style={[styles.lossCalculationText, { color: '#059669' }]}>
+                      Final refund: {fmt(Math.max(0, (
+                        item.returnQuantity * item.unitPrice - (
                           item.lossType === 'fixed'
                             ? item.lossAmount
                             : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
-                        ).toFixed(2)}
-                      </Text>
-                      <Text style={[styles.lossCalculationText, { color: '#059669' }]}>
-                        Final refund: ${Math.max(0, (
-                          item.returnQuantity * item.unitPrice - (
-                            item.lossType === 'fixed'
-                              ? item.lossAmount
-                              : (item.returnQuantity * item.unitPrice * item.lossPercentage) / 100
-                          )
-                        )).toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
+                        )
+                      )))}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          ))}
+            );
+          })}
           
           {getTotalReturnItems() > 0 && (
             <View style={styles.returnSummary}>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+                <Text style={[styles.summaryLabel, { color: colors.subtext }]}>
                   Total Items to Return:
                 </Text>
-                <Text style={[styles.summaryValue, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                  {getTotalReturnItems()}
+                <Text style={[styles.summaryValue, { color: colors.text }]}>
+                  {t('sales.itemCount', { count: getTotalReturnItems() })}
                 </Text>
               </View>
               
               <View style={[styles.summaryRow, styles.totalRefundRow]}>
-                <Text style={[styles.totalRefundLabel, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                <Text style={[styles.totalRefundLabel, { color: colors.text }]}>
                   Total Refund Amount:
                 </Text>
                 <Text style={[styles.totalRefundValue, { color: '#dc2626' }]}>
@@ -511,26 +466,39 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         <Card style={styles.reasonCard}>
           <View style={styles.reasonHeader}>
             <Info size={20} color="#ea580c" />
-            <Text style={[styles.reasonTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Return Reason
+            <Text style={[styles.reasonTitle, { color: colors.text }]}>
+              {t('sales.returnReasonLabel')}
             </Text>
           </View>
-          
-          <Input
-            label="Reason for Return"
-            value={reason}
-            onChangeText={setReason}
-            placeholder="e.g., Defective product, Customer changed mind, Wrong item"
-            required
-          />
-          
-          <Input
-            label="Additional Notes (Optional)"
+
+          <View style={styles.chipRow}>
+            {RETURN_REASONS.map(r => {
+              const active = r.key === reasonKey;
+              return (
+                <TouchableOpacity
+                  key={r.key}
+                  style={[styles.chip, { backgroundColor: active ? '#2563eb' : colors.input, borderColor: active ? '#2563eb' : colors.border }]}
+                  onPress={() => setReasonKey(r.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, { color: active ? '#ffffff' : colors.text }]}>{t(`sales.returnReasons.${r.key}`)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {!reasonKey && (
+            <Text style={[styles.hint, { color: colors.muted }]}>{t('sales.chooseReasonHint')}</Text>
+          )}
+
+          <Text style={[styles.label, { color: colors.muted }]}>{t('sales.additionalNotesOptional')}</Text>
+          <TextInput
+            style={[styles.notesInput, { backgroundColor: colors.input, color: colors.text, borderColor: colors.border }]}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Any additional details about the return"
+            placeholder={t('sales.notePlaceholder')}
+            placeholderTextColor={colors.muted}
             multiline
-            numberOfLines={3}
           />
         </Card>
 
@@ -538,22 +506,22 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
         <Card style={styles.policyCard}>
           <View style={styles.policyHeader}>
             <AlertTriangle size={20} color="#f59e0b" />
-            <Text style={[styles.policyTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+            <Text style={[styles.policyTitle, { color: colors.text }]}>
               Return Policy
             </Text>
           </View>
           
           <View style={styles.policyContent}>
-            <Text style={[styles.policyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            <Text style={[styles.policyText, { color: colors.subtext }]}>
               • Returned items will be added back to inventory
             </Text>
-            <Text style={[styles.policyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            <Text style={[styles.policyText, { color: colors.subtext }]}>
               • Sale status will be updated to "Partially Returned"
             </Text>
-            <Text style={[styles.policyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            <Text style={[styles.policyText, { color: colors.subtext }]}>
               • This action cannot be undone
             </Text>
-            <Text style={[styles.policyText, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
+            <Text style={[styles.policyText, { color: colors.subtext }]}>
               • Customer refund amount will be calculated automatically
             </Text>
           </View>
@@ -573,7 +541,7 @@ export default function ReturnSaleForm({ sale, onComplete, onCancel }: ReturnSal
           onPress={handleSubmitReturn}
           loading={loading}
           style={styles.footerButton}
-          disabled={getTotalReturnItems() === 0 || !reason.trim()}
+          disabled={!canSubmit}
         />
       </View>
     </KeyboardAvoidingView>
@@ -596,51 +564,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+  subtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
   closeButton: {
     padding: 8,
   },
   content: {
     flex: 1,
     paddingHorizontal: 16,
-  },
-  saleInfoCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  saleInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  saleInfoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  saleInfoContent: {
-    gap: 8,
-  },
-  saleInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  saleInfoLabel: {
-    fontSize: 14,
-  },
-  saleInfoValue: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
   },
   itemsCard: {
     padding: 16,
@@ -720,6 +653,7 @@ const styles = StyleSheet.create({
   returnAmount: {
     fontSize: 12,
     fontWeight: '500',
+    minHeight: 16,
   },
   lossAdjustmentSection: {
     marginTop: 12,
@@ -737,33 +671,55 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 6,
   },
-  lossRadioGroup: {
+  lossHint: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 8,
+    gap: 8,
   },
-  lossRadioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  lossRadio: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
-  lossRadioInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
+  chipSmall: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
   },
-  lossRadioLabel: {
+  chipSmallText: {
     fontSize: 12,
-    marginLeft: 6,
+    fontWeight: '600',
+  },
+  hint: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  notesInput: {
+    minHeight: 64,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlignVertical: 'top',
   },
   lossInputContainer: {
     flexDirection: 'row',
@@ -836,7 +792,7 @@ const styles = StyleSheet.create({
   reasonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   reasonTitle: {
     fontSize: 16,

@@ -393,7 +393,7 @@ export default function ProductSelectionScreen() {
                 : (item.current_stock <= item.min_stock_level ? '#ea580c' : (isDark ? '#d1d5db' : '#6b7280'))
             }
           ]}>
-            Stock: {item.current_stock}
+            Stock: {selectedUnit && conversionFactor > 1 ? `${maxUnits} ${unitName}` : item.current_stock}
           </Text>
           {hasUnits && (
             <TouchableOpacity
@@ -573,7 +573,7 @@ export default function ProductSelectionScreen() {
       {getTotalItems() > 0 && (
         <View style={styles.footer}>
           <Button
-            title={getPendingChangesCount() > 0 ? `Save & Continue (${getTotalItems()} items)` : `Continue to Cart (${getTotalItems()} items)`}
+            title={`${getPendingChangesCount() > 0 ? 'Save & Continue' : 'Continue to Cart'} (${getTotalItems()} ${getTotalItems() === 1 ? 'item' : 'items'})`}
             onPress={handleContinueToCart}
             loading={isSaving}
             disabled={isSaving}

@@ -21,6 +21,13 @@ import { ArrowLeft, Download, DollarSign, TrendingDown, TrendingUp } from 'lucid
 import { reportsService } from '@/src/services/reports';
 import { exportService } from '@/src/services/exportService';
 import * as FileSystem from 'expo-file-system/legacy';
+import { format } from 'date-fns';
+
+/** Local calendar date for a file name; the route params are ISO instants in UTC. */
+const fileDate = (iso: unknown) => {
+  const d = new Date(String(iso));
+  return isNaN(d.getTime()) ? String(iso).slice(0, 10) : format(d, 'yyyy-MM-dd');
+};
 import * as Sharing from 'expo-sharing';
 
 export default function IncomeStatementScreen() {
@@ -83,14 +90,14 @@ export default function IncomeStatementScreen() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `income_statement_${startDate}_to_${endDate}.csv`;
+        a.download = `income_statement_${fileDate(startDate)}_to_${fileDate(endDate)}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
         // Mobile platform - use expo-file-system and expo-sharing
-        const fileUri = `${FileSystem.documentDirectory}income_statement_${startDate}_to_${endDate}.csv`;
+        const fileUri = `${FileSystem.documentDirectory}income_statement_${fileDate(startDate)}_to_${fileDate(endDate)}.csv`;
         await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType?.UTF8 || 'utf8' });
         
         if (await Sharing.isAvailableAsync()) {

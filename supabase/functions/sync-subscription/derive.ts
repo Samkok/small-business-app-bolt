@@ -73,7 +73,12 @@ export function platformOf(store: string | undefined): DerivedMirror["platform"]
   }
 }
 
-export function deriveMirror(subscriber: RcSubscriber | null | undefined, nowMs: number): DerivedMirror {
+export interface DeriveOptions {
+  /** Count sandbox (test-store) purchases too: only for app_user_ids in RC_SANDBOX_ALLOWLIST */
+  allowSandbox?: boolean;
+}
+
+export function deriveMirror(subscriber: RcSubscriber | null | undefined, nowMs: number, options: DeriveOptions = {}): DerivedMirror {
   const entitlements = subscriber?.entitlements ?? {};
   const subscriptions = subscriber?.subscriptions ?? {};
 
@@ -83,8 +88,9 @@ export function deriveMirror(subscriber: RcSubscriber | null | undefined, nowMs:
   for (const [id, ent] of Object.entries(entitlements)) {
     const tier = TIER_BY_ENTITLEMENT[id];
     if (!tier) continue;
-    // A sandbox (test) purchase never counts as a production plan
-    if (subscriptions[ent.product_identifier]?.is_sandbox) continue;
+    // A sandbox (test) purchase never counts as a production plan, except for allow-listed
+    // testers (the same RC_SANDBOX_ALLOWLIST the webhook honours)
+    if (subscriptions[ent.product_identifier]?.is_sandbox && !options.allowSandbox) continue;
     everHadPlan = true;
 
     const expires = ms(ent.expires_date);

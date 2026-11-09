@@ -100,23 +100,25 @@ function getSubtext(product: ClassifiedProduct): string {
   }
 }
 
+const pluralUnits = (n: number) => (n === 1 ? 'unit' : 'units');
+
 function getRightText(product: ClassifiedProduct, formatPrice: (amount: number) => string): { text: string; color: string } {
   switch (product.category) {
     case 'out_of_stock':
-      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} units` : '0 units', color: '#dc2626' };
+      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} ${pluralUnits(product.suggestedOrderQty)}` : '0 units', color: '#dc2626' };
     case 'must_order':
-      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} units` : `${product.currentStock} left`, color: '#ea580c' };
+      return { text: product.suggestedOrderQty > 0 ? `Order ${product.suggestedOrderQty} ${pluralUnits(product.suggestedOrderQty)}` : `${product.currentStock} left`, color: '#ea580c' };
     case 'hot_selling':
       return { text: formatPrice(product.totalRevenue), color: '#059669' };
     case 'do_not_order':
-      return { text: `${product.currentStock} units`, color: '#2563eb' };
+      return { text: `${product.currentStock} ${pluralUnits(product.currentStock)}`, color: '#2563eb' };
     case 'slow_moving':
       return {
         text: product.totalUnitsSold === 0 ? 'Unsold' : `${product.totalUnitsSold} sold`,
         color: product.totalUnitsSold === 0 ? '#dc2626' : '#6b7280',
       };
     case 'healthy':
-      return { text: `${product.currentStock} units`, color: '#059669' };
+      return { text: `${product.currentStock} ${pluralUnits(product.currentStock)}`, color: '#059669' };
     default:
       return { text: '', color: '#6b7280' };
   }

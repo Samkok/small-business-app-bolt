@@ -30,7 +30,7 @@ export const cartService = {
         cart_items(
           *,
           products(name, price, cost_per_unit),
-          units(conversion_factor_to_base)
+          units(name, conversion_factor_to_base)
         )
       `)
       .eq('business_id', businessId)
@@ -87,7 +87,8 @@ export const cartService = {
         customers(*),
         cart_items(
           *,
-          products(*)
+          products(*),
+          units(name, conversion_factor_to_base)
         )
       `)
       .eq('id', cartId)
@@ -163,7 +164,8 @@ export const cartService = {
             customers(*),
             cart_items(
               *,
-              products(*)
+              products(*),
+              units(name, conversion_factor_to_base)
             )
           `)
           .eq('id', cartId)
