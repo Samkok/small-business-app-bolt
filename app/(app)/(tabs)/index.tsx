@@ -11,6 +11,7 @@ import {
   Platform
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useInstantCheckout } from '@/src/context/InstantCheckoutContext';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
@@ -108,10 +109,12 @@ export default function DashboardScreen() {
     }
   }, [wasOffline, isConnected]);
 
+  const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const handleNewSale = useCallback(() => {
-    // Use router.navigate instead of router.push to properly handle tab navigation
-    router.navigate('/sales/customer-selection');
-  }, [router]);
+    // The sheet is mounted on the Sales tab; opening it first and navigating shows it there
+    openInstantCheckoutModal();
+    router.navigate('/sales');
+  }, [router, openInstantCheckoutModal]);
 
   const loadDashboardData = async (isRefresh = false) => {
     if (!currentBusiness?.id) {

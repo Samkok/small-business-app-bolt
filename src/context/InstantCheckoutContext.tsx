@@ -63,8 +63,9 @@ interface InstantCheckoutContextType {
   guestCustomer: Customer | null;
   loading: boolean;
   addProduct: (product: Product, quantity?: number, unitOverride?: { unit_id?: string | null; unit_label?: string; price?: number; conversion_factor?: number }) => void;
-  removeProduct: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  /** unitId narrows to one line when the same product is in the sale in two units */
+  removeProduct: (productId: string, unitId?: string | null) => void;
+  updateQuantity: (productId: string, quantity: number, unitId?: string | null) => void;
   applyItemDiscount: (productId: string, discountType: 'percentage' | 'fixed', discountValue: number) => void;
   removeItemDiscount: (productId: string) => void;
   setCustomer: (customerId: string | undefined, customerName?: string, customerPhone?: string) => void;
@@ -87,10 +88,19 @@ interface InstantCheckoutContextType {
 const InstantCheckoutContext = createContext<InstantCheckoutContextType | undefined>(undefined);
 
 const AUTO_SAVE_TIMEOUT = 3 * 60 * 1000;
+const LAST_PAYMENT_STATUS_KEY = 'instant_checkout:last_payment_status';
 
 export function InstantCheckoutProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<InstantCheckoutSession | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // PAID or COD: a new sale starts with the last choice (PAID the first time), so the usual
+  // sale needs no extra tap; the selector still shows it and COD is one tap away.
+  const lastPaymentStatusRef = useRef<'paid' | 'cod'>('paid');
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_PAYMENT_STATUS_KEY)
+      .then((v) => { if (v === 'paid' || v === 'cod') lastPaymentStatusRef.current = v; })
+      .catch(() => {});
+  }, []);
   const [guestCustomer, setGuestCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(false);
   const { currentBusiness } = useAuth();
@@ -274,8 +284,9 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
           : {
               items: [newItem],
               sale_date: new Date(),
-              // Most sales are paid by transfer; PAID/COD is left unset on purpose
+              // Most sales are paid by transfer; PAID/COD starts as the last choice
               payment_method: 'transfer' as const,
+              payment_status: lastPaymentStatusRef.current,
             };
       }
     });
@@ -283,19 +294,22 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
     resetAutoSaveTimer();
   }, [calculateItemDiscount, resetAutoSaveTimer]);
 
-  const removeProduct = useCallback((productId: string) => {
+  const matchesLine = (item: InstantCheckoutItem, productId: string, unitId?: string | null) =>
+    item.product_id === productId && (unitId === undefined || (item.unit_id ?? null) === unitId);
+
+  const removeProduct = useCallback((productId: string, unitId?: string | null) => {
     setSession((prev) => {
       if (!prev) return null;
-      const updatedItems = prev.items.filter(item => item.product_id !== productId);
+      const updatedItems = prev.items.filter(item => !matchesLine(item, productId, unitId));
       return updatedItems.length > 0 ? { ...prev, items: updatedItems } : null;
     });
 
     resetAutoSaveTimer();
   }, [resetAutoSaveTimer]);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number, unitId?: string | null) => {
     if (quantity <= 0) {
-      removeProduct(productId);
+      removeProduct(productId, unitId);
       return;
     }
 
@@ -303,7 +317,7 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
       if (!prev) return null;
 
       const updatedItems = prev.items.map(item => {
-        if (item.product_id === productId) {
+        if (matchesLine(item, productId, unitId)) {
           const originalSubtotal = item.unit_price * quantity;
           const itemDiscountAmount = calculateItemDiscount(
             quantity,
@@ -417,6 +431,8 @@ export function InstantCheckoutProvider({ children }: { children: React.ReactNod
   }, [resetAutoSaveTimer]);
 
   const setPaymentStatus = useCallback((status: 'paid' | 'cod') => {
+    lastPaymentStatusRef.current = status;
+    AsyncStorage.setItem(LAST_PAYMENT_STATUS_KEY, status).catch(() => {});
     setSession((prev) => {
       if (!prev) return null;
       return { ...prev, payment_status: status };

@@ -28,6 +28,8 @@ import { isNetworkError } from '@/src/lib/network';
 import { useRouter } from 'expo-router';
 import { X, CreditCard, Plus, Percent, DollarSign, Truck, Tag, Check, Barcode, Package } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
+import { ProductPickerSheet, ProductPickerRow } from '@/src/components/products/ProductPickerSheet';
+import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
 import Input from '@/src/components/ui/Input';
 import { Button } from '../ui/Button';
 import { InstantCheckoutProductList } from './InstantCheckoutProductList';
@@ -172,20 +174,31 @@ export function InstantCheckoutModal() {
     }
   };
 
-  const handleAddProduct = (product: any) => {
+  const handleAddProduct = (product: any, keepOpen = false) => {
     addProduct(product, 1);
-    setShowProductSelector(false);
+    if (!keepOpen) setShowProductSelector(false);
   };
 
-  const handleAddProductVariant = (product: any, variant: ProductUnit, unit?: Unit) => {
+  const handleAddProductVariant = (product: any, variant: ProductUnit, unit?: Unit, keepOpen = false) => {
     addProduct(product, 1, {
       unit_id: variant.unit_id,
       unit_label: variant.name || unit?.name,
       price: variant.price,
       conversion_factor: unit?.conversion_factor_to_base ?? 1,
     });
-    setShowProductSelector(false);
+    if (!keepOpen) setShowProductSelector(false);
   };
+
+  // What the picker shows per line, and how many of each are already in the sale
+  const pickerQuantities = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const it of session?.items || []) {
+      const key = `${it.product_id}:${it.unit_id ?? 'base'}`;
+      m[key] = (m[key] || 0) + it.quantity;
+    }
+    return m;
+  }, [session?.items]);
+  const pickerItemCount = useMemo(() => (session?.items || []).reduce((n, it) => n + it.quantity, 0), [session?.items]);
 
   type SelectableRow =
     | { kind: 'base'; key: string; product: any }
@@ -231,6 +244,31 @@ export function InstantCheckoutModal() {
     }
     return rows;
   }, [products, unitPricesMap, unitsMap, searchQuery]);
+
+  const pickerRows = useMemo<ProductPickerRow[]>(() => selectableRows.map((row) => {
+    const p = row.product;
+    if (row.kind === 'variant') {
+      const conversion = row.unit?.conversion_factor_to_base ?? 1;
+      const maxUnits = Math.floor((p.current_stock || 0) / conversion);
+      const label = row.variant.name || row.unit?.name || 'Unit';
+      return {
+        key: `${p.id}:${row.variant.unit_id}`,
+        product: p,
+        unitLabel: label,
+        priceText: formatPrice(row.variant.price, row.variant.currency_id ?? p.currency_id ?? undefined),
+        stockText: `Stock: ${maxUnits} ${label}`,
+        disabled: maxUnits <= 0,
+        extra: { variant: row.variant, unit: row.unit },
+      };
+    }
+    return {
+      key: `${p.id}:base`,
+      product: p,
+      priceText: formatPrice(p.price, p.currency_id ?? undefined),
+      stockText: `Stock: ${p.current_stock}`,
+      disabled: (p.current_stock || 0) <= 0,
+    };
+  }), [selectableRows, formatPrice]);
 
   const barcodeBusyRef = useRef(false);
   const handleBarcodeScanned = async (barcode: string) => {
@@ -789,15 +827,10 @@ export function InstantCheckoutModal() {
                   ]}
                   onPress={() => setPaymentMethod(method.value)}
                 >
-                  <CreditCard
+                  <PaymentMethodIcon
+                    method={method.value}
                     size={20}
-                    color={
-                      session?.payment_method === method.value
-                        ? '#2563eb'
-                        : isDark
-                        ? '#d1d5db'
-                        : '#6b7280'
-                    }
+                    color={session?.payment_method === method.value ? '#2563eb' : isDark ? '#d1d5db' : '#6b7280'}
                   />
                   <Text
                     style={[
@@ -882,116 +915,30 @@ export function InstantCheckoutModal() {
         </View>
       </View>
 
-      {/* Product Selector Modal */}
-      <Modal
+      {/* Product picker: stays open with a stepper per line */}
+      <ProductPickerSheet
         visible={showProductSelector}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowProductSelector(false)}
-      >
-        <View style={[styles.modalContainer, { backgroundColor: isDark ? '#111827' : '#ffffff' }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
-            <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-              Select Product
-            </Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('Barcode button pressed');
-                  setShowProductSelector(false);
-                  setTimeout(() => {
-                    setShowBarcodeScanner(true);
-                  }, 300);
-                }}
-                style={styles.headerButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Barcode size={24} color={isDark ? '#f9fafb' : '#111827'} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowProductSelector(false)}>
-                <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <TextInput
-            style={[styles.searchInput, { backgroundColor: isDark ? '#1f2937' : '#f3f4f6', color: isDark ? '#f9fafb' : '#111827' }]}
-            placeholder="Search products..."
-            placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <FlatList
-            data={selectableRows}
-            keyExtractor={(row) => row.key}
-            renderItem={({ item: row }) => {
-              const p = row.product;
-              if (row.kind === 'variant') {
-                const conversion = row.unit?.conversion_factor_to_base ?? 1;
-                const maxUnits = Math.floor((p.current_stock || 0) / conversion);
-                const label = row.variant.name || row.unit?.name || 'Unit';
-                return (
-                  <TouchableOpacity
-                    style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-                    onPress={() => handleAddProductVariant(p, row.variant, row.unit)}
-                    disabled={maxUnits <= 0}
-                  >
-                    {p.image_url ? (
-                      <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
-                    ) : (
-                      <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                        <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
-                      </View>
-                    )}
-                    <View style={styles.productItemInfo}>
-                      <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                        {p.name} <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontWeight: '500' }}>· {label}</Text>
-                      </Text>
-                      <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                        {formatPrice(row.variant.price, row.variant.currency_id ?? p.currency_id ?? undefined)}
-                      </Text>
-                      <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                        Stock: {maxUnits} {label}{row.variant.barcode ? `  ·  ${row.variant.barcode}` : ''}
-                      </Text>
-                    </View>
-                    <Plus size={24} color={maxUnits > 0 ? '#2563eb' : '#9ca3af'} />
-                  </TouchableOpacity>
-                );
-              }
-              return (
-                <TouchableOpacity
-                  style={[styles.productItem, { backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#374151' : '#e5e7eb' }]}
-                  onPress={() => handleAddProduct(p)}
-                >
-                  {p.image_url ? (
-                    <Image source={{ uri: p.image_url }} style={styles.productItemImage} resizeMode="cover" />
-                  ) : (
-                    <View style={[styles.productItemImagePlaceholder, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}>
-                      <Package size={22} color={isDark ? '#6b7280' : '#9ca3af'} />
-                    </View>
-                  )}
-                  <View style={styles.productItemInfo}>
-                    <Text style={[styles.productItemName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                      {p.name}
-                    </Text>
-                    <Text style={[styles.productItemPrice, { color: '#059669' }]}>
-                      {formatPrice(p.price, p.currency_id ?? undefined)}
-                    </Text>
-                    <Text style={[styles.productItemStock, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                      Stock: {p.current_stock}
-                    </Text>
-                  </View>
-                  <Plus size={24} color="#2563eb" />
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                {loadingProducts ? 'Loading products...' : 'No products available'}
-              </Text>
-            }
-          />
-        </View>
-      </Modal>
+        title="Add products"
+        onClose={() => setShowProductSelector(false)}
+        loading={loadingProducts}
+        rows={pickerRows}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        quantities={pickerQuantities}
+        onIncrement={(row) => (row.extra?.variant
+          ? handleAddProductVariant(row.product, row.extra.variant, row.extra.unit, true)
+          : handleAddProduct(row.product, true))}
+        onDecrement={(row) => {
+          const current = pickerQuantities[row.key] || 0;
+          updateQuantity(row.product.id, current - 1, row.extra?.variant ? row.extra.variant.unit_id : null);
+        }}
+        onScan={() => {
+          setShowProductSelector(false);
+          setTimeout(() => setShowBarcodeScanner(true), 300);
+        }}
+        footerLabel={pickerItemCount > 0 ? `Done · ${pickerItemCount} ${pickerItemCount === 1 ? 'item' : 'items'}` : 'Done'}
+        onFooterPress={() => setShowProductSelector(false)}
+      />
 
       {/* Barcode Scanner Modal */}
       <Modal
@@ -1350,14 +1297,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
+  // Four methods in a 2 x 2 grid: half the height of four full-width rows
   paymentMethods: {
-    gap: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   paymentMethod: {
+    width: '48%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 8,
   },
   paymentMethodText: {

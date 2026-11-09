@@ -33,6 +33,7 @@ import {
   Layers,
 } from 'lucide-react-native';
 import { productService } from '@/src/services/products';
+import { ProductPickerSheet } from '@/src/components/products/ProductPickerSheet';
 import { batchImportService, BatchImportItem, BatchImportCost } from '@/src/services/batchImport';
 import { unitService, ProductUnit, Unit } from '@/src/services/units';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
@@ -463,83 +464,22 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
   // ── Product selector modal ────────────────────────────────────────────────
   const renderProductSelector = () => (
-    <Modal
+    <ProductPickerSheet
       visible={showProductSelector}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowProductSelector(false)}
-    >
-      <View style={[styles.modalContainer, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
-        <View style={styles.modalHeader}>
-          <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
-            Select Product
-          </Text>
-          <TouchableOpacity onPress={() => setShowProductSelector(false)}>
-            <X size={24} color={isDark ? '#f9fafb' : '#111827'} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchInputContainer, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}>
-            <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-            <TextInput
-              style={[styles.searchInput, { color: isDark ? '#f9fafb' : '#111827' }]}
-              placeholder="Search products..."
-              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-        </View>
-
-        <FlatList
-          data={filteredProducts}
-          keyExtractor={item => item.id}
-          style={styles.productSelectorList}
-          renderItem={({ item }) => {
-            const isMultiUnit = Boolean(item.unit_group_id);
-            return (
-              <TouchableOpacity
-                style={[styles.productSelectorItem, { backgroundColor: isDark ? '#374151' : '#ffffff' }]}
-                onPress={() => handleProductTap(item)}
-              >
-                <View style={styles.productSelectorInfo}>
-                  {item.image_url ? (
-                    <OptimizedImage
-                      source={{ uri: item.image_url }}
-                      style={styles.productSelectorImage}
-                      resizeMode="contain"
-                      alt={item.name}
-                    />
-                  ) : (
-                    <View style={[styles.imagePlaceholder, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
-                      <Package size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                    </View>
-                  )}
-                  <View style={styles.productSelectorDetails}>
-                    <View style={styles.productNameRow}>
-                      <Text style={[styles.productSelectorName, { color: isDark ? '#f9fafb' : '#111827' }]}>
-                        {item.name}
-                      </Text>
-                      {isMultiUnit && (
-                        <View style={styles.multiUnitBadge}>
-                          <Layers size={10} color="#2563eb" />
-                          <Text style={styles.multiUnitBadgeText}>Multi-unit</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.productSelectorStock, { color: isDark ? '#d1d5db' : '#6b7280' }]}>
-                      Stock: {item.current_stock}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-    </Modal>
+      title="Select product"
+      onClose={() => setShowProductSelector(false)}
+      loading={productsLoading}
+      rows={filteredProducts.map((p: any) => ({
+        key: p.id,
+        product: p,
+        priceText: Number(p.cost_per_unit) > 0 ? `Cost ${formatPrice(Number(p.cost_per_unit), p.currency_id ?? undefined)}` : undefined,
+        stockText: `Stock: ${p.current_stock ?? 0}`,
+        multiUnit: Boolean(p.unit_group_id),
+      }))}
+      query={searchQuery}
+      onQueryChange={setSearchQuery}
+      onPick={(row) => handleProductTap(row.product)}
+    />
   );
 
   // ── Item row ─────────────────────────────────────────────────────────────

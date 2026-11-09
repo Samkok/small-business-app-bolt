@@ -625,13 +625,14 @@ export default function SalesScreen() {
     );
   }, [deleteCart]);
 
+  // One way to start a sale: the sheet. Saved drafts still open the cart screen from Active Carts.
   const handleNewSale = useCallback(() => {
     if (salesCountData.isAtLimit && !canAccessFeature) {
       setShowUpgradePrompt(true);
       return;
     }
-    router.push('/sales/customer-selection');
-  }, [router, salesCountData.isAtLimit, canAccessFeature]);
+    openInstantCheckoutModal();
+  }, [openInstantCheckoutModal, salesCountData.isAtLimit, canAccessFeature]);
 
   const handleCartPress = useCallback((cartId: string) => {
     router.push(`/sales/cart/${cartId}`);
@@ -1272,18 +1273,11 @@ export default function SalesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#f59e0b' }]}
-              onPress={openInstantCheckoutModal}
-            >
-              <Zap size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#2563eb', marginLeft: 8 }]}
+              style={[styles.actionButton, { backgroundColor: '#2563eb' }]}
               onPress={handleNewSale}
             >
-              <Plus size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
+              <Zap size={18} color="#ffffff" />
+              <Text style={styles.headerActionText}>{t('sales.newSale')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1371,30 +1365,15 @@ export default function SalesScreen() {
                 style={[
                   styles.actionButton,
                   {
-                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#f59e0b',
+                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
                     opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
                   }
                 ]}
-                onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : openInstantCheckoutModal}
-                disabled={salesCountData.isAtLimit || !canAccessFeature}
+                onPress={salesCountData.isAtLimit || !canAccessFeature ? (businessDisableReason === 'owner_disabled' ? undefined : () => setShowUpgradePrompt(true)) : handleNewSale}
+                disabled={salesCountData.isAtLimit || !canAccessFeature && businessDisableReason === 'owner_disabled'}
               >
                 <Zap size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.quickCheckout')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  {
-                    backgroundColor: salesCountData.isAtLimit || !canAccessFeature ? '#9ca3af' : '#2563eb',
-                    marginLeft: 8,
-                    opacity: salesCountData.isAtLimit || !canAccessFeature ? 0.5 : 1
-                  }
-                ]}
-                onPress={handleNewSale}
-                disabled={salesCountData.isAtLimit || !canAccessFeature}
-              >
-                <Plus size={18} color="#ffffff" />
-                <Text style={styles.headerActionText}>{t('sales.createCart')}</Text>
+                <Text style={styles.headerActionText}>{t('sales.newSale')}</Text>
               </TouchableOpacity>
             </>
           )}

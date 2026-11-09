@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, FlatList, Alert, Platform } from 'react-native';
 import { BottomSheet } from '@/src/components/ui/BottomSheet';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, PackageMinus, ClipboardList, Plus, Search, X } from 'lucide-react-native';
@@ -20,6 +20,7 @@ import {
   StockAdjustment,
   reasonLabel,
 } from '@/src/services/stockAdjustments';
+import { ProductPickerSheet, ProductPickerRow } from '@/src/components/products/ProductPickerSheet';
 
 type Period = '30d' | '90d' | 'year' | 'all';
 const PERIODS: { key: Period; label: string }[] = [
@@ -114,6 +115,8 @@ export default function StockAdjustmentsScreen() {
   const chooseProduct = (p: any) => {
     pendingProduct.current = p;
     setPickerVisible(false);
+    // iOS continues from the sheet's onDismiss; Android has no such callback
+    if (Platform.OS !== 'ios') setTimeout(() => { void openAdjustmentForPending(); }, 350);
   };
 
   const openAdjustmentForPending = async () => {
@@ -143,6 +146,17 @@ export default function StockAdjustmentsScreen() {
     }
     setPickerQuery(barcode);
   }, [currentBusiness?.id, pickerProducts]);
+
+  const pickerRows = useMemo<ProductPickerRow[]>(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    const list = q ? pickerProducts.filter(p => String(p.name || '').toLowerCase().includes(q) || String(p.barcode || '').includes(q)) : pickerProducts;
+    return list.map(p => ({
+      key: p.id,
+      product: p,
+      stockText: `${p.current_stock ?? 0} in stock · cost ${formatPrice(Number(p.cost_per_unit) || 0, p.currency_id ?? undefined)}`,
+      multiUnit: Boolean(p.unit_group_id),
+    }));
+  }, [pickerProducts, pickerQuery, formatPrice]);
 
   const pickerVisibleProducts = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
@@ -323,59 +337,18 @@ export default function StockAdjustmentsScreen() {
         )}
       </ScrollView>
 
-      <BottomSheet
+      <ProductPickerSheet
         visible={pickerVisible}
+        title="Which product?"
         onClose={() => setPickerVisible(false)}
         onDismissed={openAdjustmentForPending}
-        backgroundColor={colors.bg}
-        heightPercent={85}
-        contentStyle={{ flex: 1 }}
-        header={
-          <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.pickerTitle, { color: colors.text }]}>Which product?</Text>
-            <TouchableOpacity onPress={() => setPickerVisible(false)} style={styles.backButton}>
-              <X size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-        }
-      >
-            <View style={styles.pickerSearchRow}>
-            <View style={[styles.pickerSearch, { backgroundColor: colors.chip, borderColor: colors.border }]}>
-              <Search size={16} color={colors.subtext} />
-              <TextInput
-                style={[styles.pickerSearchInput, { color: colors.text }]}
-                value={pickerQuery}
-                onChangeText={setPickerQuery}
-                placeholder="Search name or barcode"
-                placeholderTextColor={colors.subtext}
-                autoFocus
-              />
-            </View>
-            <ScanBarcodeButton onScanned={handlePickerScanned} backgroundColor={colors.chip} borderColor={colors.border} />
-            </View>
-            {pickerLoading ? (
-              <LoadingSpinner />
-            ) : (
-              <FlatList
-                data={pickerVisibleProducts}
-                keyExtractor={p => p.id}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ paddingBottom: 24 }}
-                ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.subtext, paddingVertical: 24 }]}>No products match.</Text>}
-                renderItem={({ item: p }) => (
-                  <TouchableOpacity style={[styles.pickerRow, { borderBottomColor: colors.border }]} onPress={() => chooseProduct(p)}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>{p.name}</Text>
-                      <Text style={[styles.rowMeta, { color: colors.subtext }]}>
-                        {p.current_stock ?? 0} in stock · cost {formatPrice(Number(p.cost_per_unit) || 0, p.currency_id ?? undefined)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.rowMeta, { color: colors.subtext }]}>›</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
-      </BottomSheet>
+        loading={pickerLoading}
+        rows={pickerRows}
+        query={pickerQuery}
+        onQueryChange={setPickerQuery}
+        onPick={(row) => chooseProduct(row.product)}
+        headerExtra={<ScanBarcodeButton onScanned={handlePickerScanned} backgroundColor={colors.chip} borderColor={colors.border} />}
+      />
 
       <StockAdjustmentModal
         visible={!!target}
