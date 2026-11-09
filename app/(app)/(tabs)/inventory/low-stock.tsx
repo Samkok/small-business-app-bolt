@@ -612,24 +612,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   productWrapper: {
-    position: 'relative',
     marginBottom: 12,
   },
+  // In the flow above the card, not floating over it: an absolute badge sat on top of long
+  // product names
   stockStatusBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    zIndex: 1,
+    marginBottom: 6,
   },
   stockStatusText: {
     fontSize: 10,
     fontWeight: '600',
-    marginLeft: 4,
   },
   emptyState: {
     alignItems: 'center',
