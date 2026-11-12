@@ -2,7 +2,7 @@
   "expo": {
     "name": "BizManage",
     "slug": "business-manager-pro",
-    "version": "2.13.0",
+    "version": "2.14.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "businessmanager",
@@ -92,7 +92,7 @@
       }
     },
     "notification": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/notification-icon.png",
       "color": "#2563eb",
       "iosDisplayInForeground": true,
       "androidMode": "default",
@@ -103,7 +103,7 @@
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#17120D"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -126,7 +126,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
+          "icon": "./assets/images/notification-icon.png",
           "color": "#2563eb",
           "sounds": [],
           "mode": "production"
