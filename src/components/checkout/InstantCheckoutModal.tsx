@@ -574,7 +574,7 @@ export function InstantCheckoutModal() {
             deliveryCharge: summary.deliveryCharge,
           });
           clearSession();
-          onClose();
+          closeModal();
           Alert.alert(
             'Sale Saved Offline',
             'No internet connection. Your sale has been saved and will sync when you are back online.',

@@ -111,10 +111,9 @@ export default function DashboardScreen() {
 
   const { openModal: openInstantCheckoutModal } = useInstantCheckout();
   const handleNewSale = useCallback(() => {
-    // The sheet is mounted on the Sales tab; opening it first and navigating shows it there
+    // The sheet is mounted once for the whole app, so it opens over the dashboard
     openInstantCheckoutModal();
-    router.navigate('/sales');
-  }, [router, openInstantCheckoutModal]);
+  }, [openInstantCheckoutModal]);
 
   const loadDashboardData = async (isRefresh = false) => {
     if (!currentBusiness?.id) {

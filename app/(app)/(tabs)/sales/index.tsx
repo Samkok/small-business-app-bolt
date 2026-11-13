@@ -46,7 +46,6 @@ import { dataCache } from '@/src/lib/dataCache';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
-import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { Paywall } from '@/src/components/subscription/Paywall';
 import { ReadOnlyBanner } from '@/src/components/subscription/ReadOnlyBanner';
 import { WarningBanner } from '@/src/components/subscription/WarningBanner';
@@ -1704,7 +1703,6 @@ export default function SalesScreen() {
       <InstantCheckoutWidget />
 
       {/* Instant Checkout Modal */}
-      <InstantCheckoutModal />
 
       {/* Subscription Paywall */}
       <Paywall
