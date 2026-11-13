@@ -93,9 +93,11 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
         <View style={styles.header}>
           <View style={styles.saleInfo}>
             <View style={styles.titleRow}>
-              <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              <Text style={[styles.saleId, { color: isDark ? '#f9fafb' : '#111827' }]} numberOfLines={1}>
                 Sale #{sale.id.slice(-8)}
               </Text>
+              {/* Status, PAID/COD and Void share one row at one height */}
+              <View style={styles.badgeCluster}>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) + '20' }]}>
                 <Text style={[styles.statusText, { color: getStatusColor(sale.status) }]}>
                   {sale.status.charAt(0).toUpperCase() + sale.status.slice(1).replace('_', ' ')}
@@ -109,6 +111,20 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
                   </Text>
                 </View>
               )}
+              {sale.status === 'completed' && (
+                <TouchableOpacity
+                  style={[styles.voidButton, { backgroundColor: isDark ? '#3f1d1d' : '#fef2f2', borderColor: isDark ? '#7f1d1d' : '#fecaca' }]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onVoid(sale);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  accessibilityLabel={t('sales.void')}
+                >
+                  <Text style={styles.voidText}>{t('sales.void')}</Text>
+                </TouchableOpacity>
+              )}
+              </View>
             </View>
             
             <View style={styles.amountRow}>
@@ -131,18 +147,7 @@ export const SaleCard = React.memo(function SaleCard({ sale, onVoid, showCreator
               </View>
             </View>
           </View>
-          
-          {sale.status === 'completed' && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onVoid(sale);
-              }}
-            >
-              <Text style={styles.voidText}>{t('sales.void')}</Text>
-            </TouchableOpacity>
-          )}
+
         </View>
         
         <View style={styles.details}>
@@ -220,18 +225,32 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 8,
   },
   saleId: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
   },
+  badgeCluster: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   statusBadge: {
+    height: 24,
     paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: 12,
-    marginRight: 8,
+    justifyContent: 'center',
+  },
+  voidButton: {
+    height: 24,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
   },
   statusText: {
     fontSize: 10,

@@ -4,6 +4,7 @@ import { Alert, AppState } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { TermsUpdatePrompt } from '@/src/components/TermsUpdatePrompt';
+import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { analytics } from '@/src/services/analytics';
 import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -111,6 +112,10 @@ export default function AppLayout() {
       </Stack>
       {/* Asks once to accept a newer version of the terms (src/config/terms.ts) */}
       <TermsUpdatePrompt />
+      {/* The one Quick Checkout sheet. It used to be mounted inside the Sales and the
+          Inventory tabs; tabs stay mounted, so after visiting both a sale opened two sheets,
+          and finishing the sale in one left the other on screen with the same items. */}
+      <InstantCheckoutModal />
     </>
   );
 }

@@ -38,7 +38,6 @@ import { productService } from '@/src/services/products';
 import { batchImportService } from '@/src/services/batchImport';
 import { productTransactionService } from '@/src/services/productTransactions';
 import { supabase } from '@/src/config/supabase';
-import { InstantCheckoutModal } from '@/src/components/checkout/InstantCheckoutModal';
 import { InstantCheckoutWidget } from '@/src/components/checkout/InstantCheckoutWidget';
 import { unitService, Unit, ProductUnit } from '@/src/services/units';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1778,7 +1777,6 @@ export default function InventoryScreen() {
         </View>
       )}
 
-      <InstantCheckoutModal />
       <InstantCheckoutWidget />
     </View>
   );
