@@ -475,6 +475,7 @@ export type Database = {
           expense_date: string | null
           id: string
           notes: string | null
+          receipt_paths: string[] | null
         }
         Insert: {
           amount?: number
@@ -489,6 +490,7 @@ export type Database = {
           expense_date?: string | null
           id?: string
           notes?: string | null
+          receipt_paths?: string[] | null
         }
         Update: {
           amount?: number
@@ -503,6 +505,7 @@ export type Database = {
           expense_date?: string | null
           id?: string
           notes?: string | null
+          receipt_paths?: string[] | null
         }
         Relationships: [
           {
@@ -583,6 +586,7 @@ export type Database = {
           imported_by_business_id: string | null
           imported_by_name: string | null
           notes: string | null
+          receipt_paths: string[] | null
           purchase_date: string
           status: string
           total_batch_cost: number
@@ -597,6 +601,7 @@ export type Database = {
           imported_by_business_id?: string | null
           imported_by_name?: string | null
           notes?: string | null
+          receipt_paths?: string[] | null
           purchase_date?: string
           status?: string
           total_batch_cost?: number
@@ -611,6 +616,7 @@ export type Database = {
           imported_by_business_id?: string | null
           imported_by_name?: string | null
           notes?: string | null
+          receipt_paths?: string[] | null
           purchase_date?: string
           status?: string
           total_batch_cost?: number

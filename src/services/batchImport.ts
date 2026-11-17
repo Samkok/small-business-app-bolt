@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { removeReceiptFiles } from './expenseReceipts';
 import { productCostService, importLineToBaseUnits } from './productCost';
 import { Database } from '../types/database';
 
@@ -358,6 +359,7 @@ export const batchImportService = {
       .from('inventory_batches')
       .select(`
         status,
+        receipt_paths,
         inventory_imports(
           product_id,
           quantity,
@@ -420,6 +422,9 @@ export const batchImportService = {
       .delete()
       .eq('id', batchId);
     if (deleteError) throw deleteError;
+
+    // The receipt photos go with the batch (best effort; the cleanup job catches leftovers)
+    await removeReceiptFiles((batch as any).receipt_paths ?? []);
 
     return true;
   },

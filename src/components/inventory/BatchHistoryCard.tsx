@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
-import { Pencil, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck } from 'lucide-react-native';
+import { Pencil, Trash2, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, ChevronRight, Eye, UserCheck, Paperclip } from 'lucide-react-native';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
 interface BatchHistoryCardProps {
@@ -15,6 +15,7 @@ interface BatchHistoryCardProps {
     purchase_date: string;
     arrival_date?: string;
     notes?: string;
+    receipt_paths?: string[] | null;
     status: 'pending' | 'completed';
     total_batch_cost: number;
     created_at: string;
@@ -115,6 +116,15 @@ export function BatchHistoryCard({ batch, onEdit, onDelete, onMarkAsArrived, onV
                 {batch.inventory_imports.length} {batch.inventory_imports.length === 1 ? 'product' : 'products'}, {totalQuantity} {totalQuantity === 1 ? 'unit' : 'units'}
               </Text>
             </View>
+
+            {(batch.receipt_paths?.length ?? 0) > 0 && (
+              <View style={styles.metaItem}>
+                <Paperclip size={14} color="#2563eb" />
+                <Text style={[styles.metaText, { color: '#2563eb' }]}>
+                  {batch.receipt_paths!.length === 1 ? '1 receipt' : `${batch.receipt_paths!.length} receipts`}
+                </Text>
+              </View>
+            )}
           </View>
 
           {batch.arrival_date && (

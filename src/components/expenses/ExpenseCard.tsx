@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { Card } from '@/src/components/ui/Card';
-import { CreditCard as Edit, Trash2, Calendar, Tag, DollarSign } from 'lucide-react-native';
+import { CreditCard as Edit, Trash2, Calendar, Tag, DollarSign, Paperclip } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 
 interface ExpenseCardProps {
   expense: {
@@ -12,6 +13,7 @@ interface ExpenseCardProps {
     description: string;
     expense_date: string;
     notes?: string;
+    receipt_paths?: string[] | null;
     expense_categories?: {
       name: string;
     };
@@ -21,10 +23,13 @@ interface ExpenseCardProps {
   };
   onEdit: (expense: any) => void;
   onDelete: (expense: any) => void;
+  onViewReceipts?: (expense: any) => void;
 }
 
-export const ExpenseCard = React.memo(function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardProps) {
+export const ExpenseCard = React.memo(function ExpenseCard({ expense, onEdit, onDelete, onViewReceipts }: ExpenseCardProps) {
   const { isDark } = useTheme();
+  const { t } = useTranslation();
+  const receiptCount = expense.receipt_paths?.length ?? 0;
   const { formatPrice } = useCurrencyContext();
 
   const formatDate = (dateString: string) => {
@@ -91,7 +96,21 @@ export const ExpenseCard = React.memo(function ExpenseCard({ expense, onEdit, on
         </View>
       )}
       
-      <View style={styles.footer}>
+      <View style={[styles.footer, receiptCount > 0 && styles.footerWithReceipts]}>
+        {receiptCount > 0 && (
+          <TouchableOpacity
+            style={[styles.receiptChip, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}
+            onPress={() => onViewReceipts?.(expense)}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          >
+            <Paperclip size={13} color="#2563eb" />
+            <Text style={styles.receiptChipText}>
+              {receiptCount === 1
+                ? t('expenses.receiptOne')
+                : t('expenses.receiptMany', { count: receiptCount })}
+            </Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.amountContainer}>
           <DollarSign size={16} color="#dc2626" />
           <Text style={[styles.amount, { color: '#dc2626' }]}>
@@ -167,6 +186,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  footerWithReceipts: {
+    justifyContent: 'space-between',
+  },
+  receiptChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 13,
+  },
+  receiptChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563eb',
   },
   amountContainer: {
     flexDirection: 'row',
