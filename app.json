@@ -2,7 +2,7 @@
   "expo": {
     "name": "BizManage",
     "slug": "business-manager-pro",
-    "version": "2.15.0",
+    "version": "2.16.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "businessmanager",
@@ -13,8 +13,8 @@
       "bundleIdentifier": "com.businessmanager.pro",
       "usesPushNotifications": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "We use your camera so you can scan the barcode and take photos for your products, business profile, and user profile directly in the app.",
-        "NSPhotoLibraryUsageDescription": "We use your photo library so you can upload photos for your products, business profile, and user profile. This helps you showcase your items and personalize your account.",
+        "NSCameraUsageDescription": "We use your camera so you can scan barcodes, photograph expense receipts, and take photos for your products, business profile, and user profile directly in the app.",
+        "NSPhotoLibraryUsageDescription": "We use your photo library so you can attach receipt photos to expenses and upload photos for your products, business profile, and user profile.",
         "NSPhotoLibraryAddUsageDescription": "We save images to your photo library when you choose to export or download product photos or profile images.",
         "ITSAppUsesNonExemptEncryption": false
       },

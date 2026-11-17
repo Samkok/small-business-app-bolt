@@ -18,7 +18,9 @@ import { Button } from '@/src/components/ui/Button';
 import { LoadingSpinner } from '@/src/components/ui/LoadingSpinner';
 import { OptimizedImage } from '@/src/components/ui/OptimizedImage';
 import EditBatchForm from '@/src/components/inventory/EditBatchForm';
-import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2, UserCheck } from 'lucide-react-native';
+import { ArrowLeft, Package, Calendar, DollarSign, CircleCheck as CheckCircle, Clock, FileText, TrendingUp, Trash2, UserCheck, Paperclip } from 'lucide-react-native';
+import { ReceiptPicker } from '@/src/components/receipts/ReceiptPicker';
+import { ReceiptDraft, syncReceipts } from '@/src/services/expenseReceipts';
 import { batchImportService } from '@/src/services/batchImport';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
 
@@ -29,6 +31,7 @@ export default function BatchDetailsScreen() {
   const [markingAsArrived, setMarkingAsArrived] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showEditBatchForm, setShowEditBatchForm] = useState(false);
+  const [savingReceipts, setSavingReceipts] = useState(false);
 
   
   const router = useRouter();
@@ -125,6 +128,43 @@ export default function BatchDetailsScreen() {
         },
       ]
     );
+  };
+
+  // Receipts save straight away, for pending and received batches alike: only the
+  // receipt_paths column is written, so stock and cost are untouched.
+  const handleReceiptsChange = async (draft: ReceiptDraft) => {
+    if (!batch || !currentBusiness?.id || savingReceipts) return;
+    const original: string[] = batch.receipt_paths ?? [];
+    const removing = original.filter((p) => !draft.kept.includes(p));
+    const apply = async () => {
+      setSavingReceipts(true);
+      try {
+        const { paths, notUploaded } = await syncReceipts({
+          table: 'inventory_batches',
+          businessId: currentBusiness.id,
+          recordId: batch.id,
+          original,
+          draft,
+        });
+        setBatch((prev: any) => (prev ? { ...prev, receipt_paths: paths.length ? paths : null } : prev));
+        if (notUploaded > 0) {
+          Alert.alert('Receipts', `${notUploaded} receipt photo(s) did not upload. Check your connection and try again.`);
+        }
+      } catch (error) {
+        console.error('Error saving batch receipts:', error);
+        Alert.alert('Error', 'Failed to save the receipts');
+      } finally {
+        setSavingReceipts(false);
+      }
+    };
+    if (removing.length) {
+      Alert.alert('Remove receipt', 'Delete this receipt photo from the batch?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: apply },
+      ]);
+    } else {
+      apply();
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -284,6 +324,22 @@ export default function BatchDetailsScreen() {
               </Text>
             </View>
           )}
+        </Card>
+
+        {/* Supplier invoice / receipt photos */}
+        <Card style={styles.costsCard}>
+          <View style={styles.sectionHeader}>
+            <Paperclip size={20} color="#2563eb" />
+            <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              Receipts
+            </Text>
+          </View>
+          <ReceiptPicker
+            value={{ kept: batch.receipt_paths ?? [], added: [] }}
+            onChange={handleReceiptsChange}
+            title={`Batch #${batch.id.slice(-8)}`}
+            busy={savingReceipts}
+          />
         </Card>
 
         {/* Additional Costs */}

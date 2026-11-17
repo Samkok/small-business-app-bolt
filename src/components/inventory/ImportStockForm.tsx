@@ -37,6 +37,8 @@ import { ProductPickerSheet } from '@/src/components/products/ProductPickerSheet
 import { batchImportService, BatchImportItem, BatchImportCost } from '@/src/services/batchImport';
 import { unitService, ProductUnit, Unit } from '@/src/services/units';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
+import { ReceiptPicker } from '@/src/components/receipts/ReceiptPicker';
+import { ReceiptDraft, syncReceipts } from '@/src/services/expenseReceipts';
 
 interface ImportStockFormProps {
   onComplete: () => void;
@@ -64,6 +66,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
   const [selectedItems, setSelectedItems] = useState<BatchImportItem[]>([]);
   const [additionalCosts, setAdditionalCosts] = useState<BatchImportCost[]>([]);
   const [notes, setNotes] = useState('');
+  // Supplier invoice / receipt photos; uploaded after the batch is saved
+  const [receipts, setReceipts] = useState<ReceiptDraft>({ kept: [], added: [] });
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString());
   // ON: the goods are already here, so the batch is created and received in one step.
   const [receiveNow, setReceiveNow] = useState(true);
@@ -334,10 +338,30 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
       costs: additionalCosts,
     };
 
+    // Receipts follow the saved batch; a failed upload keeps the import and says so
+    const attachReceipts = async (batchId?: string) => {
+      if (!receipts.added.length) return;
+      const notUploaded = batchId
+        ? (
+            await syncReceipts({
+              table: 'inventory_batches',
+              businessId: currentBusiness.id,
+              recordId: batchId,
+              original: [],
+              draft: receipts,
+            })
+          ).notUploaded
+        : receipts.added.length;
+      if (notUploaded > 0) {
+        Alert.alert('Receipts', `The import was saved, but ${notUploaded} receipt photo(s) did not upload. Open the batch in Import History and add them again.`);
+      }
+    };
+
     setLoading(true);
     try {
       if (receiveNow) {
         const result = await batchImportService.createAndReceiveBatch(batchData, purchaseDate);
+        await attachReceipts(result.batch?.id);
         if (!result.received) {
           console.error('Error receiving import:', result.receiveError);
           Alert.alert(
@@ -354,7 +378,8 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
           `${productCount} ${productCount === 1 ? 'product' : 'products'} added to stock. Total cost ${formatPrice(totalCost)}.`,
         );
       } else {
-        await batchImportService.createBatchImport(batchData);
+        const created = await batchImportService.createBatchImport(batchData);
+        await attachReceipts(created.batch?.id);
         Alert.alert('Success', 'Stock import created successfully');
       }
       onComplete();
@@ -830,6 +855,12 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
             numberOfLines={3}
           />
         </Card>
+
+        {/* Supplier invoice / receipt photos */}
+        <Card style={styles.section}>
+          <Text style={[styles.receiptsTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>Receipts</Text>
+          <ReceiptPicker value={receipts} onChange={setReceipts} title={notes || 'Import receipts'} busy={loading} />
+        </Card>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -1011,6 +1042,7 @@ const styles = StyleSheet.create({
   itemCostValue: { fontSize: 12, fontWeight: '500' },
 
   footer: { flexDirection: 'row', padding: 16, gap: 12 },
+  receiptsTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
   footerButton: { flex: 1 },
 
   // Modals

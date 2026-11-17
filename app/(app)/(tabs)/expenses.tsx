@@ -13,7 +13,8 @@ import {
   FlatList,
   LayoutAnimation,
   Platform,
-  UIManager
+  UIManager,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -26,7 +27,9 @@ import { SkeletonExpenseCard, SkeletonCard, SkeletonLoader, SkeletonList } from 
 import { ExpenseCard } from '@/src/components/expenses/ExpenseCard';
 import ExpenseForm from '@/src/components/expenses/ExpenseForm';
 import CategoryForm from '@/src/components/expenses/CategoryForm';
-import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp, X } from 'lucide-react-native';
+import { ReceiptViewer } from '@/src/components/receipts/ReceiptViewer';
+import { buildReceiptsPdfHtml, removeReceiptFiles, shareReceiptsPdf } from '@/src/services/expenseReceipts';
+import { Receipt, Plus, Search, Filter, DollarSign, TrendingDown, Calendar, Tag, ChartBar as BarChart3, ChevronDown, ChevronUp, X, FileDown } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
@@ -56,6 +59,8 @@ export default function ExpensesScreen() {
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [dateRangeText, setDateRangeText] = useState('');
+  const [receiptsExpense, setReceiptsExpense] = useState<any>(null);
+  const [exportingReceipts, setExportingReceipts] = useState(false);
 
   // Animation for collapsible section
   const collapseAnim = useRef(new Animated.Value(0)).current;
@@ -241,6 +246,8 @@ export default function ExpensesScreen() {
           onPress: async () => {
             try {
               await expenseService.deleteExpense(expense.id);
+              // The photos go with the expense; a leftover file is caught by the cleanup job
+              removeReceiptFiles(expense.receipt_paths ?? []);
               Alert.alert(t('common.success'), t('expenses.deleteSuccess'));
               loadData();
             } catch (error) {
@@ -252,6 +259,56 @@ export default function ExpensesScreen() {
       ]
     );
   }, [loadData]);
+
+  const handleViewReceipts = useCallback((expense: any) => {
+    setReceiptsExpense(expense);
+  }, []);
+
+  // One PDF for what the list shows now (period, category and search filters): the list
+  // with a total, then every receipt photo on its own page.
+  const handleExportReceipts = useCallback(() => {
+    if (exportingReceipts) return;
+    const list = filteredExpenses;
+    const period = periodFilters.find((f) => f.value === selectedPeriod)?.label ?? '';
+    if (!list.length) {
+      Alert.alert(t('expenses.exportReceiptsTitle'), t('expenses.exportNothing'));
+      return;
+    }
+    const withReceipts = list.filter((e) => e.receipt_paths?.length).length;
+    const run = async () => {
+      setExportingReceipts(true);
+      try {
+        const { html, missing } = await buildReceiptsPdfHtml({
+          businessName: currentBusiness?.business_name ?? '',
+          periodLabel: period,
+          expenses: list,
+          formatPrice,
+          formatDate: (iso: string) => new Date(iso).toLocaleDateString(),
+        });
+        setExportingReceipts(false);
+        if (missing > 0) {
+          Alert.alert(t('expenses.exportReceiptsTitle'), t('expenses.exportMissing', { count: missing }));
+        }
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        await shareReceiptsPdf(html, `${currentBusiness?.business_name ?? 'Expenses'} receipts ${today}`);
+      } catch (error) {
+        console.error('Receipts PDF failed:', error);
+        setExportingReceipts(false);
+        Alert.alert(t('common.error'), t('expenses.exportFailed'));
+      }
+    };
+    Alert.alert(
+      t('expenses.exportReceiptsTitle'),
+      withReceipts
+        ? t('expenses.exportReceiptsBody', { expenses: list.length, period, receipts: withReceipts })
+        : t('expenses.exportNoReceipts', { expenses: list.length, period }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('expenses.exportCreate'), onPress: run },
+      ]
+    );
+  }, [exportingReceipts, filteredExpenses, periodFilters, selectedPeriod, currentBusiness?.business_name, formatPrice, t]);
 
   const toggleStatsCollapse = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -326,8 +383,9 @@ export default function ExpensesScreen() {
       expense={item}
       onEdit={handleEditExpense}
       onDelete={handleDeleteExpense}
+      onViewReceipts={handleViewReceipts}
     />
-  ), [handleEditExpense, handleDeleteExpense]);
+  ), [handleEditExpense, handleDeleteExpense, handleViewReceipts]);
 
   const renderEmptyComponent = useCallback(() => (
     <Card style={styles.emptyState}>
@@ -401,6 +459,13 @@ export default function ExpensesScreen() {
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={[styles.addButton, { marginRight: 8 }]}
+              onPress={handleExportReceipts}
+              accessibilityLabel={t('expenses.exportReceipts')}
+            >
+              <FileDown size={20} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowCategoryForm(true)}
             >
@@ -467,6 +532,14 @@ export default function ExpensesScreen() {
           {t('expenses.title')}
         </Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.addButton, { marginRight: 8 }]}
+            onPress={handleExportReceipts}
+            disabled={exportingReceipts}
+            accessibilityLabel={t('expenses.exportReceipts')}
+          >
+            {exportingReceipts ? <ActivityIndicator color="#ffffff" /> : <FileDown size={20} color="#ffffff" />}
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => setShowCategoryForm(true)}
@@ -767,6 +840,25 @@ export default function ExpensesScreen() {
           </View>
         </View>
       </Modal>
+
+      <ReceiptViewer
+        visible={!!receiptsExpense}
+        paths={receiptsExpense?.receipt_paths ?? []}
+        title={receiptsExpense?.description}
+        onClose={() => setReceiptsExpense(null)}
+      />
+
+      {/* A plain overlay, not a Modal: iOS will not present the share sheet while a Modal is closing */}
+      {exportingReceipts && (
+        <View style={[StyleSheet.absoluteFillObject, styles.datePickerOverlay]}>
+          <View style={[styles.exportingBox, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={[styles.exportingText, { color: isDark ? '#f9fafb' : '#111827' }]}>
+              {t('expenses.preparingPdf')}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -788,6 +880,17 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
+  },
+  exportingBox: {
+    paddingVertical: 24,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    gap: 12,
+  },
+  exportingText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   addButton: {
     backgroundColor: '#2563eb',

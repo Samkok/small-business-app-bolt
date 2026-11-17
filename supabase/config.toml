@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.sync-subscription]
 verify_jwt = true
+
+[functions.cleanup-expense-receipts]
+verify_jwt = true

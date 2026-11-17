@@ -8,16 +8,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Modal
+  Modal,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '@/src/components/ui/Card';
 import Input from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
-import { X, DollarSign, FileText, Calendar, Tag } from 'lucide-react-native';
+import { X, DollarSign, FileText, Calendar, Tag, Paperclip } from 'lucide-react-native';
 import { expenseService } from '@/src/services/expenses';
 import SingleDatePicker from '@/src/components/ui/SingleDatePicker';
+import { ReceiptPicker } from '@/src/components/receipts/ReceiptPicker';
+import { ReceiptDraft, syncReceipts } from '@/src/services/expenseReceipts';
 
 interface ExpenseFormProps {
   expense?: any;
@@ -34,6 +37,9 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Receipts: stored paths the user keeps, and new photos that upload after the expense is saved
+  const [receipts, setReceipts] = useState<ReceiptDraft>({ kept: [], added: [] });
+  const { t } = useTranslation();
   
   const { isDark } = useTheme();
   const { currentBusiness, user } = useAuth();
@@ -45,6 +51,7 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
       setCategoryId(expense.category_id || '');
       setExpenseDate(expense.expense_date?.split('T')[0] || '');
       setNotes(expense.notes || '');
+      setReceipts({ kept: expense.receipt_paths ?? [], added: [] });
     } else {
       const today = new Date();
       const year = today.getFullYear();
@@ -101,13 +108,29 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
         created_by: user.id,
       };
 
-      if (expense) {
-        await expenseService.updateExpense(expense.id, expenseData);
-      } else {
-        await expenseService.createExpense(expenseData);
-      }
+      // The expense row is saved first with its named columns only; receipts follow.
+      const saved = expense
+        ? await expenseService.updateExpense(expense.id, expenseData)
+        : await expenseService.createExpense(expenseData);
+      const expenseId: string | undefined = saved?.id ?? expense?.id;
 
-      Alert.alert('Success', `Expense ${expense ? 'updated' : 'created'} successfully`);
+      const notUploaded = expenseId
+        ? (
+            await syncReceipts({
+              table: 'expenses',
+              businessId: currentBusiness.id,
+              recordId: expenseId,
+              original: expense?.receipt_paths ?? [],
+              draft: receipts,
+            })
+          ).notUploaded
+        : receipts.added.length;
+
+      if (notUploaded > 0) {
+        Alert.alert(t('common.success'), t('expenses.receiptsSavedPartly', { count: notUploaded }));
+      } else {
+        Alert.alert('Success', `Expense ${expense ? 'updated' : 'created'} successfully`);
+      }
       onSave();
     } catch (error) {
       console.error('Error saving expense:', error);
@@ -249,6 +272,16 @@ export default function ExpenseForm({ expense, categories, onSave, onCancel }: E
               multiline
               numberOfLines={4}
             />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Paperclip size={20} color="#2563eb" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
+                {t('expenses.receipts')}
+              </Text>
+            </View>
+            <ReceiptPicker value={receipts} onChange={setReceipts} title={description} busy={loading} />
           </View>
         </Card>
       </ScrollView>
