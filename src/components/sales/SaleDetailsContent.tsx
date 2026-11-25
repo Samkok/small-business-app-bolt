@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Modal,
+  ScrollView, 
   TouchableOpacity,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +24,7 @@ import { paymentStatusLabel } from '@/src/utils/paymentStatus';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { hasReturns, isFullyReturned } from '@/src/utils/saleMoney';
 import { PaymentMethodIcon } from '@/src/utils/paymentMethodIcon';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface SaleDetailsContentProps {
   sale: any;
@@ -776,7 +776,7 @@ export default function SaleDetailsContent({
       )}
 
       {/* Return Items Modal */}
-      <Modal
+      <SheetModal
         visible={showReturnForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -786,7 +786,7 @@ export default function SaleDetailsContent({
           onComplete={onReturnComplete}
           onCancel={onCancelReturn}
         />
-      </Modal>
+      </SheetModal>
 
       {/* Void Sale Modal */}
       {sale && (

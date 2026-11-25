@@ -1,7 +1,8 @@
 import React from 'react';
-import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import { X, Barcode, Package, Plus, Minus, Layers, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 /**
  * The one product picker. Quick Checkout, receiving and stock adjustments used to carry four
@@ -124,7 +125,7 @@ export function ProductPickerSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismissed}>
+    <SheetModal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismissed}>
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={[styles.header, { borderBottomColor: border }]}>
           <Text style={[styles.title, { color: text }]}>{title}</Text>
@@ -165,7 +166,7 @@ export function ProductPickerSheet({
           </View>
         )}
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 

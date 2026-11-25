@@ -36,6 +36,7 @@ import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -794,7 +795,7 @@ export default function ExpensesScreen() {
         contentContainerStyle={filteredExpenses.length === 0 ? styles.emptyContainer : undefined}
       />
 
-      <Modal
+      <SheetModal
         visible={showExpenseForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -808,9 +809,9 @@ export default function ExpensesScreen() {
             setSelectedExpense(null);
           }}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showCategoryForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -819,7 +820,7 @@ export default function ExpensesScreen() {
           onSave={handleCategorySave}
           onCancel={() => setShowCategoryForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
       <Modal
         visible={showCustomDateRangePicker}

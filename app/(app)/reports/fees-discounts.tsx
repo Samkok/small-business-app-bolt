@@ -8,8 +8,9 @@ import {
   RefreshControl,
   Alert,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
+import { useCornerInset } from '@/src/hooks/useCornerInset';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { BarChart as BarChartKit } from 'react-native-chart-kit';
 import { ArrowLeft, Download, Calendar, Percent, Truck, Tag } from 'lucide-react-native';
@@ -53,7 +54,6 @@ function presetRange(preset: Exclude<Preset, 'custom'>): { start: Date; end: Dat
   }
 }
 
-const screenWidth = Dimensions.get('window').width;
 
 /**
  * Fees & Discounts: courier fees the business absorbed and discounts it gave,
@@ -62,6 +62,10 @@ const screenWidth = Dimensions.get('window').width;
  * "By month" rows are clipped to the chosen dates, so they add up to the totals.
  */
 export default function FeesDiscountsScreen() {
+  // Content width, read on every render: it changes when an iPhone Duo folds or unfolds, and the
+  // Duo's corner pill takes 84 pt on the right (see useCornerInset). 64 = screen + card padding.
+  const { width: windowWidth } = useWindowDimensions();
+  const screenWidth = windowWidth - useCornerInset();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { isDark } = useTheme();
@@ -328,9 +332,9 @@ export default function FeesDiscountsScreen() {
               </Text>
               <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.cellMonth, styles.headerText, { color: colors.subtext }]}>Month</Text>
-                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]}>Delivery</Text>
-                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]}>Discounts</Text>
-                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]}>Total</Text>
+                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Delivery</Text>
+                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Discounts</Text>
+                <Text style={[styles.cell, styles.headerText, { color: colors.subtext }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Total</Text>
               </View>
               {rangeMonths.slice().reverse().map(m => (
                 <View key={m.key} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
@@ -420,7 +424,7 @@ const styles = StyleSheet.create({
   headerText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
   tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'transparent' },
   cellMonth: { flex: 1.5 },
-  cell: { flex: 1, textAlign: 'right', fontSize: 13 },
+  cell: { flex: 1, textAlign: 'right', fontSize: 13, paddingLeft: 6 },
   monthText: { fontSize: 14, fontWeight: '600' },
   monthMeta: { fontSize: 11, marginTop: 1 },
   totalText: { fontWeight: '700' },

@@ -39,6 +39,7 @@ import { unitService, ProductUnit, Unit } from '@/src/services/units';
 import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { ReceiptPicker } from '@/src/components/receipts/ReceiptPicker';
 import { ReceiptDraft, syncReceipts } from '@/src/services/expenseReceipts';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface ImportStockFormProps {
   onComplete: () => void;
@@ -399,7 +400,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
 
   // ── Variant picker modal ──────────────────────────────────────────────────
   const renderVariantPicker = () => (
-    <Modal
+    <SheetModal
       visible={showVariantPicker}
       animationType="slide"
       presentationStyle="pageSheet"
@@ -484,7 +485,7 @@ export default function ImportStockForm({ onComplete, onCancel }: ImportStockFor
           }
         />
       </View>
-    </Modal>
+    </SheetModal>
   );
 
   // ── Product selector modal ────────────────────────────────────────────────

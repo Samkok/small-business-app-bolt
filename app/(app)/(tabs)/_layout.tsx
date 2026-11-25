@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { useTranslation } from '@/src/locales';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { useCornerInset } from '@/src/hooks/useCornerInset';
 import {
   LayoutDashboard,
   Package,
@@ -17,9 +18,14 @@ export default function TabLayout() {
   const { isDark } = useTheme();
   const { pendingSalesCount } = useNetwork();
 
+  const cornerInset = useCornerInset();
+
   const tabBarStyle = {
     backgroundColor: isDark ? '#374151' : '#ffffff',
     borderTopColor: isDark ? '#4b5563' : '#e5e7eb',
+    // React Navigation pads both sides by the larger side inset; on iPhone Duo that squeezed the
+    // six tabs into ~300 pt. The corner pill is only at the top, so the bar can use the full width.
+    paddingHorizontal: 0,
   };
 
   const tabBarActiveTintColor = '#2563eb';
@@ -36,6 +42,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Keep every tab screen clear of the iPhone Duo corner pill (0 on other iPhones).
+        sceneStyle: { paddingRight: cornerInset, backgroundColor: isDark ? '#111827' : '#f9fafb' },
         tabBarStyle,
         tabBarActiveTintColor,
         tabBarInactiveTintColor,

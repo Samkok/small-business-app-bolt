@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  Modal,
+  Alert, 
   RefreshControl,
   TextInput,
   FlatList,
@@ -27,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -528,7 +528,7 @@ export default function CustomersScreen() {
         contentContainerStyle={filteredCustomers.length === 0 ? styles.emptyContainer : styles.customersList}
       />
 
-      <Modal
+      <SheetModal
         visible={showCustomerForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -541,7 +541,7 @@ export default function CustomersScreen() {
             setSelectedCustomer(null);
           }}
         />
-      </Modal>
+      </SheetModal>
     </View>
   );
 }
