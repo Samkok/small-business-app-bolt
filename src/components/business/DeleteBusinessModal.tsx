@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  Modal,
+  StyleSheet, 
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -20,6 +19,7 @@ import {
   Trash2,
   Check
 } from 'lucide-react-native';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface DeleteBusinessModalProps {
   visible: boolean;
@@ -346,7 +346,7 @@ export function DeleteBusinessModal({
   };
 
   return (
-    <Modal
+    <SheetModal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
@@ -357,7 +357,7 @@ export function DeleteBusinessModal({
           {renderCurrentStep()}
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 

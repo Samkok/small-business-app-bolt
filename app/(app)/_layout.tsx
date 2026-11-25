@@ -10,6 +10,8 @@ import { useCart } from '@/src/context/CartContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from '@/src/locales';
 import { useNetwork } from '@/src/context/NetworkContext';
+import { useTheme } from '@/src/context/ThemeContext';
+import { useCornerInset } from '@/src/hooks/useCornerInset';
 
 export default function AppLayout() {
   const { session, loading, initialDataLoaded, signedOutDueToInactivity, resetInactivitySignOutFlag, userBusinesses, currentBusiness, user } = useAuth();
@@ -26,6 +28,8 @@ export default function AppLayout() {
   const router = useRouter();
   const segments = useSegments();
   const { t } = useTranslation();
+  const { isDark } = useTheme();
+  const cornerInset = useCornerInset();
   const alertShownRef = useRef(false);
   const hadBusinessRef = useRef(false);
 
@@ -102,8 +106,14 @@ export default function AppLayout() {
   console.log('AppLayout: Rendering stack layout');
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
+      {/* Screens outside the tabs keep clear of the iPhone Duo corner pill; the tabs pad their own scenes. */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { paddingRight: cornerInset, backgroundColor: isDark ? '#111827' : '#f9fafb' },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ contentStyle: { paddingRight: 0 } }} />
         <Stack.Screen name="business-onboarding" />
         <Stack.Screen name="business-selection" />
         <Stack.Screen name="top-customers" />

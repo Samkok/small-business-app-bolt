@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal,
   RefreshControl,
   Platform
 } from 'react-native';
@@ -34,6 +33,7 @@ import { format } from 'date-fns';
 import { useCurrencyContext } from '@/src/context/CurrencyContext';
 import { CurrencyDropdown } from '@/src/components/ui/CurrencyDropdown';
 import { OnlineMenuButton } from '@/src/components/menu/OnlineMenuButton';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface DashboardStats {
   todayRevenue: number;
@@ -592,7 +592,7 @@ export default function DashboardScreen() {
       )}
 
       {/* Modals */}
-      <Modal
+      <SheetModal
         visible={showProductForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -601,9 +601,9 @@ export default function DashboardScreen() {
           onSave={handleProductSave}
           onCancel={() => setShowProductForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showCustomerForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -612,9 +612,9 @@ export default function DashboardScreen() {
           onSave={handleCustomerSave}
           onCancel={() => setShowCustomerForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showSalesForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -623,7 +623,7 @@ export default function DashboardScreen() {
           onComplete={handleSaleComplete}
           onCancel={() => setShowSalesForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
 
       {stats && (

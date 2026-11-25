@@ -5,8 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
-  Modal,
+  Alert, 
   TextInput,
   FlatList
 } from 'react-native';
@@ -25,6 +24,7 @@ import { productService } from '@/src/services/products';
 import { productInsightService } from '@/src/services/productInsight';
 import { inventoryService } from '@/src/services/inventory';
 import { useTranslation } from '@/src/locales';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 export default function LowStockScreen() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
@@ -446,7 +446,7 @@ export default function LowStockScreen() {
       </ScrollView>
 
       {/* Modals */}
-      <Modal
+      <SheetModal
         visible={showProductForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -459,9 +459,9 @@ export default function LowStockScreen() {
             setSelectedProduct(null);
           }}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showImportStockForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -473,7 +473,7 @@ export default function LowStockScreen() {
             setSelectedProduct(null);
           }}
         />
-      </Modal>
+      </SheetModal>
     </View>
   );
 }

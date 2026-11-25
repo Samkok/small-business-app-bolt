@@ -45,6 +45,7 @@ import { PostSaleActionModal } from '../sales/PostSaleActionModal';
 import { useCurrency } from '@/src/hooks/useCurrency';
 import { unitService, ProductUnit, Unit } from '@/src/services/units';
 import { saleEvents } from '@/src/lib/saleEvents';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -699,11 +700,12 @@ export function InstantCheckoutModal() {
   if (!isModalOpen) return null;
 
   return (
-    <Modal
+    <SheetModal
       visible={isModalOpen}
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
+      cornerBackground={isDark ? '#111827' : '#ffffff'}
     >
       <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#ffffff' }]}>
         <View style={[styles.header, { borderBottomColor: isDark ? '#374151' : '#e5e7eb' }]}>
@@ -941,10 +943,11 @@ export function InstantCheckoutModal() {
       />
 
       {/* Barcode Scanner Modal */}
-      <Modal
+      <SheetModal
         visible={showBarcodeScanner}
         animationType="slide"
         presentationStyle="fullScreen"
+        cornerBackground="#000000"
         onRequestClose={() => {
           setShowBarcodeScanner(false);
           setTimeout(() => {
@@ -961,7 +964,7 @@ export function InstantCheckoutModal() {
             }, 300);
           }}
         />
-      </Modal>
+      </SheetModal>
 
       {/* Item Discount Modal */}
       <Modal
@@ -1245,7 +1248,7 @@ export function InstantCheckoutModal() {
         salesCount={salesCountData.salesCount}
         message="You've reached the free limit. Upgrade to continue creating sales."
       />
-    </Modal>
+    </SheetModal>
   );
 }
 

@@ -47,6 +47,7 @@ import { fetchProductsForExport, buildProductsCsv, buildProductsBarcodeHtml, sha
 import { showNetworkAwareError } from '@/src/utils/offlineAlert';
 import { useNetwork } from '@/src/context/NetworkContext';
 import { dataCache } from '@/src/lib/dataCache';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 const PRODUCTS_PER_PAGE = 5;
 
@@ -1532,7 +1533,7 @@ export default function InventoryScreen() {
         </View>
       )}
 
-      <Modal
+      <SheetModal
         visible={showProductForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1545,9 +1546,9 @@ export default function InventoryScreen() {
             setSelectedProduct(null);
           }}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1556,9 +1557,9 @@ export default function InventoryScreen() {
           onComplete={handleMultiImportComplete}
           onCancel={() => setShowImportForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
-      <Modal
+      <SheetModal
         visible={showEditImportForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1571,7 +1572,7 @@ export default function InventoryScreen() {
             setSelectedImport(null);
           }}
         />
-      </Modal>
+      </SheetModal>
 
       <Modal
         visible={showBarcodeScanner}
@@ -1584,7 +1585,7 @@ export default function InventoryScreen() {
         />
       </Modal>
 
-      <Modal
+      <SheetModal
         visible={showEditBatchForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -1594,7 +1595,7 @@ export default function InventoryScreen() {
           onComplete={handleRefresh}
           onCancel={() => setShowEditBatchForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
       {/* Export Products Modal */}
       <Modal

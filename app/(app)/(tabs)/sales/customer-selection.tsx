@@ -5,8 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
-  Modal,
+  Alert, 
   TextInput,
   FlatList
 } from 'react-native';
@@ -24,6 +23,7 @@ import { ArrowLeft, Users, Plus, Search, User, X } from 'lucide-react-native';
 import { customerService } from '@/src/services/customers';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { dataCache } from '@/src/lib/dataCache';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 export default function CustomerSelectionScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -251,7 +251,7 @@ export default function CustomerSelectionScreen() {
       )}
 
       {/* Customer Form Modal */}
-      <Modal
+      <SheetModal
         visible={showCustomerForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -260,7 +260,7 @@ export default function CustomerSelectionScreen() {
           onSave={handleCustomerSave}
           onCancel={() => setShowCustomerForm(false)}
         />
-      </Modal>
+      </SheetModal>
 
       {/* Upgrade Prompt Modal */}
       <UpgradePrompt

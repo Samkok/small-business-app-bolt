@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   Image,
@@ -13,6 +12,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { getReceiptUrls } from '@/src/services/expenseReceipts';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface ReceiptViewerProps {
   visible: boolean;
@@ -59,7 +59,7 @@ export function ReceiptViewer({ visible, paths = [], localUris = [], title, init
   }, [visible, key, initialIndex]);
 
   return (
-    <Modal visible={visible} animationType="fade" onRequestClose={onClose} presentationStyle="fullScreen">
+    <SheetModal visible={visible} animationType="fade" onRequestClose={onClose} presentationStyle="fullScreen" cornerBackground="#000000">
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Text style={styles.title} numberOfLines={1}>
@@ -91,7 +91,7 @@ export function ReceiptViewer({ visible, paths = [], localUris = [], title, init
           </ScrollView>
         )}
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 

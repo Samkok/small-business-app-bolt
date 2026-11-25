@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Modal,
+  ScrollView, 
   TouchableOpacity,
   Alert,
   RefreshControl
@@ -23,6 +22,7 @@ import { ReceiptPicker } from '@/src/components/receipts/ReceiptPicker';
 import { ReceiptDraft, syncReceipts } from '@/src/services/expenseReceipts';
 import { batchImportService } from '@/src/services/batchImport';
 import { getUserDisplayName } from '@/src/utils/userDisplayName';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 export default function BatchDetailsScreen() {
   const [batch, setBatch] = useState<any>(null);
@@ -489,7 +489,7 @@ export default function BatchDetailsScreen() {
         </Card>
       </ScrollView>
 
-      <Modal
+      <SheetModal
         visible={showEditBatchForm}
         animationType="slide"
         presentationStyle="pageSheet"
@@ -499,7 +499,7 @@ export default function BatchDetailsScreen() {
           onComplete={() => { setShowEditBatchForm(false); loadBatchDetails(); }}
           onCancel={() => setShowEditBatchForm(false)}
         />
-      </Modal>
+      </SheetModal>
       {/* Action Buttons */}
       <View style={styles.footer}>
         {batch.status === 'pending' && (

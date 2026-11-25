@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  Modal,
+  StyleSheet, 
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -21,6 +20,7 @@ import {
   Building
 } from 'lucide-react-native';
 import { AccountDeletePreview } from '@/src/services/account';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface DeleteAccountModalProps {
   visible: boolean;
@@ -411,7 +411,7 @@ export function DeleteAccountModal({
   };
 
   return (
-    <Modal
+    <SheetModal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
@@ -422,7 +422,7 @@ export function DeleteAccountModal({
           {renderCurrentStep()}
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 

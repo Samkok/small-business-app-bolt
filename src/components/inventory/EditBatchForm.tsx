@@ -25,6 +25,7 @@ import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import { supabase } from '@/src/config/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCurrency } from '@/src/utils/formatCurrency';
+import { SheetModal } from '@/src/components/ui/SheetModal';
 
 interface EditBatchFormProps {
   batch: any;
@@ -423,7 +424,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
   const { totalBaseValue, totalAdditionalCosts, totalBatchCost, itemsWithCosts } = calculateCostSummary();
 
   const renderVariantPicker = () => (
-    <Modal visible={showVariantPicker} animationType="slide" presentationStyle="pageSheet">
+    <SheetModal visible={showVariantPicker} animationType="slide" presentationStyle="pageSheet">
       <View style={[styles.modalContainer, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.modalHeader}>
           <View>
@@ -486,11 +487,11 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
           }}
         />
       </View>
-    </Modal>
+    </SheetModal>
   );
 
   const renderProductSelector = () => (
-    <Modal visible={showProductSelector} animationType="slide" presentationStyle="pageSheet">
+    <SheetModal visible={showProductSelector} animationType="slide" presentationStyle="pageSheet">
       <View style={[styles.modalContainer, { backgroundColor: isDark ? '#111827' : '#f9fafb' }]}>
         <View style={styles.modalHeader}>
           <Text style={[styles.modalTitle, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -569,7 +570,7 @@ export default function EditBatchForm({ batch, onComplete, onCancel }: EditBatch
           }}
         />
       </View>
-    </Modal>
+    </SheetModal>
   );
 
   return (

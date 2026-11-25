@@ -277,6 +277,8 @@ export function buildReceiptModel(input: ReceiptInput): ReceiptModel {
       address: clean(input.business?.address),
       pageName: clean(input.business?.pageName),
       footer: clean(input.business?.footer),
+      paymentNote: clean(input.business?.paymentNote),
+      paymentQrUrl: clean(input.business?.paymentQrUrl),
     },
     numberLabel: input.provisional ? 'PROVISIONAL' : receiptNumberLabel(input.receiptNumber, input.saleId),
     date: isNaN(date.getTime()) ? new Date() : date,

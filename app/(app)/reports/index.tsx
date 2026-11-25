@@ -6,11 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Dimensions,
   Platform,
   ActivityIndicator,
-  Modal
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
+import { useCornerInset } from '@/src/hooks/useCornerInset';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/src/context/ThemeContext';
@@ -30,10 +31,13 @@ import DateRangePicker from '@/src/components/sales/DateRangePicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
-const screenWidth = Dimensions.get('window').width;
 const EXPORT_FILE_PREFIX = 'BizManage_Report';
 
 export default function ReportsScreen() {
+  // Content width, read on every render: it changes when an iPhone Duo folds or unfolds, and the
+  // Duo's corner pill takes 84 pt on the right (see useCornerInset). 64 = screen + card padding.
+  const { width: windowWidth } = useWindowDimensions();
+  const screenWidth = windowWidth - useCornerInset();
   const [initialLoading, setInitialLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'cash-flow'>('overview');
@@ -300,6 +304,11 @@ export default function ReportsScreen() {
 
   // Daily and weekly ranges (31 buckets or fewer) draw bars, so a day with no sales is an
   // empty slot instead of a smoothed curve implying one. Longer ranges keep a straight line.
+  // chart-kit draws every bar 32 * barPercentage wide whatever the chart width, so scale it to the
+  // slot each bucket gets (64 = the y-axis gutter) or neighbouring bars overlap on narrow screens.
+  const barPercentFor = (count: number, chartWidth: number) =>
+    Math.min(0.6, (((chartWidth - 64) / Math.max(count, 1)) * 0.7) / 32);
+
   const renderTrendChart = (values: number[], labels: string[], color: string) => {
     const chartWidth = screenWidth - 64;
     const baseConfig = {
@@ -312,8 +321,6 @@ export default function ReportsScreen() {
     };
     const chartStyle = { marginVertical: 8, borderRadius: 16 };
     if (values.length <= 31) {
-      // chart-kit draws every bar 32 * barPercentage wide, so scale it to the slot each bucket gets
-      const slotWidth = (chartWidth - 64) / Math.max(values.length, 1);
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
       return (
         <BarChartKit
@@ -327,7 +334,7 @@ export default function ReportsScreen() {
           chartConfig={{
             ...baseConfig,
             color: (opacity = 1) => `rgba(${r}, ${g}, ${b}, ${opacity})`,
-            barPercentage: Math.min(0.6, (slotWidth * 0.7) / 32),
+            barPercentage: barPercentFor(values.length, chartWidth),
           }}
           style={chartStyle}
         />
@@ -614,6 +621,7 @@ export default function ReportsScreen() {
           
           <View style={styles.chartContainer}>
             {expenseCategoriesData.length > 0 ? (
+              <>
               <PieChartKit
                 data={expenseCategoriesPieData}
                 width={screenWidth - 64}
@@ -626,9 +634,24 @@ export default function ReportsScreen() {
                 }}
                 accessor="amount"
                 backgroundColor="transparent"
-                paddingLeft="15"
-                absolute
+                // chart-kit always draws the pie a quarter of the way in; another quarter centres it
+                paddingLeft={String((screenWidth - 64) / 4)}
+                hasLegend={false}
               />
+              {/* Legend as rows under the pie: chart-kit's own legend sits in a fixed slice of the
+                  chart and cut long category names off on narrow screens. */}
+              <View style={styles.pieLegend}>
+                {expenseCategoriesPieData.map((item: any) => (
+                  <View key={item.name} style={styles.pieLegendRow}>
+                    <View style={[styles.pieLegendDot, { backgroundColor: item.color }]} />
+                    <Text style={[styles.pieLegendName, { color: isDark ? '#d1d5db' : '#4b5563' }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.pieLegendValue, { color: isDark ? '#f9fafb' : '#111827' }]}>{fmt(item.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+              </>
             ) : (
               <View style={styles.noDataContainer}>
                 <Text style={[styles.noDataText, { color: isDark ? '#f9fafb' : '#111827' }]}>
@@ -693,7 +716,7 @@ export default function ReportsScreen() {
                       decimalPlaces: 0,
                       color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
                       labelColor: (opacity = 1) => isDark ? `rgba(249, 250, 251, ${opacity})` : `rgba(17, 24, 39, ${opacity})`,
-                      barPercentage: 0.6,
+                      barPercentage: barPercentFor(inventorySpendData.series.length, screenWidth - 64),
                       style: { borderRadius: 16 },
                     }}
                     style={{ marginVertical: 8, borderRadius: 16 }}
@@ -1556,6 +1579,33 @@ const styles = StyleSheet.create({
   },
   spendRowLabel: {
     fontSize: 14,
+    flexShrink: 1,
+    marginRight: 12,
+  },
+  pieLegend: {
+    alignSelf: 'stretch',
+    marginTop: 4,
+    gap: 6,
+  },
+  pieLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pieLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  pieLegendName: {
+    flex: 1,
+    fontSize: 13,
+    marginRight: 12,
+  },
+  pieLegendValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   spendRowValue: {
     fontSize: 14,
